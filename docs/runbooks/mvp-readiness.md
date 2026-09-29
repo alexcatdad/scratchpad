@@ -4,7 +4,7 @@
 
 Readiness covers the complete PRD MVP and acceptance scenarios A–G, including capture/retrieval, project boundaries, authentication, operation, import/export, and distribution. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP. A local development slice does not establish release acceptance.
 
-The core implementation and release automation are present. Full MVP acceptance remains open because signed/notarized publication, both GHCR architectures, Homebrew delivery/installation, and final end-to-end acceptance at the release commit still need evidence. Missing signing and release credentials are concrete external blockers.
+The core implementation and release automation are present. Full MVP acceptance remains open because signed/notarized publication, both GHCR architectures, Homebrew delivery/installation, and final end-to-end acceptance at the release commit still need evidence. The local signed-artifact handoff and GitHub App configuration remain external prerequisites. Apple credentials are not required in GitHub.
 
 ## Evidence ledger — 2026-09-29
 
@@ -51,8 +51,8 @@ Implementation closure and operational acceptance are separate. A source file or
 2. Preserve the passed disposable Docker acceptance evidence and rerun it if operational changes affect backup/restore. Do not use an actual owner's live database for tests.
 3. Preserve the completed real-history import/reimport evidence and close any remaining scenario-level retrieval and replacement-chain acceptance gaps. Keep private historical data outside public fixtures/artifacts.
 4. Commit the integrated state and require GitHub Actions success for that exact commit. Deploy and check the updated public documentation independently.
-5. Provision the credentials named in the release runbook in the existing `action-runners` environment (limited to `main` and `v*` tags). Do not silently substitute unsigned macOS binaries.
-6. After the release revision passes CI and credentials are configured, publish a reviewed stable tag and verify every artifact, Apple acceptance, GHCR platform, and clean Homebrew installation.
+5. Provision GitHub App credentials and the public Apple team ID named in the release runbook in the existing `action-runners` environment (limited to `main` and `v*` tags). Do not silently substitute unsigned macOS binaries.
+6. After the release revision passes CI, prepare locally signed/notarized archives and the draft release, then dispatch publication for the stable tag and verify every artifact, Apple acceptance, GHCR platform, and clean Homebrew installation.
 7. Audit PRD scenarios A–G against current evidence before declaring MVP ready. Report release publication, deployment, and user workflow acceptance separately.
 
 ## Repeatable audit procedure

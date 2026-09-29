@@ -12,8 +12,10 @@ output="$root/dist/release/${TARGET_OS}-${TARGET_ARCH}"
 mkdir -p "$output"
 (
   cd "$root/mcp"
+  GOTOOLCHAIN=$(awk '/^go / {print "go" $2}' go.mod)
+  export GOTOOLCHAIN
   CGO_ENABLED=0 GOOS="$TARGET_OS" GOARCH="$TARGET_ARCH" go build \
-    -trimpath -ldflags="-s -w -X main.version=${RELEASE_TAG#v}" \
+    -trimpath -buildvcs=false -ldflags="-s -w -X main.version=${RELEASE_TAG#v}" \
     -o "$output/scratchpad-mcp" ./cmd/scratchpad-mcp
 )
 if [[ "$TARGET_OS" == linux ]]; then

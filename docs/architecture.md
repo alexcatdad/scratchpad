@@ -804,7 +804,7 @@ Plus:
 checksums.txt
 ```
 
-macOS binaries are Developer ID signed and notarized.
+macOS binaries are Developer ID signed and notarized locally by the owner. A draft release transfers those artifacts to CI, which verifies the expected signing team, Apple trust assessment, source revision, checksums, and rebuilt executable content before publication. Apple signing credentials remain in the local Keychain.
 
 The existing Homebrew tap is automatically updated.
 

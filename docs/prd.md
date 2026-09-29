@@ -1107,12 +1107,14 @@ CI should cover:
 A tagged release should:
 
 1. produce MCP native binaries;
-2. sign/notarize macOS artifacts;
+2. sign/notarize macOS artifacts locally, then verify the uploaded artifacts in CI;
 3. generate checksums;
 4. publish GitHub Release assets;
 5. build the Scratchpad application image;
 6. publish the image to GHCR;
 7. update the Homebrew tap automatically.
+
+The owner performs Apple signing and notarization locally. Apple credentials stay in the local Keychain; CI verifies the signed archives before publication.
 
 Existing release patterns from the developer's Paw Proxy, Homebrew tap, Go MCP, and notarized Go application projects should be reused where practical.
 

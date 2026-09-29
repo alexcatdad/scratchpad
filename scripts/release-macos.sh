@@ -1,50 +1,45 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Called only on the isolated macOS release runner. Never print secret values.
-: "${RELEASE_TAG:?Missing release tag}"
-: "${TARGET_ARCH:?Missing target architecture}"
-: "${APPLE_CERTIFICATE_P12_BASE64:?Missing Developer ID certificate}"
-: "${APPLE_CERTIFICATE_PASSWORD:?Missing certificate password}"
-: "${APPLE_SIGNING_IDENTITY:?Missing Developer ID signing identity}"
-: "${APPLE_ID:?Missing Apple account}"
-: "${APPLE_TEAM_ID:?Missing Apple team ID}"
-: "${APPLE_APP_SPECIFIC_PASSWORD:?Missing notarization password}"
+# Run locally. Private keys and notarization credentials stay in the Keychain.
+: "${RELEASE_TAG:?Set the existing stable release tag}"
+: "${APPLE_SIGNING_IDENTITY:?Set the local Developer ID Application identity}"
+: "${APPLE_TEAM_ID:?Set the expected public Apple team ID}"
+: "${NOTARYTOOL_PROFILE:?Set the existing local notarytool Keychain profile name}"
+[[ $(uname -s) == Darwin ]]
 [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
-[[ "$TARGET_ARCH" == arm64 || "$TARGET_ARCH" == amd64 ]]
 [[ "$APPLE_SIGNING_IDENTITY" == 'Developer ID Application:'* ]]
 root=$(git rev-parse --show-toplevel)
-work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/scratchpad-sign.XXXXXX")
-keychain="$work/release.keychain-db"
-cleanup() {
-  security delete-keychain "$keychain" >/dev/null 2>&1 || true
-  rm -rf "$work"
-}
-trap cleanup EXIT
-password=$(openssl rand -hex 32)
-printf '%s' "$APPLE_CERTIFICATE_P12_BASE64" | base64 --decode > "$work/certificate.p12"
-security create-keychain -p "$password" "$keychain"
-security set-keychain-settings -lut 21600 "$keychain"
-security unlock-keychain -p "$password" "$keychain"
-security import "$work/certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" \
-  -T /usr/bin/codesign -T /usr/bin/security >/dev/null
-security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" >/dev/null
-binary="$root/dist/release/darwin-${TARGET_ARCH}/scratchpad-mcp"
-codesign --force --timestamp --options runtime --keychain "$keychain" \
-  --sign "$APPLE_SIGNING_IDENTITY" "$binary"
-codesign --verify --strict --verbose=2 "$binary"
-codesign -dv --verbose=4 "$binary" 2> "$work/signature.txt"
-grep -Fq 'Authority=Developer ID Application:' "$work/signature.txt"
-grep -Fq "TeamIdentifier=$APPLE_TEAM_ID" "$work/signature.txt"
-grep -Fq 'runtime' "$work/signature.txt"
-archive="$root/dist/release/scratchpad-mcp-${RELEASE_TAG}-darwin-${TARGET_ARCH}.zip"
-ditto -c -k --keepParent "$binary" "$archive"
-receipt="$root/dist/release/notarization-darwin-${TARGET_ARCH}.json"
-xcrun notarytool submit "$archive" --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-  --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait --timeout 30m --output-format json > "$receipt"
-jq -e '.status == "Accepted" and (.id | type == "string")' "$receipt" >/dev/null
-# CLI Mach-O files and ZIP archives cannot be stapled. Publish the exact accepted
-# ZIP; Gatekeeper retrieves its ticket online. Never rewrite it after acceptance.
-if [[ $(uname -m) == "$TARGET_ARCH" || ( $(uname -m) == x86_64 && "$TARGET_ARCH" == amd64 ) ]]; then
-  "$binary" --version | grep -Fx "scratchpad-mcp ${RELEASE_TAG#v}"
-fi
+cd "$root"
+[[ -z $(git status --porcelain) ]] || { echo 'Use a clean tagged checkout.' >&2; exit 1; }
+sha=$(git rev-parse HEAD)
+[[ $(git rev-parse "refs/tags/$RELEASE_TAG^{commit}") == "$sha" ]]
+mkdir -p dist/release
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+jq -n --arg tag "$RELEASE_TAG" --arg sha "$sha" --arg team "$APPLE_TEAM_ID" \
+  '{tag:$tag,sourceSha:$sha,teamId:$team,artifacts:{}}' > "$work/manifest.json"
+for arch in arm64 amd64; do
+  RELEASE_TAG="$RELEASE_TAG" TARGET_OS=darwin TARGET_ARCH="$arch" bash scripts/release-build.sh
+  binary="$root/dist/release/darwin-$arch/scratchpad-mcp"
+  codesign --force --timestamp --options runtime --sign "$APPLE_SIGNING_IDENTITY" "$binary"
+  codesign --verify --strict "$binary"
+  codesign -dv --verbose=4 "$binary" 2> "$work/signature.txt"
+  grep -Fxq "TeamIdentifier=$APPLE_TEAM_ID" "$work/signature.txt"
+  grep -Fq 'Authority=Developer ID Application:' "$work/signature.txt"
+  archive="$root/dist/release/scratchpad-mcp-$RELEASE_TAG-darwin-$arch.zip"
+  receipt="$root/dist/release/notarization-darwin-$arch.json"
+  # ditto must create a fresh archive, never update an older one.
+  rm -f "$archive"
+  ditto -c -k --keepParent "$binary" "$archive"
+  xcrun notarytool submit "$archive" --keychain-profile "$NOTARYTOOL_PROFILE" \
+    --wait --timeout 30m --output-format json > "$receipt"
+  jq -e '.status == "Accepted" and (.id | type == "string")' "$receipt" >/dev/null
+  archive_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
+  receipt_hash=$(shasum -a 256 "$receipt" | awk '{print $1}')
+  jq --arg arch "$arch" --arg archive "$archive_hash" --arg receipt "$receipt_hash" \
+    '.artifacts[$arch]={sha256:$archive,receiptSha256:$receipt}' "$work/manifest.json" > "$work/next.json"
+  mv "$work/next.json" "$work/manifest.json"
+done
+mv "$work/manifest.json" dist/release/macos-release.json
+printf 'Local signing and notarization complete for %s (%s). Upload the two ZIPs, two receipts and macos-release.json to the draft release.\n' "$RELEASE_TAG" "$sha"

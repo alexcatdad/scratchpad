@@ -28,6 +28,6 @@ These are workflow guarantees to verify during the first real release. Passing l
 
 ## Remaining setup
 
-The repository still needs its release environment configured with a Developer ID certificate, signing/notarization credentials, and the existing GitHub App's tap-writing credentials. The [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) names the required secrets and documents provisioning, publication, and recovery.
+The owner signs and notarizes macOS archives locally, then uploads them to a draft release for CI verification. Apple credentials stay in the local Keychain. The release environment needs the existing GitHub App's tap-writing credentials and the public Apple team ID. The [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) names the required secrets and documents provisioning, publication, and recovery.
 
 After publication, validate checksum downloads, both image architectures, clean Homebrew installation, and a real MCP session before treating that version as delivered.

@@ -2,57 +2,71 @@
 
 ## Status and authority
 
-The release pipeline is implemented in `.github/workflows/release.yml`. It has not yet published or notarized a Scratchpad release. A green ordinary CI run does not establish signing, Apple acceptance, registry publication, or tap installation.
+The release pipeline is implemented in `.github/workflows/release.yml`. Actual signed publication and installation acceptance remain unverified. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
 
-The PRD requires four native MCP targets, Developer ID signing and notarization for macOS, checksums, GitHub Release assets, GHCR application images, and automatic delivery through the existing `alexcatdad/homebrew-tap` repository. The workflow fails closed when signing credentials or notarization are missing. It never publishes unsigned macOS substitutes.
+Apple private keys and notarization credentials stay in the owner's macOS Keychain. GitHub does not need an Apple certificate, certificate password, Apple account password, or notarization secret. This follows the owner's accepted local-signing instruction.
 
-The existing Paw Proxy GitHub App delivery pattern and USB Boop's published-artifact verification and downgrade prevention were inspected. Scratchpad uses tagged builds; it does not copy their automatic version bumping or assume their credentials are available here.
+## One-time configuration
 
-## One-time administrator configuration
+Use the existing `action-runners` GitHub environment, restricted to `main` and `v*` tags:
 
-Use the existing **action-runners** GitHub environment in `alexcatdad/scratchpad`, restricted to `main` and `v*` tags. Configure these names through GitHub's encrypted settings; never paste values into a runbook, issue, agent message, or command history:
+| Kind     | Name            | Purpose                                                                         |
+| -------- | --------------- | ------------------------------------------------------------------------------- |
+| Variable | `APP_ID`        | Existing GitHub App ID for tap delivery                                         |
+| Secret   | `APP_SECRET`    | App private key with contents-write access to `alexcatdad/homebrew-tap`         |
+| Variable | `APPLE_TEAM_ID` | Public team identifier used to verify the locally signed binaries independently |
 
-| Kind     | Name                           | Purpose                                                                                             |
-| -------- | ------------------------------ | --------------------------------------------------------------------------------------------------- |
-| Variable | `APP_ID`                       | Existing GitHub App ID used by Paw Proxy's tap delivery                                             |
-| Secret   | `APP_SECRET`                   | That application's private key; installation must allow contents write on `alexcatdad/homebrew-tap` |
-| Secret   | `APPLE_CERTIFICATE_P12_BASE64` | Base64-encoded Developer ID Application certificate and private key exported as P12                 |
-| Secret   | `APPLE_CERTIFICATE_PASSWORD`   | Password protecting the P12                                                                         |
-| Secret   | `APPLE_SIGNING_IDENTITY`       | Full `Developer ID Application: …` identity                                                         |
-| Secret   | `APPLE_ID`                     | Apple account authorized for notarization                                                           |
-| Secret   | `APPLE_TEAM_ID`                | Developer team identifier matching the signing certificate                                          |
-| Secret   | `APPLE_APP_SPECIFIC_PASSWORD`  | App-specific password for that Apple account                                                        |
+Configure the Developer ID Application identity and a `notarytool` credential profile in the local Keychain using Apple's [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow). Never paste secret values into commands recorded in history, issues, or agent messages. The scripts use an existing profile by name.
 
-`GITHUB_TOKEN` is supplied by Actions. Jobs receive only the read/write scopes they need; the image job needs packages write, and release publication needs contents write. GHCR package visibility and repository linkage must be checked after initial publication before promising anonymous image pulls.
+The repository has not selected a license. The tap formula does not invent one.
 
-Metadata inspection on 2026-09-29 found no repository secrets and only the `github-pages` environment in Scratchpad. Paw Proxy's `action-runners` environment has `APP_SECRET` and `APP_ID`; those do not automatically transfer across repositories. No secret values were read. USB Boop signs locally, so its configuration is not evidence that Apple signing secrets exist for Scratchpad CI.
+## Prepare and sign locally
 
-The project has not selected a license in the repository. The generated tap formula deliberately does not invent a license declaration. Resolve licensing before representing the project as open source or publishing under a specific license.
+Use a clean checkout of the intended commit with all relevant checks passing. CI must be successful at that exact SHA on `main`; an earlier green revision is insufficient. Use the pinned Go toolchain. Native builds disable automatic VCS metadata so local and CI binaries can be compared after normalizing signatures.
 
-## Validate before tagging
+The following example uses an unused `v0.1.0` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
 
-1. Ensure every intended change is committed and on `main`.
-2. Run the development and infrastructure checks. Run `actionlint`, `shellcheck scripts/release-*.sh`, and `node --test scripts/release-formula.test.mjs` for release changes.
-3. Wait for the latest `CI` workflow at the exact intended commit to finish successfully. The release preflight checks that exact SHA; a green run on an earlier commit is insufficient.
-4. Choose an unused stable tag matching `vX.Y.Z`. Pre-release tags are deliberately outside this first pipeline.
-5. Confirm credentials and tap application access are available, and publish only the reviewed revision covered by the release request.
+```sh
+export RELEASE_TAG=v0.1.0
+git tag "$RELEASE_TAG"
+git push origin "$RELEASE_TAG"
+export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR NAME (TEAMID)'
+export APPLE_TEAM_ID=TEAMID
+export NOTARYTOOL_PROFILE=your-existing-keychain-profile
+bash scripts/release-macos.sh
+```
 
-Once the checks and prerequisites pass, tag the reviewed commit and push that tag. The push starts the workflow. A manual dispatch can retry an existing tag; it cannot fabricate an unreviewed source revision. Preflight also requires the tag commit to be reachable from `main`.
+The helper refuses a dirty or mismatched checkout, builds ARM64 and AMD64, signs with hardened runtime and a secure timestamp, verifies the signing team, and submits each ZIP using the local Keychain profile. Both submissions must return `Accepted`. It writes the two archives, receipts, and a `macos-release.json` manifest binding the tag, source SHA, signing team, and archive/receipt checksums. These generated files stay under ignored `dist/release/`.
 
-## Pipeline behavior
+Bare Mach-O command-line binaries and ZIPs cannot receive stapled tickets. Publish the exact accepted ZIPs; online Apple trust assessment remains required. Do not repackage the archives after notarization.
 
-1. Preflight validates the tag, exact-source CI, signing credentials, and GitHub App access to the tap.
-2. Matrix jobs build macOS ARM64/AMD64 and Linux ARM64/AMD64 with Go's pinned toolchain and version metadata.
-3. macOS jobs import the certificate into an ephemeral keychain, sign with hardened runtime and a secure timestamp, verify the team and signature, and submit the exact ZIP to `notarytool`. Only `Accepted` permits progression. The keychain and certificate files are deleted on exit.
-4. The image job builds and pushes `linux/amd64` and `linux/arm64` to `ghcr.io/alexcatdad/scratchpad:vX.Y.Z`, with provenance and SBOM attestations. It starts only after all native jobs succeed.
-5. Publication verifies all four archives and both Apple receipts, generates `checksums.txt`, and publishes a draft release only after uploading the complete inventory. Published releases are not overwritten by reruns.
-6. The tap job downloads the published assets again, verifies checksums, generates `Formula/scratchpad-mcp.rb`, checks Ruby syntax, and commits it with the existing GitHub App identity. Lower versions cannot replace a higher installed formula version. A conflicting tap push fails instead of force-pushing.
+## Upload the draft and dispatch
 
-The workflow serializes releases. It publishes versioned image tags only; it does not silently move `latest`. GitHub Releases are also not forced into the latest slot. This keeps recovery of older tags from unexpectedly changing the default version.
+Pushing a tag intentionally does not start publication: local signing and upload must finish first.
+
+```sh
+gh release create "$RELEASE_TAG" --repo alexcatdad/scratchpad \
+  --verify-tag --draft --title "$RELEASE_TAG" --notes 'Release preparation in progress.'
+gh release upload "$RELEASE_TAG" --repo alexcatdad/scratchpad \
+  "dist/release/scratchpad-mcp-$RELEASE_TAG-darwin-arm64.zip" \
+  "dist/release/scratchpad-mcp-$RELEASE_TAG-darwin-amd64.zip" \
+  dist/release/notarization-darwin-arm64.json \
+  dist/release/notarization-darwin-amd64.json \
+  dist/release/macos-release.json
+gh workflow run release.yml --repo alexcatdad/scratchpad --ref main -f tag="$RELEASE_TAG"
+```
+
+Use `gh release view` before retrying creation/upload. Do not overwrite assets while a workflow is running. A retry may repair an unpublished draft; a published release is immutable.
+
+## Pipeline verification
+
+1. Preflight checks stable tag syntax, ancestry on `main`, exact-source CI, draft state, and GitHub App access. It fixes the uploaded manifest checksum for the run.
+2. macOS runners rebuild unsigned reference binaries from the selected commit. They download the exact archive/receipt/manifest names and reject changed manifests, mismatched source/team/checksums, unexpected ZIP contents, invalid signatures, missing hardened runtime, and failed Apple trust assessment.
+3. Signature-normalized copies of the downloaded binary and rebuilt reference must match byte for byte. The original signed archive is never modified. An uploaded `Accepted` JSON alone is not proof of notarization: `spctl` must report `Notarized Developer ID`.
+4. Linux ARM64 and AMD64 are built in CI. The image job publishes both Linux platforms to `ghcr.io/alexcatdad/scratchpad:vX.Y.Z` only after native verification succeeds.
+5. Publication checks the complete inventory, generates checksums, revalidates the tag SHA, and publishes the draft. The tap job downloads the published assets, verifies checksums, and updates `Formula/scratchpad-mcp.rb` using the GitHub App. Downgrades and force pushes are prohibited.
 
 ## Artifact inventory
-
-For tag `vX.Y.Z`:
 
 - `scratchpad-mcp-vX.Y.Z-darwin-arm64.zip`
 - `scratchpad-mcp-vX.Y.Z-darwin-amd64.zip`
@@ -60,36 +74,22 @@ For tag `vX.Y.Z`:
 - `scratchpad-mcp-vX.Y.Z-linux-amd64.tar.gz`
 - `notarization-darwin-arm64.json`
 - `notarization-darwin-amd64.json`
+- `macos-release.json`
 - `checksums.txt`
 
-Each archive contains `scratchpad-mcp`. Bare Mach-O command-line binaries and ZIP containers cannot receive stapled tickets. The published ZIP is the exact Apple-accepted file; the operating system obtains the notarization ticket online. No offline stapling guarantee is claimed.
+## Recovery and acceptance
 
-Homebrew selects the archive for the host OS and CPU and installs Git/OpenSSH dependencies. Linux Homebrew also covers WSL. Native Windows is not part of this release matrix.
+For a failed unpublished release, fix the cause and dispatch again after completing the draft. If publication succeeded but tap delivery failed, dispatch with `-f homebrew_only=true`; this uses published assets without rebuilding or resigning. Publication across GHCR, GitHub Releases and the tap is not atomic. Record each outcome separately.
 
-## Recovery and verification
+After publication verify all downloaded checksums, both macOS signatures and Apple acceptance, both GHCR platforms starting with readiness on matching hosts or verified emulation, clean macOS/Linux Homebrew installation and `brew test`, version output, and a fresh authenticated MCP retrieval session. Check GHCR visibility and repository linkage before promising anonymous pulls. Neither a green ordinary CI run nor local signing alone proves full release acceptance.
 
-Before a public release exists, rerun the failed jobs after fixing the cause. A draft release may have its assets completed on retry. Never replace a published binary under the same tag.
+## Validate changes
 
-If the release is already public and only tap delivery failed, dispatch `Release` with that tag and **homebrew_only: true**. This downloads and verifies existing release assets without rebuilding, resigning, notarizing, or republishing the image. Rebuilding an Apple-signed archive would change its checksum and violate release immutability. An older recovery cannot downgrade the formula.
+```sh
+actionlint
+shellcheck scripts/release-*.sh scripts/verify-macos-release.sh
+node --test scripts/release-formula.test.mjs
+npm run lint
+```
 
-Publication spans GitHub Releases, GHCR, and a second Git repository; it is not atomic. An image can exist even when later release publication fails. Record each outcome separately and recover the incomplete destination. Do not claim complete delivery from the first successful job.
-
-After a successful run, verify:
-
-1. Every named GitHub asset exists and checksums match downloaded bytes.
-2. Both macOS receipts are accepted and signatures match the configured team.
-3. The GHCR digest contains both architectures and each architecture starts and passes readiness on a matching host or verified emulation.
-4. `brew install alexcatdad/tap/scratchpad-mcp` and `brew test alexcatdad/tap/scratchpad-mcp` work on macOS and Linux.
-5. `scratchpad-mcp --version` matches the tag, and a fresh real MCP session can authenticate and retrieve a record.
-
-These post-publication checks remain necessary even if the workflow is green.
-
-## Sources and pins
-
-Action tags and commit SHAs were resolved from each official GitHub repository's latest stable release on 2026-09-29. The workflow records both beside every action reference. Dependency updates must repeat that lookup and rerun the infrastructure checks.
-
-Apple's [notarization guidance](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [custom workflow documentation](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) define Developer ID, hardened runtime, and acceptance requirements. Docker's [multi-platform Actions documentation](https://docs.docker.com/build/ci/github-actions/multi-platform/) covers the image matrix; GitHub's [container publication guidance](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images) describes GHCR token permissions.
-
-## Repository environment status
-
-The `action-runners` GitHub environment exists and restricts deployment refs to branch `main` and tags matching `v*`. Required Apple and GitHub App credentials remain unconfigured. Provision only the names listed above through GitHub environment settings; do not paste credential values into issues, logs, or documentation.
+The first real local-signing handoff must still demonstrate successful Apple assessment and byte comparison on CI. Failures must be investigated; never bypass either check or publish unsigned substitutes.
