@@ -3,13 +3,24 @@ title: Configuration
 description: Understand which settings belong to the server, the project, and the local MCP.
 ---
 
-Configuration has three distinct owners. The initial implementation will document exact flags and environment variable names in the repository as they become executable.
+Configuration has three distinct owners. Server and MCP settings are separate: the server exposes an origin, while the local MCP connects to it.
 
 | Scope     | Responsibility                                                                                         |
 | --------- | ------------------------------------------------------------------------------------------------------ |
 | Server    | Public URL, persistent database location, authentication state, instance policy, optional AI providers |
 | Project   | Project identity, metadata, repository mirror permission, cross-project analysis permission            |
 | Local MCP | Server address, signing-key access, default launch directory, local mirror opt-in                      |
+
+## Server environment
+
+| Variable                   | Default                  | Purpose                                                          |
+| -------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `SCRATCHPAD_PUBLIC_URL`    | `http://localhost:3000`  | Browser origin and passkey relying-party configuration           |
+| `SCRATCHPAD_DATABASE_PATH` | `data/scratchpad.sqlite` | SQLite file location; use an absolute path for local development |
+
+Use the same values for the server and administrator commands. Changing working directories with the relative database default can create a separate database.
+
+See [MCP setup](/scratchpad/guides/mcp/) for its separate connection and signing variables.
 
 ## Public URL and storage
 

@@ -6,7 +6,7 @@
 
 ---
 
-# 1. Purpose
+## 1. Purpose
 
 This document defines the initial logical data model and HTTP API contract between:
 
@@ -21,7 +21,7 @@ It establishes stable concepts and API boundaries required to begin implementati
 
 ---
 
-# 2. Identifier Strategy
+## 2. Identifier Strategy
 
 Scratchpad uses globally unique opaque IDs.
 
@@ -56,47 +56,43 @@ IDs must:
 
 ---
 
-# 3. Project
+## 3. Project
 
 Conceptual model:
 
 ```ts
 type Project = {
-  id: string
-  name: string
-  slug: string
+  id: string;
+  name: string;
+  slug: string;
 
-  kind: "normal" | "external"
+  kind: "normal" | "external";
 
-  createdAt: string
-  updatedAt: string
+  createdAt: string;
+  updatedAt: string;
 
-  settings: ProjectSettings
-}
+  settings: ProjectSettings;
+};
 ```
 
 ---
 
-# 4. Project Source Identity
+## 4. Project Source Identity
 
 A project may have one or more source identities.
 
 ```ts
 type ProjectSource = {
-  id: string
-  projectId: string
+  id: string;
+  projectId: string;
 
-  kind:
-    | "git_remote"
-    | "manifest"
-    | "folder"
-    | "manual"
+  kind: "git_remote" | "manifest" | "folder" | "manual";
 
-  identity: string
-  displayValue?: string
+  identity: string;
+  displayValue?: string;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 Examples:
@@ -117,20 +113,20 @@ This supports renamed or moved repositories.
 
 ---
 
-# 5. Project Settings
+## 5. Project Settings
 
 ```ts
 type ProjectSettings = {
   repoMirroring: {
-    enabled: boolean
+    enabled: boolean;
 
-    recordTypes: RecordType[]
-  }
+    recordTypes: RecordType[];
+  };
 
-  crossProjectAnalysis: boolean
+  crossProjectAnalysis: boolean;
 
-  aiProcessing: boolean
-}
+  aiProcessing: boolean;
+};
 ```
 
 Recommended defaults:
@@ -153,7 +149,7 @@ aiProcessing: conservative/global setting
 
 ---
 
-# 6. Record Types
+## 6. Record Types
 
 ```ts
 type RecordType =
@@ -164,20 +160,16 @@ type RecordType =
   | "qa"
   | "failure"
   | "constraint"
-  | "project_state"
+  | "project_state";
 ```
 
 ---
 
-# 7. Authority Type
+## 7. Authority Type
 
 ```ts
 type AuthorityType =
-  | "explicit"
-  | "observed"
-  | "inferred"
-  | "derived"
-  | "suggested"
+  "explicit" | "observed" | "inferred" | "derived" | "suggested";
 ```
 
 Meaning:
@@ -204,18 +196,14 @@ The system believes this may be useful but does not present it as established kn
 
 ---
 
-# 8. Confidence
+## 8. Confidence
 
 Confidence is deliberately agent-reported rather than centrally calculated.
 
 Initial representation:
 
 ```ts
-type Confidence =
-  | "high"
-  | "medium"
-  | "low"
-  | "unknown"
+type Confidence = "high" | "medium" | "low" | "unknown";
 ```
 
 An optional explanatory field may accompany confidence.
@@ -228,30 +216,30 @@ The vocabulary may evolve later.
 
 ---
 
-# 9. Raw Record
+## 9. Raw Record
 
 ```ts
 type Record = {
-  id: string
+  id: string;
 
-  projectId: string
-  type: RecordType
+  projectId: string;
+  type: RecordType;
 
-  title: string
-  content: string
+  title: string;
+  content: string;
 
-  authority: AuthorityType
-  confidence: Confidence
-  confidenceReason?: string
+  authority: AuthorityType;
+  confidence: Confidence;
+  confidenceReason?: string;
 
-  happenedAt?: string
-  recordedAt: string
+  happenedAt?: string;
+  recordedAt: string;
 
-  actor: RecordActor
-  gitContext?: GitContext
+  actor: RecordActor;
+  gitContext?: GitContext;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 The original record is immutable.
@@ -260,23 +248,19 @@ Fields such as current display title, tags, and curated metadata should not requ
 
 ---
 
-# 10. Actor
+## 10. Actor
 
 ```ts
 type RecordActor = {
-  kind:
-    | "user"
-    | "agent"
-    | "import"
-    | "system"
+  kind: "user" | "agent" | "import" | "system";
 
-  displayName?: string
+  displayName?: string;
 
-  client?: string
-  clientVersion?: string
+  client?: string;
+  clientVersion?: string;
 
-  credentialFingerprint?: string
-}
+  credentialFingerprint?: string;
+};
 ```
 
 Examples:
@@ -300,27 +284,27 @@ or:
 
 ---
 
-# 11. Git Context
+## 11. Git Context
 
 ```ts
 type GitContext = {
-  repositoryIdentity?: string
+  repositoryIdentity?: string;
 
-  remote?: string
+  remote?: string;
 
-  branch?: string
+  branch?: string;
 
-  commit?: string
+  commit?: string;
 
-  rootPathHint?: string
+  rootPathHint?: string;
 
   worktree?: {
-    detected: boolean
-    name?: string
-  }
+    detected: boolean;
+    name?: string;
+  };
 
-  dirty?: boolean
-}
+  dirty?: boolean;
+};
 ```
 
 Local filesystem paths should be treated carefully.
@@ -329,7 +313,7 @@ They may be useful operationally but should not become permanent cross-machine i
 
 ---
 
-# 12. Type-Specific Data
+## 12. Type-Specific Data
 
 Each record may have structured payload data.
 
@@ -344,58 +328,58 @@ type RecordPayload =
   | QAPayload
   | FailurePayload
   | ConstraintPayload
-  | ProjectStatePayload
+  | ProjectStatePayload;
 ```
 
 ---
 
-# 13. Decision Payload
+## 13. Decision Payload
 
 ```ts
 type DecisionPayload = {
-  decision: string
-  rationale?: string
+  decision: string;
+  rationale?: string;
 
-  alternatives?: string[]
-  consequences?: string[]
-}
+  alternatives?: string[];
+  consequences?: string[];
+};
 ```
 
 ---
 
-# 14. ADR Payload
+## 14. ADR Payload
 
 ```ts
 type ADRPayload = {
-  context?: string
+  context?: string;
 
-  decision: string
-  rationale?: string
+  decision: string;
+  rationale?: string;
 
   alternatives?: Array<{
-    name: string
-    reasonRejected?: string
-  }>
+    name: string;
+    reasonRejected?: string;
+  }>;
 
-  consequences?: string[]
-}
+  consequences?: string[];
+};
 ```
 
 ---
 
-# 15. Business Decision Payload
+## 15. Business Decision Payload
 
 ```ts
 type BusinessDecisionPayload = {
-  decision: string
-  rationale?: string
+  decision: string;
+  rationale?: string;
 
-  requestedBy?: string
+  requestedBy?: string;
 
-  businessContext?: string
+  businessContext?: string;
 
-  expectedOutcome?: string
-}
+  expectedOutcome?: string;
+};
 ```
 
 No external stakeholder identity system is required.
@@ -404,75 +388,75 @@ No external stakeholder identity system is required.
 
 ---
 
-# 16. Finding Payload
+## 16. Finding Payload
 
 ```ts
 type FindingPayload = {
-  finding: string
+  finding: string;
 
-  environment?: string
+  environment?: string;
 
-  limitations?: string[]
-}
+  limitations?: string[];
+};
 ```
 
 ---
 
-# 17. Q&A Payload
+## 17. Q&A Payload
 
 ```ts
 type QAPayload = {
-  question: string
-  answer: string
+  question: string;
+  answer: string;
 
-  limitations?: string[]
-}
+  limitations?: string[];
+};
 ```
 
 ---
 
-# 18. Failure Payload
+## 18. Failure Payload
 
 ```ts
 type FailurePayload = {
-  expected?: string
-  observed: string
+  expected?: string;
+  observed: string;
 
-  cause?: string
-  resolution?: string
+  cause?: string;
+  resolution?: string;
 
-  lesson?: string
-}
+  lesson?: string;
+};
 ```
 
 ---
 
-# 19. Constraint Payload
+## 19. Constraint Payload
 
 ```ts
 type ConstraintPayload = {
-  constraint: string
+  constraint: string;
 
-  reason?: string
+  reason?: string;
 
-  scope?: string
-}
+  scope?: string;
+};
 ```
 
 ---
 
-# 20. Project State Payload
+## 20. Project State Payload
 
 ```ts
 type ProjectStatePayload = {
-  state: string
+  state: string;
 
-  reason?: string
+  reason?: string;
 
-  previousState?: string
+  previousState?: string;
 
-  followUp?: string
-}
+  followUp?: string;
+};
 ```
 
 V1 should not hard-code a global project-state enum.
@@ -492,29 +476,29 @@ and other domain-specific states.
 
 ---
 
-# 21. Curated Metadata
+## 21. Curated Metadata
 
 Mutable metadata is separated from raw content.
 
 ```ts
 type RecordMetadata = {
-  recordId: string
+  recordId: string;
 
-  displayTitle?: string
+  displayTitle?: string;
 
-  tags: string[]
+  tags: string[];
 
-  archived?: boolean
+  archived?: boolean;
 
-  updatedAt: string
-}
+  updatedAt: string;
+};
 ```
 
 Changing metadata creates an audit event.
 
 ---
 
-# 22. Record Revision
+## 22. Record Revision
 
 Raw records are immutable.
 
@@ -522,19 +506,19 @@ A curated amendment or correction creates:
 
 ```ts
 type RecordRevision = {
-  id: string
-  recordId: string
+  id: string;
+  recordId: string;
 
-  revisionNumber: number
+  revisionNumber: number;
 
-  patch: object
+  patch: object;
 
-  reason?: string
+  reason?: string;
 
-  actor: RecordActor
+  actor: RecordActor;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 The implementation may store full snapshots rather than patches if simpler.
@@ -545,7 +529,7 @@ The required behavior is:
 
 ---
 
-# 23. Relationships
+## 23. Relationships
 
 ```ts
 type RelationshipType =
@@ -558,29 +542,26 @@ type RelationshipType =
   | "depends_on"
   | "implements"
   | "caused_by"
-  | "answers"
+  | "answers";
 ```
 
 Relationship:
 
 ```ts
 type RecordRelationship = {
-  id: string
+  id: string;
 
-  fromRecordId: string
-  toRecordId: string
+  fromRecordId: string;
+  toRecordId: string;
 
-  type: RelationshipType
+  type: RelationshipType;
 
-  note?: string
+  note?: string;
 
-  authority:
-    | "explicit"
-    | "inferred"
-    | "suggested"
+  authority: "explicit" | "inferred" | "suggested";
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 AI-created relationships default to:
@@ -593,12 +574,12 @@ until accepted.
 
 ---
 
-# 24. Evidence
+## 24. Evidence
 
 ```ts
 type Evidence = {
-  id: string
-  recordId: string
+  id: string;
+  recordId: string;
 
   kind:
     | "url"
@@ -609,76 +590,76 @@ type Evidence = {
     | "conversation"
     | "test"
     | "deployment"
-    | "other"
+    | "other";
 
-  reference: string
+  reference: string;
 
-  revision?: string
+  revision?: string;
 
-  description?: string
+  description?: string;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 A linked source does not automatically mean Scratchpad verified its contents.
 
 ---
 
-# 25. Repository Mirror State
+## 25. Repository Mirror State
 
 ```ts
 type MirrorState = {
-  recordId: string
+  recordId: string;
 
-  attempted: boolean
-  succeeded: boolean
+  attempted: boolean;
+  succeeded: boolean;
 
-  path?: string
+  path?: string;
 
-  error?: string
+  error?: string;
 
-  updatedAt: string
-}
+  updatedAt: string;
+};
 ```
 
 Central-record success and mirror success are independent.
 
 ---
 
-# 26. Audit Event
+## 26. Audit Event
 
 All important mutations produce audit events.
 
 ```ts
 type AuditEvent = {
-  id: string
+  id: string;
 
-  entityType: string
-  entityId: string
+  entityType: string;
+  entityId: string;
 
-  action: string
+  action: string;
 
-  actor: RecordActor
+  actor: RecordActor;
 
-  previous?: object
-  next?: object
+  previous?: object;
+  next?: object;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 Raw-record creation itself also produces an audit event.
 
 ---
 
-# 27. Derived Artifact
+## 27. Derived Artifact
 
 ```ts
 type DerivedArtifact = {
-  id: string
+  id: string;
 
-  projectId?: string
+  projectId?: string;
 
   kind:
     | "summary"
@@ -686,42 +667,42 @@ type DerivedArtifact = {
     | "pattern"
     | "duplicate_candidate"
     | "relationship_candidate"
-    | "recommendation"
+    | "recommendation";
 
-  content: object
+  content: object;
 
-  sourceRecordIds: string[]
+  sourceRecordIds: string[];
 
   generator?: {
-    provider?: string
-    model?: string
-    version?: string
-  }
+    provider?: string;
+    model?: string;
+    version?: string;
+  };
 
-  createdAt: string
-  expiresAt?: string
-}
+  createdAt: string;
+  expiresAt?: string;
+};
 ```
 
 Derived artifacts are rebuildable.
 
 ---
 
-# 28. Embedding
+## 28. Embedding
 
 Logical representation:
 
 ```ts
 type Embedding = {
-  recordId: string
+  recordId: string;
 
-  model: string
-  dimensions: number
+  model: string;
+  dimensions: number;
 
-  vector: number[]
+  vector: number[];
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 Physical representation may differ between SQLite and PostgreSQL.
@@ -732,134 +713,125 @@ They may be regenerated.
 
 ---
 
-# 29. Owner Profile
+## 29. Owner Profile
 
 ```ts
 type OwnerProfile = {
-  id: string
+  id: string;
 
-  displayName: string
+  displayName: string;
 
   github?: {
-    username: string
-    avatarUrl?: string
-    profileUrl?: string
-    linked: boolean
-  }
+    username: string;
+    avatarUrl?: string;
+    profileUrl?: string;
+    linked: boolean;
+  };
 
-  createdAt: string
-  updatedAt: string
-}
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
 There is one owner per installation in V1.
 
 ---
 
-# 30. Credentials
+## 30. Credentials
 
 Credential records support multiple enrolled credentials.
 
 ```ts
 type Credential = {
-  id: string
+  id: string;
 
-  kind:
-    | "ssh"
-    | "webauthn"
-    | "local_key"
+  kind: "ssh" | "webauthn" | "local_key";
 
-  label?: string
+  label?: string;
 
-  publicMaterial: object
+  publicMaterial: object;
 
-  createdAt: string
+  createdAt: string;
 
-  lastUsedAt?: string
+  lastUsedAt?: string;
 
-  revokedAt?: string
-}
+  revokedAt?: string;
+};
 ```
 
 Private credential material is never stored by Scratchpad.
 
 ---
 
-# 31. Authentication Challenge
+## 31. Authentication Challenge
 
 ```ts
 type AuthChallenge = {
-  id: string
+  id: string;
 
-  kind:
-    | "ssh"
-    | "webauthn"
+  kind: "ssh" | "webauthn";
 
-  nonce: string
+  nonce: string;
 
-  expiresAt: string
-  consumedAt?: string
+  expiresAt: string;
+  consumedAt?: string;
 
-  createdAt: string
-}
+  createdAt: string;
+};
 ```
 
 Challenges are single-use.
 
 ---
 
-# 32. Browser Session
+## 32. Browser Session
 
 ```ts
 type Session = {
-  id: string
+  id: string;
 
-  credentialId: string
+  credentialId: string;
 
-  expiresAt: string
+  expiresAt: string;
 
-  createdAt: string
-  lastSeenAt: string
+  createdAt: string;
+  lastSeenAt: string;
 
-  revokedAt?: string
-}
+  revokedAt?: string;
+};
 ```
 
 ---
 
-# 33. Job
+## 33. Job
 
 ```ts
 type Job = {
-  id: string
+  id: string;
 
-  type: string
+  type: string;
 
-  status:
-    | "queued"
-    | "running"
-    | "completed"
-    | "failed"
+  status: "queued" | "running" | "completed" | "failed";
 
-  payload: object
+  payload: object;
 
-  runAfter: string
+  runAfter: string;
 
-  attempts: number
+  attempts: number;
 
-  startedAt?: string
-  completedAt?: string
+  startedAt?: string;
+  completedAt?: string;
 
-  lastError?: string
+  lastError?: string;
 
-  createdAt: string
-  updatedAt: string
-}
+  createdAt: string;
+  updatedAt: string;
+};
 ```
 
 ---
 
-# 34. HTTP API Conventions
+## 34. HTTP API Conventions
 
 Base:
 
@@ -885,9 +857,9 @@ Example:
 
 ---
 
-# 35. Authentication API
+## 35. Authentication API
 
-## Request MCP challenge
+### Request MCP challenge
 
 ```http
 POST /api/v1/auth/mcp/challenge
@@ -906,7 +878,7 @@ Response:
 
 ---
 
-## Verify MCP challenge
+### Verify MCP challenge
 
 ```http
 POST /api/v1/auth/mcp/verify
@@ -935,7 +907,7 @@ The exact token format may be opaque rather than JWT.
 
 ---
 
-# 36. Project Resolution API
+## 36. Project Resolution API
 
 ```http
 POST /api/v1/projects/resolve
@@ -985,7 +957,7 @@ Ambiguous:
 
 ---
 
-# 37. Explicit Project Resolution
+## 37. Explicit Project Resolution
 
 When the agent has asked the user:
 
@@ -1012,7 +984,7 @@ The API may:
 
 ---
 
-# 38. Create Record
+## 38. Create Record
 
 ```http
 POST /api/v1/records
@@ -1063,7 +1035,7 @@ Response:
 
 ---
 
-# 39. Record Retrieval
+## 39. Record Retrieval
 
 ```http
 GET /api/v1/records/:id
@@ -1081,7 +1053,7 @@ Returns:
 
 ---
 
-# 40. Record Search
+## 40. Record Search
 
 ```http
 GET /api/v1/records
@@ -1113,7 +1085,7 @@ Cursor pagination is preferred over offset pagination.
 
 ---
 
-# 41. Full-Text Search
+## 41. Full-Text Search
 
 Dedicated endpoint may be exposed:
 
@@ -1138,7 +1110,7 @@ Semantic search may augment this later.
 
 ---
 
-# 42. Project Context
+## 42. Project Context
 
 ```http
 GET /api/v1/projects/:id/context
@@ -1161,7 +1133,7 @@ AI-generated summaries may augment this later but must remain distinguishable.
 
 ---
 
-# 43. Relationships
+## 43. Relationships
 
 Create:
 
@@ -1185,7 +1157,7 @@ Human/agent-explicit relationships and AI suggestions should not share indisting
 
 ---
 
-# 44. Evidence API
+## 44. Evidence API
 
 ```http
 POST /api/v1/records/:id/evidence
@@ -1195,7 +1167,7 @@ Evidence references may be added after record creation.
 
 ---
 
-# 45. Metadata Update
+## 45. Metadata Update
 
 ```http
 PATCH /api/v1/records/:id/metadata
@@ -1216,7 +1188,7 @@ Does not alter raw record data.
 
 ---
 
-# 46. Amendments
+## 46. Amendments
 
 ```http
 POST /api/v1/records/:id/revisions
@@ -1238,7 +1210,7 @@ Raw capture remains unchanged.
 
 ---
 
-# 47. Project Settings
+## 47. Project Settings
 
 ```http
 GET /api/v1/projects/:id/settings
@@ -1256,7 +1228,7 @@ AI processing
 
 ---
 
-# 48. Global Settings
+## 48. Global Settings
 
 ```http
 GET /api/v1/settings
@@ -1278,7 +1250,7 @@ Secrets must not be returned in plaintext after storage.
 
 ---
 
-# 49. AI Suggestions
+## 49. AI Suggestions
 
 Example:
 
@@ -1314,7 +1286,7 @@ It never rewrites raw source records.
 
 ---
 
-# 50. Export
+## 50. Export
 
 ```http
 POST /api/v1/export
@@ -1336,7 +1308,7 @@ Generated embeddings need not be exported by default.
 
 ---
 
-# 51. Import
+## 51. Import
 
 ```http
 POST /api/v1/import
@@ -1375,7 +1347,7 @@ Imports must not silently invent historical authority.
 
 ---
 
-# 52. Health Endpoints
+## 52. Health Endpoints
 
 ```http
 GET /health
@@ -1393,7 +1365,7 @@ AI provider availability must not determine core Scratchpad readiness.
 
 ---
 
-# 53. API Idempotency
+## 53. API Idempotency
 
 Record-creation APIs should support idempotency.
 
@@ -1409,7 +1381,7 @@ Idempotency state must be persisted.
 
 ---
 
-# 54. Concurrency
+## 54. Concurrency
 
 Mutable operations should use optimistic concurrency where needed.
 
@@ -1431,7 +1403,7 @@ Conflicting curated edits must not silently overwrite one another.
 
 ---
 
-# 55. Error Codes
+## 55. Error Codes
 
 Initial stable error set:
 
@@ -1467,7 +1439,7 @@ Additional codes may be added without changing the overall response envelope.
 
 ---
 
-# 56. MCP-to-API Flow
+## 56. MCP-to-API Flow
 
 Typical write:
 
@@ -1492,7 +1464,7 @@ MCP reports result to agent
 
 ---
 
-# 57. First Implementation Milestone
+## 57. First Implementation Milestone
 
 Implement only the minimum necessary for:
 
@@ -1530,7 +1502,7 @@ Everything else can build on this stable core.
 
 ---
 
-# 58. Compatibility Rule
+## 58. Compatibility Rule
 
 The HTTP API is the contract between the Go MCP and TypeScript application.
 
@@ -1542,26 +1514,23 @@ Generated TypeScript and Go clients may be introduced if useful.
 
 OpenAPI becomes documentation and validation, not a requirement for the first scaffold commit.
 
-# 59. Accepted clarification — enrollment contract requirements
+## 59. Accepted clarification — enrollment contract requirements
 
 The owner accepted browser-first setup and administrator-controlled recovery on 2026-09-29; see architecture §24 and decision `scratchpad-20260929-010`.
 
 The authentication contract must additionally support initial setup-token redemption with first-passkey registration, authenticated credential enrollment with MCP proof of possession, and a separate audited replacement-passkey recovery flow. Setup/recovery capabilities are short-lived and single-use; initial setup stays disabled after owner enrollment. These flows must preserve project data and restart-safe authentication semantics. Their endpoint names and exact wire formats will be specified during implementation.
 
-
-# 60. Accepted clarification — MCP session lifetime
+## 60. Accepted clarification — MCP session lifetime
 
 Per decision `scratchpad-20260929-011`, successful MCP challenge verification issues a session token valid for up to 24 hours, unless revoked earlier. The client stores it only in MCP process memory and authenticates again after restart or expiry. Credential revocation immediately invalidates associated sessions. No refresh-token API is required initially. Server-side authorization state must survive application restarts; challenges remain random, short-lived, and single-use. Exact signing and token representation remain implementation details.
 
-
-# 61. Accepted clarification — local workspace selection
+## 61. Accepted clarification — local workspace selection
 
 Project-scoped MCP tools accept optional `workingDirectory`; otherwise discovery starts from the process launch directory (decision `scratchpad-20260929-012`). Resolve context separately for each call and return the resolved project so the caller can see which project was used.
 
 `workingDirectory` selects local MCP filesystem context, not a filesystem location for the central API to access or a permanent project identity. The MCP sends resolved project/Git context through the API; existing non-Git and ambiguity rules still apply.
 
-
-# 62. Accepted clarification — capture payload and evolution
+## 62. Accepted clarification — capture payload and evolution
 
 Decision `scratchpad-20260929-013` clarifies §§9, 12–20, and 38:
 
@@ -1573,8 +1542,7 @@ Decision `scratchpad-20260929-013` clarifies §§9, 12–20, and 38:
 
 The user's approval explicitly requires flexibility. Versioning and client-compatibility mechanics will be specified during implementation; a configurable schema engine is not an initial requirement.
 
-
-# 63. Accepted clarification — retry and edit-conflict semantics
+## 63. Accepted clarification — retry and edit-conflict semantics
 
 Decision `scratchpad-20260929-014` fixes the behavior described in §§53–54:
 
@@ -1586,8 +1554,7 @@ Decision `scratchpad-20260929-014` fixes the behavior described in §§53–54:
 
 Persisted idempotency state and an explicit revision precondition must support these behaviors. Concrete key scope, equality rules, retention, and version-versus-ETag syntax will be specified during implementation.
 
-
-# 64. Accepted clarification — mirror outcome contract
+## 64. Accepted clarification — mirror outcome contract
 
 Per decision `scratchpad-20260929-015`, repository mirroring requires both local MCP enablement and project permission, with `decision`, `adr`, and `business_decision` eligible by default. Persist the central record before any mirror append. Return the central record identity even if mirroring fails, with an explicit partial-success outcome. Retrying must not duplicate central or local records.
 

@@ -17,3 +17,9 @@ Implement the accepted PRD and addenda using npm workspaces: `apps/web` for TanS
 ## Completion evidence
 
 Track verified commands and outstanding work in handoffs and decision records. The initial repository had only six documentation files and two local commits; GitHub repository was public and empty when implementation began. No release artifact or deployment exists merely because a workflow is present.
+
+## Dashboard integration checkpoint — 2026-09-29
+
+The production web build and disposable Playwright workflow passed locally. Run `npm run build -w @scratchpad/web` followed by `npm run test:e2e` to exercise virtual passkey enrollment, browser capture and editing, SSH key enrollment, the real stdio MCP binary, and persistence across a server restart. The test creates and removes its own database and credentials; screenshots remain ignored under `test-results/`.
+
+Docker smoke verification of the final startup command, remote GitHub Actions runs, and live Pages deployment are still pending. This checkpoint does not establish full MVP or deployment acceptance.

@@ -1,0 +1,189 @@
+import { useState } from "react";
+import { api, label, type Project, post, types } from "../lib/api";
+
+const fields: Record<string, string[]> = {
+  decision: ["decision", "rationale"],
+  adr: ["decision", "context", "rationale"],
+  business_decision: ["decision", "rationale", "requestedBy"],
+  finding: ["finding", "environment"],
+  qa: ["question", "answer"],
+  failure: ["observed", "expected", "lesson"],
+  constraint: ["constraint", "reason", "scope"],
+  project_state: ["state", "reason", "followUp"],
+};
+export function Capture({
+  projects,
+  onClose,
+  onSaved,
+}: {
+  projects: Project[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [type, setType] = useState("finding");
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [payload, setPayload] = useState<Record<string, string>>({});
+  const [authority, setAuthority] = useState("explicit");
+  const [confidence, setConfidence] = useState("unknown");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  function change() {
+    setRequestId(crypto.randomUUID());
+  }
+  async function save() {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/records", {
+        ...post({
+          projectId,
+          record: {
+            type,
+            title,
+            authority,
+            confidence,
+            payload,
+            actor: { kind: "user", client: "browser" },
+          },
+        }),
+        headers: { "Idempotency-Key": requestId },
+      });
+      onSaved();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not save record.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="modal-backdrop">
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="capture-title"
+        className="modal"
+      >
+        <header>
+          <h2 id="capture-title">New record</h2>
+          <button type="button" onClick={onClose}>
+            Close
+          </button>
+        </header>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+          onChange={change}
+        >
+          <div className="form-grid">
+            <label>
+              Project
+              <select
+                aria-label="Project"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                required
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Type
+              <select
+                aria-label="Type"
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  setPayload({});
+                }}
+              >
+                {types.map((t) => (
+                  <option key={t} value={t}>
+                    {label(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label>
+            Title
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required
+              maxLength={500}
+            />
+          </label>
+          {fields[type]?.map((field, index) => (
+            <label key={field}>
+              {label(field)}
+              {index > 0 && !(type === "qa" && field === "answer") && (
+                <small>Optional</small>
+              )}
+              <textarea
+                rows={3}
+                value={payload[field] ?? ""}
+                onChange={(e) =>
+                  setPayload({ ...payload, [field]: e.target.value })
+                }
+                required={index === 0 || type === "qa"}
+              />
+            </label>
+          ))}
+          <div className="form-grid">
+            <label>
+              Authority
+              <select
+                aria-label="Authority"
+                value={authority}
+                onChange={(e) => setAuthority(e.target.value)}
+              >
+                {["explicit", "observed", "inferred"].map((t) => (
+                  <option key={t} value={t}>
+                    {label(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Confidence
+              <select
+                aria-label="Confidence"
+                value={confidence}
+                onChange={(e) => setConfidence(e.target.value)}
+              >
+                {["unknown", "low", "medium", "high"].map((t) => (
+                  <option key={t} value={t}>
+                    {label(t)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          <button
+            type="submit"
+            className="primary"
+            disabled={busy || !projectId}
+          >
+            {busy ? "Saving…" : "Save record"}
+          </button>
+          {!projects.length && <p>Create a project first.</p>}
+        </form>
+      </section>
+    </div>
+  );
+}

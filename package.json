@@ -15,7 +15,9 @@
     "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs",
     "test": "npm run test -w @scratchpad/web",
     "lint": "biome check . && prettier --check . && markdownlint-cli2 && node scripts/check-decisions.mjs",
-    "format": "biome check --write . && prettier --write ."
+    "format": "biome check --write . && prettier --write .",
+    "admin": "npm exec -w @scratchpad/web -- tsx src/server/admin.ts",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

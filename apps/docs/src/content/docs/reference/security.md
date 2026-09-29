@@ -3,17 +3,17 @@ title: Security & recovery
 description: The single-owner authentication and recovery model.
 ---
 
-:::note[Design contract]
-These are accepted requirements. They do not constitute a claim that a production release or independent security review exists.
+:::note[Initial implementation]
+The server implements these authentication and recovery flows. There is no production release or independent security review yet.
 :::
 
 Scratchpad V1 is one owner per instance, with multiple browser credentials and agent credentials. Browser and MCP authentication use separate mechanisms.
 
 ## First owner
 
-An administrator command on the server creates a short-lived, single-use setup token. The owner opens the setup page at the configured origin, supplies the token, and registers the first passkey. Ordinary initial setup stays disabled after enrollment.
+`npm run admin -- setup` on the server creates a 15-minute, single-use setup token. The owner opens the setup page at the configured origin, supplies the token, and registers the first passkey. Ordinary initial setup stays disabled after enrollment.
 
-SimpleWebAuthn handles passkey verification. The implementation must verify the expected relying party, origin, challenge, and registration/authentication response.
+SimpleWebAuthn handles passkey verification. Verification checks the expected relying party, origin, challenge, and registration/authentication response.
 
 ## Agent enrollment
 
@@ -23,7 +23,7 @@ Random challenges are short-lived and single-use. MCP sessions last up to 24 hou
 
 ## Recovery
 
-Server administrative access is the recovery authority. A separate recovery command authorizes replacement-passkey registration. Recovery is explicit and audited, preserves records, and does not reopen first-time setup.
+Server administrative access is the recovery authority. `npm run admin -- recover` authorizes replacement-passkey registration. Recovery is explicit and audited, preserves records, and does not reopen first-time setup.
 
 There is no email-delivery dependency or external identity provider in the initial flow.
 

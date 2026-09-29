@@ -32,7 +32,7 @@ The architecture prioritizes:
 
 ---
 
-# 2. System Overview
+## 2. System Overview
 
 ```text
 ┌──────────────────────────────┐
@@ -82,9 +82,9 @@ The architecture prioritizes:
 
 ---
 
-# 3. Technology Decisions
+## 3. Technology Decisions
 
-## 3.1 Web application and API
+### 3.1 Web application and API
 
 Use:
 
@@ -107,7 +107,7 @@ A separate HTTP framework is not required for V1.
 
 ---
 
-## 3.2 MCP
+### 3.2 MCP
 
 The local MCP is a separate Go executable.
 
@@ -123,7 +123,7 @@ It owns integration with the local development environment but does not own Scra
 
 ---
 
-## 3.3 Database
+### 3.3 Database
 
 Supported persistence engines:
 
@@ -147,9 +147,9 @@ Portability is provided by Scratchpad export/import.
 
 ---
 
-# 4. Application Boundaries
+## 4. Application Boundaries
 
-## 4.1 Scratchpad server owns
+### 4.1 Scratchpad server owns
 
 The central application owns:
 
@@ -171,7 +171,7 @@ The central application owns:
 
 ---
 
-## 4.2 MCP owns
+### 4.2 MCP owns
 
 The MCP owns:
 
@@ -190,7 +190,7 @@ The MCP owns:
 
 ---
 
-## 4.3 MCP must not own
+### 4.3 MCP must not own
 
 The MCP must not independently decide:
 
@@ -207,9 +207,9 @@ These belong to the server.
 
 ---
 
-# 5. Project Resolution
+## 5. Project Resolution
 
-## 5.1 Git repositories
+### 5.1 Git repositories
 
 When running inside Git:
 
@@ -242,7 +242,7 @@ The API maps that source identity to a stable internal project ID.
 
 ---
 
-## 5.2 Worktrees
+### 5.2 Worktrees
 
 Multiple worktrees for the same repository map to one project.
 
@@ -256,7 +256,7 @@ Worktree identity never creates a new project automatically.
 
 ---
 
-## 5.3 Multiple remotes
+### 5.3 Multiple remotes
 
 The MCP should use deterministic rules where possible.
 
@@ -275,7 +275,7 @@ The agent asks the user.
 
 ---
 
-## 5.4 Non-Git environments
+### 5.4 Non-Git environments
 
 Resolution hints, in order:
 
@@ -295,7 +295,7 @@ The agent asks the user for a project name and retries.
 
 ---
 
-# 6. Authentication Architecture
+## 6. Authentication Architecture
 
 Scratchpad has one owner with multiple possible credentials.
 
@@ -303,7 +303,7 @@ Credentials authenticate the owner, not separate user accounts.
 
 ---
 
-## 6.1 MCP authentication
+### 6.1 MCP authentication
 
 Preferred mechanism:
 
@@ -326,7 +326,7 @@ Potential credential sources:
 
 ---
 
-## 6.2 Browser authentication
+### 6.2 Browser authentication
 
 Use WebAuthn/passkeys.
 
@@ -350,7 +350,7 @@ Sessions use secure HTTP-only cookies.
 
 ---
 
-## 6.3 GitHub
+### 6.3 GitHub
 
 GitHub is not an authentication provider.
 
@@ -366,7 +366,7 @@ GitHub profile linkage must be visually distinct from authenticated identity.
 
 ---
 
-# 7. Stateful Application Model
+## 7. Stateful Application Model
 
 Scratchpad is a stateful application.
 
@@ -390,7 +390,7 @@ In-memory caching is allowed only when losing the cache changes performance rath
 
 ---
 
-# 8. Record Architecture
+## 8. Record Architecture
 
 Scratchpad separates:
 
@@ -404,7 +404,7 @@ DERIVED KNOWLEDGE
 
 ---
 
-## 8.1 Raw knowledge
+### 8.1 Raw knowledge
 
 Raw captured records are immutable.
 
@@ -420,7 +420,7 @@ Raw content is never automatically rewritten.
 
 ---
 
-## 8.2 Curated knowledge
+### 8.2 Curated knowledge
 
 Human-curatable representations may include:
 
@@ -434,7 +434,7 @@ Changes are mutable but fully audited.
 
 ---
 
-## 8.3 Derived knowledge
+### 8.3 Derived knowledge
 
 Generated/rebuildable information includes:
 
@@ -450,7 +450,7 @@ Derived data can be deleted and regenerated without losing authoritative history
 
 ---
 
-# 9. Record Types
+## 9. Record Types
 
 V1 supports distinct types:
 
@@ -469,7 +469,7 @@ All share a common record envelope while supporting type-specific payloads.
 
 ---
 
-# 10. Dual-Write Architecture
+## 10. Dual-Write Architecture
 
 Central Scratchpad storage is authoritative.
 
@@ -503,7 +503,7 @@ The API and MCP should return partial-success information clearly.
 
 ---
 
-# 11. Repository Mirror Format
+## 11. Repository Mirror Format
 
 V1 should use a simple append-friendly structured format.
 
@@ -531,11 +531,11 @@ Two-way synchronization is out of scope.
 
 ---
 
-# 12. Search Architecture
+## 12. Search Architecture
 
 Search has three levels.
 
-## 12.1 Structured filtering
+### 12.1 Structured filtering
 
 Always available.
 
@@ -552,7 +552,7 @@ Filters include:
 
 ---
 
-## 12.2 Full-text search
+### 12.2 Full-text search
 
 Always available.
 
@@ -570,7 +570,7 @@ native full-text search
 
 ---
 
-## 12.3 Semantic search
+### 12.3 Semantic search
 
 Optional.
 
@@ -582,7 +582,7 @@ Semantic results are derived search results.
 
 ---
 
-# 13. Background Jobs
+## 13. Background Jobs
 
 No Redis or external queue is required.
 
@@ -614,7 +614,7 @@ The job model must permit separating the worker later without schema redesign.
 
 ---
 
-# 14. Optional AI Architecture
+## 14. Optional AI Architecture
 
 The AI layer uses an internal provider interface.
 
@@ -622,11 +622,11 @@ Conceptually:
 
 ```ts
 interface CompletionProvider {
-  complete(input: CompletionInput): Promise<CompletionResult>
+  complete(input: CompletionInput): Promise<CompletionResult>;
 }
 
 interface EmbeddingProvider {
-  embed(input: string[]): Promise<number[][]>
+  embed(input: string[]): Promise<number[][]>;
 }
 ```
 
@@ -642,7 +642,7 @@ Other compatible implementations may work without dedicated adapters.
 
 ---
 
-# 15. AI Safety Boundary
+## 15. AI Safety Boundary
 
 AI processing may produce suggestions.
 
@@ -663,7 +663,7 @@ AI output must include:
 
 ---
 
-# 16. Cross-Project Analysis
+## 16. Cross-Project Analysis
 
 Cross-project analysis is an optional project capability.
 
@@ -679,7 +679,7 @@ Cross-project jobs must filter out projects that do not permit participation bef
 
 ---
 
-# 17. Dashboard Architecture
+## 17. Dashboard Architecture
 
 Primary screens expected for V1:
 
@@ -706,9 +706,9 @@ Exact information architecture may evolve.
 
 ---
 
-# 18. Deployment Architecture
+## 18. Deployment Architecture
 
-## 18.1 SQLite deployment
+### 18.1 SQLite deployment
 
 Minimum:
 
@@ -725,7 +725,7 @@ No supporting service required.
 
 ---
 
-## 18.2 PostgreSQL deployment
+### 18.2 PostgreSQL deployment
 
 ```text
 Scratchpad container
@@ -737,7 +737,7 @@ Optional local LLM remains independent.
 
 ---
 
-## 18.3 AI-enabled deployment
+### 18.3 AI-enabled deployment
 
 Example:
 
@@ -753,7 +753,7 @@ AI jobs should fail/retry independently.
 
 ---
 
-# 19. CI
+## 19. CI
 
 GitHub Actions is used for Scratchpad itself.
 
@@ -777,17 +777,17 @@ Go:
 
 ---
 
-# 20. Releases
+## 20. Releases
 
 A release produces two independent deliverables.
 
-## Application
+### Application
 
 ```text
 ghcr.io/alexcatdad/scratchpad:<version>
 ```
 
-## MCP
+### MCP
 
 GitHub Release binaries:
 
@@ -810,7 +810,7 @@ The existing Homebrew tap is automatically updated.
 
 ---
 
-# 21. Source Repository Structure
+## 21. Source Repository Structure
 
 Recommended initial structure:
 
@@ -857,7 +857,7 @@ The API contract is their integration boundary.
 
 ---
 
-# 22. Architectural Constraints
+## 22. Architectural Constraints
 
 The following should remain true unless explicitly superseded:
 
@@ -876,7 +876,7 @@ The following should remain true unless explicitly superseded:
 
 ---
 
-# 23. First Vertical Slice
+## 23. First Vertical Slice
 
 Implementation should first prove:
 
@@ -900,7 +900,7 @@ Before implementing:
 
 This vertical slice proves the central product architecture.
 
-# 24. Accepted clarification — owner enrollment and recovery
+## 24. Accepted clarification — owner enrollment and recovery
 
 Accepted by the owner on 2026-09-29 (decision `scratchpad-20260929-010`). This section supplements the supplied v0.1 baseline.
 
@@ -913,8 +913,7 @@ Accepted by the owner on 2026-09-29 (decision `scratchpad-20260929-010`). This s
 
 Exact command names, endpoints, token lifetimes, and existing-session handling on recovery remain implementation details. This approval does not yet select the MCP signature encoding or token lifetime.
 
-
-# 25. Accepted clarification — simple MCP sessions
+## 25. Accepted clarification — simple MCP sessions
 
 Accepted on 2026-09-29 (decision `scratchpad-20260929-011`).
 
@@ -924,8 +923,7 @@ Server-side session validity and revocation state remain persistent and restart-
 
 This replaces the earlier unaccepted 15-minute-token proposal. Exact signature encoding, signed fields, challenge lifetime, and server token representation remain engineering details; the two-minute challenge suggestion was not adopted as a requirement.
 
-
-# 26. Accepted clarification — MCP working directory
+## 26. Accepted clarification — MCP working directory
 
 Accepted on 2026-09-29 (decision `scratchpad-20260929-012`).
 
@@ -933,8 +931,7 @@ Use the MCP process launch directory as the default discovery context. Project-s
 
 The earlier proposal to require a directory on every call was not adopted.
 
-
-# 27. Accepted clarification — flexible typed capture
+## 27. Accepted clarification — flexible typed capture
 
 Accepted on 2026-09-29 (decision `scratchpad-20260929-013`).
 
@@ -942,15 +939,13 @@ Keep explicit typed MCP capture tools, with natural fields such as decision/rati
 
 Treat the initial payload shapes as an evolving starting point. Keep required fields minimal, add optional structure as real usage warrants, and preserve original captures when schemas or renderers evolve. Historical records must remain readable without rewriting raw evidence to satisfy a newer shape. Avoid freezing a comprehensive taxonomy or building a dynamic schema platform in advance of demonstrated needs. Exact schema-versioning and compatibility mechanics remain implementation details.
 
-
-# 28. Accepted clarification — retries and concurrent edits
+## 28. Accepted clarification — retries and concurrent edits
 
 Accepted on 2026-09-29 (decision `scratchpad-20260929-014`). Retrying the same capture with the same request identity and content returns the existing record. Reusing that identity with changed content produces a conflict. Separate intentional captures remain separate even when text matches; do not perform automatic content-based deduplication.
 
 Mutable edits must detect stale revisions and return a conflict rather than silently overwrite intervening changes. No automatic merge is required. Raw captures remain immutable. Persist retry state as required by the API baseline; exact key scope, comparison rules, retention, and concurrency representation remain implementation details.
 
-
-# 29. Accepted clarification — simple local mirroring
+## 29. Accepted clarification — simple local mirroring
 
 Accepted on 2026-09-29 (decision `scratchpad-20260929-015`).
 

@@ -45,7 +45,7 @@ AI-generated information is derived knowledge and must never silently modify or 
 
 ---
 
-# 2. Product Thesis
+## 2. Product Thesis
 
 Developers routinely remember **what the code does** through source code and Git history but lose **why it became that way**.
 
@@ -74,7 +74,7 @@ The system then makes that history searchable and progressively more useful with
 
 ---
 
-# 3. Evidence and Origin
+## 3. Evidence and Origin
 
 Scratchpad originates from decision-log workflows already used in real projects.
 
@@ -116,7 +116,7 @@ Scratchpad must provide full project memory without requiring any repository mod
 
 ---
 
-# 4. Primary User
+## 4. Primary User
 
 The primary user is:
 
@@ -137,9 +137,9 @@ One installation represents one owner.
 
 ---
 
-# 5. Product Principles
+## 5. Product Principles
 
-## 5.1 Self-hosted first
+### 5.1 Self-hosted first
 
 Scratchpad should be trivial to operate on a homelab, workstation, NAS, or small server.
 
@@ -147,7 +147,7 @@ No cloud service should be required.
 
 ---
 
-## 5.2 Useful without AI
+### 5.2 Useful without AI
 
 Capture, retrieval, filtering, history inspection, and project management must work without:
 
@@ -160,7 +160,7 @@ AI enhances Scratchpad but does not make Scratchpad functional.
 
 ---
 
-## 5.3 Agent-native
+### 5.3 Agent-native
 
 Coding agents should be first-class clients rather than integrations added afterward.
 
@@ -168,7 +168,7 @@ The primary machine interface is MCP.
 
 ---
 
-## 5.4 Capture should be cheap
+### 5.4 Capture should be cheap
 
 Scratchpad deliberately accepts some noise.
 
@@ -182,7 +182,7 @@ Capture guidance will evolve with real usage.
 
 ---
 
-## 5.5 Raw history is immutable
+### 5.5 Raw history is immutable
 
 Original captured records are evidence.
 
@@ -190,7 +190,7 @@ They must never be silently rewritten, merged, summarized away, or deleted by au
 
 ---
 
-## 5.6 Derived knowledge is disposable
+### 5.6 Derived knowledge is disposable
 
 Summaries, clusters, inferred relationships, embeddings, patterns, recommendations, and other derived data may be regenerated.
 
@@ -198,7 +198,7 @@ They must remain distinguishable from source records.
 
 ---
 
-## 5.7 Provenance over false authority
+### 5.7 Provenance over false authority
 
 Scratchpad must distinguish:
 
@@ -212,7 +212,7 @@ An agent-generated interpretation must not silently become an authoritative huma
 
 ---
 
-## 5.8 Repository-aware, not repository-dependent
+### 5.8 Repository-aware, not repository-dependent
 
 Git provides excellent context for project identification and provenance.
 
@@ -220,7 +220,7 @@ Git must not be required as Scratchpad's persistence mechanism.
 
 ---
 
-# 6. Goals
+## 6. Goals
 
 Scratchpad should allow a developer or agent to answer:
 
@@ -239,7 +239,7 @@ Scratchpad should allow a developer or agent to answer:
 
 ---
 
-# 7. Non-Goals
+## 7. Non-Goals
 
 Scratchpad V1 is not intended to provide:
 
@@ -268,13 +268,13 @@ Team functionality may be contributed or developed later, but the architecture s
 
 ---
 
-# 8. Core Record Types
+## 8. Core Record Types
 
 Record types are intentionally distinct rather than forcing all developer memory into a generic decision object.
 
 Initial supported types:
 
-## 8.1 Decision
+### 8.1 Decision
 
 A general explicit choice.
 
@@ -284,7 +284,7 @@ Example:
 
 ---
 
-## 8.2 ADR / Technical Decision
+### 8.2 ADR / Technical Decision
 
 An architecture or technical choice with rationale, alternatives, and consequences.
 
@@ -294,7 +294,7 @@ Example:
 
 ---
 
-## 8.3 Business Decision
+### 8.3 Business Decision
 
 A product, stakeholder, commercial, or organizational decision.
 
@@ -304,7 +304,7 @@ Example:
 
 ---
 
-## 8.4 Finding
+### 8.4 Finding
 
 A non-obvious technical or operational observation.
 
@@ -314,7 +314,7 @@ Example:
 
 ---
 
-## 8.5 Question & Answer
+### 8.5 Question & Answer
 
 A question whose answer is expected to remain useful later.
 
@@ -324,7 +324,7 @@ Example:
 
 ---
 
-## 8.6 Failure / Lesson
+### 8.6 Failure / Lesson
 
 An unsuccessful approach, operational incident, unexpected behavior, or lesson worth avoiding later.
 
@@ -334,7 +334,7 @@ Example:
 
 ---
 
-## 8.7 Constraint
+### 8.7 Constraint
 
 A requirement that bounds implementation choices.
 
@@ -344,7 +344,7 @@ Example:
 
 ---
 
-## 8.8 Project State
+### 8.8 Project State
 
 A meaningful project status transition and its reason.
 
@@ -354,7 +354,7 @@ Example:
 
 ---
 
-# 9. Common Record Envelope
+## 9. Common Record Envelope
 
 All records should contain a small common envelope.
 
@@ -386,7 +386,7 @@ Required fields should remain small enough that agent capture stays cheap.
 
 ---
 
-# 10. Authority and Confidence
+## 10. Authority and Confidence
 
 The MCP instructions must require the calling agent to report the nature of the record and its confidence appropriately.
 
@@ -416,9 +416,9 @@ Agents are expected to report their own confidence rather than Scratchpad attemp
 
 ---
 
-# 11. Immutability and Audit Model
+## 11. Immutability and Audit Model
 
-## 11.1 Raw records
+### 11.1 Raw records
 
 Raw captured records are immutable.
 
@@ -426,7 +426,7 @@ Once created, their original content remains recoverable permanently unless the 
 
 ---
 
-## 11.2 Corrections and amendments
+### 11.2 Corrections and amendments
 
 Corrections should create an auditable revision or event.
 
@@ -434,7 +434,7 @@ The previous state remains recoverable.
 
 ---
 
-## 11.3 Mutable information
+### 11.3 Mutable information
 
 Mutable information may include:
 
@@ -450,7 +450,7 @@ Every meaningful mutation must produce an audit entry.
 
 ---
 
-## 11.4 Derived information
+### 11.4 Derived information
 
 Derived objects can be freely rebuilt.
 
@@ -467,7 +467,7 @@ Derived objects must reference the raw records that support them.
 
 ---
 
-# 12. Project Model
+## 12. Project Model
 
 The Scratchpad API supports an arbitrary number of projects.
 
@@ -477,9 +477,9 @@ Project identity is discovered from the working environment.
 
 ---
 
-# 13. Project Discovery
+## 13. Project Discovery
 
-## 13.1 Git repository
+### 13.1 Git repository
 
 When operating within a Git repository, the MCP determines:
 
@@ -505,7 +505,7 @@ Branch and worktree information remain record provenance, not project identity.
 
 ---
 
-## 13.2 Ambiguous Git identity
+### 13.2 Ambiguous Git identity
 
 If multiple remotes or repository conditions make project identity ambiguous, the MCP must report the ambiguity to the agent.
 
@@ -515,7 +515,7 @@ Scratchpad should not silently guess when ambiguity matters.
 
 ---
 
-## 13.3 Non-Git directories
+### 13.3 Non-Git directories
 
 If no Git repository exists, the MCP may inspect contextual hints such as:
 
@@ -531,7 +531,7 @@ The agent then asks the user for the desired project name and retries.
 
 ---
 
-# 14. MCP
+## 14. MCP
 
 The Scratchpad MCP is a local **stdio MCP server written in Go**.
 
@@ -550,7 +550,7 @@ Business logic belongs to the Scratchpad API, not the MCP binary.
 
 ---
 
-# 15. MCP Configuration
+## 15. MCP Configuration
 
 Local MCP configuration should remain minimal.
 
@@ -568,7 +568,7 @@ Other application behavior belongs in the Scratchpad dashboard.
 
 ---
 
-# 16. MCP Tools
+## 16. MCP Tools
 
 Initial tools should include capabilities equivalent to:
 
@@ -595,7 +595,7 @@ The first version should prefer explicit tools and schemas over a single overloa
 
 ---
 
-# 17. Dual-Write
+## 17. Dual-Write
 
 Scratchpad's central API is the primary memory store.
 
@@ -619,7 +619,7 @@ The central record should maintain enough provenance to indicate whether a repos
 
 ---
 
-# 18. Contractor and External Projects
+## 18. Contractor and External Projects
 
 Scratchpad must fully support projects where repository writes are prohibited.
 
@@ -637,7 +637,7 @@ The user may explicitly override these settings.
 
 ---
 
-# 19. Retrieval
+## 19. Retrieval
 
 Basic retrieval must not require AI.
 
@@ -658,7 +658,7 @@ PostgreSQL deployments should use PostgreSQL-native search capabilities.
 
 ---
 
-# 20. Project Context Retrieval
+## 20. Project Context Retrieval
 
 A key product capability should eventually expose a bounded project context suitable for an agent resuming work.
 
@@ -692,7 +692,7 @@ The summary must link back to underlying records.
 
 ---
 
-# 21. Cross-Project Memory
+## 21. Cross-Project Memory
 
 Scratchpad's central storage enables a capability unavailable to repository-local decision logs:
 
@@ -712,7 +712,7 @@ It must never silently include projects where this capability has been disabled.
 
 ---
 
-# 22. Optional AI Layer
+## 22. Optional AI Layer
 
 AI functionality is optional.
 
@@ -724,7 +724,7 @@ Provider-specific integrations are not required initially.
 
 ---
 
-# 23. AI Background Processing
+## 23. AI Background Processing
 
 When enabled, scheduled processing may suggest:
 
@@ -753,7 +753,7 @@ AI may not automatically:
 
 ---
 
-# 24. Embeddings
+## 24. Embeddings
 
 Embeddings are an optional secondary index.
 
@@ -774,7 +774,7 @@ SQLite vector capabilities may be added where appropriate without changing the a
 
 ---
 
-# 25. Browser Dashboard
+## 25. Browser Dashboard
 
 The dashboard is primarily for:
 
@@ -793,7 +793,7 @@ It is not intended to become a project-management system.
 
 ---
 
-# 26. Dashboard Configuration
+## 26. Dashboard Configuration
 
 The dashboard owns configuration such as:
 
@@ -815,7 +815,7 @@ MCP-local configuration should not duplicate these settings.
 
 ---
 
-# 27. Authentication
+## 27. Authentication
 
 Scratchpad has one owner but supports multiple credentials.
 
@@ -823,7 +823,7 @@ Authentication mechanisms are intentionally different for browser and MCP usage.
 
 ---
 
-## 27.1 Browser
+### 27.1 Browser
 
 Browser authentication uses **WebAuthn/passkeys**.
 
@@ -841,7 +841,7 @@ Browser sessions may use secure server-side session cookies.
 
 ---
 
-## 27.2 MCP
+### 27.2 MCP
 
 MCP authentication uses public-key challenge/response.
 
@@ -857,7 +857,7 @@ The private key never leaves the developer's machine or hardware token.
 
 ---
 
-## 27.3 HTTPS Git users
+### 27.3 HTTPS Git users
 
 Git transport and Scratchpad authentication are separate concerns.
 
@@ -871,7 +871,7 @@ GitHub credentials and PATs must not be reused as Scratchpad authentication secr
 
 ---
 
-# 28. Git Identity and GitHub Profile
+## 28. Git Identity and GitHub Profile
 
 `git config user.name` may be used for friendly presentation such as:
 
@@ -898,7 +898,7 @@ GitHub is not part of Scratchpad's root of trust.
 
 ---
 
-# 29. Stateful Application, Restart-Safe API
+## 29. Stateful Application, Restart-Safe API
 
 Scratchpad is a stateful application.
 
@@ -927,13 +927,13 @@ In-memory caching is permitted only as a disposable optimization.
 
 ---
 
-# 30. Database
+## 30. Database
 
 Scratchpad supports two persistence engines.
 
-## Default
+### Default
 
-**SQLite**
+SQLite
 
 Targeted at the normal single-developer self-hosted installation.
 
@@ -947,15 +947,15 @@ Benefits:
 
 ---
 
-## Optional
+### Optional
 
-**PostgreSQL**
+PostgreSQL
 
 Available for users who prefer PostgreSQL, heavier concurrency, or future native vector capabilities.
 
 ---
 
-## Portability
+### Portability
 
 Scratchpad does not provide transparent live migration between database engines.
 
@@ -967,9 +967,9 @@ The export format must preserve records, relationships, provenance, and audit hi
 
 ---
 
-# 31. Technology Stack
+## 31. Technology Stack
 
-## Server and dashboard
+### Server and dashboard
 
 - TypeScript
 - Node.js 24 LTS
@@ -992,7 +992,7 @@ A separate HTTP framework is not required initially.
 
 ---
 
-## MCP
+### MCP
 
 - Go
 - official MCP Go SDK
@@ -1009,9 +1009,9 @@ The Go MCP handles:
 
 ---
 
-# 32. Deployment
+## 32. Deployment
 
-## Scratchpad server
+### Scratchpad server
 
 Distributed as an OCI container through:
 
@@ -1041,7 +1041,7 @@ No Redis, message broker, vector database, or external authentication service is
 
 ---
 
-# 33. MCP Distribution
+## 33. MCP Distribution
 
 The Go MCP is distributed as native binaries through GitHub Releases.
 
@@ -1069,7 +1069,7 @@ No npm registry is required.
 
 ---
 
-# 34. macOS Distribution
+## 34. macOS Distribution
 
 macOS MCP release binaries must be:
 
@@ -1080,7 +1080,7 @@ Homebrew should reference only the signed/notarized release artifacts.
 
 ---
 
-# 35. CI and Release
+## 35. CI and Release
 
 GitHub Actions is the canonical CI/release system for Scratchpad.
 
@@ -1118,7 +1118,7 @@ Existing release patterns from the developer's Paw Proxy, Homebrew tap, Go MCP, 
 
 ---
 
-# 36. Initial Import
+## 36. Initial Import
 
 Scratchpad should support importing existing decision logs.
 
@@ -1136,7 +1136,7 @@ The USB Boop and Asource decision histories are appropriate initial real-world v
 
 ---
 
-# 37. MVP
+## 37. MVP
 
 The first usable vertical slice is:
 
@@ -1205,9 +1205,9 @@ AI features are not required to prove the initial capture/retrieval loop.
 
 ---
 
-# 38. MVP Acceptance Scenarios
+## 38. MVP Acceptance Scenarios
 
-## Scenario A — recover a historical technical choice
+### Scenario A — recover a historical technical choice
 
 Import USB Boop history.
 
@@ -1217,7 +1217,7 @@ Scratchpad returns the relevant records and supporting history without requiring
 
 ---
 
-## Scenario B — resume an interrupted project
+### Scenario B — resume an interrupted project
 
 USB Boop is paused.
 
@@ -1230,7 +1230,7 @@ Scratchpad can show:
 
 ---
 
-## Scenario C — explain an old stakeholder request
+### Scenario C — explain an old stakeholder request
 
 A stakeholder asks why a behavior was changed several months earlier.
 
@@ -1243,7 +1243,7 @@ Scratchpad retrieves:
 
 ---
 
-## Scenario D — contractor repository
+### Scenario D — contractor repository
 
 The agent operates inside a repository where decision files must not be committed.
 
@@ -1255,7 +1255,7 @@ The repository remains untouched.
 
 ---
 
-## Scenario E — worktrees
+### Scenario E — worktrees
 
 Several worktrees exist for one repository.
 
@@ -1263,7 +1263,7 @@ Records from all worktrees resolve to one Scratchpad project while preserving in
 
 ---
 
-## Scenario F — non-Git project
+### Scenario F — non-Git project
 
 An agent operates in a non-Git project.
 
@@ -1275,7 +1275,7 @@ The agent asks the user for a project name and retries successfully.
 
 ---
 
-## Scenario G — restart resilience
+### Scenario G — restart resilience
 
 The Scratchpad container is restarted.
 
@@ -1283,7 +1283,7 @@ Projects, sessions where appropriate, records, credentials, configuration, pendi
 
 ---
 
-# 39. Post-MVP Capabilities
+## 39. Post-MVP Capabilities
 
 After the core workflow is proven:
 
@@ -1339,7 +1339,7 @@ Sharing derived documents is preferred over granting broad shared access to the 
 
 ---
 
-# 40. Success Criteria
+## 40. Success Criteria
 
 The project should be considered useful when it demonstrably reduces repeated context reconstruction.
 
@@ -1357,7 +1357,7 @@ Record volume itself is not a success metric.
 
 ---
 
-# 41. Deferred Decisions
+## 41. Deferred Decisions
 
 The following should be tuned through actual usage rather than over-designed now:
 
@@ -1376,7 +1376,7 @@ The architecture should allow these behaviors to evolve without changing the imm
 
 ---
 
-# 42. Working Product Description
+## 42. Working Product Description
 
 > **Scratchpad is a private, self-hosted memory system for developers and coding agents. It captures decisions, findings, questions, failures, constraints, and project history through MCP and makes that context searchable across projects. Scratchpad works without AI and can optionally use local or OpenAI-compatible models to summarize, connect, and surface patterns in a developer's history.**
 

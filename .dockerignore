@@ -1,0 +1,13 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/.astro
+**/.tanstack
+data
+**/data
+*.sqlite*
+.env*
+!.env.example
+playwright-report
+test-results

@@ -3,7 +3,7 @@ title: MCP & project context
 description: The local stdio interface, project discovery, and authentication design.
 ---
 
-The planned `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context, authenticates to the central API, and optionally mirrors eligible captures into the selected checkout. Record business rules remain server-side.
+The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context, authenticates to the central API, and optionally mirrors eligible captures into the selected checkout. Record business rules remain server-side.
 
 ## Selecting the project
 
@@ -27,6 +27,32 @@ The MCP proves possession of an enrolled signing key. The server provides a rand
 
 Tokens stay in the MCP process memory. Restarting MCP requires authentication again. Revoking its credential immediately invalidates its sessions. Private signing keys remain local.
 
-## Installation status
+## Build and enroll
 
-The concrete tool inventory, launch flags, and client configuration belong to the implemented MCP and its tests. Follow the repository MCP README while this interface is being built; do not treat illustrative names in the design documents as a verified release API.
+Build the local binary using the [installation guide](/scratchpad/guides/installation/). Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
+
+Sign the exact displayed nonce **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The MCP handles subsequent authentication challenges automatically.
+
+## Client configuration
+
+Point your MCP client's stdio command at the absolute path to your locally built `dist/scratchpad-mcp` binary. Set these environment variables in that client's configuration:
+
+| Variable                 | Meaning                                                                       |
+| ------------------------ | ----------------------------------------------------------------------------- |
+| `SCRATCHPAD_URL`         | Required server origin; HTTP is allowed only on loopback                      |
+| `SCRATCHPAD_PUBLIC_KEY`  | Required absolute path to the enrolled OpenSSH public key                     |
+| `SCRATCHPAD_SIGNING_KEY` | Optional private-key path; otherwise use the public-key path with `ssh-agent` |
+| `SCRATCHPAD_MIRROR`      | Set to `true` to opt into local mirroring; off by default                     |
+| `SCRATCHPAD_MIRROR_PATH` | Repository-relative path; defaults to `scratchpad/decisions.jsonl`            |
+
+Keep the private key local and available through `ssh-agent` or the explicit signing-key path. A locked or missing key prevents authentication.
+
+## Available tools
+
+Capture tools are `record_decision`, `record_adr`, `record_business_decision`, `record_finding`, `record_qa`, `record_failure`, `record_constraint`, and `record_project_state`.
+
+They accept common `title`, `authority`, `confidence`, and `requestId` fields plus type-specific payloads. Reuse the original request ID and input on retry. Use a fresh ID for a separate intentional capture.
+
+Read tools are `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, and `find_related`. Related records come from stored relationships, not AI inference. `resolve_project` supports owner-confirmed project resolution when discovery is insufficient.
+
+The binary exposes its exact typed schemas through MCP tool discovery. Consult the [MCP README](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md) for the wire contract and development checks.

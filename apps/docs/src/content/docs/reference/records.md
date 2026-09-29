@@ -17,7 +17,7 @@ The server assigns record identity, receipt time, and verified credential attrib
 - Same request identity with different content: return a conflict.
 - Different request identities with identical text: preserve two intentional captures.
 
-Retry identity is persistent. A server restart must not turn a harmless retry into a duplicate.
+Retry identity is persistent and scoped to the authenticated credential. Comparison includes the resolved project and normalized capture payload, but excludes rediscovered Git context; the original capture retains its original Git provenance. A server restart must not turn a harmless retry into a duplicate.
 
 ## Concurrent changes
 
@@ -25,6 +25,6 @@ Raw records are immutable. An edit to mutable knowledge must include a revision 
 
 ## Initial HTTP surface
 
-The design's first subset includes MCP challenge verification, project resolution, project listing, record creation, record listing, and record detail. Authentication enrollment and browser session endpoints support that path.
+The implementation exposes MCP challenge verification, project resolution and listing, record creation and retrieval, search, relationships, native import/export, and browser credential enrollment under `/api/v1`.
 
-Use the implementation and tests to verify exact request and response formats as they land. The [API baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md) describes the larger contract; it is not a claim that every listed endpoint is already live.
+Use the implementation and tests to verify exact request and response formats. The [API baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md) describes the larger contract; it is not a claim that every listed endpoint is already live.

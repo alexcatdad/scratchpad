@@ -8,6 +8,8 @@
       "!**/.astro",
       "!**/.output",
       "!**/.tanstack",
+      "!**/test-results",
+      "!**/playwright-report",
       "!**/routeTree.gen.ts",
       "!**/go.sum",
       "!**/package-lock.json"

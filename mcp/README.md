@@ -20,13 +20,13 @@ CI must verify formatting without rewriting it (`test -z "$(gofmt -l .)"`), then
 
 Enroll an SSH public key from the authenticated dashboard first. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
 
-| Variable | Meaning |
-| --- | --- |
-| `SCRATCHPAD_URL` | Required server origin, e.g. `https://memory.example.com`; HTTP allowed only on loopback |
-| `SCRATCHPAD_PUBLIC_KEY` | Required absolute path to the enrolled OpenSSH public key |
+| Variable                 | Meaning                                                                                         |
+| ------------------------ | ----------------------------------------------------------------------------------------------- |
+| `SCRATCHPAD_URL`         | Required server origin, e.g. `https://memory.example.com`; HTTP allowed only on loopback        |
+| `SCRATCHPAD_PUBLIC_KEY`  | Required absolute path to the enrolled OpenSSH public key                                       |
 | `SCRATCHPAD_SIGNING_KEY` | Optional absolute private-key path; defaults to public-key path for signing through `ssh-agent` |
-| `SCRATCHPAD_MIRROR` | `true` enables optional repository mirroring locally; default off |
-| `SCRATCHPAD_MIRROR_PATH` | Repository-relative mirror file; default `scratchpad/decisions.jsonl` |
+| `SCRATCHPAD_MIRROR`      | `true` enables optional repository mirroring locally; default off                               |
+| `SCRATCHPAD_MIRROR_PATH` | Repository-relative mirror file; default `scratchpad/decisions.jsonl`                           |
 
 Launch the binary from the project folder. Every project-scoped tool accepts `workingDirectory` to override that folder for one call. No mutable current-project setting is shared between concurrent calls. Non-Git and ambiguous contexts require an explicit `projectId` or owner-confirmed `resolve_project` call. Git `origin` takes precedence; otherwise one unique fetch identity is required. Equivalent SSH/HTTPS remote forms and worktrees map to the same source identity. Credentials embedded in Git remotes are stripped from transmitted remote context.
 

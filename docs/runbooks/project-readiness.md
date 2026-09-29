@@ -80,14 +80,14 @@ The product direction is sufficient for foundation work. Before implementing dep
 
 ### Prioritized gaps
 
-| Priority / timing | Missing item | Concrete completion condition |
-| --- | --- | --- |
-| Before owner/project schema | Owner boundary | Settle single owner versus shared users. Multiple agent/device credentials are compatible with single owner. |
-| Before enrollment implementation | Initial deployment and authentication flow | Choose the first supported deployment shape and browser origin; specify trusted initial enrollment, passkey registration, MCP SSH-key enrollment/challenge, sessions, revocation, and recovery. |
-| Before capture implementation | Record and API/MCP contract | Supply representative payloads, field semantics, enum/unknown handling, raw-versus-editable boundaries, actor/source attribution, operation-key scope and retry semantics, pagination, and errors. Define how future amendments fit without implementing all of them in M1. |
-| Before resolver implementation | Active workspace discovery | Define how the MCP client receives a repository path when its process working directory differs from the agent's workspace or one process serves multiple projects. Establish explicit-path/selection precedence, Git remote normalization, and ambiguity handling. |
-| During initial scaffold | Architecture and reproducible development | Choose repository layout, package manager, maintained libraries, database access/migrations, contract ownership between TypeScript and Go, and configuration. Verify current compatibility before pinning versions. Provide README, repository agent instructions, ignored local data/secrets, run/test commands, and minimal CI. |
-| Alongside first slice | Executable acceptance fixtures | Implement a real MCP protocol-to-API/database test and browser smoke path for the M1 scenarios, including restart persistence, retry conflicts, ambiguous identity, wrong-project access, and server failure. Use small synthetic fixtures before importing sensitive live data. |
+| Priority / timing                | Missing item                               | Concrete completion condition                                                                                                                                                                                                                                                                                                     |
+| -------------------------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Before owner/project schema      | Owner boundary                             | Settle single owner versus shared users. Multiple agent/device credentials are compatible with single owner.                                                                                                                                                                                                                      |
+| Before enrollment implementation | Initial deployment and authentication flow | Choose the first supported deployment shape and browser origin; specify trusted initial enrollment, passkey registration, MCP SSH-key enrollment/challenge, sessions, revocation, and recovery.                                                                                                                                   |
+| Before capture implementation    | Record and API/MCP contract                | Supply representative payloads, field semantics, enum/unknown handling, raw-versus-editable boundaries, actor/source attribution, operation-key scope and retry semantics, pagination, and errors. Define how future amendments fit without implementing all of them in M1.                                                       |
+| Before resolver implementation   | Active workspace discovery                 | Define how the MCP client receives a repository path when its process working directory differs from the agent's workspace or one process serves multiple projects. Establish explicit-path/selection precedence, Git remote normalization, and ambiguity handling.                                                               |
+| During initial scaffold          | Architecture and reproducible development  | Choose repository layout, package manager, maintained libraries, database access/migrations, contract ownership between TypeScript and Go, and configuration. Verify current compatibility before pinning versions. Provide README, repository agent instructions, ignored local data/secrets, run/test commands, and minimal CI. |
+| Alongside first slice            | Executable acceptance fixtures             | Implement a real MCP protocol-to-API/database test and browser smoke path for the M1 scenarios, including restart persistence, retry conflicts, ambiguous identity, wrong-project access, and server failure. Use small synthetic fixtures before importing sensitive live data.                                                  |
 
 ### PRD ambiguities to resolve
 
@@ -112,7 +112,6 @@ The product direction is sufficient for foundation work. Before implementing dep
 4. Scaffold the repository, document development commands, add minimal CI, and implement the first slice with its executable acceptance checks.
 
 Do not treat all later-release questions as prerequisites for starting development. No scaffold, dependency installation, network deployment, commit, or push was performed in this review.
-
 
 ## Reconciled development readiness — original PRD supplied 2026-09-29
 
@@ -152,7 +151,6 @@ Cross-project analysis policy is specified, but the source does not explicitly e
 
 Write `docs/architecture.md` and a concrete first-slice contract using the supplied product choices. Resolve enrollment/workspace handoff in those documents, then scaffold and test the first internal loop while retaining the full source MVP scope. No additional broad product-discovery round is needed. No implementation, dependency validation, signing setup, release, commit, or deployment was performed during reconciliation.
 
-
 ## Architecture and API baseline reconciliation — 2026-09-29
 
 ### Source and maintenance
@@ -176,14 +174,14 @@ There is no need to write another architecture or conceptual API document before
 
 ### First-slice clarifications
 
-| Item | Existing baseline | Remaining implementation detail |
-| --- | --- | --- |
-| Trusted enrollment and browser access | Single owner, passkeys, enrolled public-key challenge auth | First credential enrollment, recovery route, browser enrollment/login endpoints, configured origin, and how the first dashboard is authenticated. API §57's small endpoint subset does not enumerate all of this; it does not authorize bypassing browser auth. |
-| Challenge proof and authorization | Single-use persisted challenges; namespace; short-lived token | Exact signed byte representation/algorithm, binding to purpose/credential/instance, atomic consume behavior, token storage/expiry/revocation. Authenticated project resolution must follow obtaining authorization; API §56 lists resolution before authentication and needs ordering clarification. |
-| Workspace context | MCP owns cwd/Git inspection | Per-call workspace source/precedence when process cwd differs from the agent's checkout, and behavior for multiple workspaces. Suggested origin priority must not override the stated competing-remote ambiguity rule. |
-| Complete record shape | Raw Record in API §9; typed payloads in §§12–20; payload in create example §38 | Put payload explicitly in persisted/returned record shape and define type/payload validation. Specify which actor/credential/timestamp fields the server derives versus client-supplied attribution. Define content/payload consistency rather than silently discarding one. |
-| Resolved project on create | Resolution returns stable ID; create example uses sourceIdentity | Define ID-based creation for manual/non-Git projects and how conflicting supplied identifiers are rejected. Define when resolve creates versus only matches projects. Weak folder/manifest hints must not silently merge unrelated projects. |
-| Mutation and list behavior | Persisted Idempotency-Key; version or ETag; cursor direction | Choose concrete key scope, payload comparison, expiry/replay behavior, conflict response, initial concurrency mechanism, list response envelopes, ordering, cursor semantics, and validation limits. |
+| Item                                  | Existing baseline                                                              | Remaining implementation detail                                                                                                                                                                                                                                                                      |
+| ------------------------------------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Trusted enrollment and browser access | Single owner, passkeys, enrolled public-key challenge auth                     | First credential enrollment, recovery route, browser enrollment/login endpoints, configured origin, and how the first dashboard is authenticated. API §57's small endpoint subset does not enumerate all of this; it does not authorize bypassing browser auth.                                      |
+| Challenge proof and authorization     | Single-use persisted challenges; namespace; short-lived token                  | Exact signed byte representation/algorithm, binding to purpose/credential/instance, atomic consume behavior, token storage/expiry/revocation. Authenticated project resolution must follow obtaining authorization; API §56 lists resolution before authentication and needs ordering clarification. |
+| Workspace context                     | MCP owns cwd/Git inspection                                                    | Per-call workspace source/precedence when process cwd differs from the agent's checkout, and behavior for multiple workspaces. Suggested origin priority must not override the stated competing-remote ambiguity rule.                                                                               |
+| Complete record shape                 | Raw Record in API §9; typed payloads in §§12–20; payload in create example §38 | Put payload explicitly in persisted/returned record shape and define type/payload validation. Specify which actor/credential/timestamp fields the server derives versus client-supplied attribution. Define content/payload consistency rather than silently discarding one.                         |
+| Resolved project on create            | Resolution returns stable ID; create example uses sourceIdentity               | Define ID-based creation for manual/non-Git projects and how conflicting supplied identifiers are rejected. Define when resolve creates versus only matches projects. Weak folder/manifest hints must not silently merge unrelated projects.                                                         |
+| Mutation and list behavior            | Persisted Idempotency-Key; version or ETag; cursor direction                   | Choose concrete key scope, payload comparison, expiry/replay behavior, conflict response, initial concurrency mechanism, list response envelopes, ordering, cursor semantics, and validation limits.                                                                                                 |
 
 These are implementation details to settle alongside the first scaffold; they do not justify another broad product discovery round. An initial confidence vocabulary is already provided, so do not reopen it as missing.
 
@@ -202,11 +200,9 @@ The product, architecture, and logical API baseline are now present. Foundation 
 
 This reconciliation did not verify dependency compatibility, execute application tests, scaffold code, create a commit, or publish anything.
 
-
 ## Initial documentation checkpoint
 
 The user requested a local commit of the initial documents before discussing implementation recommendations. For this checkpoint: inspect Git status and the complete file list; validate decision-log JSONL and supplied-document copies; stage only `docs/` and `decisions.jsonl`; inspect the staged summary; commit with `docs: add initial Scratchpad specifications`; verify the resulting commit and clean working tree. Do not push unless requested. Subsequent recommendations remain proposals until resolved with the user.
-
 
 ## Recording accepted implementation clarifications
 
@@ -214,18 +210,13 @@ For each user-approved recommendation, inspect current files, append a clearly d
 
 On 2026-09-29 the user accepted browser-first setup with an administrator-generated single-use token, passkey registration, dashboard-managed credentials, SimpleWebAuthn, and separate administrator-authorized recovery. Architecture §24 and API §59 close that gap. Detailed MCP challenge/token behavior is the next discussion.
 
-
 On 2026-09-29 the user accepted the simplified MCP authentication flow with sessions lasting up to 24 hours, client-memory token storage, reauthentication after MCP restart, immediate credential revocation, and no refresh tokens. Architecture §25 and API §60 record it. The earlier 15-minute recommendation was not adopted. Workspace handoff is the next pending recommendation.
-
 
 On 2026-09-29 the user accepted MCP process launch-directory discovery by default, optional per-call `workingDirectory`, and resolved-project visibility in results. Architecture §26 and API §61 close the workspace-handoff decision. Requiring a directory on every call was not adopted. The remaining record-shape clarification is next; no record-format proposal has been approved by this entry.
 
-
 On 2026-09-29 the user accepted typed payloads with deterministically generated content, server-assigned identity/timestamps, and resolved-project-ID creation, explicitly requiring that schemas remain flexible and adapt through use. Architecture §27 and API §62 record the clarification. Keep optional fields optional, preserve historical raw captures/readability, and avoid premature schema machinery. Retry/concurrency defaults remain a separate pending recommendation.
 
-
 On 2026-09-29 the user accepted repeat-capture replay, conflicts for changed content under the same request identity, conflicts for stale edits, and preservation of separate intentional captures even when text matches. Architecture §28 and API §63 record these semantics. Exact wire representations remain implementation details; repository mirroring enablement and failure behavior are the next proposed clarification.
-
 
 ## Decision-review completion — 2026-09-29
 
