@@ -2,7 +2,12 @@
 set -euo pipefail
 
 # CI installs the exact versions below. Local runs fail explicitly on drift.
-[[ $(actionlint -version | head -n 1) == '1.7.12' ]]
+actionlint_version=$(actionlint -version | head -n 1)
+# Source builds prefix the version with v; release binaries omit it.
+if [[ ${actionlint_version#v} != '1.7.12' ]]; then
+  printf 'Expected actionlint 1.7.12, found %s\n' "$actionlint_version" >&2
+  exit 1
+fi
 shellcheck --version | grep -Fqx 'version: 0.11.0'
 actionlint
 shellcheck scripts/*.sh
