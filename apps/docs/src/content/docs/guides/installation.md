@@ -39,7 +39,7 @@ docker compose up --build -d
 docker compose exec scratchpad npm run admin -- setup
 ```
 
-The local Compose configuration serves the dashboard on port 3000 and stores SQLite in a persistent volume. Follow the repository deployment runbook before moving beyond localhost: remote instances require HTTPS and a matching `SCRATCHPAD_PUBLIC_URL`.
+The local Compose configuration serves the dashboard on port 3000 and stores SQLite in a persistent volume. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before moving beyond localhost: remote instances require HTTPS and a matching `SCRATCHPAD_PUBLIC_URL`.
 
 ## Recover access
 

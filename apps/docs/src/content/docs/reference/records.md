@@ -28,3 +28,11 @@ Raw records are immutable. An edit to mutable knowledge must include a revision 
 The implementation exposes MCP challenge verification, project resolution and listing, record creation and retrieval, search, relationships, native import/export, and browser credential enrollment under `/api/v1`.
 
 Use the implementation and tests to verify exact request and response formats. The [API baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md) describes the larger contract; it is not a claim that every listed endpoint is already live.
+
+## Inspect a record in the dashboard
+
+Open a record to view its original typed payload, authority, confidence, and capture provenance. Git context, occurrence time, capture time, and recorded actor remain distinguishable. Imported records expose their preserved original entry.
+
+**Decision chain and relationships** shows links to other records and lets you navigate them. Replacement and partial-replacement relationships express different historical meanings; a partial replacement does not discard every earlier constraint. Proposed and accepted relationship states remain visible.
+
+Curated title, tags, summary, and archive status are editable metadata. Revision history and audit events record changes separately from original evidence. Evidence links retain their source references; they do not turn a past conclusion into current policy automatically.

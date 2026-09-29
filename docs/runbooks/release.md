@@ -35,9 +35,9 @@ The project has not selected a license in the repository. The generated tap form
 2. Run the development and infrastructure checks. Run `actionlint`, `shellcheck scripts/release-*.sh`, and `node --test scripts/release-formula.test.mjs` for release changes.
 3. Wait for the latest `CI` workflow at the exact intended commit to finish successfully. The release preflight checks that exact SHA; a green run on an earlier commit is insufficient.
 4. Choose an unused stable tag matching `vX.Y.Z`. Pre-release tags are deliberately outside this first pipeline.
-5. Confirm credentials and tap application access are available. Have the owner authorize the release/tag push before publishing.
+5. Confirm credentials and tap application access are available, and publish only the reviewed revision covered by the release request.
 
-Once authorized, tag the reviewed commit and push that tag. The push starts the workflow. A manual dispatch can retry an existing tag; it cannot fabricate an unreviewed source revision. Preflight also requires the tag commit to be reachable from `main`.
+Once the checks and prerequisites pass, tag the reviewed commit and push that tag. The push starts the workflow. A manual dispatch can retry an existing tag; it cannot fabricate an unreviewed source revision. Preflight also requires the tag commit to be reachable from `main`.
 
 ## Pipeline behavior
 
@@ -89,3 +89,7 @@ These post-publication checks remain necessary even if the workflow is green.
 Action tags and commit SHAs were resolved from each official GitHub repository's latest stable release on 2026-09-29. The workflow records both beside every action reference. Dependency updates must repeat that lookup and rerun the infrastructure checks.
 
 Apple's [notarization guidance](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) and [custom workflow documentation](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow) define Developer ID, hardened runtime, and acceptance requirements. Docker's [multi-platform Actions documentation](https://docs.docker.com/build/ci/github-actions/multi-platform/) covers the image matrix; GitHub's [container publication guidance](https://docs.github.com/en/actions/tutorials/publish-packages/publish-docker-images) describes GHCR token permissions.
+
+## Repository environment status
+
+The `action-runners` GitHub environment exists and restricts deployment refs to branch `main` and tags matching `v*`. Required Apple and GitHub App credentials remain unconfigured. Provision only the names listed above through GitHub environment settings; do not paste credential values into issues, logs, or documentation.

@@ -41,3 +41,11 @@ The server receives resolved identity and Git provenance; a local directory path
 Repository mirroring requires permission in both project settings and the local MCP configuration. Enabling either alone is insufficient.
 
 AI and embeddings are optional. Provider configuration must not become a requirement for capturing or retrieving records. Cross-project automated analysis needs its own explicit policy; it should not silently broaden data exposure.
+
+## Change project settings in the dashboard
+
+Open **Projects → Project settings** to choose enabled capture types, enable repository mirroring, select eligible mirror types, and set cross-project analysis permission. **Edit project** changes display information and classification. These are versioned updates; a stale edit returns a conflict instead of overwriting a newer change.
+
+Disabling a capture type prevents new captures of that type; it does not erase historical records. A successful retry still refers to the original capture. Mirror permission is checked against current project settings, so enabling a local flag cannot bypass an owner restriction.
+
+The cross-project analysis setting records policy for optional future processing. It does not imply an AI analysis engine is running.

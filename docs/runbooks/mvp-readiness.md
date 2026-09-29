@@ -1,26 +1,56 @@
 # MVP readiness
 
-## Scope
+## Scope and current conclusion
 
-Deliver PRD sections 36–38, including all capture/retrieval/project/authentication/operations/distribution requirements and acceptance scenarios A–G. AI, embeddings, pattern analysis, and PostgreSQL remain post-MVP. A working local development slice is not MVP acceptance.
+Readiness covers the complete PRD MVP and acceptance scenarios A–G, including capture/retrieval, project boundaries, authentication, operation, import/export, and distribution. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP. A local development slice does not establish release acceptance.
 
-## Work procedure
+The core implementation and release automation are present. Full MVP acceptance remains open because signed/notarized publication, both GHCR architectures, Homebrew delivery/installation, and final end-to-end acceptance at the release commit still need evidence. Missing signing and release credentials are concrete external blockers.
 
-1. Compare PRD and API contract with current code, tests, and published artifacts.
-2. Implement missing behaviors with coordinated ownership: server/import, MCP acceptance, release automation, dashboard/integration.
-3. Run meaningful server and real stdio tests, then browser tests and disposable Docker backup/restart/restore checks.
-4. Validate real USB Boop and Asource histories locally, preserving original content and uncertainty. Never publish private historical datasets in test fixtures or release artifacts.
-5. Run all lint, types, builds, race tests, and vulnerability checks. Commit and require GitHub Actions success for the release revision.
-6. Produce and validate signed/notarized macOS and Linux MCP assets, checksums, GHCR image, and Homebrew installation. Document missing credentials as blockers, never silently publish unsigned macOS assets.
-7. Audit every requirement and scenario against current evidence before declaring MVP ready.
+## Evidence ledger — 2026-09-29
 
-## Initial gaps found
+| Requirement                                                                                 | Authoritative evidence                                                                    | Current assessment                                                                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Owner enrollment, browser sign-in/recovery, SSH MCP auth, revocation                        | `apps/web/src/server/webauthn.test.ts`, `api.test.ts`, `tests/workflow.spec.ts`           | Baseline integration and the expanded Docker browser/real-MCP flow passed locally; final committed revision still needs exact-source CI.                                                                                       |
+| Eight typed captures, retry identity, immutable evidence, concurrent edit conflicts         | API/server tests and real Go MCP transport tests                                          | Implemented and covered by automated tests; record exact release-revision results before acceptance.                                                                                                                           |
+| Record provenance, evidence, relationship navigation, revisions, and audit UI               | `apps/web/src/components/record-detail.tsx`                                               | Implemented; expanded Docker browser checks passed locally, including title, evidence, audit, imports, and settings.                                                                                                           |
+| Enabled capture types, mirroring policy/types, project classification, cross-project policy | `projects.tsx`, `domain.ts`, `imports.test.ts`                                            | Implemented. Cross-project policy does not imply the deferred AI processor exists.                                                                                                                                             |
+| Legacy JSONL arrays, source IDs, original line/object preservation, diagnostics             | `imports.ts`, `imports.test.ts`; dashboard Settings import                                | Live server validation imported all 19 current USB Boop entries and 805 larger work-project entries; 800 source IDs retained in the larger set. Original objects/raw lines preserved; reimport after native restore adds zero. |
+| Native knowledge export/import and idempotent historical reimport                           | `imports.test.ts`, API tests                                                              | Knowledge migration preserves source evidence and audit history; excludes authentication.                                                                                                                                      |
+| Full operational backup and restore                                                         | `Store.backup`, admin `backup`, `imports.test.ts`, [deployment runbook](deployment.md)    | Passed disposable Docker online backup and fresh-volume restore; browser session, fresh MCP authentication, records, and retry identity survived. See [container acceptance](container-acceptance.md).                         |
+| Worktrees, multiple projects, restricted repositories, ambiguity                            | `mcp/internal/scratchpad/acceptance_test.go`, [MCP acceptance runbook](mcp-acceptance.md) | Agent reports vet, race tests, and vulnerability checks passed; tests use real temporary Git repositories and protocol calls.                                                                                                  |
+| Four native targets and version metadata                                                    | `scripts/release-build.sh`                                                                | All four compiled locally; binary formats inspected, macOS ARM64 version command verified. These local binaries are not signed release artifacts.                                                                              |
+| Signing/notarization, checksums, image/tap publication                                      | `.github/workflows/release.yml`, [release runbook](release.md)                            | Automation and lint/formula tests pass. Actual publication blocked by missing credentials.                                                                                                                                     |
+| English docs and Pages                                                                      | `apps/docs`, Documentation workflow                                                       | Public docs deployed at earlier verified revision; newest content requires its own deployment.                                                                                                                                 |
+| Final exact-source CI                                                                       | GitHub Actions                                                                            | Most recent inspected green CI and Documentation are at `10ecc4d73b1aed22c7f6659d01a3ca47aa431761`; later commits and pending edits are not covered by those runs.                                                             |
 
-- Legacy import skips array-valued decisions and discards historical IDs.
-- Dashboard omits relationship navigation, detailed provenance and audit history, legacy JSONL import, and most project controls.
-- Full SQLite backup/restore procedure is missing.
-- Real-world scenario acceptance and multi-worktree/restricted-repository coverage need explicit evidence.
-- Release workflow, published GHCR image, signed/notarized binaries, and Homebrew formula are missing.
-- Repository has no release secrets configured; credential provisioning is required for signed publication.
+Verified remote baseline: [CI run 36559490898](https://github.com/alexcatdad/scratchpad/actions/runs/36559490898), [Documentation run 36559490834](https://github.com/alexcatdad/scratchpad/actions/runs/36559490834). These links are historical evidence, not a claim about a later HEAD.
 
-This checklist is evidence tracking, not a claim that unchecked features are complete.
+## Latest local acceptance
+
+The Docker acceptance command `SCRATCHPAD_E2E_DOCKER=1 npm run test:e2e` passed (one workflow, 51.4 seconds). It used the actual image and disposable named volumes, browser passkey/SSH enrollment, all eight real Go stdio captures, an online backup, fresh-volume restore, new MCP process authentication, stable capture IDs/retries, browser session continuity, detail/audit/evidence, synthetic imported state, project settings, logout, and passkey sign-in. Its own containers and volumes were cleaned. This is local operational evidence, not remote release or public-host acceptance.
+
+The server import validation used private real histories locally: 19 USB Boop entries and 805 larger work-project entries, retaining 800 original IDs in the latter. The original JSON objects and raw lines were preserved. Native export/restore followed by identical legacy reimport added zero captures. The larger native export was approximately 13.3 MB, motivating the implemented 64 MiB import HTTP limit (32 MiB JSONL text); other API requests retain an 8 MiB limit. Historical sources themselves were not copied into public fixtures.
+
+## Closed implementation gaps
+
+- Added legacy import support for array-valued decisions and preserved historical IDs/source objects.
+- Added record relationship navigation, provenance, evidence, audit/revision visibility, JSONL import with notes, and project controls.
+- Added a consistent online SQLite backup command and explicit offline restore/upgrade rollback procedure.
+- Added real-worktree and unchanged-contractor-repository tests.
+- Added mandatory signed/notarized native-release and multiarchitecture image/tap delivery automation with safe recovery.
+
+Implementation closure and operational acceptance are separate. A source file or test name proves that a check exists, not that its most recent execution passed.
+
+## Remaining verification and external requirements
+
+1. Run all current application, browser/MCP, Go race/vulnerability, documentation, Docker, and infrastructure gates after the final integrated changes.
+2. Preserve the passed disposable Docker acceptance evidence and rerun it if operational changes affect backup/restore. Do not use an actual owner's live database for tests.
+3. Preserve the completed real-history import/reimport evidence and close any remaining scenario-level retrieval and replacement-chain acceptance gaps. Keep private historical data outside public fixtures/artifacts.
+4. Commit the integrated state and require GitHub Actions success for that exact commit. Deploy and check the updated public documentation independently.
+5. Provision the credentials named in the release runbook in the existing `action-runners` environment (limited to `main` and `v*` tags). Do not silently substitute unsigned macOS binaries.
+6. After the release revision passes CI and credentials are configured, publish a reviewed stable tag and verify every artifact, Apple acceptance, GHCR platform, and clean Homebrew installation.
+7. Audit PRD scenarios A–G against current evidence before declaring MVP ready. Report release publication, deployment, and user workflow acceptance separately.
+
+## Repeatable audit procedure
+
+Compare PRD/API contracts with code, meaningful tests, run results, and published artifacts. For every acceptance claim, record the exact revision and the scope the evidence covers. Preserve uncertainty when a check is pending or narrower than the requirement. Update this ledger after authoritative results change; do not carry a green baseline forward to changed source by assumption.

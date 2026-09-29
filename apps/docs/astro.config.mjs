@@ -38,6 +38,10 @@ export default defineConfig({
             },
             { label: "Configuration", slug: "guides/configuration" },
             { label: "MCP & project context", slug: "guides/mcp" },
+            {
+              label: "Releases & installation channels",
+              slug: "guides/releases",
+            },
           ],
         },
         {
