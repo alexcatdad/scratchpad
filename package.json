@@ -13,7 +13,7 @@
     "docs:dev": "npm run dev -w @scratchpad/docs",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs",
-    "test": "npm run test -w @scratchpad/web",
+    "test": "npm run test -w @scratchpad/web && node --test scripts/release-formula.test.mjs",
     "lint": "biome check . && prettier --check . && markdownlint-cli2 && node scripts/check-decisions.mjs",
     "format": "biome check --write . && prettier --write .",
     "admin": "npm exec -w @scratchpad/web -- tsx src/server/admin.ts",

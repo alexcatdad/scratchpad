@@ -1,0 +1,263 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing stable vX.Y.Z tag to release or recover
+        required: true
+        type: string
+      homebrew_only:
+        description: Retry tap delivery for an already published release without rebuilding artifacts
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: scratchpad-release
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: action-runners
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate tag, exact-source CI, and required credentials
+        id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          HOMEBREW_ONLY: ${{ inputs.homebrew_only || false }}
+          APP_ID: ${{ vars.APP_ID }}
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          names="APP_ID APP_SECRET"
+          if [[ "$HOMEBREW_ONLY" != true ]]; then
+            names="$names APPLE_CERTIFICATE_P12_BASE64 APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD"
+          fi
+          for name in $names; do
+            [[ -n "${!name}" ]] || { echo "Missing release credential: $name" >&2; exit 1; }
+          done
+          git fetch origin main "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG"
+          sha=$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")
+          git merge-base --is-ancestor "$sha" origin/main
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$sha" \
+            --limit 1 --json status,conclusion | jq -e 'length == 1 and .[0].status == "completed" and .[0].conclusion == "success"'
+          if [[ "$HOMEBREW_ONLY" == true ]]; then
+            gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
+          elif gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft > release-state.txt 2>/dev/null; then
+            [[ $(cat release-state.txt) == true ]] || { echo 'Release already published; use homebrew_only recovery.' >&2; exit 1; }
+          fi
+          printf 'tag=%s\nsha=%s\n' "$RELEASE_TAG" "$sha" >> "$GITHUB_OUTPUT"
+      - name: Check tap application access before publishing anything
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_SECRET }}
+          owner: alexcatdad
+          repositories: homebrew-tap
+          permission-contents: write
+  native:
+    if: inputs.homebrew_only != true
+    needs: preflight
+    environment: action-runners
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: darwin
+            arch: arm64
+            runner: macos-26
+          - os: darwin
+            arch: amd64
+            runner: macos-26
+          - os: linux
+            arch: arm64
+            runner: ubuntu-latest
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - name: Build native MCP
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          TARGET_OS: ${{ matrix.os }}
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: bash scripts/release-build.sh
+      - name: Sign and notarize macOS archive (required)
+        if: matrix.os == 'darwin'
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          TARGET_ARCH: ${{ matrix.arch }}
+          APPLE_CERTIFICATE_P12_BASE64: ${{ secrets.APPLE_CERTIFICATE_P12_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: bash scripts/release-macos.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: native-${{ matrix.os }}-${{ matrix.arch }}
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/release/*.zip
+            dist/release/*.tar.gz
+            dist/release/notarization-*.json
+  image:
+    needs: [preflight, native]
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.image.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        id: image
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ghcr.io/alexcatdad/scratchpad:${{ needs.preflight.outputs.tag }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/alexcatdad/scratchpad
+            org.opencontainers.image.revision=${{ needs.preflight.outputs.sha }}
+            org.opencontainers.image.version=${{ needs.preflight.outputs.tag }}
+          provenance: true
+          sbom: true
+  publish:
+    needs: [preflight, native, image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: native-*
+          merge-multiple: true
+          path: assets
+      - name: Verify artifact inventory and notarization before release
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          for arch in amd64 arm64; do
+            test -s "assets/scratchpad-mcp-${RELEASE_TAG}-darwin-${arch}.zip"
+            test -s "assets/scratchpad-mcp-${RELEASE_TAG}-linux-${arch}.tar.gz"
+            jq -e '.status == "Accepted"' "assets/notarization-darwin-${arch}.json" > /dev/null
+          done
+          (cd assets && sha256sum ./*.zip ./*.tar.gz notarization-*.json > checksums.txt)
+      - name: Publish versioned assets and container digest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+          EXPECTED_SHA: ${{ needs.preflight.outputs.sha }}
+        run: |
+          set -euo pipefail
+          read -r object_type object_sha < <(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object | [.type,.sha] | @tsv')
+          while [[ "$object_type" == tag ]]; do
+            read -r object_type object_sha < <(gh api "repos/$GH_REPO/git/tags/$object_sha" --jq '.object | [.type,.sha] | @tsv')
+          done
+          [[ "$object_type" == commit && "$object_sha" == "$EXPECTED_SHA" ]] || { echo 'Tag changed since preflight.' >&2; exit 1; }
+          # shellcheck disable=SC2016 # Markdown backticks are literal release-note text.
+          printf 'Container: `ghcr.io/alexcatdad/scratchpad:%s`\n\nDigest: `%s`\n\nmacOS ZIPs contain Developer ID signed binaries accepted by Apple notarization.\n' "$RELEASE_TAG" "$IMAGE_DIGEST" > notes.md
+          if gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft > draft.txt 2>/dev/null; then
+            [[ $(cat draft.txt) == true ]] || { echo 'Published releases are immutable; recover tap delivery separately.' >&2; exit 1; }
+          else
+            gh release create "$RELEASE_TAG" --verify-tag --draft --title "$RELEASE_TAG" --notes-file notes.md
+          fi
+          gh release upload "$RELEASE_TAG" assets/* --clobber
+          gh release edit "$RELEASE_TAG" --draft=false --notes-file notes.md --latest=false
+  homebrew:
+    if: always() && needs.preflight.result == 'success' && (needs.publish.result == 'success' || inputs.homebrew_only == true)
+    needs: [preflight, publish]
+    runs-on: ubuntu-latest
+    environment: action-runners
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_SECRET }}
+          owner: alexcatdad
+          repositories: homebrew-tap
+          permission-contents: write
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: alexcatdad/homebrew-tap
+          token: ${{ steps.app.outputs.token }}
+          path: tap
+          persist-credentials: true
+      - name: Download and verify published archives
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir assets
+          (cd assets && sha256sum --check checksums.txt)
+          node scripts/release-formula.mjs "$RELEASE_TAG" assets tap
+          ruby -c tap/Formula/scratchpad-mcp.rb
+      - name: Commit formula to the existing tap
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+          APP_SLUG: ${{ steps.app.outputs.app-slug }}
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+        run: |
+          set -euo pipefail
+          user_id=$(gh api "/users/${APP_SLUG}[bot]" --jq .id)
+          git -C tap config user.name "${APP_SLUG}[bot]"
+          git -C tap config user.email "${user_id}+${APP_SLUG}[bot]@users.noreply.github.com"
+          git -C tap add Formula/scratchpad-mcp.rb
+          if ! git -C tap diff --cached --quiet; then
+            git -C tap commit -m "chore: release scratchpad-mcp ${RELEASE_TAG#v}"
+            git -C tap push
+          fi
