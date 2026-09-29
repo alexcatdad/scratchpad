@@ -899,3 +899,65 @@ Before implementing:
 - complex summaries.
 
 This vertical slice proves the central product architecture.
+
+# 24. Accepted clarification — owner enrollment and recovery
+
+Accepted by the owner on 2026-09-29 (decision `scratchpad-20260929-010`). This section supplements the supplied v0.1 baseline.
+
+- Use browser-first enrollment. An administrator command inside the container generates a short-lived, single-use setup token.
+- The owner opens the setup page at the configured public URL, presents the token, and registers the first passkey. Initial setup is disabled after enrollment.
+- Use SimpleWebAuthn for browser registration/authentication verification. Exact dependencies are verified and pinned during implementation.
+- Enroll additional passkeys and MCP public keys through the authenticated dashboard. MCP key enrollment requires proof of possession via a signed challenge; private keys remain local.
+- Lost-credential recovery uses a separate administrator command inside the container to authorize replacement-passkey registration. Recovery is explicit and audited, preserves project data, and does not reopen ordinary first-time setup.
+- Server administrative access is the recovery authority; no email delivery or external identity provider is required.
+
+Exact command names, endpoints, token lifetimes, and existing-session handling on recovery remain implementation details. This approval does not yet select the MCP signature encoding or token lifetime.
+
+
+# 25. Accepted clarification — simple MCP sessions
+
+Accepted on 2026-09-29 (decision `scratchpad-20260929-011`).
+
+The server issues a random, short-lived, single-use challenge. MCP signs it with an enrolled key; successful verification returns a session token. The session lasts up to 24 hours and the client keeps its token in MCP process memory. MCP restart requires authentication again. Credential revocation immediately invalidates associated sessions. No refresh-token mechanism is required initially.
+
+Server-side session validity and revocation state remain persistent and restart-safe, consistent with §7. Client memory storage does not imply server process-local session authority.
+
+This replaces the earlier unaccepted 15-minute-token proposal. Exact signature encoding, signed fields, challenge lifetime, and server token representation remain engineering details; the two-minute challenge suggestion was not adopted as a requirement.
+
+
+# 26. Accepted clarification — MCP working directory
+
+Accepted on 2026-09-29 (decision `scratchpad-20260929-012`).
+
+Use the MCP process launch directory as the default discovery context. Project-scoped tool calls may supply an optional `workingDirectory` override when the agent is operating elsewhere. The override applies to that call; it does not change a shared current-project setting. Resolve Git/project identity from the selected directory using the existing discovery rules and include the resolved project in results. Missing or ambiguous project identity still produces structured resolution errors. Stdio transport alone is not a guarantee that a client launches the server in the active project folder.
+
+The earlier proposal to require a directory on every call was not adopted.
+
+
+# 27. Accepted clarification — flexible typed capture
+
+Accepted on 2026-09-29 (decision `scratchpad-20260929-013`).
+
+Keep explicit typed MCP capture tools, with natural fields such as decision/rationale or question/answer. Persist their submitted fields as immutable payload plus common metadata. Generate readable content deterministically from those fields, without AI or requiring the caller to compose duplicate text. Server-owned IDs, receipt timestamps, and authenticated credential identity are assigned by the server; descriptive source attribution remains distinguishable from verified identity. Use the resolved project ID for both Git and non-Git record creation.
+
+Treat the initial payload shapes as an evolving starting point. Keep required fields minimal, add optional structure as real usage warrants, and preserve original captures when schemas or renderers evolve. Historical records must remain readable without rewriting raw evidence to satisfy a newer shape. Avoid freezing a comprehensive taxonomy or building a dynamic schema platform in advance of demonstrated needs. Exact schema-versioning and compatibility mechanics remain implementation details.
+
+
+# 28. Accepted clarification — retries and concurrent edits
+
+Accepted on 2026-09-29 (decision `scratchpad-20260929-014`). Retrying the same capture with the same request identity and content returns the existing record. Reusing that identity with changed content produces a conflict. Separate intentional captures remain separate even when text matches; do not perform automatic content-based deduplication.
+
+Mutable edits must detect stale revisions and return a conflict rather than silently overwrite intervening changes. No automatic merge is required. Raw captures remain immutable. Persist retry state as required by the API baseline; exact key scope, comparison rules, retention, and concurrency representation remain implementation details.
+
+
+# 29. Accepted clarification — simple local mirroring
+
+Accepted on 2026-09-29 (decision `scratchpad-20260929-015`).
+
+- Mirror only when both local MCP configuration and server-owned project settings permit it. Default eligible types remain `decision`, `adr`, and `business_decision`.
+- Persist centrally first, then append eligible captures to the repository JSONL file.
+- If the local write fails, keep the central record and report “saved centrally; mirror failed.” A retry must not duplicate either the central record or its local mirror.
+- Mirroring covers captures made through that MCP instance into its selected checkout. No automatic browser-to-repository synchronization is required.
+- Never automatically commit or push mirrored files.
+
+The central API remains authoritative. Exact append coordination and mirror-result reporting are implementation details to resolve when building mirroring.

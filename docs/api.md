@@ -1541,3 +1541,54 @@ The contract should eventually be published as OpenAPI.
 Generated TypeScript and Go clients may be introduced if useful.
 
 OpenAPI becomes documentation and validation, not a requirement for the first scaffold commit.
+
+# 59. Accepted clarification — enrollment contract requirements
+
+The owner accepted browser-first setup and administrator-controlled recovery on 2026-09-29; see architecture §24 and decision `scratchpad-20260929-010`.
+
+The authentication contract must additionally support initial setup-token redemption with first-passkey registration, authenticated credential enrollment with MCP proof of possession, and a separate audited replacement-passkey recovery flow. Setup/recovery capabilities are short-lived and single-use; initial setup stays disabled after owner enrollment. These flows must preserve project data and restart-safe authentication semantics. Their endpoint names and exact wire formats will be specified during implementation.
+
+
+# 60. Accepted clarification — MCP session lifetime
+
+Per decision `scratchpad-20260929-011`, successful MCP challenge verification issues a session token valid for up to 24 hours, unless revoked earlier. The client stores it only in MCP process memory and authenticates again after restart or expiry. Credential revocation immediately invalidates associated sessions. No refresh-token API is required initially. Server-side authorization state must survive application restarts; challenges remain random, short-lived, and single-use. Exact signing and token representation remain implementation details.
+
+
+# 61. Accepted clarification — local workspace selection
+
+Project-scoped MCP tools accept optional `workingDirectory`; otherwise discovery starts from the process launch directory (decision `scratchpad-20260929-012`). Resolve context separately for each call and return the resolved project so the caller can see which project was used.
+
+`workingDirectory` selects local MCP filesystem context, not a filesystem location for the central API to access or a permanent project identity. The MCP sends resolved project/Git context through the API; existing non-Git and ambiguity rules still apply.
+
+
+# 62. Accepted clarification — capture payload and evolution
+
+Decision `scratchpad-20260929-013` clarifies §§9, 12–20, and 38:
+
+- Include typed `payload` explicitly in persisted and retrieved records. MCP callers provide natural type-specific fields once; readable `content` is generated deterministically from them and is not a second mandatory caller-authored body.
+- Use the already resolved `projectId` on creation for Git and non-Git projects. The original source-identity example is illustrative discovery context, not the only supported creation path.
+- The server assigns record IDs, receipt timestamps, and authenticated credential attribution. Caller-supplied source/actor descriptions do not override verified credential identity.
+- Keep initial required fields small and evolve payload shapes through usage. Optional additions and improved renderers must not require rewriting immutable historical captures. Maintain historical readability and distinguish original payload from generated display/search representations.
+- This clarification does not authorize dropping original imported content or unrecognized legacy fields. Legacy source preservation remains required.
+
+The user's approval explicitly requires flexibility. Versioning and client-compatibility mechanics will be specified during implementation; a configurable schema engine is not an initial requirement.
+
+
+# 63. Accepted clarification — retry and edit-conflict semantics
+
+Decision `scratchpad-20260929-014` fixes the behavior described in §§53–54:
+
+- Same capture request identity with the same content returns the existing record.
+- Reuse of that identity with changed content returns `CONFLICT`.
+- Different intentional captures remain separate even if their text matches.
+- A mutable edit based on an outdated revision returns `CONFLICT` rather than overwriting a concurrent change.
+- No automatic merge or content-based deduplication is required.
+
+Persisted idempotency state and an explicit revision precondition must support these behaviors. Concrete key scope, equality rules, retention, and version-versus-ETag syntax will be specified during implementation.
+
+
+# 64. Accepted clarification — mirror outcome contract
+
+Per decision `scratchpad-20260929-015`, repository mirroring requires both local MCP enablement and project permission, with `decision`, `adr`, and `business_decision` eligible by default. Persist the central record before any mirror append. Return the central record identity even if mirroring fails, with an explicit partial-success outcome. Retrying must not duplicate central or local records.
+
+The MCP reports mirror outcome for its local capture/checkout; the exact reporting endpoint and append coordination remain implementation details. This is not browser-to-repository synchronization, and no automatic Git commit or push is authorized by mirroring.

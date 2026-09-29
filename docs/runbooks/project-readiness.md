@@ -206,3 +206,31 @@ This reconciliation did not verify dependency compatibility, execute application
 ## Initial documentation checkpoint
 
 The user requested a local commit of the initial documents before discussing implementation recommendations. For this checkpoint: inspect Git status and the complete file list; validate decision-log JSONL and supplied-document copies; stage only `docs/` and `decisions.jsonl`; inspect the staged summary; commit with `docs: add initial Scratchpad specifications`; verify the resulting commit and clean working tree. Do not push unless requested. Subsequent recommendations remain proposals until resolved with the user.
+
+
+## Recording accepted implementation clarifications
+
+For each user-approved recommendation, inspect current files, append a clearly dated clarification to the relevant canonical documents, append an accepted decision with the user's source statement, and validate JSONL uniqueness plus whitespace changes. Preserve the baseline and distinguish accepted behavior from unapproved protocol details. Implementation and commit/push are separate actions.
+
+On 2026-09-29 the user accepted browser-first setup with an administrator-generated single-use token, passkey registration, dashboard-managed credentials, SimpleWebAuthn, and separate administrator-authorized recovery. Architecture §24 and API §59 close that gap. Detailed MCP challenge/token behavior is the next discussion.
+
+
+On 2026-09-29 the user accepted the simplified MCP authentication flow with sessions lasting up to 24 hours, client-memory token storage, reauthentication after MCP restart, immediate credential revocation, and no refresh tokens. Architecture §25 and API §60 record it. The earlier 15-minute recommendation was not adopted. Workspace handoff is the next pending recommendation.
+
+
+On 2026-09-29 the user accepted MCP process launch-directory discovery by default, optional per-call `workingDirectory`, and resolved-project visibility in results. Architecture §26 and API §61 close the workspace-handoff decision. Requiring a directory on every call was not adopted. The remaining record-shape clarification is next; no record-format proposal has been approved by this entry.
+
+
+On 2026-09-29 the user accepted typed payloads with deterministically generated content, server-assigned identity/timestamps, and resolved-project-ID creation, explicitly requiring that schemas remain flexible and adapt through use. Architecture §27 and API §62 record the clarification. Keep optional fields optional, preserve historical raw captures/readability, and avoid premature schema machinery. Retry/concurrency defaults remain a separate pending recommendation.
+
+
+On 2026-09-29 the user accepted repeat-capture replay, conflicts for changed content under the same request identity, conflicts for stale edits, and preservation of separate intentional captures even when text matches. Architecture §28 and API §63 record these semantics. Exact wire representations remain implementation details; repository mirroring enablement and failure behavior are the next proposed clarification.
+
+
+## Decision-review completion — 2026-09-29
+
+The user accepted simple local mirroring: local AND project enablement, central-first persistence, visible partial success, duplicate-safe retry, MCP-local capture scope, and no automatic Git commit/push. Architecture §29 and API §64 record it.
+
+The main product choices for starting implementation are resolved across decisions 010–015: enrollment/recovery, MCP sessions, workspace discovery, flexible capture shape, retry/concurrency semantics, and mirroring. Earlier “next question” notes above are historical. Remaining protocol, dependency, pagination, storage, and migration details can be specified during implementation within these constraints. Keep the supplied full MVP scope while first building the smaller SQLite capture/retrieval loop.
+
+The initial documentation checkpoint is `be48339`. The user subsequently requested a local commit of accepted clarifications 010–015. Follow the checkpoint procedure above, staging only the four changed documentation/decision files, and use `docs: record accepted implementation decisions`. Verify the resulting commit and clean working tree; do not push.
