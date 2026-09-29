@@ -1,6 +1,12 @@
 {
   "globs": ["**/*.md", "**/*.mdx"],
-  "ignores": ["node_modules/**", "**/dist/**", "**/.astro/**"],
+  "ignores": [
+    "node_modules/**",
+    "**/dist/**",
+    "**/.astro/**",
+    "test-results/**",
+    "playwright-report/**"
+  ],
   "config": {
     "default": true,
     "MD013": false,

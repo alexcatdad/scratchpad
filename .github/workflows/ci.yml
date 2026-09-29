@@ -67,3 +67,17 @@ jobs:
       - run: docker compose config --quiet
       - run: docker build -t scratchpad:ci .
       - run: bash scripts/docker-smoke.sh scratchpad:ci
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify browser and MCP against container backup restore
+        run: npm run test:e2e
+        env:
+          SCRATCHPAD_E2E_DOCKER: "1"

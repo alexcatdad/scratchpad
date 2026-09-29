@@ -32,7 +32,7 @@ Launch the binary from the project folder. Every project-scoped tool accepts `wo
 
 Capture tools: `record_decision`, `record_adr`, `record_business_decision`, `record_finding`, `record_qa`, `record_failure`, `record_constraint`, `record_project_state`. Each takes common `title`, `authority`, `confidence`, and `requestId` fields alongside natural type-specific fields. Reuse the request ID and input for retries. A new intentional capture needs a new ID, even when text matches. The server generates readable content from payloads.
 
-Read tools: `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, `find_related`. Decision history includes all three decision types by default, with optional type selection and pagination; related records are based on stored relationships, not an AI inference. `resolve_project` creates/resolves an owner-confirmed name for weak discovery contexts.
+Read tools: `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, `find_related`. Search supports optional type, tag, date/time bounds, branch, lifecycle status, relationship type/related record, descriptive source, Git path hint, authority, confidence, cursor, and limit filters. Decision history includes all three decision types by default, with optional type selection and pagination; related records are based on stored relationships, not an AI inference. `resolve_project` creates/resolves an owner-confirmed name for weak discovery contexts.
 
 ## Authentication wire contract
 
@@ -45,3 +45,9 @@ The central capture completes before local mirroring. Both local enablement and 
 Mirroring never commits or pushes Git. Paths must stay inside the selected repository; symlink escapes are rejected. A per-file `.lock` directory coordinates writers. An interrupted process can leave a lock behind: stop all MCP writers, confirm no writer remains, then remove that specific empty lock directory and retry the original capture. Locks are deliberately not expired automatically, because a paused live writer must not be mistaken for a dead one. Malformed/partial JSONL is reported for repair rather than silently truncating historical data. Save a copy before repairing any malformed tail.
 
 Capture responses always identify the resolved project and distinguish central success from mirror/report failure. A retry after a mirror failure preserves the centrally captured Git context rather than rewriting it with the checkout's later dirty state.
+
+## Acceptance and release identity
+
+See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Explicit project selection retains checkout provenance even when remotes are ambiguous.
+
+Local builds identify as `dev`. Release builds inject the tag with `go build -ldflags '-X main.version=<version>'`; both `--version` and MCP initialization report that value.

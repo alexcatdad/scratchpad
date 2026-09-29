@@ -112,10 +112,21 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 	})
 	type Search struct {
 		Scope
-		Query  string `json:"query,omitempty"`
-		Type   string `json:"type,omitempty"`
-		Cursor string `json:"cursor,omitempty"`
-		Limit  int    `json:"limit,omitempty"`
+		Query        string `json:"query,omitempty"`
+		Type         string `json:"type,omitempty"`
+		Cursor       string `json:"cursor,omitempty"`
+		Limit        int    `json:"limit,omitempty"`
+		Tag          string `json:"tag,omitempty" jsonschema:"Exact curated tag"`
+		Branch       string `json:"branch,omitempty" jsonschema:"Captured Git branch"`
+		From         string `json:"from,omitempty" jsonschema:"Inclusive earliest date/time in ISO 8601 format"`
+		To           string `json:"to,omitempty" jsonschema:"Inclusive latest date/time in ISO 8601 format"`
+		Status       string `json:"status,omitempty" jsonschema:"Server-supported current lifecycle or project state filter"`
+		Relationship string `json:"relationship,omitempty" jsonschema:"Relationship type such as supports, replaces, or depends_on"`
+		RelatedTo    string `json:"relatedTo,omitempty" jsonschema:"Related record ID"`
+		Source       string `json:"source,omitempty" jsonschema:"Descriptive actor/source text filter; source attribution is not verified authority"`
+		GitPath      string `json:"gitPath,omitempty" jsonschema:"Captured repository path hint filter"`
+		Authority    string `json:"authority,omitempty" jsonschema:"explicit, observed, inferred, derived, or suggested"`
+		Confidence   string `json:"confidence,omitempty" jsonschema:"high, medium, low, or unknown"`
 	}
 	mcp.AddTool(s, &mcp.Tool{Name: "search_memory", Description: "Search records within the resolved project"}, func(ctx context.Context, _ *mcp.CallToolRequest, in Search) (*mcp.CallToolResult, any, error) {
 		p, _, err := c.resolve(ctx, in.Scope)
@@ -128,6 +139,11 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 		q.Set("q", in.Query)
 		q.Set("type", in.Type)
 		q.Set("cursor", in.Cursor)
+		for key, value := range map[string]string{"tag": in.Tag, "branch": in.Branch, "from": in.From, "to": in.To, "status": in.Status, "relationship": in.Relationship, "relatedTo": in.RelatedTo, "source": in.Source, "gitPath": in.GitPath, "authority": in.Authority, "confidence": in.Confidence} {
+			if value != "" {
+				q.Set(key, value)
+			}
+		}
 		if in.Limit > 0 {
 			b, _ := json.Marshal(in.Limit)
 			q.Set("limit", string(b))

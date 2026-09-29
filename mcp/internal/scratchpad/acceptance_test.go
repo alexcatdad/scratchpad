@@ -351,3 +351,47 @@ func TestReleaseVersionInProtocol(t *testing.T) {
 		t.Fatalf("protocol advertised %q", got)
 	}
 }
+
+func TestSearchProtocolForwardsDeterministicFilters(t *testing.T) {
+	expected := map[string]string{"projectId": "selected-project", "q": "historical choice", "type": "decision", "tag": "storage", "branch": "feature/storage", "from": "2026-01-01T00:00:00Z", "to": "2026-09-29T23:59:59Z", "status": "active", "relationship": "supports", "relatedTo": "record-existing", "source": "Owner & agent", "gitPath": "/workspace/project folder", "authority": "explicit", "confidence": "high", "cursor": "opaque-cursor", "limit": "17"}
+	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/v1/records" || r.Method != "GET" {
+			t.Errorf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+		for key, want := range expected {
+			if got := r.URL.Query().Get(key); got != want {
+				t.Errorf("filter %s=%q; want %q", key, got, want)
+			}
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"records":[],"nextCursor":null}`)
+	}))
+	defer api.Close()
+	c, err := NewClient(Config{URL: api.URL, WorkingDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.token = "test"
+	c.expires = time.Now().Add(time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	st, ct := mcp.NewInMemoryTransports()
+	server, err := NewServer(c).Connect(ctx, st, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+	client, err := mcp.NewClient(&mcp.Implementation{Name: "filter-test", Version: "test"}, nil).Connect(ctx, ct, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	args := map[string]any{}
+	for key, value := range expected {
+		args[key] = value
+	}
+	delete(args, "q")
+	args["query"] = "historical choice"
+	args["limit"] = 17
+	acceptanceCall(t, client, "search_memory", args)
+}
