@@ -1,0 +1,49 @@
+---
+title: Leave a trail worth finding.
+description: Scratchpad is private, self-hosted project memory for developers and coding agents.
+template: splash
+hero:
+  tagline: Your code remembers what changed. Scratchpad keeps the why—decisions, discoveries, and lessons for the next session.
+  actions:
+    - text: Explore the project
+      link: /scratchpad/overview/
+      icon: right-arrow
+    - text: Build with us
+      link: /scratchpad/guides/installation/
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard } from "@astrojs/starlight/components";
+
+**Early development.** Scratchpad is being built in the open. These docs distinguish the working foundation from the planned V1 product; there is no production release yet.
+
+## A home for the context between commits
+
+<CardGrid>
+  <Card title="Capture while you work" icon="pencil">
+    Record a decision, a useful answer, or a failed investigation through a
+    local MCP. Keep the original evidence, even as your understanding changes.
+  </Card>
+  <Card title="Pick up the thread" icon="magnifier">
+    Give your next coding session a useful starting point: the project, its
+    constraints, and the reasoning behind its current shape.
+  </Card>
+  <Card title="Keep it yours" icon="setting">
+    A single-owner, self-hosted design with SQLite by default. AI is optional;
+    your repository is never required to become the database.
+  </Card>
+  <Card title="Let knowledge evolve" icon="open-book">
+    Separate captured history from curated knowledge. Corrections and
+    replacements should add context without quietly rewriting the past.
+  </Card>
+</CardGrid>
+
+## Small enough to start, durable enough to return to
+
+The first milestone follows one complete path: a coding agent captures a record through stdio MCP, the server persists it, and the owner finds it in the dashboard. Import, export, optional repository mirrors, and release packaging follow within the V1 plan.
+
+<LinkCard
+  title="Read the architecture"
+  description="One server, a local MCP, and a clear boundary between raw history and derived knowledge."
+  href="/scratchpad/reference/architecture/"
+/>
