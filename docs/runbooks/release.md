@@ -10,7 +10,7 @@ The existing Paw Proxy GitHub App delivery pattern and USB Boop's published-arti
 
 ## One-time administrator configuration
 
-Create the **action-runners** GitHub environment in `alexcatdad/scratchpad`, with suitable release protection. Configure these names through GitHub's encrypted settings; never paste values into a runbook, issue, agent message, or command history:
+Use the existing **action-runners** GitHub environment in `alexcatdad/scratchpad`, restricted to `main` and `v*` tags. Configure these names through GitHub's encrypted settings; never paste values into a runbook, issue, agent message, or command history:
 
 | Kind     | Name                           | Purpose                                                                                             |
 | -------- | ------------------------------ | --------------------------------------------------------------------------------------------------- |
