@@ -1,0 +1,27 @@
+{
+  "name": "scratchpad",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=24.21.0"
+  },
+  "scripts": {
+    "dev": "npm run dev -w @scratchpad/web",
+    "docs:dev": "npm run dev -w @scratchpad/docs",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs",
+    "test": "npm run test -w @scratchpad/web",
+    "lint": "biome check . && prettier --check . && markdownlint-cli2 && node scripts/check-decisions.mjs",
+    "format": "biome check --write . && prettier --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.14",
+    "prettier": "3.9.9",
+    "prettier-plugin-astro": "1.1.0",
+    "markdownlint-cli2": "0.23.3",
+    "@playwright/test": "1.63.0"
+  }
+}

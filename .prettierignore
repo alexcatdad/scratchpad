@@ -1,0 +1,16 @@
+node_modules
+package-lock.json
+**/dist
+**/.astro
+**/.output
+**/.tanstack
+**/*.ts
+**/*.tsx
+**/*.js
+**/*.mjs
+**/*.json
+**/*.jsonc
+**/*.css
+**/*.go
+**/go.sum
+**/go.mod

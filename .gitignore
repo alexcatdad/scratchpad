@@ -1,0 +1,16 @@
+node_modules/
+.output/
+dist/
+.astro/
+.tanstack/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+data/
+*.sqlite
+*.sqlite-*
+mcp/bin/
+.DS_Store
