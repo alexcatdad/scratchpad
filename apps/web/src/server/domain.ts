@@ -49,6 +49,7 @@ export const captureSchema = z.object({
     .optional(),
 });
 export const settingsSchema = z.object({
+  enabledRecordTypes: z.array(z.enum(recordTypes)).default([...recordTypes]),
   repoMirroring: z.object({
     enabled: z.boolean(),
     recordTypes: z.array(z.enum(recordTypes)),
@@ -79,6 +80,7 @@ export function now(): string {
 }
 export function defaults(kind: string): ProjectSettings {
   return {
+    enabledRecordTypes: [...recordTypes],
     repoMirroring: {
       enabled: false,
       recordTypes: ["decision", "adr", "business_decision"],

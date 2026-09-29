@@ -231,7 +231,17 @@ describe("persistent API domain", () => {
     });
     expect(legacy.data.imported).toBe(1);
     expect(legacy.data.skipped).toBe(1);
-    expect(legacy.data.warnings).toHaveLength(2);
+    expect(
+      legacy.data.warnings.map((warning: { code: string }) => warning.code),
+    ).toEqual(
+      expect.arrayContaining([
+        "INVALID_JSON",
+        "MISSING_ID",
+        "MISSING_RATIONALE",
+        "UNVERIFIED_LEGACY_PROVENANCE",
+        "MISSING_DATE",
+      ]),
+    );
     const exported = (await call("/api/v1/export", "POST", {})).data;
     exported.data.record[0].projectId = "missing";
     const destination = fixture();

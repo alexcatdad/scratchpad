@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { Auth, type Identity } from "./auth";
+import { assertRelationshipSafe, projectContext } from "./context";
 import {
   type Actor,
   ApiError,
@@ -11,28 +12,17 @@ import {
   type JsonObject,
   normalizeRemote,
   now,
-  recordTypes,
+  type recordTypes,
   relationshipTypes,
   renderPayload,
   requireValue,
   settingsSchema,
 } from "./domain";
+import { exportKinds, importLegacy, importNative } from "./imports";
 import { Store } from "./store";
 
 const object = z.record(z.string(), z.unknown());
 const nonempty = z.string().trim().min(1).max(500);
-const exportKinds = [
-  "project",
-  "source",
-  "record",
-  "metadata",
-  "revision",
-  "relationship",
-  "evidence",
-  "mirror",
-  "audit",
-  "settings",
-] as const;
 const bodyLimit = 8 * 1024 * 1024;
 function response(
   value: unknown,
@@ -119,7 +109,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
       `${kind} not found.`,
       404,
     );
-    return value;
+    return kind === "project"
+      ? { ...value, settings: settingsSchema.parse(value.settings) }
+      : value;
   }
   function projectCreate(
     name: string,
@@ -132,7 +124,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
       name,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
       kind,
-      settings: defaults(kind),
+      settings:
+        kind === "external"
+          ? defaults(kind)
+          : settingsSchema.parse(
+              store.get("settings", "global")?.defaultProjectSettings ??
+                defaults(kind),
+            ),
       updatedAt: now(),
     });
     if (identity) {
@@ -156,6 +154,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
   ): JsonObject {
     const project = entity("project", projectId),
       record = captureSchema.parse(submitted);
+    requireValue(
+      settingsSchema
+        .parse(project.settings)
+        .enabledRecordTypes.includes(record.type),
+      "RECORD_TYPE_DISABLED",
+      "This record type is disabled for the project.",
+      403,
+    );
     const content = renderPayload(record.type, record.payload);
     const saved = store.insert("record", {
       ...record,
@@ -192,6 +198,17 @@ export function createApi(config: { databasePath: string; origin: string }) {
     };
   }
   function recordDetail(key: string): JsonObject {
+    const relatedIds = new Set([
+      key,
+      ...store
+        .list("relationship")
+        .filter((link) => link.fromRecordId === key || link.toRecordId === key)
+        .map((link) => link.id),
+      ...store
+        .list("evidence")
+        .filter((item) => item.recordId === key)
+        .map((item) => item.id),
+    ]);
     return {
       record: entity("record", key),
       metadata: store.get("metadata", key),
@@ -201,7 +218,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
         .filter((r) => r.fromRecordId === key || r.toRecordId === key),
       evidence: store.list("evidence").filter((r) => r.recordId === key),
       mirror: store.get("mirror", key),
-      audit: store.list("audit").filter((r) => r.entityId === key),
+      audit: store
+        .list("audit")
+        .filter((r) => relatedIds.has(String(r.entityId))),
     };
   }
   function search(params: URLSearchParams): JsonObject {
@@ -261,12 +280,74 @@ export function createApi(config: { databasePath: string; origin: string }) {
       );
     if (from) {
       z.iso.datetime().parse(from);
-      records = records.filter((r) => String(r.recordedAt) >= from);
+      records = records.filter(
+        (r) => String(r.happenedAt ?? r.recordedAt) >= from,
+      );
     }
     if (to) {
       z.iso.datetime().parse(to);
-      records = records.filter((r) => String(r.recordedAt) <= to);
+      records = records.filter(
+        (r) => String(r.happenedAt ?? r.recordedAt) <= to,
+      );
     }
+    const status = params.get("status"),
+      relationshipType = params.get("relationship"),
+      relatedTo = params.get("relatedTo"),
+      source = params.get("source"),
+      gitPath = params.get("gitPath");
+    if (status)
+      records = records.filter((record) => {
+        const metadata = store.get("metadata", record.id);
+        const replacements = store
+          .list("relationship")
+          .filter(
+            (link) =>
+              link.toRecordId === record.id && link.status === "accepted",
+          );
+        const lifecycle = metadata?.archived
+          ? "archived"
+          : replacements.some((link) => link.type === "replaces")
+            ? "superseded"
+            : replacements.some((link) => link.type === "partially_replaces")
+              ? "partially_superseded"
+              : (metadata?.legacyStatus ?? "active");
+        return lifecycle === status;
+      });
+    if (relationshipType || relatedTo) {
+      const links = store
+        .list("relationship")
+        .filter(
+          (link) =>
+            link.status !== "rejected" &&
+            (!relationshipType || link.type === relationshipType) &&
+            (!relatedTo ||
+              link.fromRecordId === relatedTo ||
+              link.toRecordId === relatedTo),
+        );
+      records = records.filter((record) =>
+        links.some(
+          (link) =>
+            link.fromRecordId === record.id || link.toRecordId === record.id,
+        ),
+      );
+    }
+    if (source)
+      records = records.filter((record) => {
+        const provenance = record.provenance as JsonObject | undefined;
+        const imported = provenance?.import as JsonObject | undefined;
+        const actor = record.actor as JsonObject | undefined;
+        return (
+          imported?.sourceName === source ||
+          actor?.client === source ||
+          actor?.displayName === source
+        );
+      });
+    if (gitPath)
+      records = records.filter(
+        (record) =>
+          (record.gitContext as JsonObject | undefined)?.rootPathHint ===
+          gitPath,
+      );
     const archived = params.get("archived");
     if (archived)
       records = records.filter(
@@ -328,6 +409,8 @@ export function createApi(config: { databasePath: string; origin: string }) {
       // Enforce limits while streaming, including requests with no Content-Length.
       let body: JsonObject = {};
       if (!["GET", "HEAD"].includes(method) && request.body) {
+        const maxBodyBytes =
+          path === "/api/v1/import" ? 64 * 1024 * 1024 : bodyLimit;
         const reader = request.body.getReader();
         const parts: Uint8Array[] = [];
         let size = 0;
@@ -335,12 +418,12 @@ export function createApi(config: { databasePath: string; origin: string }) {
           const { done, value } = await reader.read();
           if (done) break;
           size += value.byteLength;
-          if (size > bodyLimit) {
+          if (size > maxBodyBytes) {
             await reader.cancel();
             throw new ApiError(
               413,
               "VALIDATION_FAILED",
-              "Request exceeds 8 MiB.",
+              `Request exceeds ${maxBodyBytes / (1024 * 1024)} MiB.`,
             );
           }
           parts.push(value);
@@ -423,6 +506,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
         return response({
           projects: store.list("project").map((p) => ({
             ...p,
+            settings: settingsSchema.parse(p.settings),
             sources: store.list("source").filter((s) => s.projectId === p.id),
           })),
         });
@@ -504,30 +588,69 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (projectRoute) {
         const project = entity("project", projectRoute[1] ?? "");
         if (method === "GET" && projectRoute[2] === "context") {
-          const records = store
-            .list("record")
-            .filter(
-              (r) =>
-                r.projectId === project.id &&
-                !store.get("metadata", r.id)?.archived,
-            )
-            .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-          const types = (...values: string[]) =>
-            records.filter((r) => values.includes(String(r.type))).slice(0, 20);
-          return response({
-            project,
-            state: types("project_state"),
-            recentDecisions: types("decision", "adr", "business_decision"),
-            constraints: types("constraint"),
-            openFindings: types("finding"),
-            failures: types("failure"),
-          });
+          return response(
+            projectContext(store, {
+              ...project,
+              settings: settingsSchema.parse(project.settings),
+            }),
+          );
         }
         if (method === "GET")
           return response(
             projectRoute[2] === "settings"
-              ? { settings: project.settings, version: project.version }
-              : { project },
+              ? {
+                  settings: settingsSchema.parse(project.settings),
+                  version: project.version,
+                }
+              : {
+                  project: {
+                    ...project,
+                    settings: settingsSchema.parse(project.settings),
+                  },
+                },
+          );
+        if (method === "PATCH" && !projectRoute[2])
+          return response(
+            store.atomic(() => {
+              const changes = z
+                .object({
+                  name: nonempty.optional(),
+                  kind: z.enum(["normal", "external"]).optional(),
+                })
+                .strict()
+                .parse(
+                  Object.fromEntries(
+                    Object.entries(body).filter(
+                      ([key]) => key !== "expectedVersion",
+                    ),
+                  ),
+                );
+              const settings =
+                changes.kind === "external" && project.kind !== "external"
+                  ? {
+                      ...settingsSchema.parse(project.settings),
+                      repoMirroring: {
+                        ...settingsSchema.parse(project.settings).repoMirroring,
+                        enabled: false,
+                      },
+                      crossProjectAnalysis: false,
+                    }
+                  : settingsSchema.parse(project.settings);
+              const updated = store.update(
+                "project",
+                { ...project, ...changes, settings },
+                expected(body, request),
+              );
+              store.audit(
+                "project.updated",
+                "project",
+                project.id,
+                actor,
+                project,
+                updated,
+              );
+              return { project: updated };
+            }),
           );
         if (method === "PATCH" && projectRoute[2] === "settings")
           return response(
@@ -577,7 +700,20 @@ export function createApi(config: { databasePath: string; origin: string }) {
                 "Idempotency key was used for a different capture.",
                 409,
               );
-              return JSON.parse(previous.response) as JsonObject;
+              const replay = JSON.parse(previous.response) as JsonObject;
+              const currentSettings = settingsSchema.parse(
+                entity("project", projectId).settings,
+              );
+              return {
+                ...replay,
+                mirror: {
+                  eligible:
+                    currentSettings.repoMirroring.enabled &&
+                    currentSettings.repoMirroring.recordTypes.includes(
+                      record.type,
+                    ),
+                },
+              };
             }
           }
           const created = createRecord(
@@ -774,32 +910,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
         );
         return response(
           store.atomic(() => {
-            if (
-              ["replaces", "partially_replaces", "depends_on"].includes(
+            if (data.authority !== "suggested")
+              assertRelationshipSafe(
+                store,
+                data.fromRecordId,
+                data.toRecordId,
                 data.type,
-              )
-            ) {
-              const links = store
-                .list("relationship")
-                .filter((r) => r.type === data.type && r.status !== "rejected");
-              const pending = [data.toRecordId],
-                seen = new Set<string>();
-              while (pending.length) {
-                const next = pending.pop();
-                if (next === undefined) break;
-                requireValue(
-                  next !== data.fromRecordId,
-                  "RELATIONSHIP_CYCLE",
-                  "This relationship creates a cycle.",
-                  409,
-                );
-                if (seen.has(next)) continue;
-                seen.add(next);
-                for (const link of links)
-                  if (link.fromRecordId === next)
-                    pending.push(String(link.toRecordId));
-              }
-            }
+              );
             const relationship = store.insert("relationship", {
               ...data,
               id: id("rel"),
@@ -825,6 +942,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
         const previous = entity("relationship", relRoute[1] ?? "");
         return response(
           store.atomic(() => {
+            if (relRoute[2] === "accept")
+              assertRelationshipSafe(
+                store,
+                String(previous.fromRecordId),
+                String(previous.toRecordId),
+                String(previous.type),
+                previous.id,
+              );
             const relationship = store.update(
               "relationship",
               {
@@ -861,7 +986,18 @@ export function createApi(config: { databasePath: string; origin: string }) {
         );
       }
       if (route === "/import" && method === "POST")
-        return response(importData(body, actor));
+        return response(
+          body.format === "scratchpad"
+            ? importNative(store, body, actor)
+            : (() => {
+                requireValue(
+                  body.format === "jsonl",
+                  "IMPORT_INVALID",
+                  "Use format scratchpad or jsonl.",
+                );
+                return importLegacy(store, body, actor);
+              })(),
+        );
       if (route === "/settings" && method === "GET")
         return response({
           settings: store.get("settings", "global") ?? {
@@ -880,6 +1016,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
         return response(
           store.atomic(() => {
             const previous = store.get("settings", "global");
+            if (!previous)
+              requireValue(
+                body.expectedVersion === 0,
+                "CONFLICT",
+                "Initial settings require expectedVersion 0.",
+                409,
+              );
             const settings = previous
               ? store.update(
                   "settings",
@@ -903,153 +1046,6 @@ export function createApi(config: { databasePath: string; origin: string }) {
     } catch (error) {
       return publicError(error);
     }
-  }
-  function importData(body: JsonObject, actor: Actor): JsonObject {
-    if (body.format === "scratchpad") {
-      requireValue(
-        body.version === 1,
-        "IMPORT_INVALID",
-        "Unsupported export version.",
-      );
-      const data = object.parse(body.data);
-      return store.atomic(() => {
-        let imported = 0,
-          skipped = 0;
-        for (const kind of exportKinds) {
-          const values = z.array(object).parse(data[kind] ?? []);
-          for (const value of values) {
-            const key = nonempty.parse(value.id);
-            z.iso.datetime().parse(value.createdAt);
-            z.number().int().positive().parse(value.version);
-            const previous = store.get(kind, key);
-            if (previous) {
-              requireValue(
-                canonical(previous) === canonical(value),
-                "CONFLICT",
-                `Import conflicts with existing ${kind} ${key}.`,
-                409,
-              );
-              skipped++;
-              continue;
-            }
-            if (kind === "project") settingsSchema.parse(value.settings);
-            if (kind === "record") {
-              entity("project", nonempty.parse(value.projectId));
-              z.enum(recordTypes).parse(value.type);
-              z.string().parse(value.content);
-              object.parse(value.payload);
-            }
-            if (kind === "source")
-              entity("project", nonempty.parse(value.projectId));
-            if (["metadata", "revision", "evidence", "mirror"].includes(kind))
-              entity("record", nonempty.parse(value.recordId));
-            if (kind === "relationship") {
-              entity("record", nonempty.parse(value.fromRecordId));
-              entity("record", nonempty.parse(value.toRecordId));
-            }
-            store.insert(kind, value as JsonObject & { id: string });
-            imported++;
-            if (kind === "record")
-              store.sqlite
-                .prepare(
-                  "INSERT INTO record_search(record_id,title,content) VALUES(?,?,?)",
-                )
-                .run(
-                  key,
-                  z.string().parse(value.title),
-                  value.content as string,
-                );
-            if (kind === "source")
-              store.sqlite
-                .prepare("INSERT INTO identities VALUES(?,?)")
-                .run(nonempty.parse(value.identity), String(value.projectId));
-          }
-        }
-        store.audit("data.imported", "import", id("import"), actor, undefined, {
-          imported,
-          skipped,
-        });
-        return { imported, skipped, warnings: [] };
-      });
-    }
-    requireValue(
-      body.format === "jsonl",
-      "IMPORT_INVALID",
-      "Use format scratchpad or jsonl.",
-    );
-    const projectId = nonempty.parse(body.projectId);
-    entity("project", projectId);
-    const lines = z.string().max(bodyLimit).parse(body.jsonl).split(/\r?\n/);
-    const warnings: JsonObject[] = [];
-    let imported = 0,
-      skipped = 0;
-    store.atomic(() => {
-      for (const [index, line] of lines.entries()) {
-        if (!line.trim()) continue;
-        let value: JsonObject;
-        try {
-          value = object.parse(JSON.parse(line));
-        } catch {
-          warnings.push({ record: index + 1, code: "INVALID_JSON" });
-          skipped++;
-          continue;
-        }
-        const key = `legacy:${projectId}:${canonical(value)}`;
-        const previous = store.sqlite
-          .prepare("SELECT response FROM retries WHERE scope=? AND key=?")
-          .get("import", key);
-        if (previous) {
-          skipped++;
-          continue;
-        }
-        const decision =
-          typeof value.decision === "string"
-            ? value.decision
-            : typeof value.content === "string"
-              ? value.content
-              : typeof value.summary === "string"
-                ? value.summary
-                : undefined;
-        if (!decision) {
-          warnings.push({ record: index + 1, code: "MISSING_CONTENT" });
-          skipped++;
-          continue;
-        }
-        const capture = {
-          type: "decision" as const,
-          title:
-            typeof value.title === "string"
-              ? value.title.slice(0, 500)
-              : decision.slice(0, 120),
-          authority: "inferred" as const,
-          confidence: "unknown" as const,
-          confidenceReason:
-            "Imported legacy entry. Historical authority and confidence were not verified.",
-          payload: { decision, legacyOriginal: value },
-          actor: {
-            kind: "import" as const,
-            displayName: "Legacy JSONL import",
-          },
-        };
-        const created = createRecord(projectId, capture, undefined, {
-          ...actor,
-          kind: "import",
-        });
-        store.sqlite
-          .prepare("INSERT INTO retries VALUES(?,?,?,?)")
-          .run("import", key, key, JSON.stringify(created));
-        imported++;
-        warnings.push({
-          record: index + 1,
-          code: "UNVERIFIED_LEGACY_PROVENANCE",
-        });
-      }
-      store.audit("data.imported", "import", id("import"), actor, undefined, {
-        imported,
-        skipped,
-      });
-    });
-    return { imported, skipped, warnings };
   }
   return { store, auth, handleRequest, close: () => store.close() };
 }

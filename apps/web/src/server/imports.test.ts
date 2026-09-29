@@ -1,0 +1,483 @@
+import { createHash } from "node:crypto";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import { createApi } from "./api";
+import { defaults, type JsonObject } from "./domain";
+import { exportKinds, importLegacy, importNative } from "./imports";
+
+const cleanup: (() => void)[] = [];
+afterEach(() => {
+  for (const action of cleanup.splice(0)) action();
+});
+function fixture(path = ":memory:") {
+  const api = createApi({
+    databasePath: path,
+    origin: "http://localhost:3000",
+  });
+  cleanup.push(() => {
+    if (api.store.sqlite.open) api.close();
+  });
+  api.store.insert("project", {
+    id: "project",
+    name: "Example",
+    kind: "normal",
+    slug: "example",
+    settings: defaults("normal"),
+  });
+  api.store.insert("credential", { id: "test", kind: "ssh" });
+  api.store.insert("session", {
+    id: createHash("sha256").update("token").digest("hex"),
+    credentialId: "test",
+    browser: false,
+    expiresAt: new Date(Date.now() + 60000).toISOString(),
+  });
+  const call = async (
+    path: string,
+    method = "GET",
+    body?: unknown,
+    headers: Record<string, string> = {},
+  ) => {
+    const response = await api.handleRequest(
+      new Request(`http://localhost:3000/api/v1${path}`, {
+        method,
+        headers: { authorization: "Bearer token", ...headers },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      }),
+    );
+    return { status: response.status, data: await response.json() };
+  };
+  return { ...api, call };
+}
+const actor = { kind: "import" as const };
+// Structural fixtures mirror observed legacy formats without copying private source content.
+const source = [
+  {
+    id: "D001",
+    date: "2025-01-02",
+    recordType: "decision",
+    title: "Retain telemetry boundaries",
+    status: "superseded_or_partial",
+    decision: [
+      "Use public device metadata.",
+      "Do not claim measured throughput.",
+    ],
+    why: ["Metadata is observable without destructive probes."],
+    implications: ["Present measured and inferred values separately."],
+    extraSections: { Evidence: ["Local test transcript"] },
+    supersession: {
+      label: "Partial replacement",
+      notes: ["Review the later exception."],
+    },
+  },
+  {
+    id: "D002",
+    date: "2025-02-03",
+    recordType: "business_decision",
+    title: "Stakeholder requests a smaller status view",
+    decision: ["Show only actionable status."],
+    why: ["Stakeholder asked for less distraction."],
+    requestedBy: "Example stakeholder",
+    supersedes: ["D001"],
+    status: "accepted",
+  },
+  {
+    date: "2025-03-04",
+    decision: "Keep original event evidence.",
+    reason: "Allows later verification.",
+    evidence: { build: "passed", review: "pending" },
+    validation: ["Schema parsed"],
+    customField: { retained: true },
+  },
+  {
+    id: "legacy-paused",
+    type: "project_state",
+    title: "Paused for hardware validation",
+    state: "paused",
+    reason: "Awaiting a test device",
+    date: "2026-01-15",
+  },
+];
+
+describe("legacy history fidelity", () => {
+  it("preserves array decisions, original IDs, precise source evidence, missing authority, and typed project state", async () => {
+    const api = fixture();
+    const jsonl = source
+      .map((row, index) => `${index === 0 ? "  " : ""}${JSON.stringify(row)}`)
+      .join("\n");
+    const result = importLegacy(
+      api.store,
+      {
+        format: "jsonl",
+        projectId: "project",
+        source: { filename: "decisions.jsonl" },
+        jsonl,
+      },
+      actor,
+    );
+    expect(result.imported).toBe(4);
+    expect(result.skipped).toBe(0);
+    const first = api.store.get("record", "D001");
+    if (!first) throw new Error("Import omitted D001");
+    expect(first.authority).toBeNull();
+    expect(first.happenedAt).toBe("2025-01-02T00:00:00.000Z");
+    expect(first.content).toContain("Do not claim measured throughput");
+    expect((first.payload as JsonObject).legacyOriginal).toEqual(source[0]);
+    expect((first.payload as JsonObject).rationale).toContain(
+      "Metadata is observable",
+    );
+    expect(
+      ((first.provenance as JsonObject).import as JsonObject).rawLine,
+    ).toBe(jsonl.split("\n")[0]);
+    expect(
+      ((first.provenance as JsonObject).import as JsonObject).datePrecision,
+    ).toBe("day");
+    expect(api.store.get("record", "D002")?.type).toBe("business_decision");
+    expect(api.store.get("record", "legacy-paused")?.type).toBe(
+      "project_state",
+    );
+    expect(api.store.list("relationship")).toHaveLength(1);
+    expect(api.store.list("relationship")[0].status).toBe("suggested");
+    const context = (await api.call("/projects/project/context")).data;
+    expect(context.state[0].payload.state).toBe("paused");
+    expect(context.currentState).toBeNull();
+    expect(
+      context.requiresReview.map((record: { id: string }) => record.id),
+    ).toContain("legacy-paused");
+    expect(
+      (await api.call("/records?q=stakeholder&type=business_decision")).data
+        .records,
+    ).toHaveLength(1);
+    expect((await api.call("/records?q=throughput")).data.records).toHaveLength(
+      1,
+    );
+  });
+  it("reimports idempotently after native round trip and detects changed original IDs", () => {
+    const api = fixture();
+    const body = {
+      format: "jsonl",
+      projectId: "project",
+      sourceName: "history.jsonl",
+      jsonl: source.map((row) => JSON.stringify(row)).join("\n"),
+    };
+    const first = importLegacy(api.store, body, actor);
+    expect(first.imported).toBe(4);
+    expect(importLegacy(api.store, body, actor).imported).toBe(0);
+    const exported = {
+      format: "scratchpad",
+      version: 1,
+      data: Object.fromEntries(
+        exportKinds.map((kind) => [kind, api.store.list(kind)]),
+      ),
+    };
+    const restored = createApi({
+      databasePath: ":memory:",
+      origin: "http://localhost:3000",
+    });
+    cleanup.push(() => restored.close());
+    importNative(restored.store, exported, actor);
+    expect(importLegacy(restored.store, body, actor).imported).toBe(0);
+    const changed = importLegacy(
+      restored.store,
+      {
+        ...body,
+        jsonl: JSON.stringify({ ...source[0], decision: "Different" }),
+      },
+      actor,
+    );
+    expect(changed.imported).toBe(0);
+    expect(changed.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "IMPORT_ID_CONFLICT" }),
+      ]),
+    );
+    expect(restored.store.list("record")).toEqual(api.store.list("record"));
+  });
+  it("keeps duplicate source occurrences and conflicting project identities without silent loss", () => {
+    const api = fixture();
+    const record = { date: "2025-02-03", decision: "Repeated source entry" };
+    const result = importLegacy(
+      api.store,
+      {
+        projectId: "project",
+        jsonl: [record, record].map((row) => JSON.stringify(row)).join("\n"),
+      },
+      actor,
+    );
+    expect(result.imported).toBe(2);
+    expect(new Set(api.store.list("record").map((r) => r.id)).size).toBe(2);
+    api.store.insert("project", {
+      id: "other",
+      name: "Other",
+      kind: "normal",
+      settings: defaults("normal"),
+    });
+    const row = JSON.stringify(source[0]);
+    importLegacy(api.store, { projectId: "project", jsonl: row }, actor);
+    const collision = importLegacy(
+      api.store,
+      { projectId: "other", jsonl: row },
+      actor,
+    );
+    expect(collision.imported).toBe(1);
+    expect(collision.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "ID_COLLISION" }),
+      ]),
+    );
+    const other = api.store.list("record").find((r) => r.projectId === "other");
+    if (!other) throw new Error("Import omitted colliding record");
+    expect(other.id).not.toBe("D001");
+    expect(
+      ((other.payload as JsonObject).legacyOriginal as JsonObject).id,
+    ).toBe("D001");
+  });
+});
+
+describe("current context and live policy", () => {
+  it("follows accepted replacement chains, preserves partial constraints, and orders state by occurrence time", async () => {
+    const api = fixture();
+    const capture = async (
+      type: string,
+      payload: JsonObject,
+      happenedAt: string,
+    ) =>
+      (
+        await api.call("/records", "POST", {
+          projectId: "project",
+          record: {
+            type,
+            title: type,
+            authority: "explicit",
+            payload,
+            happenedAt,
+          },
+        })
+      ).data.record;
+    const old = await capture(
+      "constraint",
+      { constraint: "Previous constraint" },
+      "2025-01-01T00:00:00Z",
+    );
+    const next = await capture(
+      "constraint",
+      { constraint: "Replacement constraint" },
+      "2025-02-01T00:00:00Z",
+    );
+    await api.call("/relationships", "POST", {
+      fromRecordId: next.id,
+      toRecordId: old.id,
+      type: "partially_replaces",
+    });
+    await capture(
+      "project_state",
+      { state: "paused", reason: "Waiting for test hardware" },
+      "2025-04-01T00:00:00Z",
+    );
+    await capture("project_state", { state: "active" }, "2025-03-01T00:00:00Z");
+    let context = (await api.call("/projects/project/context")).data;
+    expect(context.currentState.payload.state).toBe("paused");
+    expect(context.partiallySuperseded[0].id).toBe(old.id);
+    expect(context.constraints).toHaveLength(2);
+    const suggestion = (
+      await api.call("/relationships", "POST", {
+        fromRecordId: old.id,
+        toRecordId: next.id,
+        type: "replaces",
+        authority: "suggested",
+      })
+    ).data.relationship;
+    expect(
+      (
+        await api.call(`/relationships/${suggestion.id}/accept`, "POST", {
+          expectedVersion: 1,
+        })
+      ).data.error.code,
+    ).toBe("RELATIONSHIP_CYCLE");
+    await api.call("/relationships", "POST", {
+      fromRecordId: next.id,
+      toRecordId: old.id,
+      type: "replaces",
+    });
+    context = (await api.call("/projects/project/context")).data;
+    expect(context.constraints.map((r: { id: string }) => r.id)).toEqual([
+      next.id,
+    ]);
+    expect(
+      context.historicalRecords.map((r: { id: string }) => r.id),
+    ).toContain(old.id);
+  });
+  it("enforces type settings and recomputes mirror permissions for capture replays", async () => {
+    const api = fixture();
+    const settings = {
+      ...defaults("normal"),
+      enabledRecordTypes: ["decision"],
+      repoMirroring: { enabled: true, recordTypes: ["decision"] },
+    };
+    await api.call("/projects/project/settings", "PATCH", {
+      expectedVersion: 1,
+      settings,
+    });
+    const body = {
+      projectId: "project",
+      record: {
+        type: "decision",
+        title: "A choice",
+        authority: "explicit",
+        payload: { decision: "A choice" },
+      },
+    };
+    const first = await api.call("/records", "POST", body, {
+      "Idempotency-Key": "retry",
+    });
+    expect(first.data.mirror.eligible).toBe(true);
+    const external = await api.call("/projects/project", "PATCH", {
+      expectedVersion: 2,
+      kind: "external",
+    });
+    expect(external.data.project.settings.crossProjectAnalysis).toBe(false);
+    const replay = await api.call("/records", "POST", body, {
+      "Idempotency-Key": "retry",
+    });
+    expect(replay.data.record.id).toBe(first.data.record.id);
+    expect(replay.data.mirror.eligible).toBe(false);
+    expect(
+      (
+        await api.call("/records", "POST", {
+          projectId: "project",
+          record: {
+            type: "finding",
+            title: "Observation",
+            authority: "observed",
+            payload: { finding: "Observation" },
+          },
+        })
+      ).data.error.code,
+    ).toBe("RECORD_TYPE_DISABLED");
+  });
+  it("backs up the live SQLite database including authentication and persistent retry state", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "scratchpad-backup-"));
+    cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
+    const api = fixture(join(directory, "live.sqlite"));
+    const body = {
+      projectId: "project",
+      record: {
+        type: "finding",
+        title: "Durable evidence",
+        authority: "observed",
+        payload: { finding: "Survives restore" },
+      },
+    };
+    const before = await api.call("/records", "POST", body, {
+      "Idempotency-Key": "backup-retry",
+    });
+    const backup = join(directory, "backup.sqlite");
+    await api.store.backup(backup);
+    expect(statSync(backup).mode & 0o777).toBe(0o600);
+    await expect(api.store.backup(backup)).rejects.toThrow();
+    const restored = createApi({
+      databasePath: backup,
+      origin: "http://localhost:3000",
+    });
+    cleanup.push(() => restored.close());
+    const response = await restored.handleRequest(
+      new Request("http://localhost:3000/api/v1/records", {
+        method: "POST",
+        headers: {
+          authorization: "Bearer token",
+          "Idempotency-Key": "backup-retry",
+        },
+        body: JSON.stringify(body),
+      }),
+    );
+    expect(response.status).toBe(201);
+    expect((await response.json()).record.id).toBe(before.data.record.id);
+    expect(restored.store.list("record")).toHaveLength(1);
+  });
+});
+
+describe("native archive integrity", () => {
+  it("round trips revisions, source identities, evidence, settings, audit, and rejects unreadable or cyclic archives atomically", async () => {
+    const api = fixture();
+    api.store.insert("source", {
+      id: "source",
+      projectId: "project",
+      kind: "git_remote",
+      identity: "example.test/demo/memory",
+    });
+    api.store.sqlite
+      .prepare("INSERT INTO identities VALUES(?,?)")
+      .run("example.test/demo/memory", "project");
+    const rows = source
+      .slice(0, 2)
+      .map((row) => JSON.stringify(row))
+      .join("\n");
+    importLegacy(api.store, { projectId: "project", jsonl: rows }, actor);
+    await api.call("/records/D001/metadata", "PATCH", {
+      expectedVersion: 1,
+      tags: ["historical"],
+      displayTitle: "Curated telemetry constraint",
+    });
+    await api.call("/records/D001/evidence", "POST", {
+      kind: "test",
+      reference: "local test run",
+      description: "Passed",
+    });
+    await api.call("/settings", "PATCH", {
+      expectedVersion: 0,
+      settings: {
+        aiEnabled: false,
+        defaultProjectSettings: defaults("external"),
+      },
+    });
+    const archive = (await api.call("/export", "POST", {})).data;
+    const restored = createApi({
+      databasePath: ":memory:",
+      origin: "http://localhost:3000",
+    });
+    cleanup.push(() => restored.close());
+    importNative(restored.store, archive, actor);
+    for (const kind of exportKinds.filter((kind) => kind !== "audit"))
+      expect(restored.store.list(kind)).toEqual(api.store.list(kind));
+    for (const entry of api.store.list("audit"))
+      expect(restored.store.get("audit", entry.id)).toEqual(entry);
+    const detail = (await api.call("/records/D001")).data;
+    expect(
+      detail.audit.some(
+        (entry: { action: string }) => entry.action === "relationship.imported",
+      ),
+    ).toBe(true);
+    for (const mutate of [
+      (data: Record<string, JsonObject[]>) => {
+        data.metadata = [];
+      },
+      (data: Record<string, JsonObject[]>) => {
+        data.metadata[0].archived = "yes";
+      },
+      (data: Record<string, JsonObject[]>) => {
+        data.relationship[0].type = "invented";
+      },
+      (data: Record<string, JsonObject[]>) => {
+        data.relationship[0].status = "accepted";
+        data.relationship.push({
+          ...data.relationship[0],
+          id: "reverse",
+          fromRecordId: "D001",
+          toRecordId: "D002",
+        });
+      },
+    ]) {
+      const invalid = structuredClone(archive);
+      mutate(invalid.data);
+      const destination = createApi({
+        databasePath: ":memory:",
+        origin: "http://localhost:3000",
+      });
+      cleanup.push(() => destination.close());
+      expect(() => importNative(destination.store, invalid, actor)).toThrow();
+      expect(destination.store.list("project")).toHaveLength(0);
+      expect(destination.store.list("record")).toHaveLength(0);
+    }
+  });
+});

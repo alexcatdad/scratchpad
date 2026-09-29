@@ -1,5 +1,5 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { chmodSync, closeSync, mkdirSync, openSync, unlinkSync } from "node:fs";
+import { dirname, isAbsolute, resolve } from "node:path";
 import Database from "better-sqlite3";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/better-sqlite3";
@@ -138,6 +138,30 @@ export class Store {
   }
   atomic<T>(fn: () => T): T {
     return this.sqlite.transaction(fn).immediate();
+  }
+  async backup(destination: string): Promise<void> {
+    if (!isAbsolute(destination))
+      throw new ApiError(
+        400,
+        "VALIDATION_FAILED",
+        "Backup destination must be an absolute path.",
+      );
+    if (resolve(destination) === resolve(this.sqlite.name))
+      throw new ApiError(
+        409,
+        "CONFLICT",
+        "Backup destination must differ from the live database.",
+      );
+    mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+    const file = openSync(destination, "wx", 0o600);
+    closeSync(file);
+    try {
+      await this.sqlite.backup(destination);
+      chmodSync(destination, 0o600);
+    } catch (error) {
+      unlinkSync(destination);
+      throw error;
+    }
   }
   close(): void {
     this.sqlite.close();
