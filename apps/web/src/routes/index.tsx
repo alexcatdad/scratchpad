@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
 import { Projects } from "../components/projects";
+import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
 import {
   api,
@@ -13,18 +14,9 @@ import {
   types,
 } from "../lib/api";
 export const Route = createFileRoute("/")({ component: Dashboard });
-type Detail = {
-  record: MemoryRecord;
-  metadata: { displayTitle?: string; tags?: string[]; version: number };
-  revisions: { id: string; createdAt: string; reason?: string }[];
-  evidence: {
-    id: string;
-    kind: string;
-    reference: string;
-    description?: string;
-  }[];
-};
 function Dashboard() {
+  const recordRequest = useRef(0);
+  const detailRequest = useRef(0);
   const [status, setStatus] = useState<{
     initialized: boolean;
     authenticated: boolean;
@@ -36,6 +28,7 @@ function Dashboard() {
   const [type, setType] = useState("");
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState<Record<string, string>>({});
   const [detail, setDetail] = useState<Detail | null>(null);
   const [capture, setCapture] = useState(false);
   const [error, setError] = useState("");
@@ -50,6 +43,7 @@ function Dashboard() {
   }, []);
   const loadRecords = useCallback(
     async (next?: string) => {
+      const request = ++recordRequest.current;
       setLoading(true);
       setError("");
       try {
@@ -58,23 +52,27 @@ function Dashboard() {
         if (type) params.set("type", type);
         if (search) params.set("q", search);
         if (next) params.set("cursor", next);
+        for (const [name, value] of Object.entries(filters))
+          if (value) params.set(name, value);
         const data = await api<{
           records: MemoryRecord[];
           nextCursor: string | null;
         }>(`/records?${params}`);
+        if (request !== recordRequest.current) return;
         setRecords((previous) =>
           next ? [...previous, ...data.records] : data.records,
         );
         setCursor(data.nextCursor);
       } catch (reason) {
+        if (request !== recordRequest.current) return;
         setError(
           reason instanceof Error ? reason.message : "Could not load records.",
         );
       } finally {
-        setLoading(false);
+        if (request === recordRequest.current) setLoading(false);
       }
     },
-    [project, type, search],
+    [project, type, search, filters],
   );
   useEffect(() => {
     void authenticate().catch((e: Error) => setError(e.message));
@@ -85,13 +83,19 @@ function Dashboard() {
   }, [status?.authenticated, loadProjects]);
   useEffect(() => {
     if (status?.authenticated) {
+      detailRequest.current++;
       setDetail(null);
+      setRecords([]);
       void loadRecords();
     }
   }, [status?.authenticated, loadRecords]);
   async function select(record: MemoryRecord) {
+    const request = ++detailRequest.current;
     try {
-      setDetail(await api<Detail>(`/records/${record.id}`));
+      const data = await api<Detail>(
+        `/records/${encodeURIComponent(record.id)}`,
+      );
+      if (request === detailRequest.current) setDetail(data);
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Could not load record.",
@@ -156,9 +160,22 @@ function Dashboard() {
       </aside>
       <main className="main-pane">
         {tab === "Projects" ? (
-          <Projects projects={projects} onChanged={() => void loadProjects()} />
+          <Projects
+            projects={projects}
+            onChanged={() => void loadProjects()}
+            onInspect={(id) => {
+              setTab("Memory");
+              void select({ id } as MemoryRecord);
+            }}
+          />
         ) : tab === "Settings" ? (
-          <Settings />
+          <Settings
+            projects={projects}
+            onImported={() => {
+              void loadProjects();
+              void loadRecords();
+            }}
+          />
         ) : (
           <>
             <header className="page-heading">
@@ -181,6 +198,15 @@ function Dashboard() {
               onSubmit={(e) => {
                 e.preventDefault();
                 setSearch(query);
+                const form = new FormData(e.currentTarget);
+                const next: Record<string, string> = {};
+                for (const name of ["tag", "branch", "status", "authority"])
+                  next[name] = String(form.get(name) ?? "");
+                const from = String(form.get("from") ?? "");
+                const to = String(form.get("to") ?? "");
+                next.from = from ? `${from}T00:00:00.000Z` : "";
+                next.to = to ? `${to}T23:59:59.999Z` : "";
+                setFilters(next);
               }}
             >
               <input
@@ -214,6 +240,77 @@ function Dashboard() {
                   </option>
                 ))}
               </select>
+              <details className="advanced-filters">
+                <summary>More filters</summary>
+                <div className="form-grid">
+                  <label>
+                    Tag
+                    <input name="tag" defaultValue={filters.tag} />
+                  </label>
+                  <label>
+                    Git branch
+                    <input name="branch" defaultValue={filters.branch} />
+                  </label>
+                  <label>
+                    From date (UTC)
+                    <input
+                      type="date"
+                      name="from"
+                      defaultValue={filters.from?.slice(0, 10)}
+                    />
+                  </label>
+                  <label>
+                    Through date (UTC)
+                    <input
+                      type="date"
+                      name="to"
+                      defaultValue={filters.to?.slice(0, 10)}
+                    />
+                  </label>
+                  <label>
+                    Lifecycle
+                    <select
+                      aria-label="Lifecycle"
+                      name="status"
+                      defaultValue={filters.status ?? ""}
+                    >
+                      <option value="">All statuses</option>
+                      {[
+                        "active",
+                        "superseded",
+                        "partially_superseded",
+                        "archived",
+                      ].map((value) => (
+                        <option value={value} key={value}>
+                          {label(value)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Record authority
+                    <select
+                      aria-label="Record authority"
+                      name="authority"
+                      defaultValue={filters.authority ?? ""}
+                    >
+                      <option value="">All authorities</option>
+                      {[
+                        "explicit",
+                        "observed",
+                        "inferred",
+                        "derived",
+                        "suggested",
+                      ].map((value) => (
+                        <option value={value} key={value}>
+                          {label(value)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <button type="submit">Apply filters</button>
+              </details>
             </form>
             {error && (
               <p role="alert" className="error">
@@ -258,12 +355,18 @@ function Dashboard() {
                 {!records.length && !loading && (
                   <div className="empty">
                     <h2>
-                      {search || project || type
+                      {search ||
+                      project ||
+                      type ||
+                      Object.values(filters).some(Boolean)
                         ? "No matching records."
                         : "Your next session starts here."}
                     </h2>
                     <p>
-                      {search || project || type
+                      {search ||
+                      project ||
+                      type ||
+                      Object.values(filters).some(Boolean)
                         ? "Try a different search or filter."
                         : "Capture a decision, finding, or question worth remembering."}
                     </p>
@@ -281,7 +384,9 @@ function Dashboard() {
               </section>
               {detail && (
                 <RecordDetail
+                  key={detail.record.id}
                   detail={detail}
+                  onNavigate={(id) => void select({ id } as MemoryRecord)}
                   onClose={() => setDetail(null)}
                   onChanged={() => {
                     void select(detail.record);
@@ -304,108 +409,5 @@ function Dashboard() {
         )}
       </main>
     </div>
-  );
-}
-function RecordDetail({
-  detail,
-  onClose,
-  onChanged,
-}: {
-  detail: Detail;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const record = detail.record;
-  const [error, setError] = useState("");
-  async function retitle(form: FormData) {
-    try {
-      await api(`/records/${record.id}/metadata`, {
-        method: "PATCH",
-        headers: { "If-Match": String(detail.metadata.version) },
-        body: JSON.stringify({ displayTitle: form.get("displayTitle") }),
-      });
-      onChanged();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not update title.",
-      );
-    }
-  }
-  return (
-    <aside className="detail">
-      <button className="close-detail" type="button" onClick={onClose}>
-        Close
-      </button>
-      <h2>{detail.metadata.displayTitle || record.title}</h2>
-      <span className="record-type">{label(record.type)}</span>
-      {Object.entries(record.payload).map(([key, value]) => (
-        <section key={key}>
-          <h3>{label(key)}</h3>
-          <p className="preserve">
-            {typeof value === "string" ? value : JSON.stringify(value)}
-          </p>
-        </section>
-      ))}
-      <dl className="provenance">
-        <div>
-          <dt>Authority</dt>
-          <dd>{label(record.authority)}</dd>
-        </div>
-        <div>
-          <dt>Confidence</dt>
-          <dd>{label(record.confidence)}</dd>
-        </div>
-      </dl>
-      <section>
-        <h3>History</h3>
-        <p>Captured {new Date(record.recordedAt).toLocaleString("en")}</p>
-        {detail.revisions.map((revision) => (
-          <p key={revision.id}>
-            {new Date(revision.createdAt).toLocaleString("en")} ·{" "}
-            {revision.reason || "Metadata updated"}
-          </p>
-        ))}
-        <details>
-          <summary>Edit display title</summary>
-          <form
-            key={record.id}
-            onSubmit={(e) => {
-              e.preventDefault();
-              void retitle(new FormData(e.currentTarget));
-            }}
-          >
-            <label>
-              Display title
-              <input
-                name="displayTitle"
-                defaultValue={detail.metadata.displayTitle || record.title}
-                required
-              />
-            </label>
-            <button type="submit">Save title</button>
-          </form>
-          <small>Original capture remains unchanged.</small>
-        </details>
-      </section>
-      <section>
-        <h3>Evidence</h3>
-        {detail.evidence.length ? (
-          detail.evidence.map((e) => (
-            <p key={e.id}>
-              {e.description ?? e.kind}:{" "}
-              <span className="break-word">{e.reference}</span>
-            </p>
-          ))
-        ) : (
-          <p className="quiet">No evidence attached.</p>
-        )}
-      </section>
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
-      )}
-      <small className="break-word">{record.id}</small>
-    </aside>
   );
 }

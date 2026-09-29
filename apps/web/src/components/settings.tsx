@@ -1,7 +1,7 @@
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
-import { api, post } from "../lib/api";
+import { api, type Project, post } from "../lib/api";
 
 type Credential = {
   id: string;
@@ -10,7 +10,27 @@ type Credential = {
   revokedAt?: string;
   createdAt: string;
 };
-export function Settings() {
+export function Settings({
+  projects,
+  onImported,
+}: {
+  projects: Project[];
+  onImported: () => void;
+}) {
+  const [importProject, setImportProject] = useState(projects[0]?.id ?? "");
+  const [importWarnings, setImportWarnings] = useState<
+    { record?: number; code: string }[]
+  >([]);
+  async function importData(data: unknown) {
+    const result = await api<{
+      imported: number;
+      skipped: number;
+      warnings: { record?: number; code: string }[];
+    }>("/import", post(data));
+    setNotice(`Imported ${result.imported} items; skipped ${result.skipped}.`);
+    setImportWarnings(result.warnings);
+    onImported();
+  }
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -198,12 +218,64 @@ export function Settings() {
               if (file)
                 void perform(async () => {
                   const data = JSON.parse(await file.text());
-                  const result = await api<unknown>("/import", post(data));
-                  setNotice(`Import finished: ${JSON.stringify(result)}`);
+                  await importData(data);
                 });
             }}
           />
         </label>
+        <h3>Import a decision log</h3>
+        <p>
+          Choose a project and a JSONL file. Original entries are preserved;
+          missing historical authority remains unknown.
+        </p>
+        <label>
+          Import into project
+          <select
+            aria-label="Import into project"
+            value={importProject}
+            onChange={(e) => setImportProject(e.target.value)}
+          >
+            <option value="">Choose a project</option>
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Import JSONL decision log
+          <input
+            type="file"
+            accept=".jsonl,application/x-ndjson,text/plain"
+            disabled={!importProject}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file)
+                void perform(async () => {
+                  await importData({
+                    format: "jsonl",
+                    projectId: importProject,
+                    jsonl: await file.text(),
+                    source: { filename: file.name },
+                  });
+                });
+            }}
+          />
+        </label>
+        {importWarnings.length > 0 && (
+          <details>
+            <summary>Import notes ({importWarnings.length})</summary>
+            <ul>
+              {importWarnings.map((warning) => (
+                <li key={`${warning.record}-${warning.code}`}>
+                  {warning.record ? `Line ${warning.record}: ` : ""}
+                  {warning.code.replaceAll("_", " ").toLowerCase()}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
     </section>
   );

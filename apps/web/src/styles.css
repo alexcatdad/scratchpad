@@ -527,3 +527,51 @@ summary {
     scroll-behavior: auto;
   }
 }
+
+.audit-json {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.75rem;
+  max-height: 24rem;
+  overflow: auto;
+  padding: 0.75rem;
+  background: #f3f4f1;
+}
+.relationship {
+  padding-block: 0.75rem;
+  border-bottom: 1px solid #dce0db;
+}
+.action-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
+}
+.detail details {
+  margin-block: 1rem;
+}
+
+.project-list .project-card {
+  display: block;
+}
+.project-card details {
+  margin-block: 1rem;
+}
+.project-card fieldset {
+  margin-block: 1rem;
+  padding: 1rem;
+  border: 1px solid #dce0db;
+}
+.project-card h4 {
+  margin-bottom: 0.5rem;
+}
+.detail details details {
+  margin-left: 0.5rem;
+}
+
+.advanced-filters {
+  grid-column: 1 / -1;
+}
+.advanced-filters .form-grid {
+  margin-top: 1rem;
+}

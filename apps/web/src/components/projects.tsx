@@ -1,11 +1,20 @@
 import { useState } from "react";
-import { api, type Project, post } from "../lib/api";
+import {
+  api,
+  label,
+  type MemoryRecord,
+  type Project,
+  post,
+  types,
+} from "../lib/api";
 export function Projects({
   projects,
   onChanged,
+  onInspect,
 }: {
   projects: Project[];
   onChanged: () => void;
+  onInspect: (id: string) => void;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState("normal");
@@ -18,26 +27,6 @@ export function Projects({
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Could not create project.",
-      );
-    }
-  }
-  async function toggle(project: Project) {
-    try {
-      await api(`/projects/${project.id}/settings`, {
-        method: "PATCH",
-        headers: { "If-Match": String(project.version) },
-        body: JSON.stringify({
-          ...project.settings,
-          repoMirroring: {
-            ...project.settings.repoMirroring,
-            enabled: !project.settings.repoMirroring.enabled,
-          },
-        }),
-      });
-      onChanged();
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not update project.",
       );
     }
   }
@@ -83,25 +72,12 @@ export function Projects({
       )}
       <div className="project-list">
         {projects.map((project) => (
-          <article key={project.id}>
-            <div>
-              <h2>{project.name}</h2>
-              <p>
-                {project.kind === "external"
-                  ? "External / client"
-                  : "Personal / internal"}
-              </p>
-              <code>{project.id}</code>
-            </div>
-            <label className="checkbox">
-              <input
-                type="checkbox"
-                checked={project.settings.repoMirroring.enabled}
-                onChange={() => void toggle(project)}
-              />
-              Allow repository mirroring
-            </label>
-          </article>
+          <ProjectCard
+            key={`${project.id}-${project.version}`}
+            project={project}
+            onChanged={onChanged}
+            onInspect={onInspect}
+          />
         ))}
       </div>
       {!projects.length && (
@@ -111,5 +87,215 @@ export function Projects({
         </div>
       )}
     </section>
+  );
+}
+
+function ProjectCard({
+  project,
+  onChanged,
+  onInspect,
+}: {
+  project: Project;
+  onChanged: () => void;
+  onInspect: (id: string) => void;
+}) {
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [context, setContext] = useState<{
+    state: MemoryRecord[];
+    recentDecisions: MemoryRecord[];
+    constraints: MemoryRecord[];
+    openFindings: MemoryRecord[];
+    failures: MemoryRecord[];
+  } | null>(null);
+  async function save(path: string, body: unknown) {
+    setError("");
+    setBusy(true);
+    try {
+      await api(path, {
+        method: "PATCH",
+        headers: { "If-Match": String(project.version) },
+        body: JSON.stringify(body),
+      });
+      onChanged();
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "Could not save settings.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <article className="project-card">
+      <div>
+        <h2>{project.name}</h2>
+        <p>
+          {project.kind === "external"
+            ? "External / client"
+            : "Personal / internal"}
+        </p>
+      </div>
+      <details>
+        <summary>Project settings</summary>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            void save(`/projects/${project.id}/settings`, {
+              ...project.settings,
+              repoMirroring: {
+                enabled: form.get("mirroring") === "on",
+                recordTypes: form.getAll("mirrorTypes"),
+              },
+              crossProjectAnalysis: form.get("crossProject") === "on",
+              enabledRecordTypes: form.getAll("enabledTypes"),
+            });
+          }}
+        >
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              name="mirroring"
+              defaultChecked={project.settings.repoMirroring.enabled}
+            />
+            Allow repository mirroring
+          </label>
+          <fieldset>
+            <legend>Record types to mirror</legend>
+            {types.map((type) => (
+              <label className="checkbox" key={type}>
+                <input
+                  type="checkbox"
+                  name="mirrorTypes"
+                  value={type}
+                  defaultChecked={project.settings.repoMirroring.recordTypes.includes(
+                    type,
+                  )}
+                />
+                {label(type)}
+              </label>
+            ))}
+          </fieldset>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              name="crossProject"
+              defaultChecked={project.settings.crossProjectAnalysis}
+            />
+            Include in cross-project analysis
+          </label>
+          <fieldset>
+            <legend>Enabled capture types</legend>
+            {types.map((type) => (
+              <label className="checkbox" key={type}>
+                <input
+                  type="checkbox"
+                  name="enabledTypes"
+                  value={type}
+                  defaultChecked={
+                    !project.settings.enabledRecordTypes ||
+                    project.settings.enabledRecordTypes.includes(type)
+                  }
+                />
+                {label(type)}
+              </label>
+            ))}
+          </fieldset>
+          <button type="submit" disabled={busy}>
+            Save project settings
+          </button>
+        </form>
+      </details>
+      <details>
+        <summary>Edit project</summary>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const form = new FormData(e.currentTarget);
+            void save(`/projects/${project.id}`, Object.fromEntries(form));
+          }}
+        >
+          <label>
+            Project display name
+            <input name="name" defaultValue={project.name} required />
+          </label>
+          <label>
+            Project classification
+            <select
+              name="kind"
+              aria-label="Project classification"
+              defaultValue={project.kind}
+            >
+              <option value="normal">Personal / internal</option>
+              <option value="external">External / client</option>
+            </select>
+          </label>
+          <p>
+            Review mirroring and cross-project settings after changing
+            classification.
+          </p>
+          <button type="submit" disabled={busy}>
+            Save project
+          </button>
+        </form>
+      </details>
+      <button
+        type="button"
+        onClick={() => {
+          setError("");
+          void api<typeof context>(`/projects/${project.id}/context`)
+            .then(setContext)
+            .catch((reason: Error) => setError(reason.message));
+        }}
+      >
+        Show project context
+      </button>
+      {context && (
+        <section aria-label={`${project.name} context`}>
+          <h3>Project context</h3>
+          {(
+            [
+              ["State", context.state],
+              ["Decisions", context.recentDecisions],
+              ["Constraints", context.constraints],
+              ["Findings", context.openFindings],
+              ["Failures and lessons", context.failures],
+            ] as [string, MemoryRecord[]][]
+          ).map(([title, records]) => (
+            <section key={title}>
+              <h4>{title}</h4>
+              {records.length ? (
+                records.map((record) => (
+                  <p key={record.id}>
+                    <button type="button" onClick={() => onInspect(record.id)}>
+                      {record.title}
+                    </button>
+                    <small className="preserve">{record.content}</small>
+                    {record.applicability &&
+                      record.applicability !== "current" && (
+                        <small>{label(record.applicability)}</small>
+                      )}
+                    {record.actor?.kind === "import" && (
+                      <small>
+                        Imported history; verify applicability before relying on
+                        it.
+                      </small>
+                    )}
+                  </p>
+                ))
+              ) : (
+                <p className="quiet">None recorded.</p>
+              )}
+            </section>
+          ))}
+        </section>
+      )}
+      {error && (
+        <p role="alert" className="error">
+          {error}
+        </p>
+      )}
+    </article>
   );
 }

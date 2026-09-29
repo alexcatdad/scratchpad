@@ -20,8 +20,14 @@ export function Capture({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [type, setType] = useState("finding");
+  const initialTypes = projects[0]?.settings.enabledRecordTypes ?? types;
+  const [type, setType] = useState(
+    initialTypes.includes("finding") ? "finding" : (initialTypes[0] ?? ""),
+  );
   const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const availableTypes: readonly string[] =
+    projects.find((project) => project.id === projectId)?.settings
+      .enabledRecordTypes ?? types;
   const [title, setTitle] = useState("");
   const [payload, setPayload] = useState<Record<string, string>>({});
   const [authority, setAuthority] = useState("explicit");
@@ -86,7 +92,16 @@ export function Capture({
               <select
                 aria-label="Project"
                 value={projectId}
-                onChange={(e) => setProjectId(e.target.value)}
+                onChange={(e) => {
+                  setProjectId(e.target.value);
+                  const allowed: readonly string[] =
+                    projects.find((project) => project.id === e.target.value)
+                      ?.settings.enabledRecordTypes ?? types;
+                  if (!allowed.includes(type)) {
+                    setType(allowed[0] ?? "");
+                    setPayload({});
+                  }
+                }}
                 required
               >
                 {projects.map((p) => (
@@ -106,7 +121,7 @@ export function Capture({
                   setPayload({});
                 }}
               >
-                {types.map((t) => (
+                {availableTypes.map((t) => (
                   <option key={t} value={t}>
                     {label(t)}
                   </option>
@@ -177,11 +192,17 @@ export function Capture({
           <button
             type="submit"
             className="primary"
-            disabled={busy || !projectId}
+            disabled={busy || !projectId || !availableTypes.includes(type)}
           >
             {busy ? "Saving…" : "Save record"}
           </button>
           {!projects.length && <p>Create a project first.</p>}
+          {!availableTypes.length && (
+            <p>
+              Capture is disabled for this project. Enable a record type in
+              project settings.
+            </p>
+          )}
         </form>
       </section>
     </div>

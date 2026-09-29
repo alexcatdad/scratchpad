@@ -1559,3 +1559,17 @@ Persisted idempotency state and an explicit revision precondition must support t
 Per decision `scratchpad-20260929-015`, repository mirroring requires both local MCP enablement and project permission, with `decision`, `adr`, and `business_decision` eligible by default. Persist the central record before any mirror append. Return the central record identity even if mirroring fails, with an explicit partial-success outcome. Retrying must not duplicate central or local records.
 
 The MCP reports mirror outcome for its local capture/checkout; the exact reporting endpoint and append coordination remain implementation details. This is not browser-to-repository synchronization, and no automatic Git commit or push is authorized by mirroring.
+
+## 65. MVP implementation extensions
+
+These additions document the current wire behavior while preserving the accepted flexible capture model.
+
+- `ProjectSettings.enabledRecordTypes` is an array of initial record type names. Older stored settings default to all types. Disabling a type prevents new captures; it does not discard imported history.
+- `PATCH /projects/:id` accepts `name`, `kind`, and optimistic version information (`If-Match` or `expectedVersion`). Switching to external disables mirroring and cross-project analysis; the owner can explicitly reenable either afterward.
+- Legacy imported records may have `authority: null` when the source does not establish authority. New captures still require an explicit authority vocabulary value. The importer preserves original source claims without treating them as verified identity or current policy.
+- JSONL import accepts `{format: "jsonl", projectId, jsonl, source: {filename}}` or `sourceName`. Results include `imported`, `skipped`, per-line `warnings`, and `records` entries containing `line`, `recordId` where available, and `status`. Safe historical IDs survive; fallback IDs retain their original value in provenance.
+- Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 MiB. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
+- Project context retains its original arrays and adds `currentState`, `stateHistory`, `applicableRecords`, `partiallySuperseded`, `historicalRecords`, and `requiresReview`. Contextual records include `applicability`, `replacedBy`, and historical-status annotations. Imported claims remain visibly unverified.
+- Record detail includes audit events for associated relationships and evidence as well as record mutations. Metadata revisions retain before/after snapshots.
+
+Native export is a portable knowledge archive, excluding authentication state. The administrator's `backup <absolute-destination>` command creates a consistent full SQLite snapshot, including credential/session/retry state. Operational restore requires a stopped service and a fresh destination volume; see the server and deployment runbooks.

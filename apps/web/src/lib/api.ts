@@ -7,6 +7,7 @@ export type Project = {
     repoMirroring: { enabled: boolean; recordTypes: string[] };
     crossProjectAnalysis: boolean;
     aiProcessing: boolean;
+    enabledRecordTypes?: string[];
   };
 };
 export type MemoryRecord = {
@@ -15,12 +16,18 @@ export type MemoryRecord = {
   type: string;
   title: string;
   content: string;
-  authority: string;
+  authority: string | null;
   confidence: string;
   recordedAt: string;
   createdAt: string;
   version: number;
   payload: Record<string, unknown>;
+  actor?: Record<string, unknown>;
+  provenance?: Record<string, unknown>;
+  applicability?: string;
+  gitContext?: Record<string, unknown>;
+  confidenceReason?: string;
+  happenedAt?: string;
   metadata?: { displayTitle?: string; tags?: string[] };
   revisions?: unknown[];
   evidence?: unknown[];
@@ -36,12 +43,14 @@ export const types = [
   "constraint",
   "project_state",
 ] as const;
-export const label = (value: string) =>
-  value === "qa"
-    ? "Question & answer"
-    : value === "adr"
-      ? "ADR"
-      : value.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
+export const label = (value: string | null | undefined): string =>
+  !value
+    ? "Unknown"
+    : value === "qa"
+      ? "Question & answer"
+      : value === "adr"
+        ? "ADR"
+        : value.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     ...init,
