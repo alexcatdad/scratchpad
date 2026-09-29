@@ -13,3 +13,7 @@ Navigation: Scratchpad, Memory, Projects, Settings, Documentation, Sign out. Mai
 ## QA procedure
 
 Run web server, inspect through the in-app browser first, verify setup/login, project/list/detail/search/create/settings/sign-out behavior, desktop and narrow layout, and capture a screenshot. Compare to the concept with image viewing: palette, typography, sidebar, spacing, list/detail arrangement, controls and overflow. Remove temporary QA outputs from tracked files. Use a virtual passkey only in disposable integration tests, never substitute test auth in production.
+
+## Initial verification
+
+The in-app browser rendered setup and the deployed Starlight presentation. Disposable Chromium tests exercised the authenticated dashboard with a virtual passkey and saved desktop (1440px) and mobile (390px) screenshots. Both were inspected against the concept: olive actions, serif headings, neutral surfaces, sidebar/list/detail layout, and readable stacked mobile detail are present. The implementation uses real captured data, a visible Search button, and a simpler text navigation. The narrow search placeholder is clipped within its control but the page has no horizontal overflow.

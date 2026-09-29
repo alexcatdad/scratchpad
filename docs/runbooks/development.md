@@ -23,3 +23,11 @@ Track verified commands and outstanding work in handoffs and decision records. T
 The production web build and disposable Playwright workflow passed locally. Run `npm run build -w @scratchpad/web` followed by `npm run test:e2e` to exercise virtual passkey enrollment, browser capture and editing, SSH key enrollment, the real stdio MCP binary, and persistence across a server restart. The test creates and removes its own database and credentials; screenshots remain ignored under `test-results/`.
 
 Docker smoke verification of the final startup command, remote GitHub Actions runs, and live Pages deployment are still pending. This checkpoint does not establish full MVP or deployment acceptance.
+
+## Infrastructure and publication
+
+Run `bash scripts/lint-infrastructure.sh` with actionlint 1.7.12, ShellCheck 0.11.0, and Docker. The script runs Hadolint 2.15.1 and skips only Debian package-version pinning (DL3008). Build `docker build -t scratchpad:ci .`, then run `bash scripts/docker-smoke.sh scratchpad:ci`; its disposable volume is removed on exit.
+
+Push main and inspect CI and Documentation runs for the exact commit using `gh run list` and `gh run view`. The current HTTPS CLI credential lacks workflow scope; the existing GitHub SSH identity can publish workflow changes with `git push git@github.com:alexcatdad/scratchpad.git main`. Pages uses GitHub Actions and serves <https://alexcatdad.github.io/scratchpad/>.
+
+The initial published checkpoint `1dcc374` passed CI and Documentation, including a successful Pages deployment. Local Docker readiness, protected-route rejection, HTML rendering, and restart passed. `npm outdated --workspaces --include-workspace-root` reported no outdated direct dependencies on 2026-09-29. Infrastructure lint and browser/MCP checks are now included in CI; validate their next published revision before claiming those remote gates passed.

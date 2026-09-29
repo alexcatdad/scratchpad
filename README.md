@@ -29,12 +29,16 @@ Use the Node 24 version in `.node-version`, npm, Go 1.27.1, Git and OpenSSH.
 
 ```sh
 npm ci
+export SCRATCHPAD_PUBLIC_URL=http://localhost:3000
+export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
 In another terminal, use the same absolute database path and public URL for the server and administrator command (see `.env.example`):
 
 ```sh
+export SCRATCHPAD_PUBLIC_URL=http://localhost:3000
+export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run admin -- setup
 ```
 

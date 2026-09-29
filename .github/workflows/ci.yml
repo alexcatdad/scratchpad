@@ -18,11 +18,17 @@ jobs:
         with:
           node-version-file: .node-version
           cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
       - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - run: npm run lint
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      - run: npm run test:e2e
   go:
     runs-on: ubuntu-latest
     defaults:
@@ -39,6 +45,21 @@ jobs:
       - run: go test -race ./...
       - run: go build ./cmd/scratchpad-mcp
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+  infrastructure:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - name: Install pinned infrastructure linters
+        run: |
+          go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.12
+          curl --fail --silent --show-error --location https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz --output "$RUNNER_TEMP/shellcheck.tar.xz"
+          tar -xJf "$RUNNER_TEMP/shellcheck.tar.xz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/shellcheck-v0.11.0" >> "$GITHUB_PATH"
+      - run: bash scripts/lint-infrastructure.sh
   docker:
     runs-on: ubuntu-latest
     steps:

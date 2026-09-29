@@ -25,7 +25,7 @@ export default defineConfig({
       ],
       editLink: {
         baseUrl:
-          "https://github.com/alexcatdad/scratchpad/edit/main/apps/docs/src/content/docs/",
+          "https://github.com/alexcatdad/scratchpad/edit/main/apps/docs/",
       },
       sidebar: [
         { label: "Overview", slug: "overview" },
