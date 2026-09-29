@@ -95,8 +95,10 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 	}
 	return nil, out, nil
 }
-func NewServer(c *Client) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: "0.1.0"}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous."})
+func NewServer(c *Client) *mcp.Server { return NewServerWithVersion(c, "dev") }
+
+func NewServerWithVersion(c *Client, version string) *mcp.Server {
+	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous."})
 	registerCaptures(s, c)
 	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory"}, func(ctx context.Context, _ *mcp.CallToolRequest, in Scope) (*mcp.CallToolResult, any, error) {
 		p, _, err := c.resolve(ctx, in)

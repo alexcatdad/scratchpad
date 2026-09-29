@@ -54,7 +54,7 @@ func NormalizeRemote(remote string) (string, error) {
 	return strings.ToLower(host) + "/" + path, nil
 }
 func git(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append([]string{"--no-optional-locks", "-C", dir}, args...)...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }
@@ -63,6 +63,17 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 	if err != nil {
 		return nil, nil
 	}
+	// Collect checkout provenance before selecting a remote. Explicit project
+	// resolution must not discard branch/commit metadata when remotes disagree.
+	g := &GitContext{RootPathHint: root}
+	g.Branch, _ = git(ctx, root, "symbolic-ref", "--short", "-q", "HEAD")
+	g.Commit, _ = git(ctx, root, "rev-parse", "HEAD")
+	status, _ := git(ctx, root, "status", "--porcelain")
+	g.Dirty = status != ""
+	common, _ := git(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
+	actual, _ := git(ctx, root, "rev-parse", "--absolute-git-dir")
+	g.Worktree.Detected = common != actual
+	g.Worktree.Name = filepath.Base(root)
 	names, err := git(ctx, root, "remote")
 	if err != nil {
 		return nil, err
@@ -82,7 +93,7 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 			identities[id] = remote
 			if name == "origin" {
 				if origin != "" && origin != id {
-					return nil, &APIError{Code: "PROJECT_IDENTITY_AMBIGUOUS", Message: "origin has competing remote identities"}
+					return g, &APIError{Code: "PROJECT_IDENTITY_AMBIGUOUS", Message: "origin has competing remote identities"}
 				}
 				origin = id
 			}
@@ -96,23 +107,15 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 				candidates = append(candidates, candidate)
 			}
 			sort.Strings(candidates)
-			return nil, &APIError{Code: "PROJECT_IDENTITY_AMBIGUOUS", Message: "Choose a project explicitly; remotes identify different repositories", Details: candidates}
+			return g, &APIError{Code: "PROJECT_IDENTITY_AMBIGUOUS", Message: "Choose a project explicitly; remotes identify different repositories", Details: candidates}
 		}
 		for candidate := range identities {
 			id = candidate
 		}
 	}
-	g := &GitContext{RepositoryIdentity: id, RootPathHint: root}
+	g.RepositoryIdentity = id
 	if id != "" {
 		g.Remote = "https://" + id
 	}
-	g.Branch, _ = git(ctx, root, "symbolic-ref", "--short", "-q", "HEAD")
-	g.Commit, _ = git(ctx, root, "rev-parse", "HEAD")
-	status, _ := git(ctx, root, "status", "--porcelain")
-	g.Dirty = status != ""
-	common, _ := git(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
-	actual, _ := git(ctx, root, "rev-parse", "--absolute-git-dir")
-	g.Worktree.Detected = common != actual
-	g.Worktree.Name = filepath.Base(root)
 	return g, nil
 }

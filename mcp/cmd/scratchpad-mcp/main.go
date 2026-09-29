@@ -11,9 +11,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// version is injected by release builds with -ldflags "-X main.version=<tag>".
+var version = "dev"
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("scratchpad-mcp 0.1.0")
+		fmt.Println("scratchpad-mcp " + version)
 		return
 	}
 	c, err := scratchpad.NewClient(scratchpad.Config{URL: os.Getenv("SCRATCHPAD_URL"), PublicKeyPath: os.Getenv("SCRATCHPAD_PUBLIC_KEY"), SigningKeyPath: os.Getenv("SCRATCHPAD_SIGNING_KEY"), Mirror: os.Getenv("SCRATCHPAD_MIRROR") == "true", MirrorPath: os.Getenv("SCRATCHPAD_MIRROR_PATH")})
@@ -23,7 +26,7 @@ func main() {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	if err = scratchpad.NewServer(c).Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
+	if err = scratchpad.NewServerWithVersion(c, version).Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
