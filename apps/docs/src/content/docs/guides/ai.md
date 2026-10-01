@@ -56,3 +56,5 @@ See the [API contract](https://github.com/alexcatdad/scratchpad/blob/main/docs/a
 The [machine-readable OpenAPI contract](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) includes provider settings, processing jobs, derived artifacts, review and semantic-search schemas. Completion providers must support structured JSON-schema responses; compatible embeddings alone do not establish completion support.
 
 Downloaded Markdown carries an application-generated draft label as well as source links. Reviewing a suggestion preserves its derived origin; the document does not establish that a source decision was approved or implemented.
+
+Document source links use the instance's configured public origin and open the authenticated dashboard record detail. They remain usable from a downloaded file; possessing the document does not bypass instance authentication.

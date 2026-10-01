@@ -468,7 +468,7 @@ test.describe("real local Qwen processing", () => {
       /handoff|next|follow|implementation/i,
     );
     for (const key of originals.keys())
-      expect(document.content.markdown).toContain(`/?recordId=${key}`);
+      expect(document.content.markdown).toContain(`${origin}/?recordId=${key}`);
     const card = page.locator("article").filter({
       has: page.getByRole("heading", {
         name: document.title as string,
@@ -492,9 +492,16 @@ test.describe("real local Qwen processing", () => {
         ),
       ).toBe(original);
     const firstId = [...originals.keys()][0] as string;
-    const linked = await page.goto(
-      `${origin}/?recordId=${encodeURIComponent(firstId)}`,
-    );
+    const expectedSourceUrl = `${origin}/?recordId=${encodeURIComponent(firstId)}`;
+    const downloadedSourceUrl = [
+      ...(document.content.markdown ?? "").matchAll(
+        /\]\((https?:\/\/[^)]+)\)/g,
+      ),
+    ]
+      .map((match) => match[1])
+      .find((url) => url === expectedSourceUrl);
+    expect(downloadedSourceUrl).toBe(expectedSourceUrl);
+    const linked = await page.goto(downloadedSourceUrl as string);
     expect(linked?.status()).toBe(200);
     await expect(
       page.getByRole("complementary", { name: "Record detail" }),

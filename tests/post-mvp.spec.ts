@@ -727,7 +727,7 @@ test("private AI settings, evidence review, semantic search and document downloa
     expect(markdown).toContain("## Source records");
     expect(markdown).toContain([...snapshots.keys()][0] ?? "");
     expect(markdown).toContain(
-      `(/?recordId=${encodeURIComponent([...snapshots.keys()][0] ?? "")})`,
+      `(${origin}/?recordId=${encodeURIComponent([...snapshots.keys()][0] ?? "")})`,
     );
     expect(markdown).not.toContain("EXCLUDED_CLIENT_SECRET");
     expect(markdown).not.toContain("synthetic-secret-key");

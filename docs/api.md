@@ -1639,3 +1639,5 @@ The local stdio server adds `semantic_search`, `get_suggestions`, `process_memor
 The machine-readable [OpenAPI 3.1 contract](openapi.json) documents the implemented routes and schemas. It can be consumed without generated clients; authentication and optional project-consent boundaries remain server-enforced.
 
 Private AI Markdown exports include an application-generated draft label and validated source links. The label is added after model validation, independently of provider wording, so downloaded files retain their derived authority outside the dashboard.
+
+Document source links use the instance's configured public origin and open the authenticated dashboard record detail. They remain usable from a downloaded file; possessing the document does not bypass instance authentication.

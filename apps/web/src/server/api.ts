@@ -103,7 +103,7 @@ export function createApi(config: {
 }) {
   const store = new Store(config.databasePath, config.databaseUrl),
     auth = new Auth(store, config.origin),
-    ai = new AiService(store);
+    ai = new AiService(store, undefined, undefined, config.origin);
   async function entity(kind: string, key: string): Promise<Entity> {
     const value = await store.get(kind, key);
     requireValue(

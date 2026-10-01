@@ -12,7 +12,12 @@ async function fixture(fetcher: typeof fetch = mockProvider()) {
   const store = new Store(":memory:");
   stores.push(store);
   let time = Date.now();
-  const ai = new AiService(store, fetcher, () => time);
+  const ai = new AiService(
+    store,
+    fetcher,
+    () => time,
+    "https://memory.example.test",
+  );
   await store.insert("project", {
     id: "p1",
     name: "Synthetic project",
@@ -778,9 +783,13 @@ describe("OpenAI-compatible response validation", () => {
     ]);
     expect((await ai.jobs())[0]?.status).toBe("completed");
     const artifact = (await ai.artifacts())[0] as Entity;
-    expect(String((artifact.content as { markdown: string }).markdown)).toMatch(
+    const markdown = String(
+      (artifact.content as { markdown: string }).markdown,
+    );
+    expect(markdown).toMatch(
       /^> AI-generated draft\. Source records retain their original authority;/,
     );
+    expect(markdown).toContain("(https://memory.example.test/?recordId=r1)");
   });
   it("meets OpenAI strict required-properties rules and removes only optional null placeholders", async () => {
     const fetcher = mockProvider({

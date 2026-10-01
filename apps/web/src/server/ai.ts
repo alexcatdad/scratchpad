@@ -392,6 +392,7 @@ export class AiService {
     readonly store: Store,
     private fetcher: Fetcher = providerFetch,
     private clock: () => number = Date.now,
+    private sourceOrigin = "http://localhost:3000",
   ) {}
   private async config(): Promise<Config> {
     return configSchema.parse(
@@ -1130,7 +1131,7 @@ export class AiService {
       const citations = artifact.sourceRecordIds
         .map(
           (key) =>
-            `- [${String(known.get(key)?.title).replace(/[[\]\n]/g, " ")}](/?recordId=${encodeURIComponent(key)}) — \`${key}\``,
+            `- [${String(known.get(key)?.title).replace(/[[\]\n]/g, " ")}](${new URL(`/?recordId=${encodeURIComponent(key)}`, this.sourceOrigin).href}) — \`${key}\``,
         )
         .join("\n");
       return {
