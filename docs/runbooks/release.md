@@ -74,7 +74,7 @@ Use `gh release view` before retrying creation/upload. Do not overwrite assets w
 
 1. Preflight checks stable tag syntax, ancestry on `main`, exact-source CI, draft state, and GitHub App access. It fixes the uploaded manifest checksum for the run.
 2. macOS runners rebuild unsigned reference binaries from the selected commit. They download the exact archive/receipt/manifest names and reject changed manifests, mismatched source/team/checksums, unexpected ZIP contents, invalid signatures, missing hardened runtime, and failed Apple trust assessment.
-3. Signature-normalized copies of the downloaded binary and rebuilt reference must match byte for byte. The original signed archive is never modified. An uploaded `Accepted` JSON alone is not proof of notarization: `codesign --test-requirement '=notarized'` must succeed. `spctl` application assessment rejects standalone command-line tools as “not an app”, so it is not the CLI verification gate.
+3. Signature-normalized copies of the downloaded binary and rebuilt reference must match byte for byte. The original signed archive is never modified. An uploaded `Accepted` JSON alone is not proof of notarization: `codesign --test-requirement '=notarized'` must succeed. `spctl` first triggers online ticket retrieval, but its application assessment rejects standalone command-line tools as “not an app”. The subsequent explicit code requirement is the mandatory CLI verification gate.
 4. Linux ARM64 and AMD64 are built in CI. The image job publishes both Linux platforms to `ghcr.io/alexcatdad/scratchpad:vX.Y.Z` only after native verification succeeds.
 5. Publication checks the complete inventory, generates checksums, revalidates the tag SHA, and publishes the draft. The tap job downloads the published assets, verifies checksums, and updates `Formula/scratchpad-mcp.rb` using the GitHub App. Downgrades and force pushes are prohibited.
 
@@ -109,3 +109,12 @@ The first real local-signing handoff must still demonstrate successful Apple ass
 ## Initial preparation correction
 
 The unpublished `v0.1.0` preparation exposed a ZIP layout mismatch and an application-only trust check. Its Apple submissions were accepted, but no assets were published. The tag is preserved. Subsequent preparation uses a new version, root-level ZIP binaries without resource sidecars, and Apple's explicit notarization code requirement for command-line tools.
+
+## Verify the published release on fresh runners
+
+After publication, dispatch `release-acceptance.yml` with the published tag. It installs and tests Homebrew on fresh macOS and Linux runners, exercises the installed executable against disposable authenticated server fixtures, verifies all published checksums, anonymously pulls both GHCR architectures, and tests the published Linux binary with the published image through backup/restore.
+
+```sh
+gh workflow run release-acceptance.yml --repo alexcatdad/scratchpad --ref main -f tag=v0.1.2
+gh run list --repo alexcatdad/scratchpad --workflow release-acceptance.yml
+```

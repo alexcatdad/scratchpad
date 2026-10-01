@@ -1,0 +1,116 @@
+name: Verify published release
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable vX.Y.Z release to verify
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  homebrew:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-26, ubuntu-latest]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - name: Verify public release and install from Homebrew
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          gh release view "$RELEASE_TAG" --json isDraft,isPrerelease | jq -e '.isDraft == false and .isPrerelease == false'
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          fi
+          echo "$(brew --prefix)/bin" >> "$GITHUB_PATH"
+          brew install alexcatdad/tap/scratchpad-mcp
+          brew test alexcatdad/tap/scratchpad-mcp
+          binary="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp"
+          "$binary" --version | grep -Fx "scratchpad-mcp ${RELEASE_TAG#v}"
+          echo "SCRATCHPAD_E2E_MCP_BINARY=$binary" >> "$GITHUB_ENV"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            spctl --assess --type execute "$binary" >/dev/null 2>&1 || true
+            codesign --verify --strict --test-requirement '=notarized' "$binary"
+            codesign -dv --verbose=4 "$binary" 2> signature.txt
+            grep -Fx 'TeamIdentifier=CX6D6KGCT5' signature.txt
+          fi
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build -w @scratchpad/web
+      - name: Verify installed binary authentication capture and restart
+        run: npm run test:e2e
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Verify anonymous image pulls and both platform readiness
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          image="ghcr.io/alexcatdad/scratchpad:$RELEASE_TAG"
+          for arch in amd64 arm64; do
+            docker pull --platform "linux/$arch" "$image"
+            name="scratchpad-release-$arch"
+            docker run -d --platform "linux/$arch" --name "$name" "$image"
+            ready=false
+            for attempt in $(seq 1 40); do
+              if docker exec "$name" node -e "fetch('http://localhost:3000/ready',{signal:AbortSignal.timeout(5000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"; then ready=true; break; fi
+              sleep 1
+            done
+            printf 'Readiness for linux/%s after %s attempts: %s\n' "$arch" "$attempt" "$ready"
+            docker logs "$name"
+            docker rm -f "$name"
+            [[ "$ready" == true ]]
+          done
+          docker pull --platform linux/amd64 "$image"
+          echo "SCRATCHPAD_E2E_IMAGE=$image" >> "$GITHUB_ENV"
+      - name: Verify all published checksums and select released Linux executable
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --dir "$RUNNER_TEMP/release-assets"
+          (cd "$RUNNER_TEMP/release-assets" && sha256sum --check checksums.txt)
+          mkdir "$RUNNER_TEMP/release-bin"
+          tar -xzf "$RUNNER_TEMP/release-assets/scratchpad-mcp-$RELEASE_TAG-linux-amd64.tar.gz" -C "$RUNNER_TEMP/release-bin"
+          echo "SCRATCHPAD_E2E_MCP_BINARY=$RUNNER_TEMP/release-bin/scratchpad-mcp" >> "$GITHUB_ENV"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Verify published image and binary through backup restore
+        run: npm run test:e2e
+        env:
+          SCRATCHPAD_E2E_DOCKER: "1"

@@ -90,7 +90,7 @@ Check the formula version and executable output against the intended release ver
 To also validate the installed MCP against a published application image, pull the exact release image first, then select it explicitly:
 
 ```sh
-SCRATCHPAD_E2E_DOCKER=1 SCRATCHPAD_E2E_IMAGE=ghcr.io/alexcatdad/scratchpad:0.1.0 SCRATCHPAD_E2E_MCP_BINARY="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" npm run test:e2e
+SCRATCHPAD_E2E_DOCKER=1 SCRATCHPAD_E2E_IMAGE=ghcr.io/alexcatdad/scratchpad:v0.1.2 SCRATCHPAD_E2E_MCP_BINARY="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" npm run test:e2e
 ```
 
 This adds the named-volume backup/restore workflow documented in [container acceptance](container-acceptance.md). Pulling an image, installing or upgrading a formula, verifying published checksums/signatures, and checking Apple notarization are separate release steps described in [the release runbook](release.md). The runner does not install, upgrade, publish, sign, or notarize anything.
