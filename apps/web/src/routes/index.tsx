@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
+import { Insights } from "../components/insights";
 import { Projects } from "../components/projects";
 import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
@@ -133,7 +134,7 @@ function Dashboard() {
           Scratchpad
         </a>
         <nav aria-label="Main navigation">
-          {["Memory", "Projects", "Settings"].map((name) => (
+          {["Memory", "Projects", "Insights", "Settings"].map((name) => (
             <button
               key={name}
               type="button"
@@ -163,6 +164,14 @@ function Dashboard() {
           <Projects
             projects={projects}
             onChanged={() => void loadProjects()}
+            onInspect={(id) => {
+              setTab("Memory");
+              void select({ id } as MemoryRecord);
+            }}
+          />
+        ) : tab === "Insights" ? (
+          <Insights
+            projects={projects}
             onInspect={(id) => {
               setTab("Memory");
               void select({ id } as MemoryRecord);

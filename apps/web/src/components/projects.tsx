@@ -149,6 +149,7 @@ function ProjectCard({
                 recordTypes: form.getAll("mirrorTypes"),
               },
               crossProjectAnalysis: form.get("crossProject") === "on",
+              aiProcessing: form.get("aiProcessing") === "on",
               enabledRecordTypes: form.getAll("enabledTypes"),
             });
           }}
@@ -185,6 +186,18 @@ function ProjectCard({
             />
             Include in cross-project analysis
           </label>
+          <label className="checkbox">
+            <input
+              type="checkbox"
+              name="aiProcessing"
+              defaultChecked={project.settings.aiProcessing}
+            />
+            Allow AI processing for this project
+          </label>
+          <p className="quiet">
+            Enabling this sends this project's records to your configured AI
+            provider. Cross-project analysis requires both permissions.
+          </p>
           <fieldset>
             <legend>Enabled capture types</legend>
             {types.map((type) => (

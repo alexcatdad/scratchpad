@@ -2,6 +2,8 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Project, post } from "../lib/api";
+import { AiSettings, OwnerSettings } from "./ai-settings";
+import { ProjectDefaults } from "./project-defaults";
 
 type Credential = {
   id: string;
@@ -95,6 +97,9 @@ export function Settings({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      <OwnerSettings />
+      <AiSettings />
+      <ProjectDefaults />
       <section className="settings-section">
         <h2>Passkeys and identities</h2>
         <p>Revoking a credential ends its sessions immediately.</p>
