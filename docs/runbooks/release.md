@@ -38,10 +38,10 @@ The repository has not selected a license. The tap formula does not invent one.
 
 Use a clean checkout of the intended commit with all relevant checks passing. CI must be successful at that exact SHA on `main`; an earlier green revision is insufficient. Use the pinned Go toolchain. Native builds disable automatic VCS metadata so local and CI binaries can be compared after normalizing signatures.
 
-The following example uses a prospective `v0.1.4` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
+The remaining-product release is prepared as `v0.2.0`. The example below names that prospective release; it does not establish publication. Never replace an existing published tag or assets.
 
 ```sh
-export RELEASE_TAG=v0.1.4
+export RELEASE_TAG=v0.2.0
 git tag "$RELEASE_TAG"
 git push origin "$RELEASE_TAG"
 export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR NAME (TEAMID)'

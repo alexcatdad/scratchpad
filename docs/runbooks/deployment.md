@@ -2,7 +2,7 @@
 
 ## Scope
 
-Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. No production release image is published yet; use a reviewed source commit until the release pipeline is provisioned and verified.
+Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. Published images are available from GHCR; the owner’s existing installation uses v0.1.3. A locally built development image is a separate acceptance candidate and must not be described as a published release.
 
 The host needs Docker Compose, storage for the persistent volume, and a TLS reverse proxy for access beyond localhost. GitHub Pages serves public documentation and cannot host the application.
 
