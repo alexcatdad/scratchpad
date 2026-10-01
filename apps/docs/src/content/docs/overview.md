@@ -19,7 +19,7 @@ Historical records are evidence, not automatically current policy. A past decisi
 
 ## Development status
 
-v0.2.0 includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring, plus optional AI processing and PostgreSQL. Follow [installation](/scratchpad/guides/installation/) for Homebrew and container setup or build from source. See [release verification](/scratchpad/guides/releases/) for publication and installation evidence. Historical MVP acceptance in v0.1.3 used clearly labeled synthetic scenarios against the actual application. Other projects provide optional examples and import datasets; their specific history is not an acceptance prerequisite.
+v0.3.0 includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring, plus optional AI processing, PostgreSQL, native pgvector, public GitHub profiles and generated API clients. Follow [installation](/scratchpad/guides/installation/) for Homebrew and container setup or build from source. See [release verification](/scratchpad/guides/releases/) for publication and installation evidence. Historical MVP acceptance in v0.1.3 used clearly labeled synthetic scenarios against the actual application. Other projects provide optional examples and import datasets; their specific history is not an acceptance prerequisite.
 
 The first internal milestone was authenticated capture and retrieval backed by SQLite and visible in the browser. The current release also supports the project boundaries, history, import/export and operational recovery needed for regular use.
 

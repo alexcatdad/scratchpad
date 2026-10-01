@@ -3,7 +3,7 @@ title: Optional extensions & API clients
 description: Native PostgreSQL vector search, public GitHub profiles and generated HTTP clients.
 ---
 
-These additions are implemented in the current source after v0.2.0. Check [release verification](/scratchpad/guides/releases/) before expecting them in an installed release.
+These additions are published in **v0.3.0**. See [release verification](/scratchpad/guides/releases/) for artifact and installation evidence.
 
 ## Native PostgreSQL vectors
 
@@ -22,3 +22,7 @@ See the [profile runbook](https://github.com/alexcatdad/scratchpad/blob/main/doc
 TypeScript and Go clients cover the documented HTTP API, including authentication, project resolution, capture, retrieval, optional AI and public profile operations. Configure your instance origin and authenticate using its existing credential flow. Version checks and project permissions still apply on the server.
 
 The clients are generated from [OpenAPI](https://github.com/alexcatdad/scratchpad/blob/main/docs/openapi.json). Follow the [API client runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/api-clients.md) for installation and examples. Regenerate with `npm run sdk:generate`; `npm run sdk:check` verifies freshness and compilation, and `npm run sdk:test` exercises actual authenticated requests.
+
+The release includes the compiled `scratchpad-api-client-0.3.0.tgz` and its checksum.
+The Go module can be installed with
+`go get github.com/alexcatdad/scratchpad/packages/clients/go@v0.3.0`.

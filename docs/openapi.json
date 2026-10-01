@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Scratchpad HTTP API",
-    "version": "source-optionals",
-    "description": "Current source contract for Scratchpad, including SQLite/PostgreSQL parity, optional AI and optional public GitHub profile enrichment. Published v0.2.0 provides the AI and PostgreSQL foundation; new optional interfaces remain source additions until a later release is published. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. GitHub profile linkage is descriptive public information and never authentication. Setup/recovery tokens are local administrator capabilities. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and provenance remain preserved."
+    "version": "0.3.0",
+    "description": "Published v0.3.0 contract for Scratchpad, including SQLite/PostgreSQL parity, optional AI and optional public GitHub profile enrichment. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. GitHub profile linkage is descriptive public information and never authentication. Setup/recovery tokens are local administrator capabilities. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and provenance remain preserved."
   },
   "servers": [
     {

@@ -112,3 +112,16 @@ The owner dashboard was upgraded to that development image with its existing Com
 The owner dashboard now runs `ghcr.io/alexcatdad/scratchpad:v0.2.0`, ARM64 image `sha256:49706308858744f23ef4f0a99b8d8b3994d5aba35f453869a849b0c353a0eebf`, with OCI source revision `1e860e4f2f02978deda95f26051642f961fd86eb`. Readiness passes; all 27 entity rows exactly match the fresh online snapshot, and the existing browser session still displays all four records. The original Compose project, volume and public origin were preserved. Installed Homebrew MCP reports 0.2.0 and passes its formula test and the Apple notarization requirement.
 
 AI remains optional and disabled until the owner enables it. The real-model fixture above establishes selected-provider interoperability without processing the owner's captures automatically.
+
+## Published optional-extension upgrade
+
+On 2 October, the owner deployment was upgraded to published v0.3.0 after an online
+backup and isolated restore verification. Its ARM64 image is
+`sha256:410ce7b9963b987701cc195f70dffe923df4834be17365a1a50c837b851fbb7f`,
+with source `b97c5636593d212487fdc6796ee461e3433aa98b`. All 27 stored rows, four
+projects, four records and the existing browser session are preserved. Provider
+configuration remains Qwen 3.8 plus Qwen embeddings at 2,560 dimensions; AI and
+project permissions remain unchanged. New public GitHub controls are visible and
+unlinked. Installed Homebrew MCP 0.3.0 passes its formula/notarization checks and
+published-image authenticated backup/restore. See the [optional ledger](../optional-readiness.md)
+for canonical checks and fresh release acceptance.

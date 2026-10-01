@@ -1,9 +1,17 @@
 ---
 title: Releases & installation channels
-description: Install Scratchpad v0.2.0 and understand how its release artifacts are verified.
+description: Install Scratchpad v0.3.0 and understand how its release artifacts are verified.
 ---
 
-## v0.2.0
+## v0.3.0
+
+[v0.3.0 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0) adds [opt-in native pgvector, public GitHub profile enrichment and generated TypeScript/Go API clients](/scratchpad/guides/optional-extensions/). Use `ghcr.io/alexcatdad/scratchpad:v0.3.0` for the application and Homebrew for MCP 0.3.0. SQLite and processing consent retain their existing defaults.
+
+[Publication run 36935307686](https://github.com/alexcatdad/scratchpad/actions/runs/36935307686) passed native source/signature verification, multiarchitecture image publication, checksummed assets and Homebrew delivery. The release includes `scratchpad-api-client-0.3.0.tgz`; the Go module is available through the matching `packages/clients/go/v0.3.0` tag. See the [optional acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/optional-readiness.md) for installation and deployment verification.
+
+[Fresh acceptance 36935929030](https://github.com/alexcatdad/scratchpad/actions/runs/36935929030) passed all four jobs: macOS/Linux Homebrew installation and installed MCP workflows, both image architectures and published-image backup/restore, and independently installed released clients with real SSH authentication. The owner dashboard and local Homebrew MCP are upgraded to 0.3.0; existing records, configuration and browser login are preserved.
+
+## v0.2.0 foundation
 
 [v0.2.0 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0) adds optional PostgreSQL, persisted AI analysis and embedding jobs, source-linked suggestions and patterns, semantic search, private Markdown documents, and dashboard/MCP controls. Its versioned application image is `ghcr.io/alexcatdad/scratchpad:v0.2.0`. Capture and deterministic retrieval remain available without AI.
 
@@ -25,7 +33,7 @@ scratchpad-mcp --version
 
 Homebrew follows the version currently delivered to the tap. For an exact release, use that release's named archive and verify it against its `checksums.txt`. See [installation](/scratchpad/guides/installation/) for server setup and key enrollment.
 
-No npm package or native Windows installer is part of this release. Optional AI processing, embeddings, pattern analysis and PostgreSQL are included in v0.2.0; capturing and retrieving memory does not require them.
+No npm registry publication or native Windows installer is required. v0.3.0 supplies its compiled TypeScript client as a checksummed release tarball. Optional AI processing, embeddings, pattern analysis and PostgreSQL are included in v0.2.0; capturing and retrieving memory does not require them.
 
 ## Local signing, independent verification
 

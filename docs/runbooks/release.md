@@ -84,7 +84,7 @@ Use `gh release view` before retrying creation/upload. Do not overwrite assets w
 
 ## Optional-extension release preparation
 
-The next release is v0.3.0 for pgvector, public GitHub profiles and generated clients.
+The optional-extension release is published as v0.3.0 for pgvector, public GitHub profiles and generated clients. [Publication 36935307686](https://github.com/alexcatdad/scratchpad/actions/runs/36935307686) and [fresh acceptance 36935929030](https://github.com/alexcatdad/scratchpad/actions/runs/36935929030) passed. The following procedure records its delivery; use a new version for later releases.
 Before tagging, require successful CI at its exact source. Create both `v0.3.0`
 and `packages/clients/go/v0.3.0` at that source; push both without changing older
 tags. The second tag makes the separate Go module consumable through normal Go

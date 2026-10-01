@@ -6,7 +6,7 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Status
 
-Scratchpad v0.2.0 includes the TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, deterministic search, audited metadata and relationships, source provenance, JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. It adds optional PostgreSQL, persisted AI analysis jobs, source-linked suggestions and patterns, semantic retrieval, five private Markdown formats, and dashboard/MCP controls. SQLite and the capture/retrieval workflow remain useful without AI. The current source additionally implements opt-in native pgvector similarity, public GitHub profile enrichment and generated TypeScript/Go HTTP clients; see [optional extension acceptance](docs/optional-readiness.md) for their delivery status. See [release verification](https://alexcatdad.github.io/scratchpad/guides/releases/) for publication and installation evidence; the [v0.1.3 MVP](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is historical acceptance evidence.
+Scratchpad v0.3.0 includes the TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, deterministic search, audited metadata and relationships, source provenance, JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. It adds optional PostgreSQL, persisted AI analysis jobs, source-linked suggestions and patterns, semantic retrieval, five private Markdown formats, and dashboard/MCP controls. SQLite and the capture/retrieval workflow remain useful without AI. This release additionally includes opt-in native pgvector similarity, public GitHub profile enrichment and generated TypeScript/Go HTTP clients; see [optional extension acceptance](docs/optional-readiness.md) for verification evidence. See [release verification](https://alexcatdad.github.io/scratchpad/guides/releases/) for publication and installation evidence; the [v0.1.3 MVP](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is historical acceptance evidence.
 
 ## Install the MCP
 
@@ -15,7 +15,7 @@ brew install alexcatdad/tap/scratchpad-mcp
 scratchpad-mcp --version
 ```
 
-The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
+The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
 
 ## Run with Docker
 
@@ -27,7 +27,7 @@ docker run -d --name scratchpad --restart unless-stopped \
   -p 127.0.0.1:3000:3000 \
   -e SCRATCHPAD_PUBLIC_URL=http://localhost:3000 \
   -v scratchpad-data:/data \
-  ghcr.io/alexcatdad/scratchpad:v0.2.0
+  ghcr.io/alexcatdad/scratchpad:v0.3.0
 docker exec scratchpad npm run admin -- setup
 ```
 
