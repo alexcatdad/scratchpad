@@ -12,6 +12,7 @@ export type AiConfiguration = {
   analysisModes: string[];
   requestTimeoutSeconds: number;
   reasoningEffort: string;
+  maxOutputTokens: number;
   apiKeyConfigured: boolean;
   version: number;
 };
@@ -87,6 +88,7 @@ export function AiSettings() {
                       form.get("requestTimeoutSeconds"),
                     ),
                     reasoningEffort: form.get("reasoningEffort"),
+                    maxOutputTokens: Number(form.get("maxOutputTokens")),
                     ...(apiKey ? { apiKey } : {}),
                     expectedVersion: configuration.version,
                   }),
@@ -213,6 +215,20 @@ export function AiSettings() {
               <small>
                 Choose provider default if your model does not support this
                 option.
+              </small>
+            </label>
+            <label>
+              Maximum output tokens
+              <input
+                name="maxOutputTokens"
+                type="number"
+                min="256"
+                max="32768"
+                required
+                defaultValue={configuration.maxOutputTokens ?? 4096}
+              />
+              <small>
+                Longer outputs need more time, especially on local models.
               </small>
             </label>
           </div>
