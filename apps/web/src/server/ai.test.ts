@@ -237,6 +237,7 @@ describe("optional AI boundary", () => {
     await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
     await ai.tick();
     expect(await ai.artifacts()).toHaveLength(1);
+    expect(await ai.artifacts({ crossProject: true })).toHaveLength(0);
   });
   it("rechecks permission after a provider call and refuses to persist revoked data", async () => {
     let revoke: (() => Promise<void>) | undefined;

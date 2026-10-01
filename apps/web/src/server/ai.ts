@@ -582,9 +582,13 @@ export class AiService {
   }
   async artifacts(scope: Scope = {}): Promise<Entity[]> {
     if (!(await this.config()).enabled) return [];
-    const projects = (await this.store.list("project")).filter(
-      (project) => settingsSchema.parse(project.settings).aiProcessing,
-    );
+    const projects = (await this.store.list("project")).filter((project) => {
+      const settings = settingsSchema.parse(project.settings);
+      return (
+        settings.aiProcessing &&
+        (!scope.crossProject || settings.crossProjectAnalysis)
+      );
+    });
     const requested =
       scope.projectIds ?? (scope.projectId ? [scope.projectId] : undefined);
     const allowed = new Map(projects.map((p) => [p.id, p]));
