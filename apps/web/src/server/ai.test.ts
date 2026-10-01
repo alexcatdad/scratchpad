@@ -624,6 +624,52 @@ describe("OpenAI-compatible response validation", () => {
       code: "AI_UNAVAILABLE",
     });
   });
+  it("requests strict JSON Schema and configurable reasoning without exposing provider internals", async () => {
+    const fetcher = mockProvider();
+    const { ai } = await fixture(fetcher);
+    await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    const body = JSON.parse(
+      String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body),
+    );
+    expect(body.reasoning_effort).toBe("none");
+    expect(body.response_format).toMatchObject({
+      type: "json_schema",
+      json_schema: {
+        strict: true,
+        schema: {
+          type: "object",
+          properties: { artifacts: { type: "array" } },
+        },
+      },
+    });
+    expect(await ai.settings()).toMatchObject({
+      requestTimeoutSeconds: 180,
+      reasoningEffort: "none",
+    });
+  });
+  it("keeps a configured provider timeout inside a longer renewable worker lease", async () => {
+    let leaseUntil = 0;
+    let readLease: (() => Promise<number>) | undefined;
+    const fetcher = (async (...args: Parameters<typeof fetch>) => {
+      leaseUntil = (await readLease?.()) ?? 0;
+      return mockProvider()(...args);
+    }) as typeof fetch;
+    const { ai, store } = await fixture(fetcher);
+    await ai.configure(
+      {
+        requestTimeoutSeconds: 600,
+        expectedVersion: Number((await ai.settings()).version),
+      },
+      actor,
+    );
+    const job = await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    readLease = async () =>
+      Date.parse(String((await store.get("ai_job", job.id))?.leaseUntil));
+    const before = Date.now();
+    await ai.tick();
+    expect(leaseUntil - before).toBeGreaterThan(600000);
+  });
   it("returns a safe provider error without leaking response bodies or API keys", async () => {
     const fetcher = (async () =>
       new Response("private-provider-key and sensitive data", {
