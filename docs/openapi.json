@@ -34,9 +34,7 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ok"
-                      ]
+                      "enum": ["ok"]
                     }
                   }
                 }
@@ -64,16 +62,11 @@
                   "properties": {
                     "status": {
                       "type": "string",
-                      "enum": [
-                        "ready"
-                      ]
+                      "enum": ["ready"]
                     },
                     "database": {
                       "type": "string",
-                      "enum": [
-                        "sqlite",
-                        "postgres"
-                      ]
+                      "enum": ["sqlite", "postgres"]
                     }
                   }
                 }
@@ -165,9 +158,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "publicKey"
-                ]
+                "required": ["publicKey"]
               }
             }
           }
@@ -220,11 +211,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "challengeId",
-                  "publicKey",
-                  "signature"
-                ]
+                "required": ["challengeId", "publicKey", "signature"]
               }
             }
           }
@@ -278,9 +265,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "publicKey"
-                ]
+                "required": ["publicKey"]
               }
             }
           }
@@ -331,11 +316,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "challengeId",
-                  "publicKey",
-                  "signature"
-                ]
+                "required": ["challengeId", "publicKey", "signature"]
               }
             }
           }
@@ -439,10 +420,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "challengeId",
-                  "response"
-                ]
+                "required": ["challengeId", "response"]
               }
             }
           }
@@ -536,10 +514,7 @@
                     "additionalProperties": true
                   }
                 },
-                "required": [
-                  "challengeId",
-                  "response"
-                ]
+                "required": ["challengeId", "response"]
               }
             }
           }
@@ -681,10 +656,7 @@
                       "properties": {
                         "engine": {
                           "type": "string",
-                          "enum": [
-                            "sqlite",
-                            "postgresql"
-                          ]
+                          "enum": ["sqlite", "postgresql"]
                         }
                       }
                     }
@@ -749,10 +721,7 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "displayName",
-                  "expectedVersion"
-                ]
+                "required": ["displayName", "expectedVersion"]
               }
             }
           }
@@ -839,19 +808,13 @@
                             "type": "string"
                           }
                         },
-                        "required": [
-                          "remote"
-                        ]
+                        "required": ["remote"]
                       }
                     },
-                    "required": [
-                      "git"
-                    ]
+                    "required": ["git"]
                   }
                 },
-                "required": [
-                  "context"
-                ]
+                "required": ["context"]
               }
             }
           }
@@ -899,10 +862,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "normal",
-                      "external"
-                    ]
+                    "enum": ["normal", "external"]
                   },
                   "projectId": {
                     "type": "string"
@@ -1006,10 +966,7 @@
                   },
                   "kind": {
                     "type": "string",
-                    "enum": [
-                      "normal",
-                      "external"
-                    ]
+                    "enum": ["normal", "external"]
                   },
                   "expectedVersion": {
                     "type": "integer",
@@ -1153,9 +1110,7 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "settings"
-                ]
+                "required": ["settings"]
               }
             }
           }
@@ -1213,10 +1168,7 @@
                     "additionalProperties": true
                   }
                 },
-                "required": [
-                  "projectId",
-                  "record"
-                ]
+                "required": ["projectId", "record"]
               }
             }
           }
@@ -1251,10 +1203,7 @@
                       }
                     },
                     "nextCursor": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     }
                   }
                 }
@@ -1624,9 +1573,7 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "changes"
-                ]
+                "required": ["changes"]
               }
             }
           }
@@ -1701,10 +1648,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "kind",
-                  "reference"
-                ]
+                "required": ["kind", "reference"]
               }
             }
           }
@@ -1766,10 +1710,7 @@
                     "type": "string"
                   }
                 },
-                "required": [
-                  "attempted",
-                  "succeeded"
-                ]
+                "required": ["attempted", "succeeded"]
               }
             }
           }
@@ -1795,10 +1736,7 @@
                       }
                     },
                     "nextCursor": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
+                      "type": ["string", "null"]
                     }
                   }
                 }
@@ -1901,21 +1839,13 @@
                   },
                   "authority": {
                     "type": "string",
-                    "enum": [
-                      "explicit",
-                      "inferred",
-                      "suggested"
-                    ]
+                    "enum": ["explicit", "inferred", "suggested"]
                   },
                   "note": {
                     "type": "string"
                   }
                 },
-                "required": [
-                  "fromRecordId",
-                  "toRecordId",
-                  "type"
-                ]
+                "required": ["fromRecordId", "toRecordId", "type"]
               }
             }
           }
@@ -2129,9 +2059,7 @@
                     "minimum": 0
                   }
                 },
-                "required": [
-                  "settings"
-                ]
+                "required": ["settings"]
               }
             }
           }
@@ -2626,10 +2554,7 @@
                     ]
                   }
                 },
-                "required": [
-                  "projectId",
-                  "format"
-                ]
+                "required": ["projectId", "format"]
               }
             }
           }
@@ -2759,15 +2684,10 @@
               },
               "details": {}
             },
-            "required": [
-              "code",
-              "message"
-            ]
+            "required": ["code", "message"]
           }
         },
-        "required": [
-          "error"
-        ]
+        "required": ["error"]
       },
       "Entity": {
         "type": "object",
@@ -2784,11 +2704,7 @@
             "format": "date-time"
           }
         },
-        "required": [
-          "id",
-          "version",
-          "createdAt"
-        ]
+        "required": ["id", "version", "createdAt"]
       },
       "ProjectSettings": {
         "type": "object",
@@ -2832,10 +2748,7 @@
                 }
               }
             },
-            "required": [
-              "enabled",
-              "recordTypes"
-            ]
+            "required": ["enabled", "recordTypes"]
           },
           "crossProjectAnalysis": {
             "type": "boolean"
@@ -2844,11 +2757,7 @@
             "type": "boolean"
           }
         },
-        "required": [
-          "repoMirroring",
-          "crossProjectAnalysis",
-          "aiProcessing"
-        ]
+        "required": ["repoMirroring", "crossProjectAnalysis", "aiProcessing"]
       },
       "Project": {
         "allOf": [
@@ -2863,10 +2772,7 @@
               },
               "kind": {
                 "type": "string",
-                "enum": [
-                  "normal",
-                  "external"
-                ]
+                "enum": ["normal", "external"]
               },
               "settings": {
                 "$ref": "#/components/schemas/ProjectSettings"
@@ -2905,22 +2811,11 @@
           },
           "authority": {
             "type": "string",
-            "enum": [
-              "explicit",
-              "observed",
-              "inferred",
-              "derived",
-              "suggested"
-            ]
+            "enum": ["explicit", "observed", "inferred", "derived", "suggested"]
           },
           "confidence": {
             "type": "string",
-            "enum": [
-              "high",
-              "medium",
-              "low",
-              "unknown"
-            ]
+            "enum": ["high", "medium", "low", "unknown"]
           },
           "confidenceReason": {
             "type": "string"
@@ -2938,12 +2833,7 @@
             "additionalProperties": true
           }
         },
-        "required": [
-          "type",
-          "title",
-          "authority",
-          "payload"
-        ]
+        "required": ["type", "title", "authority", "payload"]
       },
       "Record": {
         "allOf": [
@@ -2980,10 +2870,7 @@
                 "additionalProperties": true
               },
               "authority": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "provenance": {
                 "type": "object",
@@ -3092,14 +2979,7 @@
           },
           "reasoningEffort": {
             "type": "string",
-            "enum": [
-              "default",
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
+            "enum": ["default", "none", "low", "medium", "high", "xhigh"]
           },
           "similarityThreshold": {
             "type": "number",
@@ -3175,14 +3055,7 @@
           },
           "reasoningEffort": {
             "type": "string",
-            "enum": [
-              "default",
-              "none",
-              "low",
-              "medium",
-              "high",
-              "xhigh"
-            ]
+            "enum": ["default", "none", "low", "medium", "high", "xhigh"]
           },
           "similarityThreshold": {
             "type": "number",
@@ -3229,11 +3102,7 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "analyze",
-                  "embed",
-                  "export"
-                ]
+                "enum": ["analyze", "embed", "export"]
               },
               "format": {
                 "type": "string",
@@ -3246,9 +3115,7 @@
                 ]
               }
             },
-            "required": [
-              "type"
-            ]
+            "required": ["type"]
           }
         ]
       },
@@ -3262,20 +3129,11 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": [
-                  "analyze",
-                  "embed",
-                  "export"
-                ]
+                "enum": ["analyze", "embed", "export"]
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "queued",
-                  "running",
-                  "completed",
-                  "failed"
-                ]
+                "enum": ["queued", "running", "completed", "failed"]
               },
               "scope": {
                 "$ref": "#/components/schemas/Scope"
@@ -3298,16 +3156,10 @@
                 "type": "string"
               },
               "leaseUntil": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "lastError": {
-                "type": [
-                  "string",
-                  "null"
-                ]
+                "type": ["string", "null"]
               },
               "artifactIds": {
                 "type": "array",
@@ -3320,17 +3172,11 @@
                 "description": "Audited suggestions omitted for insufficient evidence; valid siblings remain available.",
                 "items": {
                   "type": "object",
-                  "required": [
-                    "code",
-                    "kind",
-                    "count"
-                  ],
+                  "required": ["code", "kind", "count"],
                   "properties": {
                     "code": {
                       "type": "string",
-                      "enum": [
-                        "AI_INSUFFICIENT_EVIDENCE"
-                      ]
+                      "enum": ["AI_INSUFFICIENT_EVIDENCE"]
                     },
                     "kind": {
                       "type": "string"
@@ -3373,11 +3219,7 @@
               },
               "status": {
                 "type": "string",
-                "enum": [
-                  "pending",
-                  "accepted",
-                  "rejected"
-                ]
+                "enum": ["pending", "accepted", "rejected"]
               },
               "content": {
                 "type": "object",
@@ -3425,9 +3267,7 @@
               },
               "authority": {
                 "type": "string",
-                "enum": [
-                  "derived"
-                ]
+                "enum": ["derived"]
               },
               "generator": {
                 "type": "object",
@@ -3470,9 +3310,7 @@
                 "default": 20
               }
             },
-            "required": [
-              "query"
-            ]
+            "required": ["query"]
           }
         ]
       },
@@ -3481,9 +3319,7 @@
         "properties": {
           "format": {
             "type": "string",
-            "enum": [
-              "scratchpad"
-            ]
+            "enum": ["scratchpad"]
           },
           "version": {
             "type": "integer",
@@ -3497,20 +3333,14 @@
             "additionalProperties": true
           }
         },
-        "required": [
-          "format",
-          "version",
-          "data"
-        ]
+        "required": ["format", "version", "data"]
       },
       "LegacyImport": {
         "type": "object",
         "properties": {
           "format": {
             "type": "string",
-            "enum": [
-              "jsonl"
-            ]
+            "enum": ["jsonl"]
           },
           "projectId": {
             "type": "string"
@@ -3531,11 +3361,7 @@
             "type": "string"
           }
         },
-        "required": [
-          "format",
-          "projectId",
-          "jsonl"
-        ]
+        "required": ["format", "projectId", "jsonl"]
       }
     },
     "responses": {
