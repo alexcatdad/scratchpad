@@ -777,6 +777,10 @@ describe("OpenAI-compatible response validation", () => {
       "markdown",
     ]);
     expect((await ai.jobs())[0]?.status).toBe("completed");
+    const artifact = (await ai.artifacts())[0] as Entity;
+    expect(String((artifact.content as { markdown: string }).markdown)).toMatch(
+      /^> AI-generated draft\. Source records retain their original authority;/,
+    );
   });
   it("meets OpenAI strict required-properties rules and removes only optional null placeholders", async () => {
     const fetcher = mockProvider({

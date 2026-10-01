@@ -94,3 +94,7 @@ SCRATCHPAD_REAL_AI=1 SCRATCHPAD_REAL_AI_EXPORT_ONLY=1 SCRATCHPAD_REAL_AI_TIMEOUT
 ```
 
 The application accepts 5–3,600 seconds and keeps the default at 600. Worker leases remain longer than the configured request deadline. An override is not a passing result: inspect completed Markdown, provenance and immutable source comparisons.
+
+## Final real Docker handoff — 1 October 2026
+
+The export-only fixture passed against the final draft-label candidate image `sha256:fdaf3404e07b950c82b3dfb4f397e8a0f629c168ccb842d05c183b26da581716` with an explicit 1,800-second timeout. In 7.9 minutes it persisted five valid 2,560-dimensional vectors, returned five semantic source matches, downloaded a 2,588-character handoff carrying the application draft label and all five source links, opened an authenticated source detail, and preserved every original record hash. Both selected models stayed loaded. The earlier real analysis pass remains separate; this run deliberately repeated embeddings and export only.

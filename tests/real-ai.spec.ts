@@ -404,6 +404,7 @@ test.describe("real local Qwen processing", () => {
     console.log(
       `Real embedding acceptance passed: ${captures.length} source records, 2560-dimensional Qwen vectors and ${matches.results.length} semantic matches through the authenticated application.`,
     );
+    let acceptedInsights = 0;
     if (process.env.SCRATCHPAD_REAL_AI_EXPORT_ONLY !== "1") {
       const { job: analysis } = await request<{ job: Job }>(
         page,
@@ -422,6 +423,7 @@ test.describe("real local Qwen processing", () => {
         `/suggestions?projectId=${project.id}`,
       );
       expect(suggestions.length).toBeGreaterThan(0);
+      acceptedInsights = suggestions.length;
       for (const suggestion of suggestions) {
         expect(suggestion.authority).toBe("derived");
         expect(suggestion.private).toBe(true);
@@ -460,6 +462,7 @@ test.describe("real local Qwen processing", () => {
     ).suggestions.find((item) => item.kind === "export") as Artifact;
     expect(document.private).toBe(true);
     expect(document.sourceRecordIds.length).toBe(captures.length);
+    expect(document.content.markdown).toMatch(/^> AI-generated draft\./);
     expect(document.content.markdown).toMatch(/SQLite/i);
     expect(document.content.markdown).toMatch(
       /handoff|next|follow|implementation/i,
@@ -509,7 +512,7 @@ test.describe("real local Qwen processing", () => {
       200,
     );
     console.log(
-      `Real Qwen acceptance: ${suggestions.length} cited insights, ${captures.length} validated 2560-dimensional embeddings, ${matches.results.length} semantic results, private ${document.content.markdown?.length}-character handoff; immutable source hashes preserved.`,
+      `Real Qwen acceptance: ${acceptedInsights} cited insights, ${captures.length} validated 2560-dimensional embeddings, ${matches.results.length} semantic results, private ${document.content.markdown?.length}-character handoff; immutable source hashes preserved.`,
     );
   });
 });

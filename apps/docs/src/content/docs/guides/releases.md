@@ -23,7 +23,7 @@ scratchpad-mcp --version
 
 Homebrew follows the version currently delivered to the tap. For an exact release, use that release's named archive and verify it against its `checksums.txt`. See [installation](/scratchpad/guides/installation/) for server setup and key enrollment.
 
-No npm package or native Windows installer is part of this release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; capturing and retrieving memory does not require them.
+No npm package or native Windows installer is part of this release. v0.1.3 excludes AI processing, embeddings, pattern analysis and PostgreSQL. The current source adds these optional capabilities, with separate acceptance and release preparation; capturing and retrieving memory does not require them.
 
 ## Local signing, independent verification
 

@@ -1139,7 +1139,7 @@ export class AiService {
           ...artifact.content,
           ...(artifact.content.markdown
             ? {
-                markdown: `${artifact.content.markdown}\n\n## Source records\n\n${citations}\n`,
+                markdown: `${job.type === "export" ? "> AI-generated draft. Source records retain their original authority; review this document before sharing.\n\n" : ""}${artifact.content.markdown}\n\n## Source records\n\n${citations}\n`,
               }
             : {}),
         },

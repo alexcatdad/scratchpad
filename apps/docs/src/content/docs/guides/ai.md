@@ -54,3 +54,5 @@ The source MCP adds `semantic_search`, `get_suggestions`, `process_memory`, `get
 See the [API contract](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) and [development acceptance runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/post-mvp-development.md) for exact interfaces and verification boundaries.
 
 The [machine-readable OpenAPI contract](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) includes provider settings, processing jobs, derived artifacts, review and semantic-search schemas. Completion providers must support structured JSON-schema responses; compatible embeddings alone do not establish completion support.
+
+Downloaded Markdown carries an application-generated draft label as well as source links. Reviewing a suggestion preserves its derived origin; the document does not establish that a source decision was approved or implemented.

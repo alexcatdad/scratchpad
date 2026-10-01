@@ -9,7 +9,7 @@ description: The verified MVP scope, acceptance scenarios, and a clearly labeled
 
 The release includes eight typed capture tools, deterministic search and filtering, project context, immutable source records, audited metadata and relationships, passkey browser authentication, SSH challenge authentication for MCP, optional repository mirroring, import/export, and SQLite backup/restore. Native MCP packages and the application image are published through GitHub Releases, Homebrew and GHCR.
 
-AI processing, embeddings, pattern analysis and PostgreSQL remain post-MVP. The capture and retrieval workflow works without them.
+The v0.1.3 MVP excludes AI processing, embeddings, pattern analysis and PostgreSQL. The current source implements those optional additions; their [remaining-product acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) is separate from this historical MVP evidence. The capture and retrieval workflow works without them.
 
 ## What acceptance means
 

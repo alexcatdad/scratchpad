@@ -722,6 +722,7 @@ test("private AI settings, evidence review, semantic search and document downloa
     const path = await download.path();
     expect(path).not.toBeNull();
     const markdown = readFileSync(path ?? "", "utf8");
+    expect(markdown).toMatch(/^> AI-generated draft\./);
     expect(markdown).toContain(`# Synthetic ${format}`);
     expect(markdown).toContain("## Source records");
     expect(markdown).toContain([...snapshots.keys()][0] ?? "");

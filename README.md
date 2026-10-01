@@ -6,7 +6,7 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Status
 
-The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is the current patch release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; the SQLite workflow works without them.
+The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is the current patch release. The current source adds optional PostgreSQL, persisted AI analysis jobs, source-linked suggestions and patterns, semantic retrieval, five private Markdown formats and dashboard/MCP controls. These additions are being prepared for v0.2.0 and are separate from the published v0.1.3 installation. The SQLite workflow remains useful without AI.
 
 ## Install the MCP
 
@@ -81,7 +81,7 @@ Open a record to inspect its original payload, capture provenance, evidence, rel
 
 The [release pipeline](docs/runbooks/release.md) publishes native MCP archives, checksums, a versioned multiarchitecture GHCR image, and an update to the existing Homebrew tap. The owner signs and notarizes macOS artifacts locally using the macOS Keychain; Apple signing and notarization secrets are not stored in GitHub. CI independently verifies their signing team, source identity, checksums, and Apple trust before publication.
 
-See the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for the scope of product and installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
+See the [remaining-product acceptance ledger](docs/post-mvp-readiness.md) for the current source and the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for prior installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
 
 ## Quality gates
 
