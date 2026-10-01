@@ -1385,3 +1385,9 @@ The architecture should allow these behaviors to evolve without changing the imm
 Short form:
 
 > **Scratchpad — remember why the code is this way.**
+
+## 43. Accepted clarification — illustrative projects and synthetic acceptance
+
+On 1 October 2026, the owner clarified that other projects are examples, not sources of truth for Scratchpad's requirements. USB Boop and stakeholder-history references illustrate the intended workflows; their exact past conversations or decisions are not prerequisites for MVP acceptance.
+
+Acceptance may use clearly labeled synthetic data to demonstrate the complete behavior in §§37–38, including a paused project, its reason, unresolved follow-up and relevant decisions surviving restart or restore. Synthetic examples must not be presented as facts about a real project. Real-history imports remain useful optional validation of import fidelity and retrieval, with their original provenance and uncertainty preserved.

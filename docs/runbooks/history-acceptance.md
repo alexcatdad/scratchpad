@@ -1,6 +1,6 @@
 # Private history acceptance
 
-Use this optional procedure to distinguish working retrieval from missing historical evidence. The reference histories are private/local inputs; they must never be copied into public fixtures, Pages output, or CI artifacts. The automated test suite uses anonymized structural fixtures instead.
+Use this optional procedure to examine import fidelity and retrieval against operator-supplied histories. PRD §43 permits synthetic acceptance fixtures; other projects are illustrative examples, not sources of truth for Scratchpad or prerequisites for MVP readiness. The reference histories are private/local inputs; they must never be copied into public fixtures, Pages output, or CI artifacts. The automated test suite uses anonymized structural fixtures instead.
 
 ## Run locally
 
@@ -55,7 +55,7 @@ The current reference logs imported 19 technical-project records and 805 stakeho
 
 The optional Git inspection covered 32 relevant commits and 198 document versions. It found no throughput/transfer-speed or explicit paused-state matches. Membership-related references concerned release requirements or enrollment approval and did not establish a paused project and its reason. There was therefore no justified historical record to synthesize or import for A or B.
 
-These are source-evidence limits, not permission to invent records or claim complete scenario acceptance. If additional authoritative source material is supplied, capture it with its actual provenance and rerun the relevant retrieval scenario.
+These are limits of the supplied real-history dataset. They do not block synthetic product acceptance under PRD §43 and do not justify inventing facts about a real project. If additional authoritative source material is supplied, capture it with its actual provenance and rerun the relevant retrieval scenario.
 
 ## Verify changes to this procedure
 
@@ -76,6 +76,6 @@ Three conversation messages were captured into a private supplemental JSONL file
 
 The existing HTTP acceptance procedure imported the 19 original technical records plus the three source messages, and all 805 stakeholder records, without skips. Four metadata candidates and two throughput candidates were retrieved; four matching details and their import audit events preserved their original source. The local semantic review inspected both the owner's restriction and the accepted plan, establishing the rationale required by scenario A. This is supplemental historical-source acceptance, not a claim that the original 19-line decision log contained the explanation.
 
-Scenario B remains open: none of the 45 inspected turns in that resume conversation establishes the original pause and its reason. A later resume or Apple enrollment approval cannot supply those missing facts. The approval plan's release deferral is also distinct from the motivating project pause.
+The optional USB Boop history example remains unverified: none of the 45 inspected turns in that resume conversation establishes the original pause and its reason. A later resume or Apple enrollment approval cannot supply those missing facts. The approval plan's release deferral is also distinct from the motivating project pause.
 
 To repeat with operator-provided supplemental sources, preserve the full source text and attribution in JSONL, concatenate the original log and supplement into a private combined file, and pass that file as `--usb-log`. Use the same `--asource-log` and optional `--usb-repo` flags shown above. The validator reports candidates; a reviewer must still inspect the actual rationale. A successful run or search count is not automatic semantic acceptance.

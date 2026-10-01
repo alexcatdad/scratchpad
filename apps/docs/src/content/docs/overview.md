@@ -19,7 +19,7 @@ Historical records are evidence, not automatically current policy. A past decisi
 
 ## Development status
 
-The first implementation now includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring. Install [v0.1.3](/scratchpad/guides/installation/) through Homebrew and the published container, or build from source. Signed/notarized macOS packages, Linux packages, both container architectures, and disposable installation/workflow acceptance are verified. See [release validation](/scratchpad/guides/releases/) for evidence and scope. The motivating historical pause example remains unverified; project-state capture and recovery are tested.
+The first implementation now includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring. Install [v0.1.3](/scratchpad/guides/installation/) through Homebrew and the published container, or build from source. Signed/notarized macOS packages, Linux packages, both container architectures, and disposable installation/workflow acceptance are verified. See [release validation](/scratchpad/guides/releases/) for evidence and scope. MVP acceptance uses clearly labeled synthetic scenarios against the actual application. Other projects provide optional examples and import datasets; their specific history is not an acceptance prerequisite.
 
 The first internal milestone was authenticated capture and retrieval backed by SQLite and visible in the browser. The current release also supports the project boundaries, history, import/export and operational recovery needed for regular use.
 

@@ -398,17 +398,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   await page
     .getByLabel("Import JSONL decision log", { exact: true })
     .setInputFiles({
-      name: "history.jsonl",
+      name: "synthetic-paused-project.jsonl",
       mimeType: "application/x-ndjson",
-      buffer: Buffer.from(
-        `${JSON.stringify({
-          id: "legacy-paused",
-          type: "project_state",
-          title: "Paused for hardware validation",
-          state: "paused",
-          reason: "Awaiting a test device",
-          date: "2026-01-15",
-        })}\n`,
+      buffer: readFileSync(
+        resolve(root, "tests/fixtures/synthetic-paused-project.jsonl"),
       ),
     });
   await expect(page.getByRole("status")).toContainText("Imported 1");
