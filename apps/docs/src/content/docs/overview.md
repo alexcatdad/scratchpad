@@ -25,6 +25,8 @@ The first internal milestone was authenticated capture and retrieval backed by S
 
 ## V1 direction
 
+See [MVP status and acceptance](/scratchpad/guides/mvp-acceptance/) for the completed scope, scenario checklist and synthetic paused-project example.
+
 - One owner per instance, with multiple devices and agent credentials.
 - A central HTTP API and browser dashboard.
 - A thin local Go stdio MCP with Git-aware project discovery.

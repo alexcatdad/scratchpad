@@ -31,3 +31,9 @@ Run `bash scripts/lint-infrastructure.sh` with actionlint 1.7.12, ShellCheck 0.1
 Push main and inspect CI and Documentation runs for the exact commit using `gh run list` and `gh run view`. The current HTTPS CLI credential lacks workflow scope; the existing GitHub SSH identity can publish workflow changes with `git push git@github.com:alexcatdad/scratchpad.git main`. Pages uses GitHub Actions and serves <https://alexcatdad.github.io/scratchpad/>.
 
 The initial published checkpoint `1dcc374` passed CI and Documentation, including a successful Pages deployment. Local Docker readiness, protected-route rejection, HTML rendering, and restart passed. `npm outdated --workspaces --include-workspace-root` reported no outdated direct dependencies on 2026-09-29. Infrastructure lint and browser/MCP checks are now included in CI; validate their next published revision before claiming those remote gates passed.
+
+## Publish acceptance documentation
+
+The Pages guide `apps/docs/src/content/docs/guides/mvp-acceptance.md` presents MVP status, scenarios and the explicitly synthetic fixture. Keep its example aligned with `tests/fixtures/synthetic-paused-project.jsonl`; link the detailed repository ledger rather than publishing private inputs.
+
+Run `npm run lint`, `npm run check -w @scratchpad/docs` and `npm run build -w @scratchpad/docs`. After pushing, inspect the exact-commit CI and Documentation runs, then verify `/scratchpad/guides/mvp-acceptance/` on the public site. Check the sidebar entry and links on desktop and mobile. Documentation deployment and application release publication remain separate outcomes.

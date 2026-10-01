@@ -42,6 +42,7 @@ export default defineConfig({
               label: "Releases & installation channels",
               slug: "guides/releases",
             },
+            { label: "MVP status & acceptance", slug: "guides/mvp-acceptance" },
           ],
         },
         {
