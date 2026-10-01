@@ -4,6 +4,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/docs/package.json apps/docs/package.json
+COPY packages/clients/typescript/package.json packages/clients/typescript/package.json
+COPY packages/clients/generator/package.json packages/clients/generator/package.json
 RUN npm ci
 COPY apps/web apps/web
 RUN npm run build -w @scratchpad/web

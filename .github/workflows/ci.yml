@@ -25,6 +25,14 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run lint
+      - name: Verify generated API clients and actual authenticated calls
+        run: |
+          npm run sdk:check
+          npm run sdk:build
+          npm run sdk:test
+          cd packages/clients/go
+          go vet ./...
+          go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
@@ -85,6 +93,33 @@ jobs:
         run: npx playwright test tests/post-mvp.spec.ts
         env:
           SCRATCHPAD_E2E_POSTGRES: "1"
+  pgvector:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg18-trixie@sha256:9d9c930220cb9bf2f956d10a8f909cf9973d9672ca0278aef2c1e6facccad2e0
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: scratchpad-test
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_PGVECTOR_URL: postgres://postgres:scratchpad-test@localhost:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - name: Verify native vector ranking, consent, rebuild and readiness
+        run: npm run test -w @scratchpad/web -- src/server/pgvector.test.ts
   infrastructure:
     runs-on: ubuntu-latest
     steps:

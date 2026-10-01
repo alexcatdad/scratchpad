@@ -1,0 +1,12 @@
+{
+  "name": "@scratchpad/client-generator",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "openapi-typescript": "7.13.0",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "build": "node ../../../scripts/generate-clients.mjs --check"
+  }
+}

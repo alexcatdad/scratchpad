@@ -12,7 +12,8 @@
       "!**/playwright-report",
       "!**/routeTree.gen.ts",
       "!**/go.sum",
-      "!**/package-lock.json"
+      "!**/package-lock.json",
+      "!packages/clients/typescript/schema.ts"
     ]
   },
   "formatter": {

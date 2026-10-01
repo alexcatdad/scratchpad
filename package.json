@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/clients/typescript",
+    "packages/clients/generator"
   ],
   "engines": {
     "node": ">=24.21.0"
@@ -13,18 +15,23 @@
     "docs:dev": "npm run dev -w @scratchpad/docs",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs && npm run typecheck:history",
-    "typecheck:history": "tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck scripts/validate-history.ts",
+    "typecheck:history": "npm exec -w @scratchpad/web -- tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck ../../scripts/validate-history.ts",
     "test": "npm run test -w @scratchpad/web && node --test scripts/release-formula.test.mjs",
     "lint": "biome check . && prettier --check . && markdownlint-cli2 && node scripts/check-decisions.mjs",
     "format": "biome check --write . && prettier --write .",
     "admin": "npm exec -w @scratchpad/web -- tsx src/server/admin.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "sdk:generate": "node scripts/generate-clients.mjs",
+    "sdk:check": "node scripts/generate-clients.mjs --check && npm run typecheck -w @scratchpad/api-client && cd packages/clients/go && go test ./...",
+    "sdk:build": "npm run build -w @scratchpad/api-client",
+    "sdk:test": "npm exec -w @scratchpad/web -- tsx ../../packages/clients/test.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@playwright/test": "1.63.0",
+    "markdownlint-cli2": "0.23.3",
     "prettier": "3.9.9",
     "prettier-plugin-astro": "1.1.0",
-    "markdownlint-cli2": "0.23.3",
-    "@playwright/test": "1.63.0"
+    "typescript": "5.9.3"
   }
 }
