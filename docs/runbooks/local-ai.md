@@ -98,3 +98,11 @@ The application accepts 5–3,600 seconds and keeps the default at 600. Worker l
 ## Final real Docker handoff — 1 October 2026
 
 The export-only fixture passed against the final draft-label candidate image `sha256:fdaf3404e07b950c82b3dfb4f397e8a0f629c168ccb842d05c183b26da581716` with an explicit 1,800-second timeout. In 7.9 minutes it persisted five valid 2,560-dimensional vectors, returned five semantic source matches, downloaded a 2,588-character handoff carrying the application draft label and all five source links, opened an authenticated source detail, and preserved every original record hash. Both selected models stayed loaded. The earlier real analysis pass remains separate; this run deliberately repeated embeddings and export only.
+
+## Latest reload and development upgrade
+
+After another owner reload, a request from the running application container returned HTTP 200 with two finite, nonzero 2,560-dimensional Qwen vectors in 1.959 seconds. This is a provider smoke check; the authenticated fixture remains the integration evidence.
+
+The final absolute-citation fixture passed against image `sha256:06a3fb6f71a5fa6cb81049b87fcac0f22471d629858eec9837977497135a40b4` in 6.9 minutes. It downloaded a 2,370-character private handoff with the deterministic draft label, extracted and followed an actual absolute source URL, validated five vectors and five semantic matches, and preserved all original source hashes. Real analysis was already verified separately.
+
+The owner dashboard was upgraded to that development image with its existing Compose project and volume. `/ready` succeeds, and all 27 stored rows exactly match the pre-upgrade online backup. Browser session verification remains pending while the Mac is locked. This image is not a published v0.2.0 release.

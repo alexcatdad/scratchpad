@@ -2,7 +2,7 @@
 
 ## Scope
 
-Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. Published images are available from GHCR; the owner’s existing installation uses v0.1.3. A locally built development image is a separate acceptance candidate and must not be described as a published release.
+Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. Published images are available from GHCR; the owner's published Homebrew installation uses v0.1.3; the local dashboard now runs an explicitly labeled development candidate. A locally built development image is a separate acceptance candidate and must not be described as a published release.
 
 The host needs Docker Compose, storage for the persistent volume, and a TLS reverse proxy for access beyond localhost. GitHub Pages serves public documentation and cannot host the application.
 
@@ -126,3 +126,24 @@ Do not assume an older server understands a database migrated by a newer server.
 ## Release distribution
 
 The [release runbook](release.md) covers tagged native builds, Apple signing/notarization, GHCR publication, and Homebrew delivery. The published `v0.1.2` native packages, anonymous image pulls, Homebrew installations and disposable backup/restore workflow passed release acceptance. See the [readiness ledger](mvp-readiness.md) for the exact artifacts and run evidence. Verify enrollment, MCP access and backups in your own deployment.
+
+## Existing local deployment upgrade
+
+For an installation outside the repository, use its original Compose project and file on every command. The owner instance uses project `scratchpad-local`, `~/.local/share/scratchpad/compose.yaml`, and volume `scratchpad-local_scratchpad-data`. Preserve its origin and port binding.
+
+1. Take an online administrator backup with the existing image. Copy both the snapshot and Compose file into a new protected backup directory (directory mode `0700`, files `0600`).
+2. Verify the candidate image against a restored disposable snapshot before changing the live service. Follow the directory ownership instructions above.
+3. Update only the image in the deployment Compose file. For a tested local development image, use an explicit development tag and `--pull never`; for a published release, pull the exact GHCR version first.
+4. Recreate the service with the same project and file:
+
+   ```sh
+   docker compose -p scratchpad-local -f ~/.local/share/scratchpad/compose.yaml up -d --pull never
+   curl --fail http://localhost:3000/ready
+   docker inspect --format '{{.Image}} {{range .Mounts}}{{.Name}} {{end}}' scratchpad-local-scratchpad-1
+   ```
+
+5. Compare every original entity row against the protected snapshot without printing private values. A copied mode `0600` snapshot must be owned by UID `1000` when inspected inside the application container. Remove temporary inspection copies afterward.
+6. Verify the existing authenticated browser session, known records, settings and Insights. Keep authentication preservation distinct from database row preservation.
+7. Record the exact source/image, backup reference and verification outcome outside Git. Remove only owned disposable test resources. Keep the original volume and backup available for rollback.
+
+Never remove the live volume or fabricate an authenticated session to pass an upgrade check. A development upgrade does not establish release publication or a Homebrew upgrade.
