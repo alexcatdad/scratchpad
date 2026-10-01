@@ -20,7 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     environment: action-runners
     permissions:
-      contents: read
+      # Draft releases require push access even for metadata and asset reads.
+      contents: write
       actions: read
     outputs:
       tag: ${{ steps.release.outputs.tag }}
@@ -77,6 +78,8 @@ jobs:
     if: inputs.homebrew_only != true
     needs: preflight
     environment: action-runners
+    permissions:
+      contents: write # Required to read unpublished draft assets.
     timeout-minutes: 45
     strategy:
       fail-fast: false

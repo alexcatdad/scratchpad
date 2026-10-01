@@ -72,7 +72,7 @@ Use `gh release view` before retrying creation/upload. Do not overwrite assets w
 
 ## Pipeline verification
 
-1. Preflight checks stable tag syntax, ancestry on `main`, exact-source CI, draft state, and GitHub App access. It fixes the uploaded manifest checksum for the run.
+1. Preflight checks stable tag syntax, ancestry on `main`, exact-source CI, draft state, and GitHub App access. It fixes the uploaded manifest checksum for the run. GitHub requires contents-write access to see unpublished drafts, including asset downloads; only the preflight, native verification, and publication jobs receive that repository permission.
 2. macOS runners rebuild unsigned reference binaries from the selected commit. They download the exact archive/receipt/manifest names and reject changed manifests, mismatched source/team/checksums, unexpected ZIP contents, invalid signatures, missing hardened runtime, and failed Apple trust assessment.
 3. Signature-normalized copies of the downloaded binary and rebuilt reference must match byte for byte. The original signed archive is never modified. An uploaded `Accepted` JSON alone is not proof of notarization: `codesign --test-requirement '=notarized'` must succeed. `spctl` first triggers online ticket retrieval, but its application assessment rejects standalone command-line tools as “not an app”. The subsequent explicit code requirement is the mandatory CLI verification gate.
 4. Linux ARM64 and AMD64 are built in CI. The image job publishes both Linux platforms to `ghcr.io/alexcatdad/scratchpad:vX.Y.Z` only after native verification succeeds.
