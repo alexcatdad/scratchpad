@@ -179,6 +179,51 @@ function chunks(records: Entity[]): Record<string, unknown>[][] {
   return batches;
 }
 
+/** OpenAI strict schemas require all properties, with nullable optional values. */
+function strictOutputSchema(schema: unknown): unknown {
+  if (Array.isArray(schema)) return schema.map(strictOutputSchema);
+  if (!schema || typeof schema !== "object") return schema;
+  const input = schema as Record<string, unknown>;
+  const result = Object.fromEntries(
+    Object.entries(input)
+      .filter(([key]) => key !== "$schema")
+      .map(([key, value]) => [key, strictOutputSchema(value)]),
+  );
+  if (input.type === "object" && input.properties) {
+    const required = new Set((input.required ?? []) as string[]);
+    const properties = result.properties as Record<string, unknown>;
+    for (const key of Object.keys(properties))
+      if (!required.has(key))
+        properties[key] = { anyOf: [properties[key], { type: "null" }] };
+    result.required = Object.keys(properties);
+    result.additionalProperties = false;
+  }
+  return result;
+}
+/** Only optional null placeholders are removed. Mandatory nulls remain invalid. */
+function optionalNulls(value: unknown, schema: unknown): unknown {
+  if (!schema || typeof schema !== "object") return value;
+  const definition = schema as Record<string, unknown>;
+  if (Array.isArray(value))
+    return value.map((item) => optionalNulls(item, definition.items));
+  if (!value || typeof value !== "object" || !definition.properties)
+    return value;
+  const properties = definition.properties as Record<string, unknown>;
+  const required = new Set((definition.required ?? []) as string[]);
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([key, item]) =>
+          !(
+            item === null &&
+            Object.hasOwn(properties, key) &&
+            !required.has(key)
+          ),
+      )
+      .map(([key, item]) => [key, optionalNulls(item, properties[key])]),
+  );
+}
+
 /** OpenAI-compatible transport. Provider bodies and secrets are never logged. */
 export class OpenAiProvider {
   constructor(
@@ -237,6 +282,7 @@ export class OpenAiProvider {
     input: unknown,
     schema: z.ZodType = generatedSchema,
   ): Promise<unknown> {
+    const outputSchema = z.toJSONSchema(schema, { target: "draft-7" });
     const value = await this.post("chat/completions", {
       model: this.config.model,
       temperature: 0,
@@ -249,7 +295,7 @@ export class OpenAiProvider {
         json_schema: {
           name: "scratchpad_result",
           strict: true,
-          schema: z.toJSONSchema(schema, { target: "draft-7" }),
+          schema: strictOutputSchema(outputSchema),
         },
       },
       messages: [
@@ -267,7 +313,10 @@ export class OpenAiProvider {
     if (!envelope.success)
       throw failure("AI provider returned malformed completion output.");
     try {
-      return JSON.parse(envelope.data.choices[0]?.message.content);
+      return optionalNulls(
+        JSON.parse(envelope.data.choices[0]?.message.content),
+        outputSchema,
+      );
     } catch {
       throw failure("AI completion must return valid structured JSON.");
     }
@@ -976,7 +1025,36 @@ export class AiService {
       });
     }
     const known = new Map(records.map((r) => [r.id, r]));
-    const artifacts = generated.map((artifact) => {
+    const warnings: { code: string; kind: string; count: number }[] = [];
+    const supported = generated.filter((artifact) => {
+      const insufficient =
+        (["duplicate_candidate", "contradiction", "pattern"].includes(
+          artifact.kind,
+        ) &&
+          new Set(artifact.sourceRecordIds).size < 2) ||
+        (artifact.kind === "pattern" &&
+          scope.crossProject &&
+          new Set(
+            artifact.sourceRecordIds.map((key) => known.get(key)?.projectId),
+          ).size < 2);
+      if (!insufficient) return true;
+      const existing = warnings.find(
+        (warning) => warning.kind === artifact.kind,
+      );
+      if (existing) existing.count++;
+      else
+        warnings.push({
+          code: "AI_INSUFFICIENT_EVIDENCE",
+          kind: artifact.kind,
+          count: 1,
+        });
+      return false;
+    });
+    if (generated.length && !supported.length)
+      throw failure(
+        "All AI suggestions lacked sufficient independent supporting evidence.",
+      );
+    const artifacts = supported.map((artifact) => {
       if (
         artifact.kind === "pattern" &&
         scope.crossProject &&
@@ -1018,7 +1096,7 @@ export class AiService {
       const citations = artifact.sourceRecordIds
         .map(
           (key) =>
-            `- [${String(known.get(key)?.title).replace(/[[\]\n]/g, " ")}](/records/${encodeURIComponent(key)}) — \`${key}\``,
+            `- [${String(known.get(key)?.title).replace(/[[\]\n]/g, " ")}](/?recordId=${encodeURIComponent(key)}) — \`${key}\``,
         )
         .join("\n");
       return {
@@ -1053,6 +1131,7 @@ export class AiService {
     });
     return {
       artifacts,
+      warnings,
       embeddings: [],
       sourceCount: records.length,
       signature,
@@ -1146,6 +1225,7 @@ export class AiService {
               status: "completed",
               artifactIds: saved,
               sourceCount: result.sourceCount,
+              warnings: result.warnings ?? [],
               completedAt: now(),
               leaseToken: null,
               leaseUntil: null,
@@ -1153,6 +1233,15 @@ export class AiService {
             },
             current.version,
           );
+          if ((result.warnings as unknown[] | undefined)?.length)
+            await this.store.audit(
+              "ai.output.rejected",
+              "ai_job",
+              job.id,
+              workerActor,
+              undefined,
+              { warnings: result.warnings },
+            );
           await this.store.audit(
             "ai.job.completed",
             "ai_job",

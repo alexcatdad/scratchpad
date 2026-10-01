@@ -427,7 +427,7 @@ test.describe("real local Qwen processing", () => {
       /handoff|next|follow|implementation/i,
     );
     for (const key of originals.keys())
-      expect(document.content.markdown).toContain(`/records/${key}`);
+      expect(document.content.markdown).toContain(`/?recordId=${key}`);
     const card = page.locator("article").filter({
       has: page.getByRole("heading", {
         name: document.title as string,
@@ -450,6 +450,22 @@ test.describe("real local Qwen processing", () => {
           (await request<{ record: Entity }>(page, `/records/${key}`)).record,
         ),
       ).toBe(original);
+    const firstId = [...originals.keys()][0] as string;
+    const linked = await page.goto(
+      `${origin}/?recordId=${encodeURIComponent(firstId)}`,
+    );
+    expect(linked?.status()).toBe(200);
+    await expect(
+      page.getByRole("complementary", { name: "Record detail" }),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("complementary", { name: "Record detail" })
+        .getByRole("heading", {
+          name: "Synthetic: start with a local SQLite cache",
+          exact: true,
+        }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
     expect((await fetch(`${origin}/ready`)).status, logs.slice(-2000)).toBe(
       200,

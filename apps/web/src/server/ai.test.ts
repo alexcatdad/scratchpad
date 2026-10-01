@@ -308,7 +308,7 @@ describe("optional AI boundary", () => {
       format: "handoff",
     });
     expect((artifact.content as { markdown: string }).markdown).toContain(
-      "/records/r1",
+      "/?recordId=r1",
     );
   });
   it("processes every segment of a long source and keeps all records in Markdown exports", async () => {
@@ -364,7 +364,7 @@ describe("optional AI boundary", () => {
     const artifact = (await ai.artifacts())[0] as Entity;
     expect(artifact.sourceRecordIds).toHaveLength(46);
     expect((artifact.content as { markdown: string }).markdown).toContain(
-      "/records/extra44",
+      "/?recordId=extra44",
     );
     expect(vi.mocked(fetcher).mock.calls.length).toBeGreaterThan(1);
     expect(
@@ -372,6 +372,49 @@ describe("optional AI boundary", () => {
         .mocked(fetcher)
         .mock.calls.every((call) => String(call[1]?.body).length < 20000),
     ).toBe(true);
+  });
+  it("rejects unsupported one-source patterns visibly while preserving valid source-linked siblings", async () => {
+    const { ai, store } = await fixture(
+      mockProvider({
+        artifacts: [
+          {
+            kind: "summary",
+            title: "Supported",
+            content: { text: "Supported summary" },
+            sourceRecordIds: ["r1"],
+          },
+          {
+            kind: "pattern",
+            title: "Unsupported recurrence",
+            content: {
+              text: "Only one source is insufficient for recurrence.",
+            },
+            sourceRecordIds: ["r1"],
+          },
+        ],
+      }),
+    );
+    const job = await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "completed",
+      warnings: [
+        { code: "AI_INSUFFICIENT_EVIDENCE", kind: "pattern", count: 1 },
+      ],
+    });
+    expect(await ai.artifacts()).toMatchObject([
+      { kind: "summary", sourceRecordIds: ["r1"] },
+    ]);
+    expect(
+      (await store.list("audit")).some(
+        (event) => event.action === "ai.output.rejected",
+      ),
+    ).toBe(true);
+    expect(
+      (await store.list("ai_artifact")).some(
+        (artifact) => artifact.kind === "pattern",
+      ),
+    ).toBe(false);
   });
   it("supports audited manual retry after terminal provider failures", async () => {
     let available = false;
@@ -647,6 +690,82 @@ describe("OpenAI-compatible response validation", () => {
       requestTimeoutSeconds: 180,
       reasoningEffort: "none",
     });
+  });
+  it("meets OpenAI strict required-properties rules and removes only optional null placeholders", async () => {
+    const fetcher = mockProvider({
+      artifacts: [
+        {
+          kind: "summary",
+          title: "Optional nulls",
+          content: {
+            text: "Source-backed summary",
+            markdown: null,
+            fromRecordId: null,
+            toRecordId: null,
+            relationshipType: null,
+            tags: null,
+            classification: null,
+          },
+          sourceRecordIds: ["r1"],
+        },
+      ],
+    });
+    const { ai } = await fixture(fetcher);
+    await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    const artifact = (await ai.artifacts())[0] as Entity;
+    expect(artifact.content).toEqual({ text: "Source-backed summary" });
+    const body = JSON.parse(
+      String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body),
+    );
+    const check = (schema: unknown): void => {
+      if (Array.isArray(schema)) {
+        for (const item of schema) check(item);
+        return;
+      }
+      if (!schema || typeof schema !== "object") return;
+      const definition = schema as {
+        type?: string;
+        properties?: Record<string, unknown>;
+        required?: string[];
+        additionalProperties?: boolean;
+      };
+      if (definition.type === "object") {
+        expect(definition.required?.sort()).toEqual(
+          Object.keys(definition.properties ?? {}).sort(),
+        );
+        expect(definition.additionalProperties).toBe(false);
+      }
+      for (const value of Object.values(schema)) check(value);
+    };
+    check(body.response_format.json_schema.schema);
+    const content =
+      body.response_format.json_schema.schema.properties.artifacts.items
+        .properties.content;
+    expect(content.properties.markdown).toMatchObject({
+      anyOf: [{ type: "string" }, { type: "null" }],
+    });
+  });
+  it("continues rejecting null mandatory fields even when the provider violates its schema", async () => {
+    const { ai, store } = await fixture(
+      mockProvider({
+        artifacts: [
+          {
+            kind: "summary",
+            title: "Null mandatory text",
+            content: { text: null, markdown: null },
+            sourceRecordIds: ["r1"],
+          },
+        ],
+      }),
+    );
+    const job = await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "queued",
+      lastError: "AI completion failed artifact schema validation.",
+    });
+    expect(await store.list("ai_artifact")).toHaveLength(0);
   });
   it("keeps a configured provider timeout inside a longer renewable worker lease", async () => {
     let leaseUntil = 0;
