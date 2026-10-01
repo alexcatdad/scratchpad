@@ -4,7 +4,7 @@ description: The single-owner authentication and recovery model.
 ---
 
 :::note[Initial implementation]
-The server implements these authentication and recovery flows. There is no production release or independent security review yet.
+The published server implements these authentication and recovery flows. An independent security review has not been performed.
 :::
 
 Scratchpad V1 is one owner per instance, with multiple browser credentials and agent credentials. Browser and MCP authentication use separate mechanisms.

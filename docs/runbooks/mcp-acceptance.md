@@ -65,7 +65,7 @@ See [the integration runbook](../../mcp/integration/README.md) for manually runn
 - Git inspection runs with `--no-optional-locks`, preventing optional index-refresh writes during contractor-repository discovery.
 - Local mirrors require local configuration and current server eligibility. The server must recompute eligibility on idempotent replay so disabling project mirroring also disables later retries; the original immutable record remains unchanged.
 - MCP never commits or pushes a mirror. Central success and local mirror/report failures remain distinct.
-- Scenarios A–C require real imported historical records and server-side interpretation of amendments/replacements. Passing MCP transport tests alone does not prove those scenarios.
+- Scenarios A–C require source-preserving retrieval and server-side interpretation of amendments/replacements. Clearly labeled synthetic histories are valid under PRD §43; real project histories are optional datasets. Passing MCP transport tests alone does not prove these behaviors.
 - Release publication, notarization, GHCR availability, Homebrew installation, and the actual production deployment are separate acceptance evidence; a local MCP build does not establish them.
 
 ## Validate an installed release without using an existing server
