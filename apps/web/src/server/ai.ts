@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { Agent } from "undici";
+import { Agent, fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import { assertRelationshipSafe } from "./context";
 import {
@@ -114,6 +114,8 @@ const generatedExportSchema = z.object({
     .max(1),
 });
 type Fetcher = typeof fetch;
+// Keep the fetch implementation and dispatcher on the same Undici major.
+const providerFetch = undiciFetch as unknown as Fetcher;
 const workerActor: Actor = {
   kind: "system",
   displayName: "Optional AI worker",
@@ -247,7 +249,7 @@ export class OpenAiProvider {
   constructor(
     readonly config: Config,
     private apiKey = "",
-    private fetcher: Fetcher = fetch,
+    private fetcher: Fetcher = providerFetch,
   ) {}
   private async post(path: string, body: unknown): Promise<unknown> {
     const base = new URL(this.config.baseUrl);
@@ -388,7 +390,7 @@ export class AiService {
   private inFlight?: Promise<void>;
   constructor(
     readonly store: Store,
-    private fetcher: Fetcher = fetch,
+    private fetcher: Fetcher = providerFetch,
     private clock: () => number = Date.now,
   ) {}
   private async config(): Promise<Config> {
