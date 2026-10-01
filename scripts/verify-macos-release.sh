@@ -29,9 +29,9 @@ codesign -dv --verbose=4 "$work/scratchpad-mcp" 2> "$work/signature.txt"
 grep -Fq 'Authority=Developer ID Application:' "$work/signature.txt"
 grep -Fxq "TeamIdentifier=$APPLE_TEAM_ID" "$work/signature.txt"
 grep -Fq 'runtime' "$work/signature.txt"
-# Check Apple's trust assessment, rather than trusting an uploaded JSON receipt.
-spctl --assess --type execute --verbose=2 "$work/scratchpad-mcp" 2> "$work/assessment.txt"
-grep -Fq 'source=Notarized Developer ID' "$work/assessment.txt"
+# Ask Apple for the executable's notarization ticket, independently of its receipt.
+# spctl application assessment rejects standalone CLI tools as "not an app".
+codesign --verify --strict --verbose=2 --test-requirement '=notarized' "$work/scratchpad-mcp"
 # Normalize signatures on disposable copies before comparing actual executable bytes.
 cp "$root/dist/release/darwin-$TARGET_ARCH/scratchpad-mcp" "$work/reference"
 for file in "$work/scratchpad-mcp" "$work/reference"; do

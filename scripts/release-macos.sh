@@ -29,9 +29,9 @@ for arch in arm64 amd64; do
   grep -Fq 'Authority=Developer ID Application:' "$work/signature.txt"
   archive="$root/dist/release/scratchpad-mcp-$RELEASE_TAG-darwin-$arch.zip"
   receipt="$root/dist/release/notarization-darwin-$arch.json"
-  # ditto must create a fresh archive, never update an older one.
+  # ZIP the standalone executable at the archive root, without resource sidecars.
   rm -f "$archive"
-  ditto -c -k --keepParent "$binary" "$archive"
+  /usr/bin/zip -j "$archive" "$binary"
   xcrun notarytool submit "$archive" --keychain-profile "$NOTARYTOOL_PROFILE" \
     --wait --timeout 30m --output-format json > "$receipt"
   jq -e '.status == "Accepted" and (.id | type == "string")' "$receipt" >/dev/null
