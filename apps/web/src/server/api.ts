@@ -84,7 +84,7 @@ function publicError(error: unknown): Response {
     );
   console.error(
     "Scratchpad request failed:",
-    error instanceof Error ? error.message : "unknown error",
+    error instanceof Error ? error.name : "unknown error",
   );
   return response(
     {
