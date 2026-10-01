@@ -473,12 +473,24 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     ],
     projectDirectory,
   );
-  const binary = resolve(temporary, "scratchpad-mcp");
-  command(
-    "go",
-    ["build", "-o", binary, "./cmd/scratchpad-mcp"],
-    resolve(root, "mcp"),
-  );
+  const suppliedBinary = process.env.SCRATCHPAD_E2E_MCP_BINARY;
+  const binary = suppliedBinary
+    ? resolve(root, suppliedBinary)
+    : resolve(temporary, "scratchpad-mcp");
+  if (!suppliedBinary) {
+    command(
+      "go",
+      ["build", "-o", binary, "./cmd/scratchpad-mcp"],
+      resolve(root, "mcp"),
+    );
+  }
+  const binaryVersion = command(binary, ["--version"]).trim();
+  expect(binaryVersion).toMatch(/^scratchpad-mcp \S+$/);
+  if (suppliedBinary) {
+    console.log(
+      `Validating supplied MCP executable: ${binary} (${binaryVersion})`,
+    );
+  }
   const args = [
     "run",
     "./integration",

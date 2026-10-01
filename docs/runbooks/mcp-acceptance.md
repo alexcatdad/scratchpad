@@ -67,3 +67,30 @@ See [the integration runbook](../../mcp/integration/README.md) for manually runn
 - MCP never commits or pushes a mirror. Central success and local mirror/report failures remain distinct.
 - Scenarios A–C require real imported historical records and server-side interpretation of amendments/replacements. Passing MCP transport tests alone does not prove those scenarios.
 - Release publication, notarization, GHCR availability, Homebrew installation, and the actual production deployment are separate acceptance evidence; a local MCP build does not establish them.
+
+## Validate an installed release without using an existing server
+
+The browser workflow accepts `SCRATCHPAD_E2E_MCP_BINARY`, a filesystem path to an already installed or downloaded MCP executable. When supplied, the test skips building the MCP server and passes that exact executable to both the capture phase and the fresh-process retrieval/retry phase. It prints the selected path and `--version` result. Go is still needed to run the SDK-based test client; the test client does not replace the selected MCP executable.
+
+The server, passkey, SSH key, project checkout, records, and browser session are all disposable fixtures. The test does not change an installed MCP client's configuration or connect to the owner's existing Scratchpad instance. Cleanup removes only test-created files and, in Docker mode, test-created containers and volumes; it never removes or edits the supplied executable.
+
+After release publication and an explicitly authorized Homebrew installation:
+
+```sh
+brew info --json=v2 alexcatdad/tap/scratchpad-mcp
+brew list --versions scratchpad-mcp
+brew test alexcatdad/tap/scratchpad-mcp
+"$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" --version
+npm run build -w @scratchpad/web
+SCRATCHPAD_E2E_MCP_BINARY="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" npm run test:e2e
+```
+
+Check the formula version and executable output against the intended release version before claiming acceptance. `brew test` checks the formula's own smoke test; the final command additionally proves real SSH enrollment, capture and retrieval through the installed executable, server restart, and persisted retry identity. Run on each platform whose installation is being accepted; one Apple Silicon installation does not prove Intel macOS or Linux installation.
+
+To also validate the installed MCP against a published application image, pull the exact release image first, then select it explicitly:
+
+```sh
+SCRATCHPAD_E2E_DOCKER=1 SCRATCHPAD_E2E_IMAGE=ghcr.io/alexcatdad/scratchpad:0.1.0 SCRATCHPAD_E2E_MCP_BINARY="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" npm run test:e2e
+```
+
+This adds the named-volume backup/restore workflow documented in [container acceptance](container-acceptance.md). Pulling an image, installing or upgrading a formula, verifying published checksums/signatures, and checking Apple notarization are separate release steps described in [the release runbook](release.md). The runner does not install, upgrade, publish, sign, or notarize anything.
