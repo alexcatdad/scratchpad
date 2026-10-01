@@ -16,7 +16,17 @@ Use the existing `action-runners` GitHub environment, restricted to `main` and `
 | Secret   | `APP_SECRET`    | App private key with contents-write access to `alexcatdad/homebrew-tap`         |
 | Variable | `APPLE_TEAM_ID` | Public team identifier used to verify the locally signed binaries independently |
 
-On 1 October 2026, the owner requested placeholder configuration. `APP_ID` now contains the owner-supplied GitHub App client ID. `APP_SECRET` was created with a dummy value and must be replaced with the actual private key before release; their presence does not establish working tap access. The public `APPLE_TEAM_ID` variable remains to be configured.
+On 1 October 2026, `APP_ID` was set to the owner-supplied GitHub App client ID, the owner replaced the `APP_SECRET` placeholder, and `APPLE_TEAM_ID` was set to `CX6D6KGCT5`. Secret metadata confirms the update; successful authentication must be verified independently.
+
+Run the dedicated access check before preparing a release:
+
+```sh
+gh workflow run release-access.yml --repo alexcatdad/scratchpad --ref main
+gh run list --repo alexcatdad/scratchpad --workflow release-access.yml
+gh run watch RUN_ID --repo alexcatdad/scratchpad --exit-status
+```
+
+This check requests a short-lived GitHub App token with contents-write permission on `alexcatdad/homebrew-tap` and reads repository metadata. It does not modify the tap or publish artifacts. The action revokes the token at the end of the job.
 
 Configure the Developer ID Application identity and a `notarytool` credential profile in the local Keychain using Apple's [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow). Never paste secret values into commands recorded in history, issues, or agent messages. The scripts use an existing profile by name.
 
