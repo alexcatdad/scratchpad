@@ -37,16 +37,54 @@ export class Store {
     if (path !== ":memory:")
       mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
     this.sqlite = new Database(path);
-    this.sqlite.pragma("journal_mode = WAL");
-    this.sqlite.pragma("foreign_keys = ON");
-    this.sqlite.pragma("busy_timeout = 5000");
-    this.sqlite.exec(`CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL);
+    try {
+      if (
+        this.sqlite
+          .prepare(
+            "SELECT name FROM sqlite_schema WHERE name NOT GLOB 'sqlite_*' LIMIT 1",
+          )
+          .get()
+      )
+        this.assertReady();
+      this.sqlite.pragma("journal_mode = WAL");
+      this.sqlite.pragma("foreign_keys = ON");
+      this.sqlite.pragma("busy_timeout = 5000");
+      this.sqlite.exec(`CREATE TABLE IF NOT EXISTS schema_migrations(version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS entities(kind TEXT NOT NULL,id TEXT NOT NULL,data TEXT NOT NULL,version INTEGER NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS identities(identity TEXT PRIMARY KEY,project_id TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS retries(scope TEXT NOT NULL,key TEXT NOT NULL,request TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(scope,key));
       CREATE VIRTUAL TABLE IF NOT EXISTS record_search USING fts5(record_id UNINDEXED,title,content);
       INSERT OR IGNORE INTO schema_migrations VALUES(1,strftime('%Y-%m-%dT%H:%M:%fZ','now'));`);
-    this.db = drizzle(this.sqlite);
+      this.assertReady();
+      this.db = drizzle(this.sqlite);
+    } catch (error) {
+      this.sqlite.close();
+      throw error;
+    }
+  }
+  assertReady(): void {
+    try {
+      const migrations = this.sqlite
+        .prepare(
+          "SELECT version,applied_at FROM schema_migrations ORDER BY version",
+        )
+        .all() as { version: number }[];
+      if (migrations.length !== 1 || migrations[0]?.version !== 1)
+        throw new Error("Unsupported or incomplete schema migrations.");
+      for (const query of [
+        "SELECT kind,id,data,version,created_at FROM entities LIMIT 0",
+        "SELECT identity,project_id FROM identities LIMIT 0",
+        "SELECT scope,key,request,response FROM retries LIMIT 0",
+        "SELECT record_id,title,content FROM record_search WHERE record_search MATCH 'scratchpad' LIMIT 0",
+      ])
+        this.sqlite.prepare(query).all();
+    } catch {
+      throw new ApiError(
+        503,
+        "DATABASE_NOT_READY",
+        "SQLite persistence or schema migrations are unavailable or unsupported.",
+      );
+    }
   }
   get(kind: string, id: string): Entity | undefined {
     return this.db

@@ -1,5 +1,6 @@
 import { type Entity, type JsonObject, requireValue } from "./domain";
 import type { Store } from "./store";
+import { compareTimestamps } from "./timestamps";
 
 export function assertRelationshipSafe(
   store: Store,
@@ -81,10 +82,11 @@ export function projectContext(store: Store, project: Entity): JsonObject {
     })
     .sort(
       (a, b) =>
-        String(b.happenedAt ?? b.recordedAt ?? b.createdAt).localeCompare(
+        compareTimestamps(
+          String(b.happenedAt ?? b.recordedAt ?? b.createdAt),
           String(a.happenedAt ?? a.recordedAt ?? a.createdAt),
         ) ||
-        b.createdAt.localeCompare(a.createdAt) ||
+        compareTimestamps(b.createdAt, a.createdAt) ||
         b.id.localeCompare(a.id),
     );
   const available = records.filter((record) =>

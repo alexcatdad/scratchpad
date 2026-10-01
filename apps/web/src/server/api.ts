@@ -20,6 +20,7 @@ import {
 } from "./domain";
 import { exportKinds, importLegacy, importNative } from "./imports";
 import { Store } from "./store";
+import { compareTimestamps } from "./timestamps";
 
 const object = z.record(z.string(), z.unknown());
 const nonempty = z.string().trim().min(1).max(500);
@@ -281,13 +282,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
     if (from) {
       z.iso.datetime().parse(from);
       records = records.filter(
-        (r) => String(r.happenedAt ?? r.recordedAt) >= from,
+        (r) =>
+          compareTimestamps(String(r.happenedAt ?? r.recordedAt), from) >= 0,
       );
     }
     if (to) {
       z.iso.datetime().parse(to);
       records = records.filter(
-        (r) => String(r.happenedAt ?? r.recordedAt) <= to,
+        (r) => compareTimestamps(String(r.happenedAt ?? r.recordedAt), to) <= 0,
       );
     }
     const status = params.get("status"),
@@ -395,9 +397,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (method === "GET" && path === "/health")
         return response({ status: "ok" });
       if (method === "GET" && path === "/ready") {
-        store.sqlite
-          .prepare("SELECT version FROM schema_migrations WHERE version=1")
-          .get();
+        store.assertReady();
         return response({ status: "ready", database: "sqlite" });
       }
       requireValue(
