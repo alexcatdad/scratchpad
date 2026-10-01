@@ -4,7 +4,7 @@
 
 Readiness covers the complete PRD MVP and acceptance scenarios A–G, including capture/retrieval, project boundaries, authentication, operation, import/export, and distribution. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP. A local development slice does not establish release acceptance.
 
-The core implementation and release delivery are verified for `v0.1.2`. Signed/notarized macOS archives, Linux archives, both public GHCR architectures, clean Homebrew installation, and published-binary workflow acceptance passed. Full MVP acceptance remains open because historical scenarios A and B still lack authoritative source evidence. Apple credentials stay local; the GitHub App configuration is verified.
+The core implementation and release delivery are verified for `v0.1.2`. Signed/notarized macOS archives, Linux archives, both public GHCR architectures, clean Homebrew installation, and published-binary workflow acceptance passed. Full MVP acceptance remains open because historical scenario B still lacks authoritative source evidence and the new date-ordering/schema-readiness fixes still require exact-commit CI and release delivery evidence. Apple credentials stay local; the GitHub App configuration is verified.
 
 ## Release evidence — 2026-10-01
 
@@ -15,7 +15,7 @@ The core implementation and release delivery are verified for `v0.1.2`. Signed/n
 - [Fresh-runner acceptance 36853884482](https://github.com/alexcatdad/scratchpad/actions/runs/36853884482) passed macOS/Linux Homebrew installation and formula tests, installed-binary owner enrollment, SSH authentication, capture/retrieval, and restart. It also passed readiness for both public image architectures and backup/restore using the published Linux binary and image. ARM64 readiness on the Linux runner uses QEMU; it is not native ARM host acceptance.
 - The local Homebrew ARM64 binary and downloaded Intel macOS binary each passed the authenticated host-server workflow. Intel ran through Rosetta on this ARM64 Mac. The published image also passed native ARM64 backup/restore locally with the Homebrew binary (one workflow, 12.0 seconds).
 
-These results establish release delivery and disposable workflow acceptance. They do not establish a deployment against an owner's historical database or invent missing evidence for PRD scenarios A and B.
+These results establish release delivery and disposable workflow acceptance. They do not establish a deployment against an owner's historical database or invent missing historical evidence.
 
 ## Historical evidence ledger — 2026-09-29
 
@@ -46,7 +46,7 @@ The server import validation used private real histories locally: 19 USB Boop en
 
 ## Historical scenario evidence
 
-The optional [private history acceptance procedure](history-acceptance.md) exercises actual HTTP import, search, detail, audit, and context without publishing source text. Scenario C's request/rationale and later refinement were retrieved and reviewed locally. Scenarios A and B remain unproven: the current USB Boop log and 32 relevant Git revisions do not establish the throughput rationale or explicit paused-state reason required by the examples. Additional authoritative source material is needed; successful keyword retrieval cannot supply missing facts.
+The optional [private history acceptance procedure](history-acceptance.md) exercises actual HTTP import, search, detail, audit, and context without publishing source text. Scenario C's request/rationale and later refinement were retrieved and reviewed locally. On 1 October, scenario A was demonstrated using three private, attributed messages from the actual USB Boop resume conversation in addition to the original 19-line log. The owner's restricted-access instruction and approved metadata-only plan establish why intrusive transfer benchmarks were excluded; the full messages were preserved and retrieved through HTTP. The original log alone still does not establish that explanation. Scenario B remains unproven: the log, 32 relevant Git revisions, and 45 inspected resume-conversation turns do not establish the original pause and its reason. Additional authoritative source material is needed; successful keyword retrieval cannot supply missing facts.
 
 ## Closed implementation gaps
 
@@ -60,10 +60,20 @@ Implementation closure and operational acceptance are separate. A source file or
 
 ## Remaining MVP acceptance
 
-1. Obtain authoritative source material for historical scenarios A and B and run the private retrieval/replacement-chain acceptance procedure. Preserve the completed real-history import/reimport evidence and keep private historical data outside public fixtures/artifacts.
+1. Obtain authoritative source material for historical scenario B and run the private state/reason acceptance procedure. Preserve the completed real-history import/reimport evidence and keep private historical data outside public fixtures/artifacts.
 2. Audit PRD scenarios A–G against the current evidence before declaring the full MVP ready. Report release publication, disposable workflow acceptance, and an owner's deployed acceptance separately.
 3. For later changes, require relevant local checks and exact-commit GitHub Actions success, and verify deployed documentation independently. Rerun release acceptance when delivery or operational changes warrant it; published artifacts remain immutable.
 
 ## Repeatable audit procedure
 
 Compare PRD/API contracts with code, meaningful tests, run results, and published artifacts. For every acceptance claim, record the exact revision and the scope the evidence covers. Preserve uncertainty when a check is pending or narrower than the requirement. Update this ledger after authoritative results change; do not carry a green baseline forward to changed source by assumption.
+
+## Completion audit additions — 1 October 2026
+
+The post-release audit reproduced date filters treating ISO strings with optional fractional seconds as incorrectly ordered, and readiness succeeding with deleted migration state or missing tables. The fixes compare exact timestamp instants, including sub-millisecond user precision, and reject incomplete/unsupported persistence. Startup validates any existing user schema before configuration or DDL and refuses unrelated databases. Twenty focused regression cases pass locally; canonical CI uses the pinned Node 24 runtime, while local checks used Node 26.
+
+The actual authenticated browser/API/installed-MCP workflow was extended for contractor repositories, worktrees and non-Git resolution. The previous focused Go fixtures established local boundary behavior; the additional production flow verifies the combined central policy and persistence path. Its extra five captures are checked again after restart/backup restore, including their original Git provenance.
+
+The integrated local checks passed: lint, application/documentation/history type checks, all 39 server tests, formula checks, and Go race tests. The rebuilt Node 24 container with the installed Homebrew MCP completed the expanded browser/API workflow and backup/restore (one workflow, 14.6 seconds). These checks do not substitute for exact-commit CI or publication of the corrected image.
+
+The full objective is still not declared complete. Historical scenario B is unverified. It is missing historical acceptance data, not a reason to fabricate state or delay independent product fixes.

@@ -508,6 +508,43 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     resolve(temporary, "state.json"),
   ];
   command("go", [...args, "-phase", "capture"], resolve(root, "mcp"));
+  const restrictedProject = await page.evaluate(async () => {
+    const resolved = await fetch("/api/v1/projects/resolve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        context: {
+          git: {
+            remote: "https://github.com/example/scratchpad-e2e-restricted.git",
+          },
+        },
+      }),
+    });
+    if (!resolved.ok) throw new Error("Could not resolve restricted fixture");
+    const { project } = await resolved.json();
+    const classified = await fetch(`/api/v1/projects/${project.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        kind: "external",
+        expectedVersion: project.version,
+      }),
+    });
+    if (!classified.ok)
+      throw new Error("Could not classify restricted fixture");
+    const data = await classified.json();
+    if (
+      data.project.kind !== "external" ||
+      data.project.settings.repoMirroring.enabled
+    )
+      throw new Error("Restricted fixture did not disable mirroring");
+    return String(project.id);
+  });
+  command(
+    "go",
+    [...args, "-phase", "projects", "-restricted-project", restrictedProject],
+    resolve(root, "mcp"),
+  );
   await restartOrRestore();
   command("go", [...args, "-phase", "verify"], resolve(root, "mcp"));
   await page.reload();

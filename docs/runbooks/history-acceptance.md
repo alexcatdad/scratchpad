@@ -20,7 +20,7 @@ The script:
 1. Starts a temporary loopback HTTP service backed by an in-memory database.
 2. Creates an isolated validation credential inside that disposable database. It does not enroll credentials in, or connect to, a real Scratchpad instance.
 3. Imports both logs through HTTP and exercises search, record detail/history, and project context through the actual HTTP API.
-4. Checks that retrieved details preserve their original source objects.
+4. Checks every imported source object and raw line against the supplied file, then checks that retrieved details preserve those originals.
 5. Reports counts and hashed record tokens, without source text, paths, original IDs, or authentication tokens.
 6. Optionally inspects only the technical repository's Git versions of `decisions.jsonl`, `README.md`, and Markdown files under `docs/`.
 7. Closes the service and destroys its in-memory state.
@@ -67,3 +67,15 @@ node_modules/.bin/tsc --noEmit --target ES2022 --module ESNext \
 ```
 
 Run the optional procedure again against operator-supplied local histories when changing its retrieval checks. Never make CI depend on personal repository paths or upload its private inputs as workflow artifacts.
+
+## Supplemental conversation evidence — 1 October 2026
+
+The source review found an owner instruction and later owner-approved implementation plan dated 17 September 2026 in the USB Boop resume conversation. They establish the metadata-only access boundary and its rationale: useful USB reporting must survive restricted file access without intrusive transfer benchmarks. The accompanying agent proposal remains distinguishable from the user's instruction.
+
+Three conversation messages were captured into a private supplemental JSONL file with their complete text, source roles, message/turn references, dates and retrospective-import limitations. The supplement and combined input stay under ignored `dist/history-acceptance/`; no conversation text or original message IDs were added to public fixtures or artifacts. No earlier unstated research conclusion or paused state was invented.
+
+The existing HTTP acceptance procedure imported the 19 original technical records plus the three source messages, and all 805 stakeholder records, without skips. Four metadata candidates and two throughput candidates were retrieved; four matching details and their import audit events preserved their original source. The local semantic review inspected both the owner's restriction and the accepted plan, establishing the rationale required by scenario A. This is supplemental historical-source acceptance, not a claim that the original 19-line decision log contained the explanation.
+
+Scenario B remains open: none of the 45 inspected turns in that resume conversation establishes the original pause and its reason. A later resume or Apple enrollment approval cannot supply those missing facts. The approval plan's release deferral is also distinct from the motivating project pause.
+
+To repeat with operator-provided supplemental sources, preserve the full source text and attribution in JSONL, concatenate the original log and supplement into a private combined file, and pass that file as `--usb-log`. Use the same `--asource-log` and optional `--usb-repo` flags shown above. The validator reports candidates; a reviewer must still inspect the actual rationale. A successful run or search count is not automatic semantic acceptance.

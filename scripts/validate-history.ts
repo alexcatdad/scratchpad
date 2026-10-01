@@ -170,6 +170,16 @@ async function main() {
       api?.store
         .list("record")
         .filter((record) => record.projectId === project.id) ?? [];
+    const lines = text.split(/\r?\n/);
+    for (const record of records) {
+      const source = (record.provenance as JsonObject).import as JsonObject;
+      const rawLine = lines[Number(source.line) - 1];
+      if (
+        rawLine !== source.rawLine ||
+        canonical(JSON.parse(rawLine)) !== canonical(original(record))
+      )
+        throw new Error("Imported record did not preserve supplied source.");
+    }
     return {
       project,
       records,

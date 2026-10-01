@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -20,13 +21,15 @@ import (
 )
 
 type capture struct {
-	Tool      string         `json:"tool"`
-	Arguments map[string]any `json:"arguments"`
-	RecordID  string         `json:"recordId"`
-	ProjectID string         `json:"projectId"`
+	Tool       string         `json:"tool"`
+	Arguments  map[string]any `json:"arguments"`
+	RecordID   string         `json:"recordId"`
+	ProjectID  string         `json:"projectId"`
+	GitContext map[string]any `json:"gitContext,omitempty"`
 }
 type state struct {
-	Captures []capture `json:"captures"`
+	Captures         []capture `json:"captures"`
+	ProjectScenarios []capture `json:"projectScenarios,omitempty"`
 }
 
 func main() {
@@ -42,14 +45,15 @@ func run() error {
 	workspace := flag.String("workspace", "", "Existing disposable Git repository with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
 	statePath := flag.String("state", "", "Capture-state file retained across server restart")
-	phase := flag.String("phase", "capture", "capture or verify after server restart")
+	phase := flag.String("phase", "capture", "capture, projects, or verify after server restart")
+	restrictedProject := flag.String("restricted-project", "", "Disposable external project ID for projects phase")
 	mirror := flag.Bool("mirror", false, "Require successful central and local mirroring for decisions (enable server project setting first)")
 	flag.Parse()
 	if *publicKey == "" || *workspace == "" || *binary == "" || *statePath == "" {
 		return errors.New("public-key, workspace, binary, and state flags are required")
 	}
-	if *phase != "capture" && *phase != "verify" {
-		return errors.New("phase must be capture or verify")
+	if *phase != "capture" && *phase != "projects" && *phase != "verify" {
+		return errors.New("phase must be capture, projects, or verify")
 	}
 	absWorkspace, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -64,7 +68,7 @@ func run() error {
 	command := exec.CommandContext(ctx, absBinary)
 	command.Dir = absWorkspace
 	command.Stderr = os.Stderr
-	command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*serverURL, "SCRATCHPAD_PUBLIC_KEY="+*publicKey, "SCRATCHPAD_SIGNING_KEY="+*signingKey, fmt.Sprintf("SCRATCHPAD_MIRROR=%t", *mirror))
+	command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*serverURL, "SCRATCHPAD_PUBLIC_KEY="+*publicKey, "SCRATCHPAD_SIGNING_KEY="+*signingKey, fmt.Sprintf("SCRATCHPAD_MIRROR=%t", *mirror || *phase == "projects"))
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "scratchpad-integration", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	if err != nil {
 		return fmt.Errorf("initialize real stdio MCP: %w", err)
@@ -138,7 +142,25 @@ func run() error {
 			return errors.New("state must contain all eight captures")
 		}
 	}
-	for _, item := range saved.Captures {
+	if *phase == "projects" {
+		if *restrictedProject == "" {
+			return errors.New("restricted-project is required for projects phase")
+		}
+		saved.ProjectScenarios, err = projectScenarios(ctx, session, absWorkspace, *restrictedProject)
+		if err != nil {
+			return err
+		}
+		data, err := json.MarshalIndent(saved, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err = os.WriteFile(*statePath, append(data, '\n'), 0600); err != nil {
+			return err
+		}
+		fmt.Println("PASS projects: actual API and real stdio; restricted checkout unchanged with local mirroring enabled; linked worktrees share identity and preserve provenance; non-Git error, explicit resolution and stable replay")
+		return nil
+	}
+	for index, item := range append(saved.Captures, saved.ProjectScenarios...) {
 		out, err := call(ctx, session, "get_record", map[string]any{"id": item.RecordID})
 		if err != nil {
 			return err
@@ -149,6 +171,12 @@ func run() error {
 		}
 		if record["id"] != item.RecordID || record["projectId"] != item.ProjectID || record["type"] != strings.TrimPrefix(item.Tool, "record_") {
 			return fmt.Errorf("record mismatch: %v", record)
+		}
+		if index >= len(saved.Captures) {
+			gitContext, _ := record["gitContext"].(map[string]any)
+			if !reflect.DeepEqual(gitContext, item.GitContext) {
+				return fmt.Errorf("project scenario lost original Git provenance: %v", record)
+			}
 		}
 		payload, ok := record["payload"].(map[string]any)
 		if !ok || len(payload) == 0 {
@@ -206,6 +234,9 @@ func run() error {
 	fmt.Printf("PASS %s: real stdio → SSH challenge → HTTP → persistent records; 8 typed captures, search, context, history, relationships", *phase)
 	if *phase == "verify" {
 		fmt.Print("; restart persistence, exact replay, changed-payload conflict")
+		if len(saved.ProjectScenarios) > 0 {
+			fmt.Printf("; %d project-boundary captures survive restore", len(saved.ProjectScenarios))
+		}
 	}
 	fmt.Println()
 	return nil
