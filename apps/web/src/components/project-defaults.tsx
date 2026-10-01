@@ -11,7 +11,7 @@ const initial: Project["settings"] = {
     enabled: false,
     recordTypes: ["decision", "adr", "business_decision"],
   },
-  crossProjectAnalysis: false,
+  crossProjectAnalysis: true,
   aiProcessing: false,
 };
 
