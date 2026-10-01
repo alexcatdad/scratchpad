@@ -193,7 +193,7 @@ export function AiSettings() {
                 min="5"
                 max="600"
                 required
-                defaultValue={configuration.requestTimeoutSeconds ?? 180}
+                defaultValue={configuration.requestTimeoutSeconds ?? 600}
               />
               <small>
                 Allow enough time for your local model to finish a request.

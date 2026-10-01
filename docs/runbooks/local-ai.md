@@ -1,6 +1,6 @@
 # Local AI provider verification
 
-Scratchpad v0.1.3 does not yet implement AI processing or embeddings. These checks verify the intended local provider separately from application integration.
+The installed Scratchpad v0.1.3 predates AI processing. The development application now implements AI and embeddings; distinguish provider smoke checks below from authenticated application acceptance.
 
 ## Selected models
 
@@ -58,8 +58,23 @@ The local server lists the downloaded Qwen3 Embedding 4B and 8B DWQ packages as 
 
 ## Successful retest — 1 October 2026
 
-The owner replaced the embedding package with Qwen3 Embedding 4B GGUF Q8_0 and loaded it as `text-embedding-qwen3-embedding-4b`, with an 8,192-token context. LM Studio reports this package as an embedding model. An explicit request using that identifier from the running Scratchpad Docker container returned HTTP 200, two vectors of 2,560 dimensions, all finite and nonzero. The earlier failed MLX package remains historical evidence, not the selected provider. Qwen3.8 remains the LLM choice. This verifies provider compatibility; Scratchpad application integration is still unimplemented.
+The owner replaced the embedding package with Qwen3 Embedding 4B GGUF Q8_0 and loaded it as `text-embedding-qwen3-embedding-4b`, with an 8,192-token context. LM Studio reports this package as an embedding model. An explicit request using that identifier from the running Scratchpad Docker container returned HTTP 200, two vectors of 2,560 dimensions, all finite and nonzero. The earlier failed MLX package remains historical evidence, not the selected provider. Qwen3.8 remains the LLM choice. This initial check verifies provider compatibility. The later authenticated application result below establishes embedding integration.
 
 ## Reload and development application retest — 1 October 2026
 
 After the owner reloaded the selected embedding model, the existing Docker container again received HTTP 200 with two finite, nonzero 2,560-dimensional vectors. The development application also passed an authenticated test against the real provider using a disposable SQLite database: five synthetic captures produced five persisted, nonzero 2,560-dimensional embeddings, and semantic search returned five source-linked matches with finite scores. This verifies the new application integration separately from the running v0.1.3 deployment. The live owner's database was not used for this fixture.
+
+## Latest provider reload check — 1 October 2026
+
+A fresh three-input request after the owner reloaded the model returned three finite, nonzero 2,560-dimensional vectors in 6.95 seconds. Two paraphrases scored 0.7652 cosine similarity; an unrelated sentence scored 0.2248. This repeat confirms provider health, independently of application acceptance.
+
+## Automated real application fixture
+
+Build the disposable image before running the authenticated real-provider fixture:
+
+```sh
+docker build -t scratchpad:ci .
+SCRATCHPAD_REAL_AI=1 SCRATCHPAD_E2E_DOCKER=1 npx playwright test tests/real-ai.spec.ts --workers=1
+```
+
+The fixture owns its container, volume, synthetic records and passkey. It checks persisted embeddings, semantic retrieval, analysis provenance and a private handoff. Allow slow local generation to finish; inspect the terminal job result before rerunning. Model requests and HTTP transport both need to honor the configured timeout.

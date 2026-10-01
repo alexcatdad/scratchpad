@@ -2975,7 +2975,7 @@
             "type": "integer",
             "minimum": 5,
             "maximum": 600,
-            "default": 180
+            "default": 600
           },
           "reasoningEffort": {
             "type": "string",

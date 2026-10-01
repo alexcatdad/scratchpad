@@ -803,6 +803,41 @@ test("private AI settings, evidence review, semantic search and document downloa
   expect(
     results.records.some((record) => record.id === captured.record.id),
   ).toBe(true);
+  await page.getByRole("button", { name: "Insights", exact: true }).click();
+  await page
+    .getByLabel("Insight project", { exact: false })
+    .selectOption(projects[0]?.id ?? "");
+  const enqueue = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response.url().endsWith("/ai/jobs"),
+  );
+  await page
+    .getByRole("button", { name: "Analyze memory", exact: true })
+    .click();
+  const failedJob = (await (await enqueue).json()).job as Job;
+  const jobStatus = async () =>
+    (await request<{ jobs: Job[] }>(page, "/ai/jobs")).jobs.find(
+      (job) => job.id === failedJob.id,
+    )?.status;
+  await expect.poll(jobStatus, { timeout: 30000 }).toBe("failed");
+  const retry = page.getByRole("button", { name: "Retry job", exact: true });
+  await expect(retry).toBeVisible();
+  await startProvider();
+  const providerSettings = await request<{ version: number }>(
+    page,
+    "/ai/settings",
+  );
+  await request(page, "/ai/settings", "PATCH", {
+    baseUrl: providerUrl,
+    expectedVersion: providerSettings.version,
+  });
+  await retry.click();
+  await expect(
+    page.getByText("Failed job queued for another attempt.", { exact: true }),
+  ).toBeVisible();
+  await expect.poll(jobStatus, { timeout: 30000 }).toBe("completed");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),

@@ -87,7 +87,8 @@ docker run --rm --user 0:0 --entrypoint sh \
     test -s /snapshot.sqlite
     test ! -e /restore/scratchpad.sqlite
     cp /snapshot.sqlite /restore/scratchpad.sqlite
-    chown 1000:1000 /restore/scratchpad.sqlite
+    chown 1000:1000 /restore /restore/scratchpad.sqlite
+    chmod 700 /restore
     chmod 600 /restore/scratchpad.sqlite
   '
 cat > compose.restore.yaml <<EOF_OVERRIDE
@@ -107,6 +108,8 @@ curl --fail http://localhost:3000/ready
 Continue using **both Compose files** for all commands against the restored instance, including `exec`, `stop`, backups, and upgrades. Record this selection in the deployment configuration. Running default `docker compose up` without the override would reconnect the original volume; that is a rollback action, not a routine restart. The backup is a self-contained SQLite database; do not copy old `-wal` or `-shm` files into the fresh volume.
 
 Verify browser sign-in, project/record counts, a known decision chain, and real MCP retrieval. A restored backup also restores the authentication state at its snapshot time: review credentials and revoke anything that should no longer be valid. Administrator recovery (`npm run admin -- recover`) can replace a lost passkey and invalidate current sessions without deleting records.
+
+The application must own both the restored database file and its volume directory. SQLite creates WAL and shared-memory files beside the database; assigning ownership only to the database file can cause `SQLITE_READONLY_DIRECTORY` even when the file itself is writable.
 
 Native JSON import/export is a separate knowledge migration feature. Importing an export into a new instance does not restore browser credentials or agent sessions.
 
