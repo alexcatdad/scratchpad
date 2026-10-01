@@ -78,3 +78,11 @@ SCRATCHPAD_REAL_AI=1 SCRATCHPAD_E2E_DOCKER=1 npx playwright test tests/real-ai.s
 ```
 
 The fixture owns its container, volume, synthetic records and passkey. It checks persisted embeddings, semantic retrieval, analysis provenance and a private handoff. Allow slow local generation to finish; inspect the terminal job result before rerunning. Model requests and HTTP transport both need to honor the configured timeout.
+
+After a complete run has already verified actual analysis, rerun embeddings, semantic retrieval and the private handoff without regenerating analysis:
+
+```sh
+SCRATCHPAD_REAL_AI=1 SCRATCHPAD_REAL_AI_EXPORT_ONLY=1 SCRATCHPAD_E2E_DOCKER=1 SCRATCHPAD_E2E_IMAGE=scratchpad:ci npx playwright test tests/real-ai.spec.ts --workers=1
+```
+
+This mode uses a fresh disposable container and synthetic sources. It does not claim fresh analysis acceptance. Node HTTP transport must allow the configured model deadline; the default dispatcher previously cancelled headers at 300 seconds despite a 600-second request setting. The application now supplies an explicit dispatcher and closes it on completion or abort.

@@ -651,6 +651,48 @@ describe("optional AI boundary", () => {
 });
 
 describe("OpenAI-compatible response validation", () => {
+  it("uses the configured transport deadline for delayed model headers and aborts at the overall deadline", async () => {
+    const server = createServer((_request, response) => {
+      const timer = setTimeout(() => {
+        response.setHeader("Content-Type", "application/json");
+        response.end(
+          JSON.stringify({ data: [{ index: 0, embedding: [1, 2] }] }),
+        );
+      }, 150);
+      response.on("close", () => clearTimeout(timer));
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing test server address");
+    const { ai } = await fixture();
+    const config = {
+      ...(await ai.settings()),
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      embeddingDimensions: 2,
+      requestTimeoutSeconds: 0.5,
+    } as ConstructorParameters<typeof OpenAiProvider>[0];
+    try {
+      await expect(
+        new OpenAiProvider(config).embed(["Synthetic"]),
+      ).resolves.toEqual([[1, 2]]);
+      await expect(
+        new OpenAiProvider({ ...config, requestTimeoutSeconds: 0.05 }).embed([
+          "Synthetic",
+        ]),
+      ).rejects.toMatchObject({
+        code: "AI_UNAVAILABLE",
+        message: expect.stringContaining("timed out"),
+      });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
   it.each([
     { data: [{ index: 0, embedding: [0, 0] }] },
     { data: [{ index: 0, embedding: [1] }] },
@@ -688,9 +730,53 @@ describe("OpenAI-compatible response validation", () => {
       },
     });
     expect(await ai.settings()).toMatchObject({
-      requestTimeoutSeconds: 180,
+      requestTimeoutSeconds: 600,
       reasoningEffort: "none",
     });
+    await ai.configure(
+      {
+        requestTimeoutSeconds: 180,
+        expectedVersion: (await ai.settings()).version,
+      },
+      actor,
+    );
+    expect((await ai.settings()).requestTimeoutSeconds).toBe(180);
+  });
+  it("requests a single Markdown export without unrelated analysis fields", async () => {
+    const fetcher = mockProvider({
+      artifacts: [
+        {
+          kind: "export",
+          title: "Synthetic handoff",
+          content: {
+            text: "SQLite cache handoff",
+            markdown: "# Handoff\nUse SQLite.",
+          },
+          sourceRecordIds: ["r1"],
+        },
+      ],
+    });
+    const { ai } = await fixture(fetcher);
+    await ai.enqueue(
+      { type: "export", projectId: "p1", format: "handoff" },
+      actor,
+    );
+    await ai.tick();
+    const body = JSON.parse(
+      String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body),
+    );
+    const artifacts =
+      body.response_format.json_schema.schema.properties.artifacts;
+    expect(artifacts).toMatchObject({ minItems: 1, maxItems: 1 });
+    expect(artifacts.items.properties.content.required).toEqual([
+      "text",
+      "markdown",
+    ]);
+    expect(Object.keys(artifacts.items.properties.content.properties)).toEqual([
+      "text",
+      "markdown",
+    ]);
+    expect((await ai.jobs())[0]?.status).toBe("completed");
   });
   it("meets OpenAI strict required-properties rules and removes only optional null placeholders", async () => {
     const fetcher = mockProvider({
@@ -813,3 +899,5 @@ describe("OpenAI-compatible response validation", () => {
     );
   });
 });
+
+import { createServer } from "node:http";

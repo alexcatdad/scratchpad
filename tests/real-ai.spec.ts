@@ -327,7 +327,31 @@ test.describe("real local Qwen processing", () => {
     expect((await waitForJob(page, embedding.id)).sourceCount).toBe(
       captures.length,
     );
-    if (!dockerMode) {
+    if (dockerMode) {
+      const vectors = JSON.parse(
+        command("docker", [
+          "exec",
+          runId,
+          "node",
+          "--input-type=module",
+          "-e",
+          "import Database from 'better-sqlite3'; const db=new Database('/data/scratchpad.sqlite',{readonly:true}); const rows=db.prepare(\"SELECT data FROM entities WHERE kind='ai_embedding'\").all(); console.log(JSON.stringify(rows.map(row=>{const e=JSON.parse(row.data); return {dimensions:e.dimensions,length:e.vector.length,finite:e.vector.every(Number.isFinite),nonzero:e.vector.some(n=>n!==0)}}))); db.close();",
+        ]),
+      ) as {
+        dimensions: number;
+        length: number;
+        finite: boolean;
+        nonzero: boolean;
+      }[];
+      expect(vectors).toHaveLength(captures.length);
+      for (const vector of vectors)
+        expect(vector).toEqual({
+          dimensions: 2560,
+          length: 2560,
+          finite: true,
+          nonzero: true,
+        });
+    } else {
       const sqlite = new Database(databasePath, { readonly: true });
       try {
         const rows = sqlite
@@ -368,42 +392,44 @@ test.describe("real local Qwen processing", () => {
     console.log(
       `Real embedding acceptance passed: ${captures.length} source records, 2560-dimensional Qwen vectors and ${matches.results.length} semantic matches through the authenticated application.`,
     );
-    const { job: analysis } = await request<{ job: Job }>(
-      page,
-      "/ai/jobs",
-      "POST",
-      { type: "analyze", projectId: project.id },
-    );
-    expect((await waitForJob(page, analysis.id)).sourceCount).toBe(
-      captures.length,
-    );
-    await page
-      .getByRole("button", { name: "Refresh insights", exact: true })
-      .click();
-    const { suggestions } = await request<{ suggestions: Artifact[] }>(
-      page,
-      `/suggestions?projectId=${project.id}`,
-    );
-    expect(suggestions.length).toBeGreaterThan(0);
-    for (const suggestion of suggestions) {
-      expect(suggestion.authority).toBe("derived");
-      expect(suggestion.private).toBe(true);
-      expect(suggestion.generator).toMatchObject({
-        model: "qwen/qwen3.8-27b",
-        provider: providerUrl,
-      });
-      expect(Number.isFinite(Date.parse(suggestion.generatedAt))).toBe(true);
-      expect(suggestion.sourceRecordIds.length).toBeGreaterThan(0);
-      expect(
-        suggestion.sourceRecordIds.every((key) => originals.has(key)),
-      ).toBe(true);
+    if (process.env.SCRATCHPAD_REAL_AI_EXPORT_ONLY !== "1") {
+      const { job: analysis } = await request<{ job: Job }>(
+        page,
+        "/ai/jobs",
+        "POST",
+        { type: "analyze", projectId: project.id },
+      );
+      expect((await waitForJob(page, analysis.id)).sourceCount).toBe(
+        captures.length,
+      );
+      await page
+        .getByRole("button", { name: "Refresh insights", exact: true })
+        .click();
+      const { suggestions } = await request<{ suggestions: Artifact[] }>(
+        page,
+        `/suggestions?projectId=${project.id}`,
+      );
+      expect(suggestions.length).toBeGreaterThan(0);
+      for (const suggestion of suggestions) {
+        expect(suggestion.authority).toBe("derived");
+        expect(suggestion.private).toBe(true);
+        expect(suggestion.generator).toMatchObject({
+          model: "qwen/qwen3.8-27b",
+          provider: providerUrl,
+        });
+        expect(Number.isFinite(Date.parse(suggestion.generatedAt))).toBe(true);
+        expect(suggestion.sourceRecordIds.length).toBeGreaterThan(0);
+        expect(
+          suggestion.sourceRecordIds.every((key) => originals.has(key)),
+        ).toBe(true);
+      }
+      await expect(
+        page.getByRole("heading", {
+          name: suggestions[0]?.title as string,
+          exact: true,
+        }),
+      ).toBeVisible();
     }
-    await expect(
-      page.getByRole("heading", {
-        name: suggestions[0]?.title as string,
-        exact: true,
-      }),
-    ).toBeVisible();
     const { job: exported } = await request<{ job: Job }>(
       page,
       "/summaries/export",
