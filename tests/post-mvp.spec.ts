@@ -466,6 +466,86 @@ test("private AI settings, evidence review, semantic search and document downloa
     .fill("Synthetic owner");
   await page.getByRole("button", { name: "Save profile", exact: true }).click();
   await expect(page.getByText("Profile saved.", { exact: true })).toBeVisible();
+  const defaults = page.getByRole("region", { name: "New project defaults" });
+  await defaults
+    .getByLabel("Allow repository mirroring by default", { exact: true })
+    .check();
+  await defaults
+    .getByRole("group", { name: "Default enabled capture types", exact: true })
+    .getByLabel("Question & answer", { exact: true })
+    .uncheck();
+  await defaults
+    .getByRole("button", { name: "Save project defaults", exact: true })
+    .click();
+  await expect(
+    defaults.getByText("New project defaults saved.", { exact: true }),
+  ).toBeVisible();
+  const previousDefaults = await request<{ settings: { version: number } }>(
+    page,
+    "/settings",
+  );
+  await defaults
+    .getByRole("button", { name: "Save project defaults", exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await request<{ settings: { version: number } }>(page, "/settings"))
+          .settings.version,
+    )
+    .toBe(previousDefaults.settings.version + 1);
+  const inherited = (
+    await request<{ project: Project }>(
+      page,
+      "/projects/resolve-explicit",
+      "POST",
+      { name: "Synthetic inherited defaults" },
+    )
+  ).project;
+  expect(
+    (inherited.settings.repoMirroring as { enabled: boolean }).enabled,
+  ).toBe(true);
+  expect(inherited.settings.enabledRecordTypes).not.toContain("qa");
+  expect(inherited.settings.aiProcessing).toBe(false);
+  const conservative = (
+    await request<{ project: Project }>(
+      page,
+      "/projects/resolve-explicit",
+      "POST",
+      { name: "Synthetic conservative defaults", kind: "external" },
+    )
+  ).project;
+  expect(
+    (conservative.settings.repoMirroring as { enabled: boolean }).enabled,
+  ).toBe(false);
+  expect(conservative.settings.aiProcessing).toBe(false);
+  expect(conservative.settings.crossProjectAnalysis).toBe(false);
+  const staleDefaults = await page.evaluate(async (expectedVersion) => {
+    const response = await fetch("/api/v1/settings", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ expectedVersion, settings: {} }),
+    });
+    return { status: response.status, body: await response.json() };
+  }, previousDefaults.settings.version);
+  expect(staleDefaults.status).toBe(409);
+  expect(staleDefaults.body.error.code).toBe("CONFLICT");
+  await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(
+    defaults.getByLabel("Allow repository mirroring by default", {
+      exact: true,
+    }),
+  ).toBeChecked();
+  await expect(
+    defaults
+      .getByRole("group", {
+        name: "Default enabled capture types",
+        exact: true,
+      })
+      .getByLabel("Question & answer", { exact: true }),
+  ).not.toBeChecked();
+
   const aiSettings = page.getByRole("region", { name: "AI provider settings" });
   await aiSettings.getByLabel("Enable AI processing", { exact: true }).check();
   await aiSettings
@@ -708,6 +788,42 @@ test("private AI settings, evidence review, semantic search and document downloa
   expect(
     results.records.some((record) => record.id === captured.record.id),
   ).toBe(true);
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Save AI settings", exact: true }),
+  ).toBeVisible();
+  const mobileFits = () =>
+    page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
+    );
+  expect(await mobileFits()).toBe(true);
+  await page.getByRole("button", { name: "Insights", exact: true }).click();
+  await expect(
+    page.getByLabel("Insight project", { exact: false }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Background jobs", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByLabel("Document kind", { exact: false }),
+  ).toBeVisible();
+  expect(await mobileFits()).toBe(true);
+  await page
+    .getByRole("region", { name: "AI suggestions" })
+    .getByRole("button", { name: /^Source / })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", {
+      name: "Synthetic CI investigation 0",
+      exact: true,
+    }),
+  ).toBeVisible();
+  expect(await mobileFits()).toBe(true);
+  await page.setViewportSize({ width: 1440, height: 1000 });
   expect(exceptions).toEqual([]);
   if (dockerMode) logs += command("docker", ["logs", runId]);
   expect(logs).not.toContain("synthetic-secret-key");

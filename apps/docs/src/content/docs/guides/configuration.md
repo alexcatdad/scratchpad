@@ -13,10 +13,11 @@ Configuration has three distinct owners. Server and MCP settings are separate: t
 
 ## Server environment
 
-| Variable                   | Default                  | Purpose                                                          |
-| -------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `SCRATCHPAD_PUBLIC_URL`    | `http://localhost:3000`  | Browser origin and passkey relying-party configuration           |
-| `SCRATCHPAD_DATABASE_PATH` | `data/scratchpad.sqlite` | SQLite file location; use an absolute path for local development |
+| Variable                   | Default                  | Purpose                                                                                       |
+| -------------------------- | ------------------------ | --------------------------------------------------------------------------------------------- |
+| `SCRATCHPAD_PUBLIC_URL`    | `http://localhost:3000`  | Browser origin and passkey relying-party configuration                                        |
+| `SCRATCHPAD_DATABASE_PATH` | `data/scratchpad.sqlite` | SQLite file location; use an absolute path for local development                              |
+| `SCRATCHPAD_DATABASE_URL`  | Unset                    | Optional PostgreSQL URL in the current source checkout; takes precedence over the SQLite path |
 
 Use the same values for the server and administrator commands. Changing working directories with the relative database default can create a separate database.
 
@@ -48,4 +49,8 @@ Open **Projects → Project settings** to choose enabled capture types, enable r
 
 Disabling a capture type prevents new captures of that type; it does not erase historical records. A successful retry still refers to the original capture. Mirror permission is checked against current project settings, so enabling a local flag cannot bypass an owner restriction.
 
-The cross-project analysis setting records policy for optional future processing. It does not imply an AI analysis engine is running.
+The source checkout includes the optional processing engine. Enable global AI and project AI participation separately before analysis. See [optional AI](/scratchpad/guides/ai/) for provider, schedule, threshold and analysis settings, and [PostgreSQL](/scratchpad/guides/postgresql/) for server database selection. The published v0.1.3 release retains its earlier SQLite-only capabilities.
+
+## Defaults for future projects
+
+Open **Settings → New project defaults** to choose enabled capture types, mirror permission/types, AI permission and cross-project participation for future personal/internal projects. Saving defaults does not rewrite existing project settings. External projects start with mirroring, AI and cross-project analysis disabled even when normal-project defaults permit them. The versioned API rejects stale edits.

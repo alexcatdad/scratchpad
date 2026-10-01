@@ -1575,3 +1575,65 @@ These additions document the current wire behavior while preserving the accepted
 - Date bounds and context ordering compare timestamp instants, preserving user-supplied fractional-second precision. Bounds are inclusive; equivalent representations denote the same instant.
 
 Native export is a portable knowledge archive, excluding authentication state. The administrator's `backup <absolute-destination>` command creates a consistent full SQLite snapshot, including credential/session/retry state. Operational restore requires a stopped service and a fresh destination volume; see the server and deployment runbooks.
+
+## 66. Remaining-product implementation extensions
+
+These extensions describe the source implementation after the SQLite MVP. They do not retroactively add capabilities to the published v0.1.3 artifacts. Verify the installed version and release evidence before using the newer interfaces.
+
+### Persistence and owner presentation
+
+`SCRATCHPAD_DATABASE_URL` selects PostgreSQL when set to a `postgres://` or `postgresql://` URL; otherwise `SCRATCHPAD_DATABASE_PATH` selects SQLite. Both engines implement the same API, persisted authentication, idempotency, optimistic concurrency, audit, and deterministic search semantics. PostgreSQL uses native full-text search. Startup initializes an empty application database and refuses unsupported or incomplete existing schemas. Use a dedicated PostgreSQL database.
+
+`GET /profile` returns `{profile, database: {engine: "sqlite" | "postgresql"}}`. The read-only engine indicator never exposes the connection URL. `PATCH /profile` accepts `{displayName, expectedVersion}` and returns `{profile}`. Display names are presentation data, not authentication.
+
+### Optional AI configuration
+
+`GET /ai/settings` returns the configuration directly, not under a `settings` wrapper. `PATCH /ai/settings` accepts an explicit `expectedVersion` (or `If-Match`) and any configurable fields:
+
+```ts
+type AiSettings = {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  embeddingModel: string;
+  embeddingDimensions: number;
+  scheduleMinutes: number;
+  requestTimeoutSeconds: number;
+  maxOutputTokens: number;
+  reasoningEffort: "default" | "none" | "low" | "medium" | "high" | "xhigh";
+  similarityThreshold: number;
+  analysisModes: string[];
+  apiKeyConfigured: boolean;
+  version: number;
+};
+```
+
+`apiKey` is a write-only optional field: omitting it preserves a stored key; an empty string removes it. Responses and audit configuration snapshots expose only whether a key is configured. Provider URLs must be HTTP(S), without embedded credentials, a query, or a fragment. `enabled` defaults to false. A schedule of `0` means manual processing only. The API accepts similarity thresholds from `-1` to `1`; the dashboard presents the usual nonnegative range. Provider request timeouts are configurable from 5 to 600 seconds, default 180. Reasoning effort defaults to `none`; `default` omits the provider-specific override. Choose a supported effort for the configured model. `maxOutputTokens` limits generated output (256–32,768; default 4,096). Size the timeout to the model and hardware: a large local model may require more than 180 seconds.
+
+`GET /settings` and optimistic `PATCH /settings` additionally control `defaultProjectSettings` for new normal/internal projects. Existing projects retain their settings; external projects use conservative defaults regardless of normal-project defaults.
+
+`POST /ai/test` uses synthetic completion and embedding input and returns `{ok, model, embeddingModel, dimensions}`. It does not process project history. The completion provider uses OpenAI-compatible chat completions; embedding requests use the compatible embeddings endpoint. Model output is schema-validated and cannot supply arbitrary source IDs.
+
+### Jobs, scope and semantic retrieval
+
+`GET /ai/jobs` returns `{jobs}`. `POST /ai/jobs` accepts `{type: "analyze" | "embed" | "export", projectId?, projectIds?, crossProject?, format?}` and returns HTTP 202 `{job}`. Choose one project for ordinary operations or explicitly request `crossProject: true`. Every selected project must permit the operation; explicitly selecting a denied project returns `AI_NOT_ALLOWED`. Unspecified cross-project scope includes only participating projects.
+
+`POST /ai/jobs/:id/retry` accepts `{expectedVersion}` and returns HTTP 202 `{job}` for a failed job. Jobs retain status, attempts, due time, last error and lease state in the database. The worker recovers expired leases and bounds automatic attempts; retry is a separate audited action. Scheduling and worker execution remain independent of core readiness.
+
+`POST /search/semantic` accepts `{query, projectId?, projectIds?, crossProject?, limit?}` and returns `{results: [{record, score}], model}`. An absent compatible index returns an empty result with `indexRequired: true`. Embeddings are compared only when provider/model/dimension fingerprint and source-content identity match. Changing the embedding configuration requires rebuilding the compatible index. Consent is evaluated before provider calls and before returning results; deterministic `/search` and `/records` remain independent of embeddings.
+
+### Suggestions and documents
+
+`GET /suggestions` returns `{suggestions}` and accepts `projectId`, repeated `projectIds`, and `crossProject=true` filters. Artifact kinds are `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, `recommendation`, and `export`. Artifacts retain source IDs, participating project IDs, generator metadata, creation/generation timestamps, derived authority, and review status `pending`, `accepted`, or `rejected`.
+
+`POST /suggestions/:id/accept` and `/reject` require `{expectedVersion}` and return `{suggestion}`. Acceptance creates an audited curated artifact. Classification can update audited curated tags/summary; an explicitly scoped relationship candidate can create a relationship while preserving AI derivation. No review action changes original captures, deletes source records, silently supersedes decisions, or turns AI interpretation into an explicit human decision. Current consent gates access to older artifacts as well as new analysis.
+
+`POST /summaries/export` accepts `{projectId, format}` and returns HTTP 202 `{job}`. Formats are `handoff`, `architecture`, `decisions`, `client_history`, and `adr`. The generated `export` artifact contains private Markdown and server-added source citations. Downloading/sharing a document is a separate owner action; generation does not publish it or grant access to the instance.
+
+Native knowledge exports now also preserve owner presentation profiles, AI artifacts and curated artifacts with their source references. They exclude credentials, sessions, challenges, setup tokens, retry identities, provider secrets/configuration, scheduled jobs and embeddings. Full operational PostgreSQL backup uses `pg_dump`/`pg_restore`; the administrator `backup` command remains SQLite-only and returns `BACKUP_EXTERNAL` for PostgreSQL.
+
+### MCP extensions
+
+The local stdio server adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. Project-scoped AI tools use explicit `projectId` or the existing checkout/working-directory discovery. Cross-project operations require `crossProject: true`; optional `projectIds` constrain that explicit scope. `process_memory.type` is `analyze` or `embed`; `generate_document.format` uses the five formats above. Poll `get_ai_jobs`, then read source-linked artifacts with `get_suggestions`. These tools neither enable AI nor override owner project consent. Existing `search_memory` remains deterministic.
+
+The machine-readable [OpenAPI 3.1 contract](openapi.json) documents the implemented routes and schemas. It can be consumed without generated clients; authentication and optional project-consent boundaries remain server-enforced.

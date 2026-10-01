@@ -36,3 +36,7 @@ Open a record to view its original typed payload, authority, confidence, and cap
 **Decision chain and relationships** shows links to other records and lets you navigate them. Replacement and partial-replacement relationships express different historical meanings; a partial replacement does not discard every earlier constraint. Proposed and accepted relationship states remain visible.
 
 Curated title, tags, summary, and archive status are editable metadata. Revision history and audit events record changes separately from original evidence. Evidence links retain their source references; they do not turn a past conclusion into current policy automatically.
+
+## Machine-readable API
+
+The [OpenAPI 3.1 document](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) describes actual implemented routes, cookie/bearer authentication, request schemas and stable error envelopes. See [API implementation extensions](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) for optional AI and PostgreSQL behavior. Generated clients are optional; the HTTP contract remains the boundary between the Go MCP and TypeScript server.

@@ -37,6 +37,8 @@ export default defineConfig({
               slug: "guides/installation",
             },
             { label: "Configuration", slug: "guides/configuration" },
+            { label: "Optional PostgreSQL", slug: "guides/postgresql" },
+            { label: "Optional AI & semantic memory", slug: "guides/ai" },
             { label: "MCP & project context", slug: "guides/mcp" },
             {
               label: "Releases & installation channels",

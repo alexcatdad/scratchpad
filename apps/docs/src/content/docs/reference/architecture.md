@@ -12,16 +12,16 @@ Local Go MCP ─── optional JSONL mirror in the checkout
     │ HTTP API
 TypeScript server + browser dashboard
     │
-SQLite persistent storage
+SQLite or optional PostgreSQL
 ```
 
 The public documentation site runs independently on GitHub Pages. It does not connect to a private instance or carry user records.
 
 ## Server
 
-The server uses Node.js 24 LTS, TypeScript, React, TanStack Start, and Drizzle ORM. It owns authentication, project resolution, record validation and persistence, search, retry semantics, audit history, and eventually optional processing jobs.
+The server uses Node.js 24 LTS, TypeScript, React, TanStack Start, and Drizzle ORM. It owns authentication, project resolution, record validation and persistence, search, retry semantics, audit history, and optional persisted processing jobs.
 
-SQLite is the default. PostgreSQL is an alternative target after the initial capture/retrieval loop. There is no mandatory cache, queue, vector service, or AI service.
+SQLite is the default. The current source checkout implements optional PostgreSQL behind the same server API; the published v0.1.3 release predates that support. There is no mandatory cache, queue, vector service, or AI service.
 
 ## Local MCP
 
@@ -40,5 +40,7 @@ The HTTP contract connects the two languages. Neither side imports the other's i
 ## First milestone
 
 Prove project discovery, authentication, capture, durable SQLite storage, browser visibility, and retrieval from a new agent session. Include failures and retries. A passing isolated unit test is not proof of this complete path.
+
+See [optional AI](/scratchpad/guides/ai/) for database-backed jobs, source-linked suggestions, semantic search and private documents, and [PostgreSQL](/scratchpad/guides/postgresql/) for its operational setup.
 
 The [full architecture baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/architecture.md) includes accepted clarifications and later V1 capabilities.

@@ -56,3 +56,19 @@ They accept common `title`, `authority`, `confidence`, and `requestId` fields pl
 Read tools are `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, and `find_related`. Related records come from stored relationships, not AI inference. `resolve_project` supports owner-confirmed project resolution when discovery is insufficient.
 
 The binary exposes its exact typed schemas through MCP tool discovery. Consult the [MCP README](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md) for the wire contract and development checks.
+
+## Optional AI tools in the source MCP
+
+The current source binary adds these tools; the published v0.1.3 MCP predates them.
+
+| Tool                | Behavior                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `semantic_search`   | Query a compatible embedding index and return source records with similarity scores.        |
+| `get_suggestions`   | Retrieve source-linked summaries, patterns and reviewable suggestions.                      |
+| `process_memory`    | Queue `analyze` or `embed` work without changing project permissions or raw captures.       |
+| `get_ai_jobs`       | Inspect persisted processing status, retries and failures.                                  |
+| `generate_document` | Queue a private `handoff`, `architecture`, `decisions`, `client_history` or `adr` document. |
+
+Single-project calls use `projectId` or normal checkout/`workingDirectory` discovery. Cross-project calls explicitly set `crossProject: true`; optional `projectIds` restrict that scope to the requested projects. Only permitted projects participate. Poll job status, then inspect the generated artifacts and their sources. Suggestion review remains an owner-controlled dashboard/API action.
+
+Use [Optional AI](/scratchpad/guides/ai/) to configure the provider and participating projects. The MCP never needs a provider API key.

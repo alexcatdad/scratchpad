@@ -956,3 +956,29 @@ Accepted on 2026-09-29 (decision `scratchpad-20260929-015`).
 - Never automatically commit or push mirrored files.
 
 The central API remains authoritative. Exact append coordination and mirror-result reporting are implementation details to resolve when building mirroring.
+
+## 30. Remaining-product implementation
+
+The source implementation extends the SQLite MVP with optional PostgreSQL, database-backed AI processing and intentional private document generation. Published v0.1.3 packages retain their original SQLite-only feature set; source support, canonical CI, release publication and deployment acceptance are separate evidence.
+
+### Persistence
+
+A single asynchronous Store boundary uses Drizzle with SQLite or PostgreSQL. `SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default. Domain behavior, authentication, retries, auditing and optimistic edits stay in the central server. Database-native full-text facilities implement deterministic retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated application database and its own operational backup tooling. Native export/import provides knowledge portability, not transparent live migration or credential migration.
+
+### Optional processing
+
+OpenAI-compatible completion and embedding adapters operate independently of core capture/search/readiness. Provider configuration is owner-controlled in the dashboard; global enablement alone does not authorize processing a project. Each project opts into AI, and cross-project analysis additionally requires its separate permission. External/client projects default to both permissions disabled. Consent is rechecked before provider requests, before persistence and when retrieving derived results.
+
+Jobs and schedules are database entities, with runnable time, attempt counts, leases and bounded failure/retry handling. The scheduler/worker currently runs inside the server process and can recover abandoned leased jobs after restart. No Redis or dedicated vector service is required. Embeddings store finite vectors together with source identity, model, dimensions and configuration fingerprint; incompatible or stale indexes cannot participate in similarity search.
+
+### Derivation and review
+
+Schema-validated completions produce source-linked summaries, classifications, duplicate/relationship/contradiction candidates, topic clusters, patterns and cleanup recommendations. Source record content is untrusted input, not instructions for the worker. Artifact review records an audit event and can create curated interpretation or an explicitly reviewed relationship/classification; original captures and historical lifecycle evidence remain immutable.
+
+The dashboard exposes provider/model/schedule/analysis settings, project participation, job visibility, semantic search, suggestion review and five private Markdown document formats. The MCP exposes server-backed processing, semantic retrieval, job inspection and document requests without duplicating provider business logic. The owner intentionally downloads and shares derived documents; generation never publishes the private instance.
+
+### Operations and evidence
+
+Portable knowledge exports include source/audit/derived knowledge and owner presentation, excluding authentication state, provider secrets, jobs and embeddings. Full operational backups preserve the entire selected database: SQLite's administrator snapshot command or PostgreSQL's `pg_dump`/`pg_restore`. Follow the respective runbooks and verify a restore in a disposable environment.
+
+Mock-provider browser acceptance proves application wiring, consent boundaries, review, downloads and failure isolation. Real selected-provider acceptance separately proves model interoperability and source-linked output. Neither substitutes for the other or for exact-revision canonical CI/release verification. Track final evidence in the remaining-product ledger.

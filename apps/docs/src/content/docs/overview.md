@@ -35,7 +35,7 @@ See [MVP status and acceptance](/scratchpad/guides/mvp-acceptance/) for the comp
 - Container deployment and native MCP distribution.
 - English application and documentation.
 
-PostgreSQL, embeddings, clustering, and optional OpenAI-compatible processing come after the core loop. Scratchpad must remain useful without them.
+The current source checkout adds [PostgreSQL](/scratchpad/guides/postgresql/), [optional AI and embeddings](/scratchpad/guides/ai/), source-linked suggestions/patterns, and private Markdown documents. These additions are separate from published v0.1.3 acceptance; consult release notes before expecting them in an installed package. Scratchpad remains useful with SQLite and without AI.
 
 ## Source of truth
 

@@ -1,0 +1,3359 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Scratchpad HTTP API",
+    "version": "source-post-mvp",
+    "description": "Current source contract, including SQLite/PostgreSQL parity and optional AI. Published v0.1.3 artifacts predate the post-MVP interfaces. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. Setup/recovery tokens are local administrator capabilities, never ordinary API credentials. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and imported provenance fields remain preserved. Implemented routes are listed; illustrative earlier contract routes are not invented here."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local instance; configure HTTPS for remote deployments."
+    }
+  ],
+  "security": [
+    {
+      "browserSession": []
+    },
+    {
+      "mcpBearer": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "get_health",
+        "summary": "Process health",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["ok"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/ready": {
+      "get": {
+        "operationId": "get_ready",
+        "summary": "Database/schema readiness independent of AI",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["ready"]
+                    },
+                    "database": {
+                      "type": "string",
+                      "enum": ["sqlite", "postgres"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/status": {
+      "get": {
+        "operationId": "get_auth_status",
+        "summary": "Initialization and current authentication status",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "initialized": {
+                      "type": "boolean"
+                    },
+                    "authenticated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": []
+      }
+    },
+    "/api/v1/auth/mcp/challenge": {
+      "post": {
+        "operationId": "post_auth_mcp_challenge",
+        "summary": "Issue enrolled-key challenge",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "nonce": {
+                      "type": "string"
+                    },
+                    "namespace": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": ["publicKey"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mcp/verify": {
+      "post": {
+        "operationId": "post_auth_mcp_verify",
+        "summary": "Verify key proof and issue session",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accessToken": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string"
+                  },
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "signature": {
+                    "type": "string"
+                  }
+                },
+                "required": ["challengeId", "publicKey", "signature"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/credentials/challenge": {
+      "post": {
+        "operationId": "post_auth_credentials_challenge",
+        "summary": "Issue authenticated enrollment challenge",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "nonce": {
+                      "type": "string"
+                    },
+                    "namespace": {
+                      "type": "string"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "required": ["publicKey"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/credentials/verify": {
+      "post": {
+        "operationId": "post_auth_credentials_verify",
+        "summary": "Verify and enroll credential",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "credentialId": {
+                      "type": "string"
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string"
+                  },
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "signature": {
+                    "type": "string"
+                  }
+                },
+                "required": ["challengeId", "publicKey", "signature"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register/options": {
+      "post": {
+        "operationId": "post_auth_register_options",
+        "summary": "Passkey register options",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "description": "Registration requires an authenticated owner or a valid one-use administrator setup/recovery token; authentication options are public. Requests require matching browser origin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "setupToken": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register/verify": {
+      "post": {
+        "operationId": "post_auth_register_verify",
+        "summary": "Passkey register verification",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "description": "Sets the browser session cookie on success. Registration without setupToken requires existing authentication.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "setupToken": {
+                    "type": "string"
+                  }
+                },
+                "required": ["challengeId", "response"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/options": {
+      "post": {
+        "operationId": "post_auth_login_options",
+        "summary": "Passkey login options",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "challengeId": {
+                      "type": "string"
+                    },
+                    "options": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "description": "Registration requires an authenticated owner or a valid one-use administrator setup/recovery token; authentication options are public. Requests require matching browser origin.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login/verify": {
+      "post": {
+        "operationId": "post_auth_login_verify",
+        "summary": "Passkey login verification",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean"
+                    },
+                    "expiresAt": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [],
+        "description": "Sets the browser session cookie on success. Registration without setupToken requires existing authentication.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "challengeId": {
+                    "type": "string"
+                  },
+                  "response": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["challengeId", "response"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "post_auth_logout",
+        "summary": "Revoke current session and clear cookie",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "authenticated": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/credentials": {
+      "get": {
+        "operationId": "get_auth_credentials",
+        "summary": "List public credential metadata",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "credentials": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/credentials/{id}": {
+      "delete": {
+        "operationId": "delete_auth_credentials_id",
+        "summary": "Revoke credential and associated sessions",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "revoked": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "operationId": "get_profile",
+        "summary": "Owner presentation and selected database engine",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "displayName": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        }
+                      }
+                    },
+                    "database": {
+                      "type": "object",
+                      "properties": {
+                        "engine": {
+                          "type": "string",
+                          "enum": ["sqlite", "postgresql"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patch_profile",
+        "summary": "Update owner presentation",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["displayName", "expectedVersion"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects": {
+      "get": {
+        "operationId": "get_projects",
+        "summary": "List projects and source identities",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "projects": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Project"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/projects/resolve": {
+      "post": {
+        "operationId": "post_projects_resolve",
+        "summary": "Resolve normalized Git remote identity",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "$ref": "#/components/schemas/Project"
+                    },
+                    "resolution": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "context": {
+                    "type": "object",
+                    "properties": {
+                      "git": {
+                        "type": "object",
+                        "properties": {
+                          "remote": {
+                            "type": "string"
+                          },
+                          "branch": {
+                            "type": "string"
+                          },
+                          "commit": {
+                            "type": "string"
+                          }
+                        },
+                        "required": ["remote"]
+                      }
+                    },
+                    "required": ["git"]
+                  }
+                },
+                "required": ["context"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/resolve-explicit": {
+      "post": {
+        "operationId": "post_projects_resolve_explicit",
+        "summary": "Resolve owner-confirmed project or create non-Git project",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "$ref": "#/components/schemas/Project"
+                    },
+                    "resolution": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "description": "Supply projectId to select directly, or name to match/create. Ambiguous matching returns PROJECT_IDENTITY_AMBIGUOUS.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["normal", "external"]
+                  },
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "context": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}": {
+      "get": {
+        "operationId": "get_projects_id",
+        "summary": "Retrieve project",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patch_projects_id",
+        "summary": "Rename/reclassify project with conflict detection",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "project": {
+                      "$ref": "#/components/schemas/Project"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": ["normal", "external"]
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{id}/context": {
+      "get": {
+        "operationId": "get_projects_id_context",
+        "summary": "Source-linked deterministic resume/history context",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/projects/{id}/settings": {
+      "get": {
+        "operationId": "get_projects_id_settings",
+        "summary": "Read project policy",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "$ref": "#/components/schemas/ProjectSettings"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "patch_projects_id_settings",
+        "summary": "Update project policy",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "$ref": "#/components/schemas/ProjectSettings"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "settings": {
+                    "$ref": "#/components/schemas/ProjectSettings"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["settings"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/records": {
+      "post": {
+        "operationId": "post_records",
+        "summary": "Capture immutable memory",
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "record": {
+                      "$ref": "#/components/schemas/Record"
+                    },
+                    "mirror": {
+                      "type": "object",
+                      "properties": {
+                        "eligible": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "description": "Optional Idempotency-Key is scoped to the authenticated credential. Identical retries return the saved capture; changed content under the same key conflicts.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "record": {
+                    "$ref": "#/components/schemas/Capture"
+                  },
+                  "gitContext": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                },
+                "required": ["projectId", "record"]
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200
+            }
+          }
+        ]
+      },
+      "get": {
+        "operationId": "get_records",
+        "summary": "Deterministic filtered/full-text memory",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Record"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": ["string", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "projectIds",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Repeated query values allowed."
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "types",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Repeated query values allowed."
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "branch",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "authority",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "confidence",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "relatedTo",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "relationshipType",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "source",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "gitPath",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          }
+        ]
+      }
+    },
+    "/api/v1/records/{id}": {
+      "get": {
+        "operationId": "get_records_id",
+        "summary": "Original capture plus metadata/revisions/relationships/evidence/audit",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "record": {
+                      "$ref": "#/components/schemas/Record"
+                    },
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "revisions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "relationships": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "evidence": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "mirror": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "audit": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/records/{id}/metadata": {
+      "patch": {
+        "operationId": "patch_records_id_metadata",
+        "summary": "Audited metadata edit",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "revision": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MetadataChanges"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RevisionPrecondition"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/records/{id}/revisions": {
+      "post": {
+        "operationId": "post_records_id_revisions",
+        "summary": "Audited amendment preserving original capture",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "metadata": {
+                      "type": "object",
+                      "additionalProperties": true
+                    },
+                    "revision": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "changes": {
+                    "$ref": "#/components/schemas/MetadataChanges"
+                  },
+                  "reason": {
+                    "type": "string"
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["changes"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/records/{id}/evidence": {
+      "post": {
+        "operationId": "post_records_id_evidence",
+        "summary": "Append evidence reference",
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evidence": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "url",
+                      "git_commit",
+                      "pull_request",
+                      "issue",
+                      "file",
+                      "conversation",
+                      "test",
+                      "deployment",
+                      "other"
+                    ]
+                  },
+                  "reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "revision": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string"
+                  }
+                },
+                "required": ["kind", "reference"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/records/{id}/mirror": {
+      "post": {
+        "operationId": "post_records_id_mirror",
+        "summary": "Report local mirror outcome after central capture",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mirror": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "attempted": {
+                    "type": "boolean"
+                  },
+                  "succeeded": {
+                    "type": "boolean"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "error": {
+                    "type": "string"
+                  }
+                },
+                "required": ["attempted", "succeeded"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search": {
+      "post": {
+        "operationId": "post_search",
+        "summary": "Deterministic full-text search",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Record"
+                      }
+                    },
+                    "nextCursor": {
+                      "type": ["string", "null"]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "projectIds": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "types": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "cursor": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships": {
+      "post": {
+        "operationId": "post_relationships",
+        "summary": "Create source relationship",
+        "responses": {
+          "201": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationship": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fromRecordId": {
+                    "type": "string"
+                  },
+                  "toRecordId": {
+                    "type": "string"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "related_to",
+                      "supports",
+                      "contradicts",
+                      "refines",
+                      "replaces",
+                      "partially_replaces",
+                      "depends_on",
+                      "implements",
+                      "caused_by",
+                      "answers"
+                    ]
+                  },
+                  "authority": {
+                    "type": "string",
+                    "enum": ["explicit", "inferred", "suggested"]
+                  },
+                  "note": {
+                    "type": "string"
+                  }
+                },
+                "required": ["fromRecordId", "toRecordId", "type"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships/{id}/accept": {
+      "post": {
+        "operationId": "post_relationships_id_accept",
+        "summary": "Review relationship",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationship": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionPrecondition"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/relationships/{id}/reject": {
+      "post": {
+        "operationId": "post_relationships_id_reject",
+        "summary": "Review relationship",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "relationship": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionPrecondition"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/settings": {
+      "get": {
+        "operationId": "get_settings",
+        "summary": "Global normal-project defaults",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "aiEnabled": {
+                          "type": "boolean"
+                        },
+                        "defaultProjectSettings": {
+                          "$ref": "#/components/schemas/ProjectSettings"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patch_settings",
+        "summary": "Audited global defaults; stale writes conflict",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "settings": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "settings": {
+                    "type": "object",
+                    "properties": {
+                      "aiEnabled": {
+                        "type": "boolean"
+                      },
+                      "defaultProjectSettings": {
+                        "$ref": "#/components/schemas/ProjectSettings"
+                      }
+                    }
+                  },
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["settings"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/settings": {
+      "get": {
+        "operationId": "get_ai_settings",
+        "summary": "Read optional provider settings; never plaintext key",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "patch_ai_settings",
+        "summary": "Configure optional provider",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiSettings"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiSettingsPatch"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/test": {
+      "post": {
+        "operationId": "post_ai_test",
+        "summary": "Synthetic completion and embedding connectivity test",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "embeddingModel": {
+                      "type": "string"
+                    },
+                    "dimensions": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/jobs": {
+      "get": {
+        "operationId": "get_ai_jobs",
+        "summary": "Inspect persisted jobs",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "jobs": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Job"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "post": {
+        "operationId": "post_ai_jobs",
+        "summary": "Queue consent-filtered processing",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobRequest"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/ai/jobs/{id}/retry": {
+      "post": {
+        "operationId": "post_ai_jobs_id_retry",
+        "summary": "Audited retry of failed job",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionPrecondition"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/suggestions": {
+      "get": {
+        "operationId": "get_suggestions",
+        "summary": "Retrieve currently permitted derived artifacts",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Artifact"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "projectIds",
+            "in": "query",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "Repeated query values allowed."
+          },
+          {
+            "name": "crossProject",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Optional filter."
+          }
+        ]
+      }
+    },
+    "/api/v1/suggestions/{id}/accept": {
+      "post": {
+        "operationId": "post_suggestions_id_accept",
+        "summary": "Review derived artifact without altering raw history",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggestion": {
+                      "$ref": "#/components/schemas/Artifact"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionPrecondition"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/suggestions/{id}/reject": {
+      "post": {
+        "operationId": "post_suggestions_id_reject",
+        "summary": "Review derived artifact without altering raw history",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "suggestion": {
+                      "$ref": "#/components/schemas/Artifact"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RevisionPrecondition"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/search/semantic": {
+      "post": {
+        "operationId": "post_search_semantic",
+        "summary": "Optional indexed semantic similarity",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "record": {
+                            "$ref": "#/components/schemas/Record"
+                          },
+                          "score": {
+                            "type": "number"
+                          }
+                        }
+                      }
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "indexRequired": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SemanticQuery"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/summaries/export": {
+      "post": {
+        "operationId": "post_summaries_export",
+        "summary": "Queue private source-cited Markdown document",
+        "responses": {
+          "202": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "job": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "projectId": {
+                    "type": "string"
+                  },
+                  "format": {
+                    "type": "string",
+                    "enum": [
+                      "handoff",
+                      "architecture",
+                      "decisions",
+                      "client_history",
+                      "adr"
+                    ]
+                  }
+                },
+                "required": ["projectId", "format"]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/export": {
+      "post": {
+        "operationId": "post_export",
+        "summary": "Portable knowledge archive; excludes authentication/provider secrets/jobs/vectors",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeArchive"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/import": {
+      "post": {
+        "operationId": "post_import",
+        "summary": "Transactional native archive or legacy JSONL import",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "imported": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "skipped": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "warnings": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "records": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/NativeArchive"
+                  },
+                  {
+                    "$ref": "#/components/schemas/LegacyImport"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "browserSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "scratchpad_session"
+      },
+      "mcpBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Opaque session token; not necessarily a JWT."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              },
+              "details": {}
+            },
+            "required": ["code", "message"]
+          }
+        },
+        "required": ["error"]
+      },
+      "Entity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": ["id", "version", "createdAt"]
+      },
+      "ProjectSettings": {
+        "type": "object",
+        "properties": {
+          "enabledRecordTypes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "decision",
+                "adr",
+                "business_decision",
+                "finding",
+                "qa",
+                "failure",
+                "constraint",
+                "project_state"
+              ]
+            }
+          },
+          "repoMirroring": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "recordTypes": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "decision",
+                    "adr",
+                    "business_decision",
+                    "finding",
+                    "qa",
+                    "failure",
+                    "constraint",
+                    "project_state"
+                  ]
+                }
+              }
+            },
+            "required": ["enabled", "recordTypes"]
+          },
+          "crossProjectAnalysis": {
+            "type": "boolean"
+          },
+          "aiProcessing": {
+            "type": "boolean"
+          }
+        },
+        "required": ["repoMirroring", "crossProjectAnalysis", "aiProcessing"]
+      },
+      "Project": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["normal", "external"]
+              },
+              "settings": {
+                "$ref": "#/components/schemas/ProjectSettings"
+              },
+              "sources": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Capture": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "decision",
+              "adr",
+              "business_decision",
+              "finding",
+              "qa",
+              "failure",
+              "constraint",
+              "project_state"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "authority": {
+            "type": "string",
+            "enum": ["explicit", "observed", "inferred", "derived", "suggested"]
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low", "unknown"]
+          },
+          "confidenceReason": {
+            "type": "string"
+          },
+          "happenedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "actor": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["type", "title", "authority", "payload"]
+      },
+      "Record": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "projectId": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "decision",
+                  "adr",
+                  "business_decision",
+                  "finding",
+                  "qa",
+                  "failure",
+                  "constraint",
+                  "project_state"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              },
+              "payload": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "authority": {
+                "type": ["string", "null"]
+              },
+              "provenance": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "gitContext": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "recordedAt": {
+                "type": "string"
+              },
+              "happenedAt": {
+                "type": "string"
+              },
+              "actor": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        ]
+      },
+      "RevisionPrecondition": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MetadataChanges": {
+        "type": "object",
+        "properties": {
+          "displayTitle": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          "archived": {
+            "type": "boolean"
+          },
+          "curatedSummary": {
+            "type": "string",
+            "maxLength": 100000
+          }
+        }
+      },
+      "Scope": {
+        "type": "object",
+        "properties": {
+          "projectId": {
+            "type": "string"
+          },
+          "projectIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "crossProject": {
+            "type": "boolean",
+            "default": false
+          }
+        }
+      },
+      "AiSettings": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "default": false
+          },
+          "baseUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "model": {
+            "type": "string"
+          },
+          "embeddingModel": {
+            "type": "string"
+          },
+          "embeddingDimensions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16384
+          },
+          "scheduleMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 43200
+          },
+          "requestTimeoutSeconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 600,
+            "default": 180
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "enum": ["default", "none", "low", "medium", "high", "xhigh"]
+          },
+          "similarityThreshold": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "analysisModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "classification",
+                "duplicate_candidate",
+                "relationship_candidate",
+                "contradiction",
+                "cluster",
+                "pattern",
+                "recommendation",
+                "export"
+              ]
+            }
+          },
+          "apiKeyConfigured": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 32768,
+            "default": 4096
+          }
+        }
+      },
+      "AiSettingsPatch": {
+        "type": "object",
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "baseUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "model": {
+            "type": "string"
+          },
+          "embeddingModel": {
+            "type": "string"
+          },
+          "embeddingDimensions": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16384
+          },
+          "scheduleMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 43200
+          },
+          "requestTimeoutSeconds": {
+            "type": "integer",
+            "minimum": 5,
+            "maximum": 600
+          },
+          "reasoningEffort": {
+            "type": "string",
+            "enum": ["default", "none", "low", "medium", "high", "xhigh"]
+          },
+          "similarityThreshold": {
+            "type": "number",
+            "minimum": -1,
+            "maximum": 1
+          },
+          "analysisModes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "summary",
+                "classification",
+                "duplicate_candidate",
+                "relationship_candidate",
+                "contradiction",
+                "cluster",
+                "pattern",
+                "recommendation",
+                "export"
+              ]
+            }
+          },
+          "apiKey": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Omit to preserve the stored key; empty string removes it."
+          },
+          "maxOutputTokens": {
+            "type": "integer",
+            "minimum": 256,
+            "maximum": 32768,
+            "default": 4096
+          }
+        }
+      },
+      "JobRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Scope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["analyze", "embed", "export"]
+              },
+              "format": {
+                "type": "string",
+                "enum": [
+                  "handoff",
+                  "architecture",
+                  "decisions",
+                  "client_history",
+                  "adr"
+                ]
+              }
+            },
+            "required": ["type"]
+          }
+        ]
+      },
+      "Job": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["analyze", "embed", "export"]
+              },
+              "status": {
+                "type": "string",
+                "enum": ["queued", "running", "completed", "failed"]
+              },
+              "scope": {
+                "$ref": "#/components/schemas/Scope"
+              },
+              "format": {
+                "type": "string",
+                "enum": [
+                  "handoff",
+                  "architecture",
+                  "decisions",
+                  "client_history",
+                  "adr"
+                ]
+              },
+              "attempts": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "runAfter": {
+                "type": "string"
+              },
+              "leaseUntil": {
+                "type": ["string", "null"]
+              },
+              "lastError": {
+                "type": ["string", "null"]
+              },
+              "artifactIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "Artifact": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Entity"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "summary",
+                  "classification",
+                  "duplicate_candidate",
+                  "relationship_candidate",
+                  "contradiction",
+                  "cluster",
+                  "pattern",
+                  "recommendation",
+                  "export"
+                ]
+              },
+              "title": {
+                "type": "string"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["pending", "accepted", "rejected"]
+              },
+              "content": {
+                "type": "object",
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  },
+                  "markdown": {
+                    "type": "string"
+                  },
+                  "fromRecordId": {
+                    "type": "string"
+                  },
+                  "toRecordId": {
+                    "type": "string"
+                  },
+                  "relationshipType": {
+                    "type": "string"
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "classification": {
+                    "type": "string"
+                  }
+                }
+              },
+              "sourceRecordIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "projectIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "crossProject": {
+                "type": "boolean"
+              },
+              "authority": {
+                "type": "string",
+                "enum": ["derived"]
+              },
+              "generator": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "generatedAt": {
+                "type": "string"
+              },
+              "format": {
+                "type": "string",
+                "enum": [
+                  "handoff",
+                  "architecture",
+                  "decisions",
+                  "client_history",
+                  "adr"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "SemanticQuery": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Scope"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4000
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100,
+                "default": 20
+              }
+            },
+            "required": ["query"]
+          }
+        ]
+      },
+      "NativeArchive": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": ["scratchpad"]
+          },
+          "version": {
+            "type": "integer",
+            "const": 1
+          },
+          "exportedAt": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["format", "version", "data"]
+      },
+      "LegacyImport": {
+        "type": "object",
+        "properties": {
+          "format": {
+            "type": "string",
+            "enum": ["jsonl"]
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "jsonl": {
+            "type": "string",
+            "description": "JSONL text capped at 32 MiB."
+          },
+          "source": {
+            "type": "object",
+            "properties": {
+              "filename": {
+                "type": "string"
+              }
+            }
+          },
+          "sourceName": {
+            "type": "string"
+          }
+        },
+        "required": ["format", "projectId", "jsonl"]
+      }
+    },
+    "responses": {
+      "Error": {
+        "description": "Stable JSON error envelope. Common codes: AUTH_REQUIRED, AUTH_INVALID, AUTH_CHALLENGE_EXPIRED, AUTH_CHALLENGE_USED, VALIDATION_FAILED, CONFLICT, PROJECT_NOT_FOUND, PROJECT_IDENTITY_REQUIRED, PROJECT_IDENTITY_AMBIGUOUS, AI_DISABLED, AI_NOT_ALLOWED, AI_UNAVAILABLE, AI_SCOPE_TOO_LARGE, DATABASE_NOT_READY. Additional codes may be introduced.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
