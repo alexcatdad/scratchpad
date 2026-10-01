@@ -382,6 +382,72 @@ describe("current context and live policy", () => {
     const before = await api.call("/records", "POST", body, {
       "Idempotency-Key": "backup-retry",
     });
+    const project = await api.store.get("project", "project");
+    if (!project) throw new Error("Backup fixture project missing");
+    await api.store.update("project", {
+      ...project,
+      settings: { ...defaults("normal"), aiProcessing: true },
+    });
+    await api.store.insert("ai_settings", {
+      id: "global",
+      enabled: true,
+      apiKey: "synthetic-backup-provider-secret",
+      baseUrl: "http://127.0.0.1:1/v1",
+      model: "synthetic-model",
+      embeddingModel: "synthetic-embedding",
+      embeddingDimensions: 3,
+      scheduleMinutes: 0,
+    });
+    await api.store.insert("ai_job", {
+      id: "queued-fixture",
+      type: "embed",
+      status: "queued",
+      scope: { projectIds: ["project"], crossProject: false },
+      attempts: 0,
+      runAfter: new Date().toISOString(),
+    });
+    await api.store.insert("ai_job", {
+      id: "leased-fixture",
+      type: "analyze",
+      status: "running",
+      scope: { projectIds: ["project"], crossProject: false },
+      attempts: 1,
+      leaseToken: "synthetic-lease",
+      leaseUntil: new Date(Date.now() + 60000).toISOString(),
+    });
+    await api.store.insert("ai_artifact", {
+      id: "artifact-fixture",
+      kind: "summary",
+      title: "Synthetic backup summary",
+      content: { text: "Synthetic derived memory" },
+      sourceRecordIds: [before.data.record.id],
+      projectIds: ["project"],
+      authority: "derived",
+      status: "pending",
+      private: true,
+      generator: { provider: "synthetic", model: "fixture", version: "1" },
+    });
+    await api.store.insert("ai_embedding", {
+      id: "embedding-fixture",
+      recordId: before.data.record.id,
+      vector: [1, 0.5, 0.25],
+      fingerprint: "synthetic-provider-fingerprint",
+      contentHash: "synthetic-content-hash",
+      dimensions: 3,
+    });
+    const operationalKinds = [
+      "ai_settings",
+      "ai_job",
+      "ai_artifact",
+      "ai_embedding",
+    ];
+    const operationalBefore = new Map(
+      await Promise.all(
+        operationalKinds.map(
+          async (kind) => [kind, await api.store.list(kind)] as const,
+        ),
+      ),
+    );
     const backup = join(directory, "backup.sqlite");
     await api.store.backup(backup);
     expect(statSync(backup).mode & 0o777).toBe(0o600);
@@ -404,6 +470,39 @@ describe("current context and live policy", () => {
     expect(response.status).toBe(201);
     expect((await response.json()).record.id).toBe(before.data.record.id);
     expect(await restored.store.list("record")).toHaveLength(1);
+    for (const kind of operationalKinds)
+      expect(await restored.store.list(kind)).toEqual(
+        operationalBefore.get(kind),
+      );
+    const readRestored = async (path: string) => {
+      const result = await restored.handleRequest(
+        new Request(`http://localhost:3000/api/v1${path}`, {
+          headers: { authorization: "Bearer token" },
+        }),
+      );
+      expect(result.status).toBe(200);
+      return result.json();
+    };
+    const configuration = await readRestored("/ai/settings");
+    expect(configuration.apiKeyConfigured).toBe(true);
+    expect(JSON.stringify(configuration)).not.toContain(
+      "synthetic-backup-provider-secret",
+    );
+    const jobs = await readRestored("/ai/jobs");
+    expect(jobs.jobs).toHaveLength(2);
+    expect(
+      jobs.jobs.some((job: { status: string }) => job.status === "queued"),
+    ).toBe(true);
+    expect(
+      jobs.jobs.some(
+        (job: { status: string; leaseToken?: string }) =>
+          job.status === "running" && job.leaseToken === "synthetic-lease",
+      ),
+    ).toBe(true);
+    expect(
+      (await readRestored("/suggestions?projectId=project")).suggestions[0]
+        .sourceRecordIds,
+    ).toEqual([before.data.record.id]);
   });
 });
 

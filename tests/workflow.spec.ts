@@ -1,6 +1,7 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -43,6 +44,8 @@ async function start() {
       activeContainer,
       "--publish",
       "127.0.0.1:3100:3000",
+      "--add-host",
+      "host.docker.internal:host-gateway",
       "--env",
       `SCRATCHPAD_PUBLIC_URL=${origin}`,
       "--env",
@@ -198,7 +201,7 @@ test.afterAll(async () => {
 test("owner enrollment, memory, MCP and restart preserve the real workflow", async ({
   page,
 }) => {
-  test.setTimeout(dockerMode ? 180_000 : 120_000);
+  test.setTimeout(240_000);
   if (postgresMode)
     await expect(
       (await fetch(`${origin}/ready`)).json(),
@@ -636,4 +639,169 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   await expect(
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
+  // A synthetic provider exercises authenticated production MCP routing; real Qwen quality is tested separately.
+  const provider = createServer(async (req, res) => {
+    const chunks: Buffer[] = [];
+    for await (const chunk of req) chunks.push(Buffer.from(chunk));
+    const body = JSON.parse(Buffer.concat(chunks).toString());
+    res.setHeader("Content-Type", "application/json");
+    if (req.url?.endsWith("/embeddings")) {
+      res.end(
+        JSON.stringify({
+          data: (body.input as string[]).map((_, index) => ({
+            index,
+            embedding: [1, 0.5, 0.25],
+          })),
+        }),
+      );
+      return;
+    }
+    const input = JSON.parse(body.messages.at(-1).content);
+    const isExport = String(body.messages[0].content).startsWith("Create a ");
+    const output = {
+      artifacts: [
+        {
+          kind: isExport ? "export" : "summary",
+          title: "Synthetic MCP derived output",
+          content: {
+            text: "Synthetic cited output",
+            ...(isExport
+              ? { markdown: "# Synthetic handoff\n\nPrivate fixture document." }
+              : {}),
+          },
+          sourceRecordIds: input.records.map(
+            (record: { id: string }) => record.id,
+          ),
+        },
+      ],
+    };
+    res.end(
+      JSON.stringify({
+        choices: [{ message: { content: JSON.stringify(output) } }],
+      }),
+    );
+  });
+  await new Promise<void>((done) => provider.listen(0, "0.0.0.0", done));
+  try {
+    const address = provider.address();
+    if (!address || typeof address === "string")
+      throw new Error("Fixture provider did not listen");
+    const providerUrl = `http://${dockerMode ? "host.docker.internal" : "127.0.0.1"}:${address.port}/v1`;
+    const state = JSON.parse(
+      readFileSync(resolve(temporary, "state.json"), "utf8"),
+    );
+    const localProjectId = state.captures[0].projectId as string;
+    const otherProjectId = await page.evaluate(
+      async ({ baseUrl, localId }) => {
+        const api = async (path: string, method = "GET", body?: unknown) => {
+          const response = await fetch(`/api/v1${path}`, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: body === undefined ? undefined : JSON.stringify(body),
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(JSON.stringify(data));
+          return data;
+        };
+        await api("/ai/settings", "PATCH", {
+          enabled: true,
+          baseUrl,
+          model: "synthetic-chat",
+          embeddingModel: "synthetic-embedding",
+          embeddingDimensions: 3,
+          scheduleMinutes: 0,
+          expectedVersion: 0,
+        });
+        const { project: local } = await api(`/projects/${localId}`);
+        await api(`/projects/${localId}/settings`, "PATCH", {
+          settings: {
+            ...local.settings,
+            aiProcessing: true,
+            crossProjectAnalysis: true,
+          },
+          expectedVersion: local.version,
+        });
+        const { project: other } = await api(
+          "/projects/resolve-explicit",
+          "POST",
+          { name: "Synthetic permitted MCP project" },
+        );
+        await api(`/projects/${other.id}/settings`, "PATCH", {
+          settings: {
+            ...other.settings,
+            aiProcessing: true,
+            crossProjectAnalysis: true,
+          },
+          expectedVersion: other.version,
+        });
+        await api("/records", "POST", {
+          projectId: other.id,
+          record: {
+            type: "finding",
+            title: "Private durable memory fixture",
+            authority: "observed",
+            confidence: "high",
+            payload: {
+              finding:
+                "Synthetic cross-project source for MCP consent validation",
+            },
+          },
+        });
+        return other.id as string;
+      },
+      { baseUrl: providerUrl, localId: localProjectId },
+    );
+    await new Promise<void>((done, reject) => {
+      const child = spawn(
+        "go",
+        [
+          "run",
+          "./ai-integration",
+          "-url",
+          origin,
+          "-public-key",
+          `${key}.pub`,
+          "-signing-key",
+          key,
+          "-workspace",
+          projectDirectory,
+          "-binary",
+          binary,
+          "-other-project",
+          otherProjectId,
+          "-denied-project",
+          restrictedProject,
+        ],
+        {
+          cwd: resolve(root, "mcp"),
+          env: environment,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      let output = "";
+      child.stdout.on("data", (data) => {
+        output += data;
+      });
+      child.stderr.on("data", (data) => {
+        output += data;
+      });
+      const timeout = setTimeout(() => {
+        child.kill("SIGKILL");
+        reject(new Error(`AI MCP integration timed out: ${output}`));
+      }, 120000);
+      child.on("error", (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.on("exit", (code) => {
+        clearTimeout(timeout);
+        if (code === 0) done();
+        else reject(new Error(`AI MCP integration exited ${code}: ${output}`));
+      });
+    });
+  } finally {
+    await new Promise<void>((done, reject) =>
+      provider.close((error) => (error ? reject(error) : done())),
+    );
+  }
 });

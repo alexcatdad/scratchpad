@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
@@ -286,6 +287,138 @@ describe.skipIf(!connection)("PostgreSQL persistence", () => {
       code: "DATABASE_NOT_READY",
     });
   });
+  it.skipIf(!process.env.TEST_POSTGRES_CONTAINER)(
+    "restores pg_dump including credentials, retries, AI jobs and provider configuration",
+    async () => {
+      const sourceUrl = await database();
+      const source = await fixture(sourceUrl);
+      const project = (
+        await source.call("/projects/resolve-explicit", "POST", {
+          name: "Backup fixture",
+        })
+      ).data.project;
+      const body = {
+        projectId: project.id,
+        record: {
+          type: "finding",
+          title: "Restorable source",
+          authority: "observed",
+          confidence: "high",
+          payload: { finding: "Synthetic PostgreSQL full backup" },
+        },
+      };
+      const record = (
+        await source.call("/records", "POST", body, {
+          "Idempotency-Key": "full-backup-retry",
+        })
+      ).data.record;
+      await source.api.store.insert("challenge", {
+        id: "backup-challenge",
+        kind: "ssh",
+        nonce: "synthetic-nonce",
+        expiresAt: new Date(Date.now() + 60000).toISOString(),
+      });
+      await source.api.store.insert("ai_settings", {
+        id: "global",
+        enabled: false,
+        apiKey: "synthetic-provider-secret",
+        model: "synthetic-model",
+      });
+      await source.api.store.insert("ai_job", {
+        id: "queued-backup-job",
+        type: "analyze",
+        status: "queued",
+        scope: { projectIds: [project.id] },
+        attempts: 0,
+      });
+      const kinds = [
+        ...exportKinds,
+        "owner",
+        "credential",
+        "session",
+        "challenge",
+        "ai_settings",
+        "ai_job",
+      ];
+      const original = new Map(
+        await Promise.all(
+          kinds.map(
+            async (kind) => [kind, await source.api.store.list(kind)] as const,
+          ),
+        ),
+      );
+      // Stop connections before backup for a deterministic snapshot fixture. pg_dump itself provides a consistent snapshot.
+      await source.api.close();
+      const targetUrl = await database();
+      const container = process.env.TEST_POSTGRES_CONTAINER ?? "";
+      const path = `/tmp/scratchpad-backup-${randomUUID()}.dump`;
+      const parsed = new URL(sourceUrl);
+      const target = new URL(targetUrl);
+      const username = decodeURIComponent(parsed.username);
+      try {
+        execFileSync(
+          "docker",
+          [
+            "exec",
+            container,
+            "pg_dump",
+            "-U",
+            username,
+            "-d",
+            parsed.pathname.slice(1),
+            "--format=custom",
+            "--file",
+            path,
+          ],
+          { stdio: "pipe", timeout: 60000 },
+        );
+        execFileSync(
+          "docker",
+          [
+            "exec",
+            container,
+            "pg_restore",
+            "-U",
+            username,
+            "-d",
+            target.pathname.slice(1),
+            "--exit-on-error",
+            path,
+          ],
+          { stdio: "pipe", timeout: 60000 },
+        );
+        const restored = await fixture(targetUrl);
+        for (const kind of kinds)
+          expect(await restored.api.store.list(kind)).toEqual(
+            original.get(kind),
+          );
+        expect(
+          (await restored.call("/records?q=Restorable")).data.records[0].id,
+        ).toBe(record.id);
+        expect(
+          (
+            await restored.call("/records", "POST", body, {
+              "Idempotency-Key": "full-backup-retry",
+            })
+          ).data.record.id,
+        ).toBe(record.id);
+        expect((await restored.call("/ai/jobs")).data.jobs[0].status).toBe(
+          "queued",
+        );
+        expect(
+          (await restored.call("/ai/settings")).data.apiKeyConfigured,
+        ).toBe(true);
+        expect(
+          JSON.stringify((await restored.call("/ai/settings")).data),
+        ).not.toContain("synthetic-provider-secret");
+      } finally {
+        execFileSync("docker", ["exec", container, "rm", "-f", path], {
+          stdio: "pipe",
+          timeout: 10000,
+        });
+      }
+    },
+  );
   it("refuses unrelated databases without modifying their tables", async () => {
     const url = await database();
     const sql = postgres(url);
