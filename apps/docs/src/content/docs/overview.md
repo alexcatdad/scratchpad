@@ -1,6 +1,6 @@
 ---
 title: Project overview
-description: What Scratchpad is for, who it serves, and the boundary of its first release.
+description: What Scratchpad is for, who it serves, and its optional AI and PostgreSQL capabilities.
 ---
 
 Scratchpad is private developer memory for one owner working across projects, machines, and coding agents. It keeps decisions, findings, questions and answers, failures, constraints, and project history together with their provenance.
@@ -19,7 +19,7 @@ Historical records are evidence, not automatically current policy. A past decisi
 
 ## Development status
 
-The first implementation now includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring. Install [v0.1.3](/scratchpad/guides/installation/) through Homebrew and the published container, or build from source. Signed/notarized macOS packages, Linux packages, both container architectures, and disposable installation/workflow acceptance are verified. See [release validation](/scratchpad/guides/releases/) for evidence and scope. MVP acceptance uses clearly labeled synthetic scenarios against the actual application. Other projects provide optional examples and import datasets; their specific history is not an acceptance prerequisite.
+v0.2.0 includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring, plus optional AI processing and PostgreSQL. Follow [installation](/scratchpad/guides/installation/) for Homebrew and container setup or build from source. See [release verification](/scratchpad/guides/releases/) for publication and installation evidence. Historical MVP acceptance in v0.1.3 used clearly labeled synthetic scenarios against the actual application. Other projects provide optional examples and import datasets; their specific history is not an acceptance prerequisite.
 
 The first internal milestone was authenticated capture and retrieval backed by SQLite and visible in the browser. The current release also supports the project boundaries, history, import/export and operational recovery needed for regular use.
 
@@ -35,7 +35,7 @@ See [MVP status and acceptance](/scratchpad/guides/mvp-acceptance/) for the comp
 - Container deployment and native MCP distribution.
 - English application and documentation.
 
-The current source checkout adds [PostgreSQL](/scratchpad/guides/postgresql/), [optional AI and embeddings](/scratchpad/guides/ai/), source-linked suggestions/patterns, and private Markdown documents. These additions are separate from published v0.1.3 acceptance; consult release notes before expecting them in an installed package. Scratchpad remains useful with SQLite and without AI.
+v0.2.0 adds [PostgreSQL](/scratchpad/guides/postgresql/), [optional AI and embeddings](/scratchpad/guides/ai/), source-linked suggestions/patterns, and private Markdown documents. Their verification is separate from the historical v0.1.3 MVP acceptance. Scratchpad remains useful with SQLite and without AI.
 
 ## Source of truth
 

@@ -1,11 +1,13 @@
 ---
 title: Releases & installation channels
-description: Install Scratchpad v0.1.3 and understand how its release artifacts are verified.
+description: Install Scratchpad v0.2.0 and understand how its release artifacts are verified.
 ---
 
-## v0.1.3
+## v0.2.0
 
-[v0.1.3 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) provides native MCP archives, release checksums, and the versioned application image `ghcr.io/alexcatdad/scratchpad:v0.1.3`. This patch corrects exact timestamp ordering and SQLite readiness; it is not a claim that every deployment environment has been tested.
+[v0.2.0 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0) adds optional PostgreSQL, persisted AI analysis and embedding jobs, source-linked suggestions and patterns, semantic search, private Markdown documents, and dashboard/MCP controls. Its versioned application image is `ghcr.io/alexcatdad/scratchpad:v0.2.0`. Capture and deterministic retrieval remain available without AI.
+
+[Publication run 36929564159](https://github.com/alexcatdad/scratchpad/actions/runs/36929564159) and [fresh-runner acceptance 36930356827](https://github.com/alexcatdad/scratchpad/actions/runs/36930356827) passed. macOS and Linux Homebrew installation, installed MCP authentication, the optional AI workflow, both image architectures and published-image backup/restore were verified. The [remaining-product ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) records provider, deployment and release evidence separately.
 
 | Component   | Published format                                                              |
 | ----------- | ----------------------------------------------------------------------------- |
@@ -23,7 +25,7 @@ scratchpad-mcp --version
 
 Homebrew follows the version currently delivered to the tap. For an exact release, use that release's named archive and verify it against its `checksums.txt`. See [installation](/scratchpad/guides/installation/) for server setup and key enrollment.
 
-No npm package or native Windows installer is part of this release. v0.1.3 excludes AI processing, embeddings, pattern analysis and PostgreSQL. The current source adds these optional capabilities, with separate acceptance and release preparation; capturing and retrieving memory does not require them.
+No npm package or native Windows installer is part of this release. Optional AI processing, embeddings, pattern analysis and PostgreSQL are included in v0.2.0; capturing and retrieving memory does not require them.
 
 ## Local signing, independent verification
 
@@ -41,4 +43,4 @@ The [MVP acceptance guide](/scratchpad/guides/mvp-acceptance/) contains the comp
 
 Use the versioned image tag to make upgrades deliberate. Keep a full SQLite backup before upgrading, and retain the matching older application image for rollback. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) and [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) for operations and maintainer procedures.
 
-The [v0.1.3 fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36859768053) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The expanded workflow also verifies contractor repositories, linked worktrees and explicit non-Git identity through the actual API. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records the completed scope and synthetic acceptance scenarios. Other projects are illustrative examples, not sources of truth for Scratchpad’s requirements. Verify browser sign-in and a real MCP session in your own deployment.
+The historical [v0.1.3 fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36859768053) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The expanded workflow also verifies contractor repositories, linked worktrees and explicit non-Git identity through the actual API. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records the completed scope and synthetic acceptance scenarios. Other projects are illustrative examples, not sources of truth for Scratchpad’s requirements. Verify browser sign-in and a real MCP session in your own deployment.

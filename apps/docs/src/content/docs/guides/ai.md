@@ -3,7 +3,7 @@ title: Optional AI & semantic memory
 description: Configure a compatible provider, process permitted projects, review derived evidence and prepare private documents.
 ---
 
-The source checkout now includes optional AI and semantic memory. The published **v0.1.3** release predates these features; build the current source or install a later release that explicitly includes them. Capture, exact search and project history continue to work without a model.
+**v0.2.0** includes optional AI and semantic memory. See [release verification](/scratchpad/guides/releases/) for its publication and installation evidence. Capture, exact search and project history continue to work without a model.
 
 ## Connect a provider
 
@@ -49,7 +49,7 @@ Source links use the dashboard's `/?recordId=...` location. They require access 
 
 ## Agent access
 
-The source MCP adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. See [MCP setup](/scratchpad/guides/mcp/) for project scope and signing configuration. Provider configuration remains server-owned; agents do not need provider keys.
+The v0.2.0 MCP adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. See [MCP setup](/scratchpad/guides/mcp/) for project scope and signing configuration. Provider configuration remains server-owned; agents do not need provider keys.
 
 See the [API contract](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) and [development acceptance runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/post-mvp-development.md) for exact interfaces and verification boundaries.
 

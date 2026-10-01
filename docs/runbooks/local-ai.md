@@ -1,6 +1,6 @@
 # Local AI provider verification
 
-The installed Scratchpad v0.1.3 predates AI processing. The development application now implements AI and embeddings; distinguish provider smoke checks below from authenticated application acceptance.
+Scratchpad v0.2.0 implements optional AI and embeddings. The earlier v0.1.3 installation predates these capabilities; distinguish provider smoke checks below from authenticated application acceptance.
 
 ## Selected models
 
@@ -105,4 +105,10 @@ After another owner reload, a request from the running application container ret
 
 The final absolute-citation fixture passed against image `sha256:06a3fb6f71a5fa6cb81049b87fcac0f22471d629858eec9837977497135a40b4` in 6.9 minutes. It downloaded a 2,370-character private handoff with the deterministic draft label, extracted and followed an actual absolute source URL, validated five vectors and five semantic matches, and preserved all original source hashes. Real analysis was already verified separately.
 
-The owner dashboard was upgraded to that development image with its existing Compose project and volume. `/ready` succeeds, and all 27 stored rows exactly match the pre-upgrade online backup. Browser session verification remains pending while the Mac is locked. This image is not a published v0.2.0 release.
+The owner dashboard was upgraded to that development image with its existing Compose project and volume. `/ready` succeeds, and all 27 stored rows exactly match the pre-upgrade online backup. On 2 October, the unlocked owner browser retained its existing authenticated session and displayed all four records, Insights and provider settings. Optional AI remained disabled, with no opted-in projects or queued jobs. This development-image check is separate from published-image acceptance.
+
+## Published local installation — 2 October 2026
+
+The owner dashboard now runs `ghcr.io/alexcatdad/scratchpad:v0.2.0`, ARM64 image `sha256:49706308858744f23ef4f0a99b8d8b3994d5aba35f453869a849b0c353a0eebf`, with OCI source revision `1e860e4f2f02978deda95f26051642f961fd86eb`. Readiness passes; all 27 entity rows exactly match the fresh online snapshot, and the existing browser session still displays all four records. The original Compose project, volume and public origin were preserved. Installed Homebrew MCP reports 0.2.0 and passes its formula test and the Apple notarization requirement.
+
+AI remains optional and disabled until the owner enables it. The real-model fixture above establishes selected-provider interoperability without processing the owner's captures automatically.

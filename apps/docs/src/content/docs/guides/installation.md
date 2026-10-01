@@ -10,7 +10,7 @@ brew install alexcatdad/tap/scratchpad-mcp
 scratchpad-mcp --version
 ```
 
-Homebrew supports macOS and Linux, including WSL through Linux Homebrew. Exact-version archives and checksums are available from [the v0.1.3 release](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3). macOS release binaries are signed and notarized using the owner's local Keychain; they are independently verified before publication.
+Homebrew supports macOS and Linux, including WSL through Linux Homebrew. Exact-version archives and checksums are available from [the v0.2.0 release](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0). macOS release binaries are signed and notarized using the owner's local Keychain; they are independently verified before publication.
 
 After setting up the server below, follow [MCP setup](/scratchpad/guides/mcp/) to enroll your public key and point your coding client at the installed `scratchpad-mcp` binary. Homebrew installation alone does not connect it to an instance.
 
@@ -21,7 +21,7 @@ Create a `compose.yaml` in a deployment directory:
 ```yaml
 services:
   scratchpad:
-    image: ghcr.io/alexcatdad/scratchpad:v0.1.3
+    image: ghcr.io/alexcatdad/scratchpad:v0.2.0
     ports:
       - "127.0.0.1:3000:3000"
     environment:

@@ -57,9 +57,9 @@ Read tools are `search_memory`, `get_record`, `get_project_context`, `get_decisi
 
 The binary exposes its exact typed schemas through MCP tool discovery. Consult the [MCP README](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md) for the wire contract and development checks.
 
-## Optional AI tools in the source MCP
+## Optional AI tools
 
-The current source binary adds these tools; the published v0.1.3 MCP predates them.
+The v0.2.0 binary adds these tools. Earlier v0.1.3 binaries predate them.
 
 | Tool                | Behavior                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------- |

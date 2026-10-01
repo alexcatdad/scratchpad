@@ -5,11 +5,11 @@ description: The verified MVP scope, acceptance scenarios, and a clearly labeled
 
 ## Current status
 
-**The MVP is ready to use in [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3).** Start with [installation](/scratchpad/guides/installation/) to run your private server and connect the MCP.
+**Historical MVP acceptance was completed in [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3).** Start with [installation](/scratchpad/guides/installation/) to run your private server and connect the MCP.
 
 The release includes eight typed capture tools, deterministic search and filtering, project context, immutable source records, audited metadata and relationships, passkey browser authentication, SSH challenge authentication for MCP, optional repository mirroring, import/export, and SQLite backup/restore. Native MCP packages and the application image are published through GitHub Releases, Homebrew and GHCR.
 
-The v0.1.3 MVP excludes AI processing, embeddings, pattern analysis and PostgreSQL. The current source implements those optional additions; their [remaining-product acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) is separate from this historical MVP evidence. The capture and retrieval workflow works without them.
+The v0.1.3 MVP excludes AI processing, embeddings, pattern analysis and PostgreSQL. v0.2.0 implements those optional additions; their [remaining-product acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) is separate from this historical MVP evidence. The capture and retrieval workflow works without them.
 
 ## What acceptance means
 

@@ -3,7 +3,7 @@ title: Import, export & mirroring
 description: Bring existing history into Scratchpad and retain control of your data.
 ---
 
-The first implementation includes native export/import, legacy JSONL import through the dashboard and API, and optional local MCP mirroring. These features are available in source builds; published release packages remain outstanding.
+Scratchpad includes native export/import, legacy JSONL import through the dashboard and API, and optional local MCP mirroring. Native exports in v0.2.0 also preserve owner presentation and derived/curated artifacts with their source references.
 
 ## Import existing logs
 

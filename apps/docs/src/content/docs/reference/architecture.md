@@ -21,7 +21,7 @@ The public documentation site runs independently on GitHub Pages. It does not co
 
 The server uses Node.js 24 LTS, TypeScript, React, TanStack Start, and Drizzle ORM. It owns authentication, project resolution, record validation and persistence, search, retry semantics, audit history, and optional persisted processing jobs.
 
-SQLite is the default. The current source checkout implements optional PostgreSQL behind the same server API; the published v0.1.3 release predates that support. There is no mandatory cache, queue, vector service, or AI service.
+SQLite is the default. v0.2.0 implements optional PostgreSQL behind the same server API. There is no mandatory cache, queue, vector service, or AI service.
 
 ## Local MCP
 

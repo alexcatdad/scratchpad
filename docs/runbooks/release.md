@@ -4,7 +4,9 @@
 
 The release pipeline is implemented in `.github/workflows/release.yml`. The first distribution release, [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2), is published; its signed-artifact verification and fresh-runner installation acceptance passed. See the [readiness ledger](mvp-readiness.md) for exact source revisions and run links. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
 
-The current patch release is [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3), correcting exact timestamp ordering and SQLite readiness/startup validation. Its tagged source is `ef5cb1a30594b43657c5bc327101cdd0463cc4a4`; [publication run 36859022794](https://github.com/alexcatdad/scratchpad/actions/runs/36859022794) passed native verification, image publication, release publication and tap delivery. Keep prior published versions immutable.
+The prior MVP patch release is [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3), correcting exact timestamp ordering and SQLite readiness/startup validation. Its tagged source is `ef5cb1a30594b43657c5bc327101cdd0463cc4a4`; [publication run 36859022794](https://github.com/alexcatdad/scratchpad/actions/runs/36859022794) passed native verification, image publication, release publication and tap delivery. Keep prior published versions immutable.
+
+The complete optional AI and PostgreSQL product is published as [v0.2.0](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0), tagged at `1e860e4f2f02978deda95f26051642f961fd86eb`. [Publication run 36929564159](https://github.com/alexcatdad/scratchpad/actions/runs/36929564159) passed all native verification, multiarchitecture image publication, release assets and Homebrew delivery. Both local notarization submissions were accepted. Installed MCP 0.2.0 passes the local formula test and Apple notarization requirement; the owner dashboard runs the published image with its original volume and login intact. [Fresh-runner acceptance 36930356827](https://github.com/alexcatdad/scratchpad/actions/runs/36930356827) passed macOS/Linux Homebrew installation, installed MCP authentication, the optional AI workflow, both image architectures and published-image backup/restore.
 
 Apple private keys and notarization credentials stay in the owner's macOS Keychain. GitHub does not need an Apple certificate, certificate password, Apple account password, or notarization secret. This follows the owner's accepted local-signing instruction.
 
@@ -38,7 +40,7 @@ The repository has not selected a license. The tap formula does not invent one.
 
 Use a clean checkout of the intended commit with all relevant checks passing. CI must be successful at that exact SHA on `main`; an earlier green revision is insufficient. Use the pinned Go toolchain. Native builds disable automatic VCS metadata so local and CI binaries can be compared after normalizing signatures.
 
-The remaining-product release is prepared as `v0.2.0`. The example below names that prospective release; it does not establish publication. Never replace an existing published tag or assets.
+The remaining-product release is `v0.2.0`. The example below documents the completed procedure; do not rerun tag creation or overwrite its published assets. Use a new version when preparing another release.
 
 ```sh
 export RELEASE_TAG=v0.2.0

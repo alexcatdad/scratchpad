@@ -3,7 +3,7 @@ title: Optional PostgreSQL
 description: Select PostgreSQL persistence, move knowledge through export/import and preserve operational state with database backups.
 ---
 
-SQLite remains the simplest default. The current source checkout also supports PostgreSQL with the same authenticated capture, search, history, audit and AI interfaces. The published **v0.1.3** release is SQLite-only; use a source build or a later release that explicitly includes PostgreSQL.
+SQLite remains the simplest default. **v0.2.0** also supports PostgreSQL with the same authenticated capture, search, history, audit and AI interfaces. See [release verification](/scratchpad/guides/releases/) for publication and installation evidence. Earlier v0.1.3 packages are SQLite-only.
 
 ## Select the database
 
