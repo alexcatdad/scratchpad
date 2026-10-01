@@ -91,7 +91,16 @@ func run() error {
 		kinds := []struct {
 			kind    string
 			payload map[string]any
-		}{{"decision", map[string]any{"decision": "Keep private project memory", "rationale": "Reproducible integration"}}, {"adr", map[string]any{"decision": "Use SQLite", "context": "Disposable integration instance"}}, {"business_decision", map[string]any{"decision": "Self hosted", "requestedBy": "integration"}}, {"finding", map[string]any{"finding": "Cross-process capture works"}}, {"qa", map[string]any{"question": "Does real stdio reach persistence?", "answer": "Verified by rereading the record"}}, {"failure", map[string]any{"observed": "Example captured failure", "lesson": "Preserve failure context"}}, {"constraint", map[string]any{"constraint": "English only"}}, {"project_state", map[string]any{"state": "integration-validation"}}}
+		}{
+			{"decision", map[string]any{"decision": "Keep private project memory", "rationale": "Reproducible integration"}},
+			{"adr", map[string]any{"decision": "Use SQLite", "context": "Disposable integration instance"}},
+			{"business_decision", map[string]any{"decision": "Self hosted", "requestedBy": "integration"}},
+			{"finding", map[string]any{"finding": "Cross-process capture works", "limitations": []string{"Hardware validation remains unresolved"}}},
+			{"qa", map[string]any{"question": "Does real stdio reach persistence?", "answer": "Verified by rereading the record"}},
+			{"failure", map[string]any{"observed": "Example captured failure", "lesson": "Preserve failure context"}},
+			{"constraint", map[string]any{"constraint": "English only"}},
+			{"project_state", map[string]any{"state": "paused", "reason": "Awaiting a disposable test device", "previousState": "active", "followUp": "Validate the remaining hardware behavior before resuming"}},
+		}
 		for _, kind := range kinds {
 			args := kind.payload
 			args["title"] = "Integration " + kind.kind
@@ -197,7 +206,11 @@ func run() error {
 		}
 	}
 	projectID := saved.Captures[0].ProjectID
-	if _, err = call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace}); err != nil {
+	resumeContext, err := call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace})
+	if err != nil {
+		return err
+	}
+	if err = verifyResumeContext(resumeContext, saved.Captures); err != nil {
 		return err
 	}
 	search, err := call(ctx, session, "search_memory", map[string]any{"projectId": projectID, "query": "Integration", "limit": 100})
@@ -239,6 +252,46 @@ func run() error {
 		}
 	}
 	fmt.Println()
+	return nil
+}
+
+// Verify the information a new agent needs to resume the disposable project,
+// rather than treating a successful context request as semantic acceptance.
+func verifyResumeContext(context map[string]any, captures []capture) error {
+	fields := map[string]string{
+		"record_decision": "recentDecisions", "record_adr": "recentDecisions", "record_business_decision": "recentDecisions",
+		"record_finding": "openFindings", "record_failure": "failures", "record_constraint": "constraints", "record_project_state": "stateHistory",
+	}
+	for _, item := range captures {
+		field, relevant := fields[item.Tool]
+		if !relevant {
+			continue
+		}
+		list, _ := context[field].([]any)
+		var linked map[string]any
+		for _, value := range list {
+			record, _ := value.(map[string]any)
+			if record["id"] == item.RecordID {
+				linked = record
+				break
+			}
+		}
+		if linked == nil || linked["projectId"] != item.ProjectID {
+			return fmt.Errorf("resume context omitted linked %s capture %s", field, item.RecordID)
+		}
+		if item.Tool == "record_project_state" {
+			current, _ := context["currentState"].(map[string]any)
+			payload, _ := current["payload"].(map[string]any)
+			if current["id"] != item.RecordID {
+				return errors.New("resume context did not identify the current state source")
+			}
+			for _, name := range []string{"state", "reason", "previousState", "followUp"} {
+				if payload[name] != item.Arguments[name] {
+					return fmt.Errorf("resume context lost project-state %s", name)
+				}
+			}
+		}
+	}
 	return nil
 }
 func call(ctx context.Context, session *mcp.ClientSession, name string, args map[string]any) (map[string]any, error) {

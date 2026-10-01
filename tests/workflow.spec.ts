@@ -434,6 +434,14 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       exact: true,
     }),
   ).toBeVisible();
+  await expect(
+    page
+      .locator("section")
+      .filter({
+        has: page.getByRole("heading", { name: "Reason", exact: true }),
+      })
+      .getByText("Awaiting a test device", { exact: true }),
+  ).toBeVisible();
   const key = resolve(temporary, "identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
@@ -592,6 +600,20 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       name: "Paused for hardware validation",
       exact: true,
     }),
+  ).toBeVisible();
+  await restoredProject
+    .getByRole("button", {
+      name: "Paused for hardware validation",
+      exact: true,
+    })
+    .click();
+  await expect(
+    page
+      .locator("section")
+      .filter({
+        has: page.getByRole("heading", { name: "Reason", exact: true }),
+      })
+      .getByText("Awaiting a test device", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(

@@ -69,8 +69,8 @@ Implementation closure and operational acceptance are separate. A source file or
 ## Remaining MVP acceptance
 
 1. Obtain authoritative source material for historical scenario B and run the private state/reason acceptance procedure. Preserve the completed real-history import/reimport evidence and keep private historical data outside public fixtures/artifacts.
-2. Audit PRD scenarios A–G against the current evidence before declaring the full MVP ready. Report release publication, disposable workflow acceptance, and an owner's deployed acceptance separately.
-3. For later changes, require relevant local checks and exact-commit GitHub Actions success, and verify deployed documentation independently. Rerun release acceptance when delivery or operational changes warrant it; published artifacts remain immutable.
+
+The current audit below covers scenarios A–G. Only the motivating historical pause example lacks source acceptance. For later changes, require relevant local checks and exact-commit GitHub Actions success, and verify deployed documentation independently. Rerun release acceptance when delivery or operational changes warrant it; published artifacts remain immutable. Report release publication, disposable workflow acceptance, and an owner's deployed acceptance separately.
 
 ## Repeatable audit procedure
 
@@ -85,6 +85,8 @@ The actual authenticated browser/API/installed-MCP workflow was extended for con
 The integrated local checks passed: lint, application/documentation/history type checks, all 39 server tests, formula checks, and Go race tests. The rebuilt Node 24 container with the installed Homebrew MCP completed the expanded browser/API workflow and backup/restore (one workflow, 14.6 seconds). Exact-source CI and corrected-image publication subsequently passed as recorded above.
 
 The full objective is still not declared complete. Historical scenario B is unverified. It is missing historical acceptance data, not a reason to fabricate state or delay independent product fixes.
+
+A further check found that the integration previously requested context without validating its resume information. The strengthened actual MCP workflow asserts the disposable project's paused state, reason, previous state, follow-up work and linked decisions/findings/failures/constraints before and after restore. The browser also displays the imported pause reason before and after restore. These checks passed against the published `v0.1.3` image and installed Homebrew `0.1.3` binary (one workflow, 12.9 seconds). This closes a verification gap; it does not supply USB Boop's missing history. No production code or released bytes changed.
 
 ## PRD acceptance scenario audit
 

@@ -1,8 +1,8 @@
 # Cross-process integration runbook
 
-The Go command launches the real `scratchpad-mcp` executable and drives its stdio protocol against an independently running HTTP server. It tests eight typed captures, automatic project discovery, SSH challenge authentication, deterministic content, retrieval, project context, search, decision history, relationships, persistent retry identities, and changed-payload conflicts.
+The Go command launches the real `scratchpad-mcp` executable and drives its stdio protocol against an independently running HTTP server. It tests eight typed captures, automatic project discovery, SSH challenge authentication, deterministic content, retrieval, project context, search, decision history, relationships, persistent retry identities, and changed-payload conflicts. The context check verifies the disposable project's current paused state, its reason, previous state and follow-up work, plus source-linked decisions, findings, failures and constraints before and after restart or restore. Fixture data is not USB Boop historical evidence.
 
-The two phases deliberately use separate MCP processes. Restart the server between phases while retaining its database to prove both server persistence and fresh client authentication. All dependencies and native SQLite bindings must already be installed.
+The capture and verification phases deliberately use separate MCP processes. Restart the server between phases while retaining its database to prove both server persistence and fresh client authentication. The automated workflow also invokes a project-boundary phase; see [MCP acceptance](../../docs/runbooks/mcp-acceptance.md) for its owner API setup and scope. All dependencies and native SQLite bindings must already be installed.
 
 ## Production-build smoke
 
