@@ -33,22 +33,9 @@ This example is invented test data for a fictional hardware project. It is not a
 
 The [canonical JSONL fixture](https://github.com/alexcatdad/scratchpad/blob/main/tests/fixtures/synthetic-paused-project.jsonl) contains one record:
 
+<!-- prettier-ignore -->
 ```jsonl
-{
-  "id": "legacy-paused",
-  "type": "project_state",
-  "title": "Paused for hardware validation",
-  "state": "paused",
-  "reason": "Awaiting a test device",
-  "followUp": "Validate the remaining hardware behavior before resuming",
-  "date": "2026-01-15",
-  "synthetic": true,
-  "source": {
-    "kind": "synthetic_test_fixture",
-    "project": "Synthetic Hardware Project",
-    "description": "Invented acceptance data; not a claim about USB Boop or any real project's history."
-  }
-}
+{"id":"legacy-paused","type":"project_state","title":"Paused for hardware validation","state":"paused","reason":"Awaiting a test device","followUp":"Validate the remaining hardware behavior before resuming","date":"2026-01-15","synthetic":true,"source":{"kind":"synthetic_test_fixture","project":"Synthetic Hardware Project","description":"Invented acceptance data; not a claim about USB Boop or any real project's history."}}
 ```
 
 To try it in a disposable project:
