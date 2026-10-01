@@ -19,7 +19,7 @@ Historical records are evidence, not automatically current policy. A past decisi
 
 ## Development status
 
-The first implementation now includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring. Run it from source or the local Docker build. Production release packages, signing/notarization, and full operational acceptance remain outstanding. Check the repository tests and release notes for current validation.
+The first implementation now includes the SQLite server, passkey dashboard, signed-challenge MCP access, typed captures, retrieval, native import/export, and optional repository mirroring. Install [v0.1.2](/scratchpad/guides/installation/) through Homebrew and the published container, or build from source. Signed/notarized macOS packages, Linux packages, both container architectures, and disposable installation/workflow acceptance are verified. See [release validation](/scratchpad/guides/releases/) for evidence and scope; historical scenarios A and B still need source evidence before full MVP acceptance.
 
 The first internal milestone is authenticated capture and retrieval backed by SQLite and visible in the browser. It is smaller than the complete MVP.
 

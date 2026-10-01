@@ -57,3 +57,21 @@ The final local run against the frozen application source passed both paths:
 - Post-run Docker inventory contained no remaining `scratchpad-e2e-*` containers or volumes. Test formatting and static lint passed.
 
 These are local verification results, not evidence of a published container or a completed release.
+
+## Published v0.1.2 verification — 2026-10-01
+
+The [fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36853884482) passed the full backup/restore workflow with the public `ghcr.io/alexcatdad/scratchpad:v0.1.2` image and downloaded Linux AMD64 release executable. Both public image platforms passed readiness; Linux ARM64 used QEMU on that runner.
+
+Native ARM64 acceptance on the owner's Mac also passed using the public image and installed Homebrew MCP `0.1.2` (one workflow, 12.0 seconds). The release manifest digest is `sha256:0c463e87093b49cef8d37be49eafa21a789bdbaae3d387c041e4bf9c70745a0e`.
+
+To repeat this check with an installed executable:
+
+```sh
+docker pull ghcr.io/alexcatdad/scratchpad:v0.1.2
+SCRATCHPAD_E2E_DOCKER=1 \
+  SCRATCHPAD_E2E_IMAGE=ghcr.io/alexcatdad/scratchpad:v0.1.2 \
+  SCRATCHPAD_E2E_MCP_BINARY="$(brew --prefix scratchpad-mcp)/bin/scratchpad-mcp" \
+  npm run test:e2e
+```
+
+These runs use disposable credentials and volumes. They establish the published artifacts' workflow behavior, not restoration of a live owner's database or the missing historical scenario facts.

@@ -4,9 +4,22 @@
 
 Readiness covers the complete PRD MVP and acceptance scenarios A–G, including capture/retrieval, project boundaries, authentication, operation, import/export, and distribution. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP. A local development slice does not establish release acceptance.
 
-The core implementation and release automation are present. Full MVP acceptance remains open because signed/notarized publication, both GHCR architectures, Homebrew delivery/installation, and final end-to-end acceptance at the release commit still need evidence. The local signed-artifact handoff and GitHub App configuration remain external prerequisites. Apple credentials are not required in GitHub.
+The core implementation and release delivery are verified for `v0.1.2`. Signed/notarized macOS archives, Linux archives, both public GHCR architectures, clean Homebrew installation, and published-binary workflow acceptance passed. Full MVP acceptance remains open because historical scenarios A and B still lack authoritative source evidence. Apple credentials stay local; the GitHub App configuration is verified.
 
-## Evidence ledger — 2026-09-29
+## Release evidence — 2026-10-01
+
+- Published [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2) identifies source `cbae7319268972c5424cc04b0f60ea1c5fc52e4f`. Its [exact-source CI](https://github.com/alexcatdad/scratchpad/actions/runs/36852523073) passed all application, browser/MCP, Go, documentation, container, and infrastructure gates.
+- [Publication run 36853122511](https://github.com/alexcatdad/scratchpad/actions/runs/36853122511) passed every job, including both macOS signature/notarization/source-byte checks, both Linux targets, image publication, public GitHub Release, and Homebrew tap delivery. The workflow used the later draft-access permission fix at `0fdc1e0`; the artifact source remains the tagged commit.
+- Both Apple submissions were accepted without issues. The exact accepted ZIPs were published. All seven files covered by the public `checksums.txt` matched on fresh download.
+- `ghcr.io/alexcatdad/scratchpad:v0.1.2` is anonymously pullable for Linux ARM64 and AMD64. The multiarchitecture manifest digest is `sha256:0c463e87093b49cef8d37be49eafa21a789bdbaae3d387c041e4bf9c70745a0e`.
+- [Fresh-runner acceptance 36853884482](https://github.com/alexcatdad/scratchpad/actions/runs/36853884482) passed macOS/Linux Homebrew installation and formula tests, installed-binary owner enrollment, SSH authentication, capture/retrieval, and restart. It also passed readiness for both public image architectures and backup/restore using the published Linux binary and image. ARM64 readiness on the Linux runner uses QEMU; it is not native ARM host acceptance.
+- The local Homebrew ARM64 binary and downloaded Intel macOS binary each passed the authenticated host-server workflow. Intel ran through Rosetta on this ARM64 Mac. The published image also passed native ARM64 backup/restore locally with the Homebrew binary (one workflow, 12.0 seconds).
+
+These results establish release delivery and disposable workflow acceptance. They do not establish a deployment against an owner's historical database or invent missing evidence for PRD scenarios A and B.
+
+## Historical evidence ledger — 2026-09-29
+
+The following table records the earlier baseline; superseded release gaps are closed by the results above.
 
 | Requirement                                                                                 | Authoritative evidence                                                                    | Current assessment                                                                                                                                                                                                             |
 | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -45,15 +58,11 @@ The optional [private history acceptance procedure](history-acceptance.md) exerc
 
 Implementation closure and operational acceptance are separate. A source file or test name proves that a check exists, not that its most recent execution passed.
 
-## Remaining verification and external requirements
+## Remaining MVP acceptance
 
-1. Run all current application, browser/MCP, Go race/vulnerability, documentation, Docker, and infrastructure gates after the final integrated changes.
-2. Preserve the passed disposable Docker acceptance evidence and rerun it if operational changes affect backup/restore. Do not use an actual owner's live database for tests.
-3. Preserve the completed real-history import/reimport evidence and close any remaining scenario-level retrieval and replacement-chain acceptance gaps. Keep private historical data outside public fixtures/artifacts.
-4. Commit the integrated state and require GitHub Actions success for that exact commit. Deploy and check the updated public documentation independently.
-5. Provision GitHub App credentials and the public Apple team ID named in the release runbook in the existing `action-runners` environment (limited to `main` and `v*` tags). Do not silently substitute unsigned macOS binaries.
-6. After the release revision passes CI, prepare locally signed/notarized archives and the draft release, then dispatch publication for the stable tag and verify every artifact, Apple acceptance, GHCR platform, and clean Homebrew installation.
-7. Audit PRD scenarios A–G against current evidence before declaring MVP ready. Report release publication, deployment, and user workflow acceptance separately.
+1. Obtain authoritative source material for historical scenarios A and B and run the private retrieval/replacement-chain acceptance procedure. Preserve the completed real-history import/reimport evidence and keep private historical data outside public fixtures/artifacts.
+2. Audit PRD scenarios A–G against the current evidence before declaring the full MVP ready. Report release publication, disposable workflow acceptance, and an owner's deployed acceptance separately.
+3. For later changes, require relevant local checks and exact-commit GitHub Actions success, and verify deployed documentation independently. Rerun release acceptance when delivery or operational changes warrant it; published artifacts remain immutable.
 
 ## Repeatable audit procedure
 

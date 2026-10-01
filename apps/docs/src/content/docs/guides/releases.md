@@ -1,33 +1,42 @@
 ---
 title: Releases & installation channels
-description: Native platforms, release verification, and the remaining publication prerequisites.
+description: Install Scratchpad v0.1.2 and understand how its release artifacts are verified.
 ---
 
-:::caution[Not published yet]
-Release automation is implemented. Signed binaries, a published application image, and a delivered Homebrew formula have not yet been verified. Use [local builds](/scratchpad/guides/installation/) for now.
-:::
+## v0.1.2
 
-## Distribution targets
+[v0.1.2 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2) provides native MCP archives, release checksums, and the versioned application image `ghcr.io/alexcatdad/scratchpad:v0.1.2`. It is an initial distribution release, not a claim that every deployment environment has been tested.
 
-| Component   | Planned published format                                                      |
+| Component   | Published format                                                              |
 | ----------- | ----------------------------------------------------------------------------- |
 | macOS MCP   | ARM64 and AMD64 ZIPs containing Developer ID signed, Apple-notarized binaries |
 | Linux MCP   | ARM64 and AMD64 tar archives, also usable with Linux Homebrew on WSL          |
 | Application | Versioned GHCR image for Linux ARM64 and AMD64                                |
 | Homebrew    | `scratchpad-mcp` formula in the existing `alexcatdad/tap`                     |
 
-No npm package or native Windows installer is required for this release plan.
+Install the MCP through Homebrew:
 
-## What the pipeline checks
+```sh
+brew install alexcatdad/tap/scratchpad-mcp
+scratchpad-mcp --version
+```
 
-A stable `vX.Y.Z` tag must point to a commit on `main` with successful CI at that exact source revision. Native macOS artifacts must pass signature verification and receive Apple's `Accepted` notarization result before publication continues.
+Homebrew follows the version currently delivered to the tap. For an exact release, use that release's named archive and verify it against its `checksums.txt`. See [installation](/scratchpad/guides/installation/) for server setup and key enrollment.
 
-The workflow generates checksums, publishes the complete GitHub Release inventory, builds the versioned multiarchitecture image, and updates the tap from downloaded and verified release assets. It refuses to overwrite a public release or downgrade an existing tap version. A separate recovery option retries tap delivery without rebuilding previously published files.
+No npm package or native Windows installer is part of this release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; capturing and retrieving memory does not require them.
 
-These are workflow guarantees to verify during the first real release. Passing local tests alone does not prove that Apple, GitHub Packages, or Homebrew delivery accepted the artifacts.
+## Local signing, independent verification
 
-## Remaining setup
+The owner signs both macOS binaries with a Developer ID Application identity and submits their ZIP archives to Apple using credentials in the **local macOS Keychain**. Signing credentials and notarization passwords are not uploaded to GitHub.
 
-The owner signs and notarizes macOS archives locally, then uploads them to a draft release for CI verification. Apple credentials stay in the local Keychain. The release environment needs the existing GitHub App's tap-writing credentials and the public Apple team ID. The [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) names the required secrets and documents provisioning, publication, and recovery.
+After Apple accepts both submissions, the owner uploads the archives, notarization receipts, and a source/checksum manifest to a draft release. A manual workflow verifies those finished files against a fresh build of the tagged source, the configured public team identifier, and Apple trust assessment. A stable tag must identify a commit on `main` with successful CI at that exact revision.
 
-After publication, validate checksum downloads, both image architectures, clean Homebrew installation, and a real MCP session before treating that version as delivered.
+The workflow builds Linux archives and the multiarchitecture image, publishes checksums, and updates the tap from verified release assets. It refuses to overwrite a public release or downgrade an existing formula. Tap-only recovery reuses the published bytes rather than rebuilding signed archives.
+
+Bare command-line binaries and ZIPs do not support stapled notarization tickets. The published macOS ZIPs are the exact Apple-accepted archives; online Apple trust assessment remains relevant.
+
+## Operating and upgrading
+
+Use the versioned image tag to make upgrades deliberate. Keep a full SQLite backup before upgrading, and retain the matching older application image for rollback. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) and [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) for operations and maintainer procedures.
+
+The [fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36853884482) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records scope and remaining historical acceptance gaps. Verify browser sign-in and a real MCP session in your own deployment.

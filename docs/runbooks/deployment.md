@@ -122,4 +122,4 @@ Do not assume an older server understands a database migrated by a newer server.
 
 ## Release distribution
 
-The [release runbook](release.md) covers tagged native builds, Apple signing/notarization, GHCR publication, and Homebrew delivery. Workflows are implemented; credentials and successful publication are separate requirements. Do not advertise `brew install` or image pulls as available until their actual artifacts have been published and tested.
+The [release runbook](release.md) covers tagged native builds, Apple signing/notarization, GHCR publication, and Homebrew delivery. The published `v0.1.2` native packages, anonymous image pulls, Homebrew installations and disposable backup/restore workflow passed release acceptance. See the [readiness ledger](mvp-readiness.md) for the exact artifacts and run evidence. Verify enrollment, MCP access and backups in your own deployment.

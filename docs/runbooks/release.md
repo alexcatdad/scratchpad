@@ -2,7 +2,7 @@
 
 ## Status and authority
 
-The release pipeline is implemented in `.github/workflows/release.yml`. Actual signed publication and installation acceptance remain unverified. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
+The release pipeline is implemented in `.github/workflows/release.yml`. The first distribution release, [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2), is published; its signed-artifact verification and fresh-runner installation acceptance passed. See the [readiness ledger](mvp-readiness.md) for exact source revisions and run links. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
 
 Apple private keys and notarization credentials stay in the owner's macOS Keychain. GitHub does not need an Apple certificate, certificate password, Apple account password, or notarization secret. This follows the owner's accepted local-signing instruction.
 
@@ -16,7 +16,7 @@ Use the existing `action-runners` GitHub environment, restricted to `main` and `
 | Secret   | `APP_SECRET`    | App private key with contents-write access to `alexcatdad/homebrew-tap`         |
 | Variable | `APPLE_TEAM_ID` | Public team identifier used to verify the locally signed binaries independently |
 
-On 1 October 2026, `APP_ID` was set to the owner-supplied GitHub App client ID, the owner replaced the `APP_SECRET` placeholder, and `APPLE_TEAM_ID` was set to `CX6D6KGCT5`. Secret metadata confirms the update; successful authentication must be verified independently.
+On 1 October 2026, `APP_ID` was set to the owner-supplied GitHub App client ID, the owner replaced the `APP_SECRET` placeholder, and `APPLE_TEAM_ID` was set to `CX6D6KGCT5`. The [access check](https://github.com/alexcatdad/scratchpad/actions/runs/36850995620) authenticated the App successfully; the later release run delivered the formula to the tap.
 
 Run the dedicated access check before preparing a release:
 
@@ -36,10 +36,10 @@ The repository has not selected a license. The tap formula does not invent one.
 
 Use a clean checkout of the intended commit with all relevant checks passing. CI must be successful at that exact SHA on `main`; an earlier green revision is insufficient. Use the pinned Go toolchain. Native builds disable automatic VCS metadata so local and CI binaries can be compared after normalizing signatures.
 
-The following example uses an unused `v0.1.0` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
+The following example uses a prospective `v0.1.3` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
 
 ```sh
-export RELEASE_TAG=v0.1.0
+export RELEASE_TAG=v0.1.3
 git tag "$RELEASE_TAG"
 git push origin "$RELEASE_TAG"
 export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR NAME (TEAMID)'
@@ -104,11 +104,11 @@ node --test scripts/release-formula.test.mjs
 npm run lint
 ```
 
-The first real local-signing handoff must still demonstrate successful Apple assessment and byte comparison on CI. Failures must be investigated; never bypass either check or publish unsigned substitutes.
+The `v0.1.2` local-signing handoff passed Apple notarization assessment and source-byte comparison on CI. Future failures must still be investigated; never bypass either check or publish unsigned substitutes.
 
 ## Initial preparation correction
 
-The unpublished `v0.1.0` preparation exposed a ZIP layout mismatch and an application-only trust check. Its Apple submissions were accepted, but no assets were published. The tag is preserved. Subsequent preparation uses a new version, root-level ZIP binaries without resource sidecars, and Apple's explicit notarization code requirement for command-line tools.
+The unpublished `v0.1.0` preparation exposed a ZIP layout mismatch and an application-only trust check. Its Apple submissions were accepted, but no assets were published. The tag is preserved. The unpublished `v0.1.1` preparation exposed cold-cache ticket retrieval. Both preparation tags remain preserved. Published `v0.1.2` uses root-level ZIP binaries without resource sidecars, online ticket retrieval, and Apple's explicit notarization code requirement for command-line tools.
 
 ## Verify the published release on fresh runners
 

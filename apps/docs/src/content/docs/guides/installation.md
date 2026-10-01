@@ -1,13 +1,52 @@
 ---
 title: Installation & development
-description: Run the first Scratchpad implementation locally, enroll the owner, and build the docs.
+description: Install the released MCP and container, enroll the owner, or develop from source.
 ---
 
-:::caution[Development build]
-The first implementation is available from source. There is no published production release yet. Build locally until signed release binaries and versioned container images are published.
-:::
+## Install the released MCP
 
-## Prerequisites
+```sh
+brew install alexcatdad/tap/scratchpad-mcp
+scratchpad-mcp --version
+```
+
+Homebrew supports macOS and Linux, including WSL through Linux Homebrew. Exact-version archives and checksums are available from [the v0.1.2 release](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2). macOS release binaries are signed and notarized using the owner's local Keychain; they are independently verified before publication.
+
+After setting up the server below, follow [MCP setup](/scratchpad/guides/mcp/) to enroll your public key and point your coding client at the installed `scratchpad-mcp` binary. Homebrew installation alone does not connect it to an instance.
+
+## Run the released server with Compose
+
+Create a `compose.yaml` in a deployment directory:
+
+```yaml
+services:
+  scratchpad:
+    image: ghcr.io/alexcatdad/scratchpad:v0.1.2
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      SCRATCHPAD_PUBLIC_URL: http://localhost:3000
+      SCRATCHPAD_DATABASE_PATH: /data/scratchpad.sqlite
+    volumes:
+      - scratchpad-data:/data
+    restart: unless-stopped
+volumes:
+  scratchpad-data:
+```
+
+Then start it and generate a setup token:
+
+```sh
+docker compose pull
+docker compose up -d
+docker compose exec scratchpad npm run admin -- setup
+```
+
+Open [localhost:3000](http://localhost:3000), enter the one-use token, and register a passkey. The image supports Linux ARM64 and AMD64. Remote instances require a stable HTTPS origin and a TLS reverse proxy; follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before exposing the service beyond localhost.
+
+The named volume stores your database. Preserve it across container upgrades, and take a full SQLite backup before changing application versions. AI services and PostgreSQL are not required.
+
+## Develop from source
 
 Use Node.js **24.21.0** from `.node-version`, npm, Git, and OpenSSH `ssh-keygen`. Building the MCP also requires Go **1.27.1**. Docker Compose is an alternative for running the server.
 
@@ -32,7 +71,7 @@ Enter the token in the dashboard and register your first passkey. Tokens expire 
 
 Use the same database path for the administrative command and the running server. An explicit absolute path avoids creating a second database when commands run from different folders.
 
-## Run with Docker
+## Build the source checkout with Docker
 
 ```sh
 docker compose up --build -d

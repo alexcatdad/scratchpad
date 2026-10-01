@@ -6,22 +6,42 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Status
 
-The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. This is an early implementation under active validation, not a published signed release. AI processing and PostgreSQL come after the initial SQLite workflow.
+The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2) is the initial distribution release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; the SQLite workflow works without them.
+
+## Install the MCP
+
+```sh
+brew install alexcatdad/tap/scratchpad-mcp
+scratchpad-mcp --version
+```
+
+The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
 
 ## Run with Docker
 
-```sh
-docker compose up --build -d
-docker compose exec scratchpad npm run admin -- setup
-```
-
-Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. For a remote deployment, set `SCRATCHPAD_PUBLIC_URL` to the exact HTTPS browser origin and put the service behind your TLS reverse proxy. Default Compose binding is loopback only. Follow the [deployment runbook](docs/runbooks/deployment.md) for HTTPS, persistent-volume backup/restore, upgrades, and rollback.
-
-Additional passkeys and MCP public keys are enrolled in **Settings**. Never send a private key to the server. Lost-credential recovery is an explicit administrator action:
+The versioned image supports Linux ARM64 and AMD64:
 
 ```sh
-docker compose exec scratchpad npm run admin -- recover
+docker volume create scratchpad-data
+docker run -d --name scratchpad --restart unless-stopped \
+  -p 127.0.0.1:3000:3000 \
+  -e SCRATCHPAD_PUBLIC_URL=http://localhost:3000 \
+  -v scratchpad-data:/data \
+  ghcr.io/alexcatdad/scratchpad:v0.1.2
+docker exec scratchpad npm run admin -- setup
 ```
+
+Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. Additional passkeys and MCP public keys are enrolled in **Settings**. Never send a private key to the server.
+
+For a remote deployment, use your exact HTTPS origin and a TLS reverse proxy; keep the application port private. The [installation guide](https://alexcatdad.github.io/scratchpad/guides/installation/) includes a Compose configuration. The [deployment runbook](docs/runbooks/deployment.md) covers persistent-volume backup/restore, upgrades, and rollback.
+
+Lost-credential recovery is an explicit administrator action:
+
+```sh
+docker exec scratchpad npm run admin -- recover
+```
+
+For a source checkout, the repository's `docker compose up --build -d` builds the current source instead of pulling the release image.
 
 ## Develop
 
@@ -57,11 +77,11 @@ Open a record to inspect its original payload, capture provenance, evidence, rel
 
 **Settings → Import a decision log** accepts a JSONL file and destination project. Inspect its import notes: malformed or incomplete source entries remain visible as diagnostics, and historical authority is not silently promoted to verified fact. Native exports move knowledge and audit history between instances; use the administrator SQLite backup for operational recovery including authentication state.
 
-## Distribution status
+## Release verification
 
-The [release pipeline](docs/runbooks/release.md) builds macOS/Linux MCP binaries for ARM64 and AMD64, requires Developer ID signing and Apple notarization for macOS, publishes checksums and a multiarchitecture GHCR image, and updates the existing Homebrew tap. This is implemented automation, **not evidence of a published release**. Apple signing/notarization credentials and tap application credentials still need to be configured in this repository.
+The [release pipeline](docs/runbooks/release.md) publishes native MCP archives, checksums, a versioned multiarchitecture GHCR image, and an update to the existing Homebrew tap. The owner signs and notarizes macOS artifacts locally using the macOS Keychain; Apple signing and notarization secrets are not stored in GitHub. CI independently verifies their signing team, source identity, checksums, and Apple trust before publication.
 
-See the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for tested scope and remaining acceptance work. Continue using local builds until signed artifacts are published and verified.
+See the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for the scope of product and installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
 
 ## Quality gates
 
