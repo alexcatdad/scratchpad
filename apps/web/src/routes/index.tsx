@@ -14,8 +14,14 @@ import {
   post,
   types,
 } from "../lib/api";
-export const Route = createFileRoute("/")({ component: Dashboard });
+export const Route = createFileRoute("/")({
+  component: Dashboard,
+  validateSearch: (search: Record<string, unknown>) => ({
+    recordId: typeof search.recordId === "string" ? search.recordId : undefined,
+  }),
+});
 function Dashboard() {
+  const { recordId } = Route.useSearch();
   const recordRequest = useRef(0);
   const detailRequest = useRef(0);
   const [status, setStatus] = useState<{
@@ -75,6 +81,20 @@ function Dashboard() {
     },
     [project, type, search, filters],
   );
+  const select = useCallback(async (record: MemoryRecord) => {
+    const request = ++detailRequest.current;
+    try {
+      const data = await api<Detail>(
+        `/records/${encodeURIComponent(record.id)}`,
+      );
+      if (request === detailRequest.current) setDetail(data);
+    } catch (reason) {
+      if (request === detailRequest.current)
+        setError(
+          reason instanceof Error ? reason.message : "Could not load record.",
+        );
+    }
+  }, []);
   useEffect(() => {
     void authenticate().catch((e: Error) => setError(e.message));
   }, [authenticate]);
@@ -90,19 +110,12 @@ function Dashboard() {
       void loadRecords();
     }
   }, [status?.authenticated, loadRecords]);
-  async function select(record: MemoryRecord) {
-    const request = ++detailRequest.current;
-    try {
-      const data = await api<Detail>(
-        `/records/${encodeURIComponent(record.id)}`,
-      );
-      if (request === detailRequest.current) setDetail(data);
-    } catch (reason) {
-      setError(
-        reason instanceof Error ? reason.message : "Could not load record.",
-      );
+  useEffect(() => {
+    if (status?.authenticated && recordId) {
+      setTab("Memory");
+      void select({ id: recordId } as MemoryRecord);
     }
-  }
+  }, [status?.authenticated, recordId, select]);
   if (!status)
     return (
       <main className="auth-page">

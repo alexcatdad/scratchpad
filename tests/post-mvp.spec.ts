@@ -725,9 +725,24 @@ test("private AI settings, evidence review, semantic search and document downloa
     expect(markdown).toContain(`# Synthetic ${format}`);
     expect(markdown).toContain("## Source records");
     expect(markdown).toContain([...snapshots.keys()][0] ?? "");
+    expect(markdown).toContain(
+      `(/?recordId=${encodeURIComponent([...snapshots.keys()][0] ?? "")})`,
+    );
     expect(markdown).not.toContain("EXCLUDED_CLIENT_SECRET");
     expect(markdown).not.toContain("synthetic-secret-key");
   }
+
+  const citedRecord = [...snapshots.values()][0];
+  expect(citedRecord).toBeDefined();
+  await page.goto(
+    `${origin}/?recordId=${encodeURIComponent(String(citedRecord?.id))}`,
+  );
+  await expect(
+    page.getByRole("heading", {
+      name: String(citedRecord?.title),
+      exact: true,
+    }),
+  ).toBeVisible();
 
   for (const [id, original] of snapshots)
     expect(
@@ -795,10 +810,26 @@ test("private AI settings, evidence review, semantic search and document downloa
   await expect(
     page.getByRole("button", { name: "Save AI settings", exact: true }),
   ).toBeVisible();
-  const mobileFits = () =>
-    page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth + 1,
-    );
+  const mobileFits = async () => {
+    const measured = await page.evaluate(() => ({
+      fits: document.documentElement.scrollWidth <= window.innerWidth + 1,
+      viewport: window.innerWidth,
+      width: document.documentElement.scrollWidth,
+      overflow: [...document.querySelectorAll<HTMLElement>("body *")]
+        .filter(
+          (element) =>
+            element.getBoundingClientRect().right > window.innerWidth + 1,
+        )
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.className,
+          right: element.getBoundingClientRect().right,
+        }))
+        .slice(0, 20),
+    }));
+    if (!measured.fits) console.log("Mobile overflow:", measured);
+    return measured.fits;
+  };
   expect(await mobileFits()).toBe(true);
   await page.getByRole("button", { name: "Insights", exact: true }).click();
   await expect(

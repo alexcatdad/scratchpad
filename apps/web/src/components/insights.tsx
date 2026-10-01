@@ -8,6 +8,7 @@ type Job = {
   status: string;
   attempts: number;
   lastError?: string;
+  warnings?: { code: string; kind: string; count: number }[];
   createdAt: string;
   runAfter?: string;
 };
@@ -371,6 +372,13 @@ export function Insights({
                 {label(job.status)} · Attempt {job.attempts}
               </span>
               {job.lastError && <p className="error">{job.lastError}</p>}
+              {job.warnings?.map((warning) => (
+                <p key={`${warning.code}-${warning.kind}`}>
+                  Skipped {warning.count} {label(warning.kind).toLowerCase()}
+                  {warning.count === 1 ? " suggestion" : " suggestions"}:
+                  insufficient supporting evidence.
+                </p>
+              ))}
               {job.status === "failed" && (
                 <button
                   type="button"

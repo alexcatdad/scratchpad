@@ -233,6 +233,7 @@ p {
 }
 .memory-row strong {
   display: block;
+  overflow-wrap: anywhere;
   font-weight: 550;
   margin-bottom: 4px;
 }
@@ -496,7 +497,14 @@ summary {
     padding: 28px 20px;
   }
   .memory-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .memory-grid > section {
+    min-width: 0;
+  }
+  .list-heading,
+  .memory-row {
+    grid-template-columns: 95px minmax(0, 1fr);
   }
   .page-heading {
     gap: 16px;
