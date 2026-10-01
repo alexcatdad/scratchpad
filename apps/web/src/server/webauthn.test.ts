@@ -120,7 +120,7 @@ describe("WebAuthn enrollment and recovery", () => {
         };
       };
       const device = authenticator(),
-        setupToken = api.auth.createSetupToken();
+        setupToken = await api.auth.createSetupToken();
       const options = await call("/auth/register/options", { setupToken });
       expect(options.status).toBe(200);
       const rejected = await call("/auth/register/verify", {
@@ -139,7 +139,7 @@ describe("WebAuthn enrollment and recovery", () => {
       });
       expect(enrolled.status).toBe(200);
       expect(enrolled.cookie).toBeTruthy();
-      expect(api.auth.initialized()).toBe(true);
+      expect(await api.auth.initialized()).toBe(true);
       expect(
         (await call("/auth/register/options", { setupToken })).status,
       ).toBe(401);
@@ -164,7 +164,7 @@ describe("WebAuthn enrollment and recovery", () => {
         }),
       );
       expect(originAttack.status).toBe(403);
-      const recoveryToken = api.auth.createSetupToken(true),
+      const recoveryToken = await api.auth.createSetupToken(true),
         replacement = authenticator();
       const recoveryOptions = await call("/auth/register/options", {
         setupToken: recoveryToken,
@@ -188,10 +188,12 @@ describe("WebAuthn enrollment and recovery", () => {
       );
       expect(recoveredSession.status).toBe(200);
       expect(
-        api.store.list("audit").some((a) => a.action === "owner.recovered"),
+        (await api.store.list("audit")).some(
+          (a) => a.action === "owner.recovered",
+        ),
       ).toBe(true);
     } finally {
-      api.close();
+      await api.close();
     }
   });
 });

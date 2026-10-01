@@ -2,13 +2,13 @@ import { type Entity, type JsonObject, requireValue } from "./domain";
 import type { Store } from "./store";
 import { compareTimestamps } from "./timestamps";
 
-export function assertRelationshipSafe(
+export async function assertRelationshipSafe(
   store: Store,
   from: string,
   to: string,
   type: string,
   excludeId?: string,
-): void {
+): Promise<void> {
   requireValue(
     from !== to,
     "INVALID_RELATIONSHIP",
@@ -17,14 +17,12 @@ export function assertRelationshipSafe(
   if (!["replaces", "partially_replaces", "depends_on"].includes(type)) return;
   const types =
     type === "depends_on" ? ["depends_on"] : ["replaces", "partially_replaces"];
-  const links = store
-    .list("relationship")
-    .filter(
-      (r) =>
-        r.id !== excludeId &&
-        types.includes(String(r.type)) &&
-        r.status === "accepted",
-    );
+  const links = (await store.list("relationship")).filter(
+    (r) =>
+      r.id !== excludeId &&
+      types.includes(String(r.type)) &&
+      r.status === "accepted",
+  );
   const pending = [to],
     seen = new Set<string>();
   while (pending.length) {
@@ -42,13 +40,18 @@ export function assertRelationshipSafe(
       if (link.fromRecordId === next) pending.push(String(link.toRecordId));
   }
 }
-export function projectContext(store: Store, project: Entity): JsonObject {
-  const relationships = store.list("relationship");
-  const records = store
-    .list("record")
+export async function projectContext(
+  store: Store,
+  project: Entity,
+): Promise<JsonObject> {
+  const relationships = await store.list("relationship");
+  const metadataById = new Map(
+    (await store.list("metadata")).map((m) => [m.id, m]),
+  );
+  const records = (await store.list("record"))
     .filter((record) => record.projectId === project.id)
     .map((record): Entity & { applicability: string } => {
-      const metadata = store.get("metadata", record.id),
+      const metadata = metadataById.get(record.id),
         legacyStatus = metadata?.legacyStatus;
       const replacements = relationships.filter(
         (link) =>

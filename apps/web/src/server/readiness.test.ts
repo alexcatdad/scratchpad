@@ -6,17 +6,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createApi } from "./api";
 import { Store } from "./store";
 
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0).reverse()) cleanup();
+const cleanups: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 function fixture() {
   const api = createApi({
     databasePath: ":memory:",
     origin: "http://localhost:3000",
   });
-  cleanups.push(() => {
-    if (api.store.sqlite.open) api.close();
+  cleanups.push(async () => {
+    if (api.store.sqlite.open) await api.close();
   });
   return api;
 }
@@ -29,7 +29,7 @@ async function ready(api: ReturnType<typeof createApi>) {
 
 describe("SQLite readiness", () => {
   it("reports a bootstrapped database ready without owner enrollment or AI", async () => {
-    expect(await ready(fixture())).toEqual({
+    expect(await ready(await fixture())).toEqual({
       status: 200,
       body: { status: "ready", database: "sqlite" },
     });
@@ -45,15 +45,15 @@ describe("SQLite readiness", () => {
     "DROP TABLE record_search",
     "ALTER TABLE retries RENAME COLUMN response TO unreadable_response",
   ])("fails readiness when persistence is invalid: %s", async (sql) => {
-    const api = fixture();
+    const api = await fixture();
     api.store.sqlite.exec(sql);
     const result = await ready(api);
     expect(result.status).toBe(503);
     expect(result.body.error.code).toBe("DATABASE_NOT_READY");
   });
   it("fails readiness after losing its persistence connection", async () => {
-    const api = fixture();
-    api.close();
+    const api = await fixture();
+    await api.close();
     expect((await ready(api)).status).toBe(503);
   });
   it.each([
@@ -63,29 +63,32 @@ describe("SQLite readiness", () => {
     "DROP TABLE entities",
     "ALTER TABLE entities RENAME COLUMN kind TO unreadable_kind",
     "ALTER TABLE retries RENAME COLUMN response TO unreadable_response",
-  ])("refuses an invalid existing database without modifying it: %s", (sql) => {
-    const directory = mkdtempSync(join(tmpdir(), "scratchpad-readiness-"));
-    cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
-    const path = join(directory, "memory.sqlite");
-    const initial = new Store(path);
-    initial.sqlite.pragma("journal_mode = DELETE");
-    initial.sqlite.exec(sql);
-    initial.close();
-    const before = readFileSync(path);
-    expect(() => new Store(path)).toThrow(
-      "SQLite persistence or schema migrations are unavailable or unsupported.",
-    );
-    expect(readFileSync(path)).toEqual(before);
-    const inspection = new Database(path, { readonly: true });
-    try {
-      expect(inspection.pragma("journal_mode", { simple: true })).toBe(
-        "delete",
+  ])(
+    "refuses an invalid existing database without modifying it: %s",
+    async (sql) => {
+      const directory = mkdtempSync(join(tmpdir(), "scratchpad-readiness-"));
+      cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
+      const path = join(directory, "memory.sqlite");
+      const initial = new Store(path);
+      initial.sqlite.pragma("journal_mode = DELETE");
+      initial.sqlite.exec(sql);
+      await initial.close();
+      const before = readFileSync(path);
+      expect(() => new Store(path)).toThrow(
+        "SQLite persistence or schema migrations are unavailable or unsupported.",
       );
-    } finally {
-      inspection.close();
-    }
-  });
-  it("does not bootstrap an unrelated existing database", () => {
+      expect(readFileSync(path)).toEqual(before);
+      const inspection = new Database(path, { readonly: true });
+      try {
+        expect(inspection.pragma("journal_mode", { simple: true })).toBe(
+          "delete",
+        );
+      } finally {
+        await inspection.close();
+      }
+    },
+  );
+  it("does not bootstrap an unrelated existing database", async () => {
     const directory = mkdtempSync(join(tmpdir(), "scratchpad-unrelated-"));
     cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
     const path = join(directory, "unrelated.sqlite");
@@ -93,7 +96,7 @@ describe("SQLite readiness", () => {
     original.exec(
       "CREATE TABLE unrelated(value TEXT); INSERT INTO unrelated VALUES('preserve existing data')",
     );
-    original.close();
+    await original.close();
     const before = readFileSync(path);
     expect(() => new Store(path)).toThrow(
       "SQLite persistence or schema migrations are unavailable or unsupported.",

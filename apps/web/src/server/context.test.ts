@@ -2,10 +2,13 @@ import { expect, it } from "vitest";
 import { projectContext } from "./context";
 import { Store } from "./store";
 
-it("orders context state by instant and uses receipt time for equal event instants", () => {
+it("orders context state by instant and uses receipt time for equal event instants", async () => {
   const store = new Store(":memory:");
   try {
-    const project = store.insert("project", { id: "project", name: "Dates" });
+    const project = await store.insert("project", {
+      id: "project",
+      name: "Dates",
+    });
     const states = [
       {
         id: "z-state-second",
@@ -39,13 +42,13 @@ it("orders context state by instant and uses receipt time for equal event instan
       },
     ];
     for (const { state, ...dates } of states)
-      store.insert("record", {
+      await store.insert("record", {
         ...dates,
         projectId: project.id,
         type: "project_state",
         payload: { state },
       });
-    const context = projectContext(store, project);
+    const context = await projectContext(store, project);
     expect(context.currentState).toMatchObject({
       id: "state-equal-newer",
       payload: { state: "active" },
@@ -61,6 +64,6 @@ it("orders context state by instant and uses receipt time for equal event instan
         ].map((id) => expect.objectContaining({ id })),
       );
   } finally {
-    store.close();
+    await store.close();
   }
 });

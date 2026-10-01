@@ -8,6 +8,7 @@ if (command !== "setup" && command !== "recover" && command !== "backup") {
   process.exitCode = 1;
 } else {
   const api = createApi({
+    databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
@@ -20,7 +21,7 @@ if (command !== "setup" && command !== "recover" && command !== "backup") {
       await api.store.backup(destination);
       console.log(`Backup created: ${destination}`);
     } else {
-      const token = api.auth.createSetupToken(command === "recover");
+      const token = await api.auth.createSetupToken(command === "recover");
       console.log(
         `Open ${process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000"} and enter this single-use ${command} token (expires in 15 minutes):`,
       );

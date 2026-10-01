@@ -7,29 +7,29 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createApi } from "./api";
 import { normalizeRemote } from "./domain";
 
-const cleanups: (() => void)[] = [];
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
+const cleanups: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0)) await cleanup();
 });
-function fixture(persistent = false) {
+async function fixture(persistent = false) {
   const directory = mkdtempSync(join(tmpdir(), "scratchpad-test-"));
   cleanups.push(() => rmSync(directory, { recursive: true, force: true }));
   const databasePath = persistent
     ? join(directory, "memory.sqlite")
     : ":memory:";
   const api = createApi({ databasePath, origin: "http://localhost:3000" });
-  cleanups.push(() => {
-    if (api.store.sqlite.open) api.close();
+  cleanups.push(async () => {
+    if (api.store.sqlite.open) await api.close();
   });
   // Test-only persisted credentials exercise the production authentication guard.
-  api.store.insert("owner", { id: "owner", displayName: "Test owner" });
-  api.store.insert("credential", {
+  await api.store.insert("owner", { id: "owner", displayName: "Test owner" });
+  await api.store.insert("credential", {
     id: "test-key",
     kind: "ssh",
     fingerprint: "SHA256:test",
   });
-  api.store.insert("credential", { id: "passkey", kind: "webauthn" });
-  api.store.insert("session", {
+  await api.store.insert("credential", { id: "passkey", kind: "webauthn" });
+  await api.store.insert("session", {
     id: createHash("sha256").update("test-token").digest("hex"),
     credentialId: "test-key",
     browser: false,
@@ -66,7 +66,7 @@ const capture = {
     rationale: "One container and reliable local persistence.",
   },
 };
-async function project(call: ReturnType<typeof fixture>["call"]) {
+async function project(call: Awaited<ReturnType<typeof fixture>>["call"]) {
   return (
     await call("/api/v1/projects/resolve", "POST", {
       context: { git: { remote: "git@github.com:alexcatdad/scratchpad.git" } },
@@ -81,7 +81,7 @@ describe("persistent API domain", () => {
     );
   });
   it("requires authenticated access and a project identity", async () => {
-    const { api, call } = fixture();
+    const { api, call } = await fixture();
     expect(
       (
         await api.handleRequest(
@@ -101,7 +101,7 @@ describe("persistent API domain", () => {
     expect(first.id).toBe(second.id);
   });
   it("persists idempotency across restart, refuses changed content, and retains original Git provenance", async () => {
-    const { api, call, databasePath } = fixture(true),
+    const { api, call, databasePath } = await fixture(true),
       p = await project(call);
     const body = {
       projectId: p.id,
@@ -130,12 +130,12 @@ describe("persistent API domain", () => {
         )
       ).status,
     ).toBe(409);
-    api.close();
+    await api.close();
     const restarted = createApi({
       databasePath,
       origin: "http://localhost:3000",
     });
-    cleanups.push(() => restarted.close());
+    cleanups.push(async () => await restarted.close());
     const response = await restarted.handleRequest(
       new Request("http://localhost:3000/api/v1/records", {
         method: "POST",
@@ -149,7 +149,7 @@ describe("persistent API domain", () => {
     expect((await response.json()).record.id).toBe(first.data.record.id);
   });
   it("preserves raw records through curated corrections and rejects stale edits", async () => {
-    const { call } = fixture(),
+    const { call } = await fixture(),
       p = await project(call);
     const saved = (
       await call("/api/v1/records", "POST", {
@@ -185,7 +185,7 @@ describe("persistent API domain", () => {
     expect(results).toHaveLength(1);
   });
   it("paginates same-time records without duplicates and searches literal FTS input", async () => {
-    const { call } = fixture(),
+    const { call } = await fixture(),
       p = await project(call);
     for (let n = 0; n < 4; n++)
       await call("/api/v1/records", "POST", {
@@ -203,13 +203,13 @@ describe("persistent API domain", () => {
     expect((await call("/api/v1/records?q=%22")).status).toBe(200);
   });
   it("round trips knowledge and audit history without exporting authentication", async () => {
-    const { call } = fixture(),
+    const { call } = await fixture(),
       p = await project(call);
     await call("/api/v1/records", "POST", { projectId: p.id, record: capture });
     const exported = (await call("/api/v1/export", "POST", {})).data;
     expect(exported.data.credential).toBeUndefined();
     expect(exported.data.session).toBeUndefined();
-    const destination = fixture();
+    const destination = await fixture();
     expect(
       (await destination.call("/api/v1/import", "POST", exported)).status,
     ).toBe(200);
@@ -222,7 +222,7 @@ describe("persistent API domain", () => {
     ).toBe(0);
   });
   it("rolls back invalid native imports and reports malformed legacy lines", async () => {
-    const { call } = fixture(),
+    const { call } = await fixture(),
       p = await project(call);
     const legacy = await call("/api/v1/import", "POST", {
       format: "jsonl",
@@ -244,7 +244,7 @@ describe("persistent API domain", () => {
     );
     const exported = (await call("/api/v1/export", "POST", {})).data;
     exported.data.record[0].projectId = "missing";
-    const destination = fixture();
+    const destination = await fixture();
     expect(
       (await destination.call("/api/v1/import", "POST", exported)).status,
     ).toBe(404);
@@ -253,7 +253,7 @@ describe("persistent API domain", () => {
     ).toHaveLength(0);
   });
   it("blocks replacement cycles, detects stale settings, and preserves central captures on mirror failure", async () => {
-    const { call } = fixture(),
+    const { call } = await fixture(),
       p = await project(call);
     const first = (
       await call("/api/v1/records", "POST", {
@@ -328,9 +328,9 @@ describe("owner authentication", () => {
       databasePath: join(directory, "setup.sqlite"),
       origin: "http://localhost:3000",
     });
-    cleanups.push(() => api.close());
-    const old = api.auth.createSetupToken(),
-      token = api.auth.createSetupToken();
+    cleanups.push(async () => await api.close());
+    const old = await api.auth.createSetupToken(),
+      token = await api.auth.createSetupToken();
     expect(old).not.toBe(token);
     const request = (setupToken: string, origin = "http://localhost:3000") =>
       api.handleRequest(
@@ -345,12 +345,12 @@ describe("owner authentication", () => {
     const options = await request(token);
     expect(options.status).toBe(200);
     expect((await options.json()).options.challenge).toBeTruthy();
-    api.store.insert("owner", { id: "owner" });
-    expect(() => api.auth.createSetupToken()).toThrow("disabled");
-    expect(api.auth.createSetupToken(true)).toBeTruthy();
+    await api.store.insert("owner", { id: "owner" });
+    await expect(api.auth.createSetupToken()).rejects.toThrow("disabled");
+    expect(await api.auth.createSetupToken(true)).toBeTruthy();
   });
   it("verifies a real OpenSSH signature, prevents replay, survives restart, and enforces revocation", async () => {
-    const { api, directory, databasePath } = fixture(true),
+    const { api, directory, databasePath } = await fixture(true),
       keyPath = join(directory, "identity");
     const keygen = spawnSync("ssh-keygen", [
       "-q",
@@ -367,8 +367,12 @@ describe("owner authentication", () => {
       .split(/\s+/)
       .slice(0, 2)
       .join(" ");
-    api.store.insert("credential", { id: "real-key", kind: "ssh", publicKey });
-    const challenge = api.auth.sshChallenge({ publicKey }),
+    await api.store.insert("credential", {
+      id: "real-key",
+      kind: "ssh",
+      publicKey,
+    });
+    const challenge = await api.auth.sshChallenge({ publicKey }),
       message = join(directory, "message");
     writeFileSync(message, String(challenge.nonce));
     const sign = spawnSync("ssh-keygen", [
@@ -386,29 +390,29 @@ describe("owner authentication", () => {
       publicKey,
       signature: readFileSync(`${message}.sig`, "utf8"),
     };
-    const token = api.auth.sshVerify(body);
+    const token = await api.auth.sshVerify(body);
     expect(token.accessToken).toBeTruthy();
-    expect(() => api.auth.sshVerify(body)).toThrow("consumed");
-    api.close();
+    await expect(api.auth.sshVerify(body)).rejects.toThrow("consumed");
+    await api.close();
     const restarted = createApi({
       databasePath,
       origin: "http://localhost:3000",
     });
-    cleanups.push(() => restarted.close());
+    cleanups.push(async () => await restarted.close());
     const request = new Request("http://localhost:3000/api/v1/projects", {
       headers: { authorization: `Bearer ${String(token.accessToken)}` },
     });
     expect((await restarted.handleRequest(request)).status).toBe(200);
-    const credential = restarted.store.get("credential", "real-key");
+    const credential = await restarted.store.get("credential", "real-key");
     if (!credential) throw new Error("Missing test credential");
-    restarted.store.update("credential", {
+    await restarted.store.update("credential", {
       ...credential,
       revokedAt: new Date().toISOString(),
     });
     expect((await restarted.handleRequest(request)).status).toBe(401);
   });
   it("does not allow bearer tokens in browser cookies or credential management", async () => {
-    const { api, call } = fixture();
+    const { api, call } = await fixture();
     const cookie = await api.handleRequest(
       new Request("http://localhost:3000/api/v1/projects", {
         headers: { cookie: "scratchpad_session=test-token" },
@@ -423,4 +427,38 @@ describe("owner authentication", () => {
       ).status,
     ).toBe(403);
   });
+});
+
+it("audits portable owner profiles and AI configuration without exposing credentials", async () => {
+  const { call } = await fixture();
+  const profile = await call("/api/v1/profile");
+  expect(profile.data.profile.version).toBe(0);
+  expect(profile.data.database.engine).toBe("sqlite");
+  const changed = await call("/api/v1/profile", "PATCH", {
+    displayName: "Local owner",
+    expectedVersion: 0,
+  });
+  expect(changed.data.profile.displayName).toBe("Local owner");
+  expect(
+    (
+      await call("/api/v1/profile", "PATCH", {
+        displayName: "Stale",
+        expectedVersion: 0,
+      })
+    ).status,
+  ).toBe(409);
+  const configured = await call("/api/v1/ai/settings", "PATCH", {
+    enabled: true,
+    apiKey: "synthetic-test-secret",
+    expectedVersion: 0,
+  });
+  expect(configured.data.apiKeyConfigured).toBe(true);
+  expect(JSON.stringify(configured.data)).not.toContain(
+    "synthetic-test-secret",
+  );
+  expect((await call("/api/v1/settings")).data.settings.aiEnabled).toBe(true);
+  const archive = (await call("/api/v1/export", "POST", {})).data;
+  expect(archive.data.profile[0].displayName).toBe("Local owner");
+  expect(archive.data.ai_settings).toBeUndefined();
+  expect(JSON.stringify(archive)).not.toContain("synthetic-test-secret");
 });

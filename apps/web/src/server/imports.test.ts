@@ -7,27 +7,27 @@ import { createApi } from "./api";
 import { defaults, type JsonObject } from "./domain";
 import { exportKinds, importLegacy, importNative } from "./imports";
 
-const cleanup: (() => void)[] = [];
-afterEach(() => {
-  for (const action of cleanup.splice(0)) action();
+const cleanup: (() => void | Promise<void>)[] = [];
+afterEach(async () => {
+  for (const action of cleanup.splice(0)) await action();
 });
-function fixture(path = ":memory:") {
+async function fixture(path = ":memory:") {
   const api = createApi({
     databasePath: path,
     origin: "http://localhost:3000",
   });
-  cleanup.push(() => {
-    if (api.store.sqlite.open) api.close();
+  cleanup.push(async () => {
+    if (api.store.sqlite.open) await api.close();
   });
-  api.store.insert("project", {
+  await api.store.insert("project", {
     id: "project",
     name: "Example",
     kind: "normal",
     slug: "example",
     settings: defaults("normal"),
   });
-  api.store.insert("credential", { id: "test", kind: "ssh" });
-  api.store.insert("session", {
+  await api.store.insert("credential", { id: "test", kind: "ssh" });
+  await api.store.insert("session", {
     id: createHash("sha256").update("token").digest("hex"),
     credentialId: "test",
     browser: false,
@@ -102,11 +102,11 @@ const source = [
 
 describe("legacy history fidelity", () => {
   it("preserves array decisions, original IDs, precise source evidence, missing authority, and typed project state", async () => {
-    const api = fixture();
+    const api = await fixture();
     const jsonl = source
       .map((row, index) => `${index === 0 ? "  " : ""}${JSON.stringify(row)}`)
       .join("\n");
-    const result = importLegacy(
+    const result = await importLegacy(
       api.store,
       {
         format: "jsonl",
@@ -118,7 +118,7 @@ describe("legacy history fidelity", () => {
     );
     expect(result.imported).toBe(4);
     expect(result.skipped).toBe(0);
-    const first = api.store.get("record", "D001");
+    const first = await api.store.get("record", "D001");
     if (!first) throw new Error("Import omitted D001");
     expect(first.authority).toBeNull();
     expect(first.happenedAt).toBe("2025-01-02T00:00:00.000Z");
@@ -133,12 +133,14 @@ describe("legacy history fidelity", () => {
     expect(
       ((first.provenance as JsonObject).import as JsonObject).datePrecision,
     ).toBe("day");
-    expect(api.store.get("record", "D002")?.type).toBe("business_decision");
-    expect(api.store.get("record", "legacy-paused")?.type).toBe(
+    expect((await api.store.get("record", "D002"))?.type).toBe(
+      "business_decision",
+    );
+    expect((await api.store.get("record", "legacy-paused"))?.type).toBe(
       "project_state",
     );
-    expect(api.store.list("relationship")).toHaveLength(1);
-    expect(api.store.list("relationship")[0].status).toBe("suggested");
+    expect(await api.store.list("relationship")).toHaveLength(1);
+    expect((await api.store.list("relationship"))[0].status).toBe("suggested");
     const context = (await api.call("/projects/project/context")).data;
     expect(context.state[0].payload.state).toBe("paused");
     expect(context.currentState).toBeNull();
@@ -153,32 +155,34 @@ describe("legacy history fidelity", () => {
       1,
     );
   });
-  it("reimports idempotently after native round trip and detects changed original IDs", () => {
-    const api = fixture();
+  it("reimports idempotently after native round trip and detects changed original IDs", async () => {
+    const api = await fixture();
     const body = {
       format: "jsonl",
       projectId: "project",
       sourceName: "history.jsonl",
       jsonl: source.map((row) => JSON.stringify(row)).join("\n"),
     };
-    const first = importLegacy(api.store, body, actor);
+    const first = await importLegacy(api.store, body, actor);
     expect(first.imported).toBe(4);
-    expect(importLegacy(api.store, body, actor).imported).toBe(0);
+    expect((await importLegacy(api.store, body, actor)).imported).toBe(0);
     const exported = {
       format: "scratchpad",
       version: 1,
       data: Object.fromEntries(
-        exportKinds.map((kind) => [kind, api.store.list(kind)]),
+        await Promise.all(
+          exportKinds.map(async (kind) => [kind, await api.store.list(kind)]),
+        ),
       ),
     };
     const restored = createApi({
       databasePath: ":memory:",
       origin: "http://localhost:3000",
     });
-    cleanup.push(() => restored.close());
-    importNative(restored.store, exported, actor);
-    expect(importLegacy(restored.store, body, actor).imported).toBe(0);
-    const changed = importLegacy(
+    cleanup.push(async () => await restored.close());
+    await importNative(restored.store, exported, actor);
+    expect((await importLegacy(restored.store, body, actor)).imported).toBe(0);
+    const changed = await importLegacy(
       restored.store,
       {
         ...body,
@@ -192,12 +196,14 @@ describe("legacy history fidelity", () => {
         expect.objectContaining({ code: "IMPORT_ID_CONFLICT" }),
       ]),
     );
-    expect(restored.store.list("record")).toEqual(api.store.list("record"));
+    expect(await restored.store.list("record")).toEqual(
+      await api.store.list("record"),
+    );
   });
-  it("keeps duplicate source occurrences and conflicting project identities without silent loss", () => {
-    const api = fixture();
+  it("keeps duplicate source occurrences and conflicting project identities without silent loss", async () => {
+    const api = await fixture();
     const record = { date: "2025-02-03", decision: "Repeated source entry" };
-    const result = importLegacy(
+    const result = await importLegacy(
       api.store,
       {
         projectId: "project",
@@ -206,16 +212,18 @@ describe("legacy history fidelity", () => {
       actor,
     );
     expect(result.imported).toBe(2);
-    expect(new Set(api.store.list("record").map((r) => r.id)).size).toBe(2);
-    api.store.insert("project", {
+    expect(
+      new Set((await api.store.list("record")).map((r) => r.id)).size,
+    ).toBe(2);
+    await api.store.insert("project", {
       id: "other",
       name: "Other",
       kind: "normal",
       settings: defaults("normal"),
     });
     const row = JSON.stringify(source[0]);
-    importLegacy(api.store, { projectId: "project", jsonl: row }, actor);
-    const collision = importLegacy(
+    await importLegacy(api.store, { projectId: "project", jsonl: row }, actor);
+    const collision = await importLegacy(
       api.store,
       { projectId: "other", jsonl: row },
       actor,
@@ -226,7 +234,9 @@ describe("legacy history fidelity", () => {
         expect.objectContaining({ code: "ID_COLLISION" }),
       ]),
     );
-    const other = api.store.list("record").find((r) => r.projectId === "other");
+    const other = (await api.store.list("record")).find(
+      (r) => r.projectId === "other",
+    );
     if (!other) throw new Error("Import omitted colliding record");
     expect(other.id).not.toBe("D001");
     expect(
@@ -237,7 +247,7 @@ describe("legacy history fidelity", () => {
 
 describe("current context and live policy", () => {
   it("follows accepted replacement chains, preserves partial constraints, and orders state by occurrence time", async () => {
-    const api = fixture();
+    const api = await fixture();
     const capture = async (
       type: string,
       payload: JsonObject,
@@ -309,7 +319,7 @@ describe("current context and live policy", () => {
     ).toContain(old.id);
   });
   it("enforces type settings and recomputes mirror permissions for capture replays", async () => {
-    const api = fixture();
+    const api = await fixture();
     const settings = {
       ...defaults("normal"),
       enabledRecordTypes: ["decision"],
@@ -359,7 +369,7 @@ describe("current context and live policy", () => {
   it("backs up the live SQLite database including authentication and persistent retry state", async () => {
     const directory = mkdtempSync(join(tmpdir(), "scratchpad-backup-"));
     cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
-    const api = fixture(join(directory, "live.sqlite"));
+    const api = await fixture(join(directory, "live.sqlite"));
     const body = {
       projectId: "project",
       record: {
@@ -380,7 +390,7 @@ describe("current context and live policy", () => {
       databasePath: backup,
       origin: "http://localhost:3000",
     });
-    cleanup.push(() => restored.close());
+    cleanup.push(async () => await restored.close());
     const response = await restored.handleRequest(
       new Request("http://localhost:3000/api/v1/records", {
         method: "POST",
@@ -393,14 +403,14 @@ describe("current context and live policy", () => {
     );
     expect(response.status).toBe(201);
     expect((await response.json()).record.id).toBe(before.data.record.id);
-    expect(restored.store.list("record")).toHaveLength(1);
+    expect(await restored.store.list("record")).toHaveLength(1);
   });
 });
 
 describe("native archive integrity", () => {
   it("round trips revisions, source identities, evidence, settings, audit, and rejects unreadable or cyclic archives atomically", async () => {
-    const api = fixture();
-    api.store.insert("source", {
+    const api = await fixture();
+    await api.store.insert("source", {
       id: "source",
       projectId: "project",
       kind: "git_remote",
@@ -413,7 +423,7 @@ describe("native archive integrity", () => {
       .slice(0, 2)
       .map((row) => JSON.stringify(row))
       .join("\n");
-    importLegacy(api.store, { projectId: "project", jsonl: rows }, actor);
+    await importLegacy(api.store, { projectId: "project", jsonl: rows }, actor);
     await api.call("/records/D001/metadata", "PATCH", {
       expectedVersion: 1,
       tags: ["historical"],
@@ -436,12 +446,14 @@ describe("native archive integrity", () => {
       databasePath: ":memory:",
       origin: "http://localhost:3000",
     });
-    cleanup.push(() => restored.close());
-    importNative(restored.store, archive, actor);
+    cleanup.push(async () => await restored.close());
+    await importNative(restored.store, archive, actor);
     for (const kind of exportKinds.filter((kind) => kind !== "audit"))
-      expect(restored.store.list(kind)).toEqual(api.store.list(kind));
-    for (const entry of api.store.list("audit"))
-      expect(restored.store.get("audit", entry.id)).toEqual(entry);
+      expect(await restored.store.list(kind)).toEqual(
+        await api.store.list(kind),
+      );
+    for (const entry of await api.store.list("audit"))
+      expect(await restored.store.get("audit", entry.id)).toEqual(entry);
     const detail = (await api.call("/records/D001")).data;
     expect(
       detail.audit.some(
@@ -474,10 +486,12 @@ describe("native archive integrity", () => {
         databasePath: ":memory:",
         origin: "http://localhost:3000",
       });
-      cleanup.push(() => destination.close());
-      expect(() => importNative(destination.store, invalid, actor)).toThrow();
-      expect(destination.store.list("project")).toHaveLength(0);
-      expect(destination.store.list("record")).toHaveLength(0);
+      cleanup.push(async () => await destination.close());
+      await expect(
+        importNative(destination.store, invalid, actor),
+      ).rejects.toThrow();
+      expect(await destination.store.list("project")).toHaveLength(0);
+      expect(await destination.store.list("record")).toHaveLength(0);
     }
   });
 });

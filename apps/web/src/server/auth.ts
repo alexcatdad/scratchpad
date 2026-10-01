@@ -66,10 +66,10 @@ export class Auth {
       "Public URL must use HTTPS, except localhost.",
     );
   }
-  throttle(): void {
-    this.store.atomic(() => {
+  async throttle(): Promise<void> {
+    await this.store.atomic(async () => {
       const bucket = Math.floor(Date.now() / 60000);
-      const current = this.store.get("rate", "auth");
+      const current = await this.store.get("rate", "auth");
       const count = current?.bucket === bucket ? Number(current.count) : 0;
       requireValue(
         count < 120,
@@ -78,32 +78,36 @@ export class Auth {
         429,
       );
       if (current)
-        this.store.update("rate", { ...current, bucket, count: count + 1 });
-      else this.store.insert("rate", { id: "auth", bucket, count: 1 });
+        await this.store.update("rate", {
+          ...current,
+          bucket,
+          count: count + 1,
+        });
+      else await this.store.insert("rate", { id: "auth", bucket, count: 1 });
     });
   }
-  initialized(): boolean {
-    return this.store.list("owner").length > 0;
+  async initialized(): Promise<boolean> {
+    return (await this.store.list("owner")).length > 0;
   }
-  createSetupToken(recovery = false): string {
+  async createSetupToken(recovery = false): Promise<string> {
     requireValue(
-      recovery ? this.initialized() : !this.initialized(),
+      recovery ? await this.initialized() : !(await this.initialized()),
       "SETUP_DISABLED",
       recovery
         ? "Recovery requires an existing owner."
         : "Initial setup is disabled after enrollment.",
       409,
     );
-    return this.store.atomic(() => {
-      for (const token of this.store.list("setup_token"))
-        this.store.remove("setup_token", token.id);
+    return await this.store.atomic(async () => {
+      for (const token of await this.store.list("setup_token"))
+        await this.store.remove("setup_token", token.id);
       const token = random();
-      this.store.insert("setup_token", {
+      await this.store.insert("setup_token", {
         id: hash(token),
         recovery,
         expiresAt: expiry(15 * 60 * 1000),
       });
-      this.store.audit(
+      await this.store.audit(
         recovery ? "owner.recovery_authorized" : "owner.setup_authorized",
         "owner",
         "owner",
@@ -112,14 +116,14 @@ export class Auth {
       return token;
     });
   }
-  private setup(token: unknown): Entity {
+  private async setup(token: unknown): Promise<Entity> {
     requireValue(
       typeof token === "string",
       "AUTH_REQUIRED",
       "A setup token is required.",
       401,
     );
-    const entry = this.store.get("setup_token", hash(token));
+    const entry = await this.store.get("setup_token", hash(token));
     requireValue(
       entry && String(entry.expiresAt) > now(),
       "AUTH_INVALID",
@@ -127,18 +131,21 @@ export class Auth {
       401,
     );
     requireValue(
-      entry.recovery || !this.initialized(),
+      entry.recovery || !(await this.initialized()),
       "SETUP_DISABLED",
       "Initial setup is disabled.",
       409,
     );
     return entry;
   }
-  private challenge(kind: string, details: JsonObject = {}): Entity {
-    for (const item of this.store.list("challenge"))
+  private async challenge(
+    kind: string,
+    details: JsonObject = {},
+  ): Promise<Entity> {
+    for (const item of await this.store.list("challenge"))
       if (String(item.expiresAt) < now())
-        this.store.remove("challenge", item.id);
-    return this.store.insert("challenge", {
+        await this.store.remove("challenge", item.id);
+    return await this.store.insert("challenge", {
       id: id("challenge"),
       kind,
       nonce: random(),
@@ -146,14 +153,14 @@ export class Auth {
       ...details,
     });
   }
-  private getChallenge(value: unknown, kind: string): Entity {
+  private async getChallenge(value: unknown, kind: string): Promise<Entity> {
     requireValue(
       typeof value === "string",
       "AUTH_INVALID",
       "Invalid challenge.",
       401,
     );
-    const entry = this.store.get("challenge", value);
+    const entry = await this.store.get("challenge", value);
     requireValue(
       entry && entry.kind === kind,
       "AUTH_INVALID",
@@ -174,23 +181,23 @@ export class Auth {
     );
     return entry;
   }
-  private consume(challenge: Entity): void {
-    const fresh = this.getChallenge(challenge.id, String(challenge.kind));
-    this.store.update("challenge", { ...fresh, consumedAt: now() });
+  private async consume(challenge: Entity): Promise<void> {
+    const fresh = await this.getChallenge(challenge.id, String(challenge.kind));
+    await this.store.update("challenge", { ...fresh, consumedAt: now() });
   }
-  private session(
+  private async session(
     credential: Entity,
     browser: boolean,
-  ): { accessToken: string; expiresAt: string } {
+  ): Promise<{ accessToken: string; expiresAt: string }> {
     const accessToken = random(),
       expiresAt = expiry(lifetime);
-    this.store.insert("session", {
+    await this.store.insert("session", {
       id: hash(accessToken),
       credentialId: credential.id,
       expiresAt,
       browser,
     });
-    this.store.update("credential", { ...credential, lastUsedAt: now() });
+    await this.store.update("credential", { ...credential, lastUsedAt: now() });
     return { accessToken, expiresAt };
   }
   cookie(token: string): string {
@@ -199,7 +206,7 @@ export class Auth {
   clearCookie(): string {
     return `scratchpad_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${this.origin.startsWith("https:") ? "; Secure" : ""}`;
   }
-  identify(request: Request): Identity {
+  async identify(request: Request): Promise<Identity> {
     const bearer = request.headers
       .get("authorization")
       ?.match(/^Bearer ([A-Za-z0-9_-]+)$/)?.[1];
@@ -211,14 +218,14 @@ export class Auth {
       ?.slice("scratchpad_session=".length);
     const token = bearer ?? cookie;
     requireValue(token, "AUTH_REQUIRED", "Sign in to Scratchpad.", 401);
-    const session = this.store.get("session", hash(token));
+    const session = await this.store.get("session", hash(token));
     requireValue(
       session && !session.revokedAt && String(session.expiresAt) > now(),
       "AUTH_INVALID",
       "Session expired or revoked.",
       401,
     );
-    const credential = this.store.get(
+    const credential = await this.store.get(
       "credential",
       String(session.credentialId),
     );
@@ -254,50 +261,43 @@ export class Auth {
       403,
     );
   }
-  logout(identity: Identity): void {
-    this.store.update("session", { ...identity.session, revokedAt: now() });
+  async logout(identity: Identity): Promise<void> {
+    await this.store.update("session", {
+      ...identity.session,
+      revokedAt: now(),
+    });
   }
-  publicCredentials(): JsonObject[] {
-    return this.store
-      .list("credential")
-      .map(
-        ({
-          id,
-          kind,
-          label,
-          fingerprint,
-          createdAt,
-          lastUsedAt,
-          revokedAt,
-        }) => ({
-          id,
-          kind,
-          label,
-          fingerprint,
-          createdAt,
-          lastUsedAt,
-          revokedAt,
-        }),
-      );
+  async publicCredentials(): Promise<JsonObject[]> {
+    return (await this.store.list("credential")).map(
+      ({ id, kind, label, fingerprint, createdAt, lastUsedAt, revokedAt }) => ({
+        id,
+        kind,
+        label,
+        fingerprint,
+        createdAt,
+        lastUsedAt,
+        revokedAt,
+      }),
+    );
   }
-  revoke(credentialId: string, identity: Identity): void {
-    const credential = this.store.get("credential", credentialId);
+  async revoke(credentialId: string, identity: Identity): Promise<void> {
+    const credential = await this.store.get("credential", credentialId);
     requireValue(credential, "NOT_FOUND", "Credential not found.", 404);
     requireValue(
       credential.kind !== "webauthn" ||
-        this.store
-          .list("credential")
-          .some(
-            (c) =>
-              c.kind === "webauthn" && !c.revokedAt && c.id !== credentialId,
-          ),
+        (await this.store.list("credential")).some(
+          (c) => c.kind === "webauthn" && !c.revokedAt && c.id !== credentialId,
+        ),
       "CONFLICT",
       "Enroll another passkey before revoking the last passkey.",
       409,
     );
-    this.store.atomic(() => {
-      this.store.update("credential", { ...credential, revokedAt: now() });
-      this.store.audit(
+    await this.store.atomic(async () => {
+      await this.store.update("credential", {
+        ...credential,
+        revokedAt: now(),
+      });
+      await this.store.audit(
         "credential.revoked",
         "credential",
         credentialId,
@@ -316,8 +316,8 @@ export class Auth {
         "Enroll passkeys through an authenticated browser.",
         403,
       );
-    const token = identity ? undefined : this.setup(body.setupToken);
-    const owner = this.store.get("owner", "owner");
+    const token = identity ? undefined : await this.setup(body.setupToken);
+    const owner = await this.store.get("owner", "owner");
     const options = await generateRegistrationOptions({
       rpName: "Scratchpad",
       rpID: this.rpID,
@@ -330,12 +330,11 @@ export class Auth {
         residentKey: "required",
         userVerification: "required",
       },
-      excludeCredentials: this.store
-        .list("credential")
+      excludeCredentials: (await this.store.list("credential"))
         .filter((c) => c.kind === "webauthn" && !c.revokedAt)
         .map((c) => ({ id: String(c.webauthnId) })),
     });
-    const challenge = this.challenge("registration", {
+    const challenge = await this.challenge("registration", {
       nonce: options.challenge,
       setupTokenId: token?.id,
       credentialId: identity?.credential.id,
@@ -348,9 +347,9 @@ export class Auth {
     body: JsonObject,
     identity?: Identity,
   ): Promise<{ accessToken: string; expiresAt: string }> {
-    const challenge = this.getChallenge(body.challengeId, "registration");
+    const challenge = await this.getChallenge(body.challengeId, "registration");
     const token = challenge.setupTokenId
-      ? this.setup(body.setupToken)
+      ? await this.setup(body.setupToken)
       : undefined;
     requireValue(
       token
@@ -376,30 +375,30 @@ export class Auth {
       401,
     );
     const info = result.registrationInfo;
-    return this.store.atomic(() => {
-      this.consume(challenge);
+    return await this.store.atomic(async () => {
+      await this.consume(challenge);
       if (token) {
-        this.setup(body.setupToken);
-        this.store.remove("setup_token", token.id);
+        await this.setup(body.setupToken);
+        await this.store.remove("setup_token", token.id);
       }
       requireValue(
-        !this.store
-          .list("credential")
-          .some((c) => c.webauthnId === info.credential.id),
+        !(await this.store.list("credential")).some(
+          (c) => c.webauthnId === info.credential.id,
+        ),
         "CONFLICT",
         "Passkey already enrolled.",
         409,
       );
-      if (!this.initialized())
-        this.store.insert("owner", {
+      if (!(await this.initialized()))
+        await this.store.insert("owner", {
           id: "owner",
           displayName: "Owner",
           userId: "scratchpad-owner",
         });
       if (token?.recovery)
-        for (const session of this.store.list("session"))
-          this.store.update("session", { ...session, revokedAt: now() });
-      const credential = this.store.insert("credential", {
+        for (const session of await this.store.list("session"))
+          await this.store.update("session", { ...session, revokedAt: now() });
+      const credential = await this.store.insert("credential", {
         id: id("credential"),
         kind: "webauthn",
         label: challenge.label,
@@ -408,18 +407,18 @@ export class Auth {
         counter: info.credential.counter,
         transports: info.credential.transports,
       });
-      this.store.audit(
+      await this.store.audit(
         token?.recovery ? "owner.recovered" : "credential.enrolled",
         "credential",
         credential.id,
         { kind: "user", credentialFingerprint: credential.id },
       );
-      return this.session(credential, true);
+      return await this.session(credential, true);
     });
   }
   async loginOptions(): Promise<JsonObject> {
     requireValue(
-      this.initialized(),
+      await this.initialized(),
       "SETUP_REQUIRED",
       "Complete owner setup first.",
       409,
@@ -428,22 +427,20 @@ export class Auth {
       rpID: this.rpID,
       userVerification: "required",
     });
-    const challenge = this.challenge("login", { nonce: options.challenge });
+    const challenge = await this.challenge("login", {
+      nonce: options.challenge,
+    });
     return { challengeId: challenge.id, options };
   }
   async loginVerify(
     body: JsonObject,
   ): Promise<{ accessToken: string; expiresAt: string }> {
-    const challenge = this.getChallenge(body.challengeId, "login");
+    const challenge = await this.getChallenge(body.challengeId, "login");
     const response = body.response as AuthenticationResponseJSON;
-    const credential = this.store
-      .list("credential")
-      .find(
-        (c) =>
-          c.kind === "webauthn" &&
-          c.webauthnId === response?.id &&
-          !c.revokedAt,
-      );
+    const credential = (await this.store.list("credential")).find(
+      (c) =>
+        c.kind === "webauthn" && c.webauthnId === response?.id && !c.revokedAt,
+    );
     requireValue(credential, "AUTH_INVALID", "Unknown passkey.", 401);
     const result = await verifyAuthenticationResponse({
       response,
@@ -465,23 +462,26 @@ export class Auth {
       "Passkey verification failed.",
       401,
     );
-    return this.store.atomic(() => {
-      this.consume(challenge);
-      const fresh = this.store.get("credential", credential.id);
+    return await this.store.atomic(async () => {
+      await this.consume(challenge);
+      const fresh = await this.store.get("credential", credential.id);
       requireValue(
         fresh && !fresh.revokedAt && fresh.version === credential.version,
         "AUTH_INVALID",
         "Credential changed. Please sign in again.",
         401,
       );
-      const updated = this.store.update("credential", {
+      const updated = await this.store.update("credential", {
         ...credential,
         counter: result.authenticationInfo.newCounter,
       });
-      return this.session(updated, true);
+      return await this.session(updated, true);
     });
   }
-  sshChallenge(body: JsonObject, enrollment?: Identity): JsonObject {
+  async sshChallenge(
+    body: JsonObject,
+    enrollment?: Identity,
+  ): Promise<JsonObject> {
     const publicKey = keySchema
       .parse(body.publicKey)
       .split(/\s+/)
@@ -489,17 +489,14 @@ export class Auth {
       .join(" ");
     if (!enrollment)
       requireValue(
-        this.store
-          .list("credential")
-          .some(
-            (c) =>
-              c.publicKey === publicKey && c.kind === "ssh" && !c.revokedAt,
-          ),
+        (await this.store.list("credential")).some(
+          (c) => c.publicKey === publicKey && c.kind === "ssh" && !c.revokedAt,
+        ),
         "AUTH_INVALID",
         "Public key is not enrolled.",
         401,
       );
-    const challenge = this.challenge(enrollment ? "ssh_enroll" : "ssh", {
+    const challenge = await this.challenge(enrollment ? "ssh_enroll" : "ssh", {
       publicKey,
       enrolledBy: enrollment?.credential.id,
       label:
@@ -512,8 +509,11 @@ export class Auth {
       expiresAt: challenge.expiresAt,
     };
   }
-  sshVerify(body: JsonObject, enrollment?: Identity): JsonObject {
-    const challenge = this.getChallenge(
+  async sshVerify(
+    body: JsonObject,
+    enrollment?: Identity,
+  ): Promise<JsonObject> {
+    const challenge = await this.getChallenge(
       body.challengeId,
       enrollment ? "ssh_enroll" : "ssh",
     );
@@ -561,16 +561,14 @@ export class Auth {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-    return this.store.atomic(() => {
-      this.consume(challenge);
-      let credential = this.store
-        .list("credential")
-        .find(
-          (c) => c.kind === "ssh" && c.publicKey === publicKey && !c.revokedAt,
-        );
+    return await this.store.atomic(async () => {
+      await this.consume(challenge);
+      let credential = (await this.store.list("credential")).find(
+        (c) => c.kind === "ssh" && c.publicKey === publicKey && !c.revokedAt,
+      );
       if (enrollment) {
         requireValue(!credential, "CONFLICT", "Key is already enrolled.", 409);
-        credential = this.store.insert("credential", {
+        credential = await this.store.insert("credential", {
           id: id("credential"),
           kind: "ssh",
           publicKey,
@@ -580,7 +578,7 @@ export class Auth {
             .digest("base64")
             .replace(/=+$/, "")}`,
         });
-        this.store.audit(
+        await this.store.audit(
           "credential.enrolled",
           "credential",
           credential.id,
@@ -592,7 +590,7 @@ export class Auth {
         };
       }
       requireValue(credential, "AUTH_INVALID", "Key is not enrolled.", 401);
-      return this.session(credential, false);
+      return await this.session(credential, false);
     });
   }
 }

@@ -13,7 +13,9 @@ const environment = {
   PORT: "3100",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
+  SCRATCHPAD_DATABASE_URL: process.env.SCRATCHPAD_E2E_DATABASE_URL ?? "",
 };
+const postgresMode = Boolean(environment.SCRATCHPAD_DATABASE_URL);
 const dockerMode = process.env.SCRATCHPAD_E2E_DOCKER === "1";
 const dockerImage = process.env.SCRATCHPAD_E2E_IMAGE ?? "scratchpad:ci";
 const runId = `scratchpad-e2e-${randomUUID()}`;
@@ -45,6 +47,12 @@ async function start() {
       `SCRATCHPAD_PUBLIC_URL=${origin}`,
       "--env",
       "SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite",
+      ...(postgresMode
+        ? [
+            "--env",
+            `SCRATCHPAD_DATABASE_URL=${environment.SCRATCHPAD_DATABASE_URL}`,
+          ]
+        : []),
       "--volume",
       `${activeVolume}:/data`,
       dockerImage,
@@ -135,7 +143,7 @@ function admin(...args: string[]) {
   );
 }
 async function restartOrRestore() {
-  if (!dockerMode) {
+  if (!dockerMode || postgresMode) {
     await stop();
     await start();
     return;
@@ -191,6 +199,12 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   page,
 }) => {
   test.setTimeout(dockerMode ? 180_000 : 120_000);
+  if (postgresMode)
+    await expect(
+      (await fetch(`${origin}/ready`)).json(),
+    ).resolves.toMatchObject({
+      database: "postgres",
+    });
   page.on("pageerror", (error) =>
     console.error("Browser exception:", error.message),
   );

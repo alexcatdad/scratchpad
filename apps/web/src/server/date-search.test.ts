@@ -8,13 +8,13 @@ it("compares inclusive search dates chronologically across fractional precision"
     origin: "http://localhost:3000",
   });
   try {
-    api.store.insert("owner", { id: "owner" });
-    api.store.insert("credential", {
+    await api.store.insert("owner", { id: "owner" });
+    await api.store.insert("credential", {
       id: "key",
       kind: "ssh",
       fingerprint: "SHA256:test",
     });
-    api.store.insert("session", {
+    await api.store.insert("session", {
       id: createHash("sha256").update("token").digest("hex"),
       credentialId: "key",
       browser: false,
@@ -101,6 +101,6 @@ it("compares inclusive search dates chronologically across fractional precision"
       (await receiptResponse.json()).records.map((r: { id: string }) => r.id),
     ).toContain(record.id);
   } finally {
-    api.close();
+    await api.close();
   }
 });

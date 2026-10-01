@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AiService } from "./ai";
 import { Auth, type Identity } from "./auth";
 import { assertRelationshipSafe, projectContext } from "./context";
 import {
@@ -95,11 +96,16 @@ function publicError(error: unknown): Response {
     500,
   );
 }
-export function createApi(config: { databasePath: string; origin: string }) {
-  const store = new Store(config.databasePath),
-    auth = new Auth(store, config.origin);
-  function entity(kind: string, key: string): Entity {
-    const value = store.get(kind, key);
+export function createApi(config: {
+  databasePath: string;
+  databaseUrl?: string;
+  origin: string;
+}) {
+  const store = new Store(config.databasePath, config.databaseUrl),
+    auth = new Auth(store, config.origin),
+    ai = new AiService(store);
+  async function entity(kind: string, key: string): Promise<Entity> {
+    const value = await store.get(kind, key);
     requireValue(
       value,
       kind === "project"
@@ -114,13 +120,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
       ? { ...value, settings: settingsSchema.parse(value.settings) }
       : value;
   }
-  function projectCreate(
+  async function projectCreate(
     name: string,
     kind = "normal",
     identity?: string,
     sourceKind = "git_remote",
-  ): Entity {
-    const project = store.insert("project", {
+  ): Promise<Entity> {
+    const project = await store.insert("project", {
       id: id("proj"),
       name,
       slug: name.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
@@ -129,16 +135,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
         kind === "external"
           ? defaults(kind)
           : settingsSchema.parse(
-              store.get("settings", "global")?.defaultProjectSettings ??
+              (await store.get("settings", "global"))?.defaultProjectSettings ??
                 defaults(kind),
             ),
       updatedAt: now(),
     });
     if (identity) {
-      store.sqlite
-        .prepare("INSERT INTO identities VALUES(?,?)")
-        .run(identity, project.id);
-      store.insert("source", {
+      await store.addIdentity(identity, project.id);
+      await store.insert("source", {
         id: id("source"),
         projectId: project.id,
         kind: sourceKind,
@@ -147,13 +151,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
     }
     return project;
   }
-  function createRecord(
+  async function createRecord(
     projectId: string,
     submitted: unknown,
     gitContext: unknown,
     actor: Actor,
-  ): JsonObject {
-    const project = entity("project", projectId),
+  ): Promise<JsonObject> {
+    const project = await entity("project", projectId),
       record = captureSchema.parse(submitted);
     requireValue(
       settingsSchema
@@ -164,7 +168,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
       403,
     );
     const content = renderPayload(record.type, record.payload);
-    const saved = store.insert("record", {
+    const saved = await store.insert("record", {
       ...record,
       id: id("rec"),
       projectId,
@@ -175,19 +179,22 @@ export function createApi(config: { databasePath: string; origin: string }) {
       gitContext:
         gitContext === undefined ? undefined : object.parse(gitContext),
     });
-    store.insert("metadata", {
+    await store.insert("metadata", {
       id: saved.id,
       recordId: saved.id,
       tags: [],
       archived: false,
       updatedAt: now(),
     });
-    store.sqlite
-      .prepare(
-        "INSERT INTO record_search(record_id,title,content) VALUES(?,?,?)",
-      )
-      .run(saved.id, record.title, content);
-    store.audit("record.created", "record", saved.id, actor, undefined, saved);
+    await store.indexRecord(saved.id, record.title, content);
+    await store.audit(
+      "record.created",
+      "record",
+      saved.id,
+      actor,
+      undefined,
+      saved,
+    );
     const settings = settingsSchema.parse(project.settings);
     return {
       record: saved,
@@ -198,55 +205,52 @@ export function createApi(config: { databasePath: string; origin: string }) {
       },
     };
   }
-  function recordDetail(key: string): JsonObject {
+  async function recordDetail(key: string): Promise<JsonObject> {
     const relatedIds = new Set([
       key,
-      ...store
-        .list("relationship")
+      ...(await store.list("relationship"))
         .filter((link) => link.fromRecordId === key || link.toRecordId === key)
         .map((link) => link.id),
-      ...store
-        .list("evidence")
+      ...(await store.list("evidence"))
         .filter((item) => item.recordId === key)
         .map((item) => item.id),
     ]);
     return {
-      record: entity("record", key),
-      metadata: store.get("metadata", key),
-      revisions: store.list("revision").filter((r) => r.recordId === key),
-      relationships: store
-        .list("relationship")
-        .filter((r) => r.fromRecordId === key || r.toRecordId === key),
-      evidence: store.list("evidence").filter((r) => r.recordId === key),
-      mirror: store.get("mirror", key),
-      audit: store
-        .list("audit")
-        .filter((r) => relatedIds.has(String(r.entityId))),
+      record: await entity("record", key),
+      metadata: await store.get("metadata", key),
+      revisions: (await store.list("revision")).filter(
+        (r) => r.recordId === key,
+      ),
+      relationships: (await store.list("relationship")).filter(
+        (r) => r.fromRecordId === key || r.toRecordId === key,
+      ),
+      evidence: (await store.list("evidence")).filter(
+        (r) => r.recordId === key,
+      ),
+      mirror: await store.get("mirror", key),
+      audit: (await store.list("audit")).filter((r) =>
+        relatedIds.has(String(r.entityId)),
+      ),
     };
   }
-  function search(params: URLSearchParams): JsonObject {
+  async function search(params: URLSearchParams): Promise<JsonObject> {
     const limit = z.coerce
       .number()
       .int()
       .min(1)
       .max(100)
       .parse(params.get("limit") ?? 30);
-    let records = store.list("record");
+    let records = await store.list("record");
+    const metadataById = new Map(
+      (await store.list("metadata")).map((m) => [m.id, m]),
+    );
+    const allRelationships = await store.list("relationship");
     const q = params.get("q");
     if (q) {
       const terms = q.match(/[\p{L}\p{N}_]+/gu)?.slice(0, 30) ?? [];
       if (!terms.length) records = [];
       else {
-        const matching = store.sqlite
-          .prepare(
-            "SELECT record_id FROM record_search WHERE record_search MATCH ?",
-          )
-          .all(
-            terms
-              .map((term) => `"${term.replaceAll('"', '""')}"`)
-              .join(" AND "),
-          ) as { record_id: string }[];
-        const ids = new Set(matching.map((r) => r.record_id));
+        const ids = new Set(await store.searchRecords(terms));
         records = records.filter((r) => ids.has(r.id));
       }
     }
@@ -271,9 +275,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
       to = params.get("to");
     if (tag)
       records = records.filter((r) =>
-        (store.get("metadata", r.id)?.tags as string[] | undefined)?.includes(
-          tag,
-        ),
+        (metadataById.get(r.id)?.tags as string[] | undefined)?.includes(tag),
       );
     if (branch)
       records = records.filter(
@@ -299,13 +301,10 @@ export function createApi(config: { databasePath: string; origin: string }) {
       gitPath = params.get("gitPath");
     if (status)
       records = records.filter((record) => {
-        const metadata = store.get("metadata", record.id);
-        const replacements = store
-          .list("relationship")
-          .filter(
-            (link) =>
-              link.toRecordId === record.id && link.status === "accepted",
-          );
+        const metadata = metadataById.get(record.id);
+        const replacements = allRelationships.filter(
+          (link) => link.toRecordId === record.id && link.status === "accepted",
+        );
         const lifecycle = metadata?.archived
           ? "archived"
           : replacements.some((link) => link.type === "replaces")
@@ -316,16 +315,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
         return lifecycle === status;
       });
     if (relationshipType || relatedTo) {
-      const links = store
-        .list("relationship")
-        .filter(
-          (link) =>
-            link.status !== "rejected" &&
-            (!relationshipType || link.type === relationshipType) &&
-            (!relatedTo ||
-              link.fromRecordId === relatedTo ||
-              link.toRecordId === relatedTo),
-        );
+      const links = (await store.list("relationship")).filter(
+        (link) =>
+          link.status !== "rejected" &&
+          (!relationshipType || link.type === relationshipType) &&
+          (!relatedTo ||
+            link.fromRecordId === relatedTo ||
+            link.toRecordId === relatedTo),
+      );
       records = records.filter((record) =>
         links.some(
           (link) =>
@@ -354,8 +351,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
     if (archived)
       records = records.filter(
         (r) =>
-          Boolean(store.get("metadata", r.id)?.archived) ===
-          (archived === "true"),
+          Boolean(metadataById.get(r.id)?.archived) === (archived === "true"),
       );
     records.sort(
       (a, b) =>
@@ -379,7 +375,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
     return {
       records: page.map((r) => ({
         ...r,
-        metadata: store.get("metadata", r.id),
+        metadata: metadataById.get(r.id),
       })),
       nextCursor:
         records.length > limit && last
@@ -397,8 +393,8 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (method === "GET" && path === "/health")
         return response({ status: "ok" });
       if (method === "GET" && path === "/ready") {
-        store.assertReady();
-        return response({ status: "ready", database: "sqlite" });
+        await store.assertReady();
+        return response({ status: "ready", database: store.backend });
       }
       requireValue(
         path.startsWith("/api/v1/"),
@@ -435,19 +431,23 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (route === "/auth/status" && method === "GET") {
         let authenticated = false;
         try {
-          auth.identify(request);
+          await auth.identify(request);
           authenticated = true;
         } catch {
           /* Status intentionally supports signed-out clients. */
         }
-        return response({ initialized: auth.initialized(), authenticated });
+        return response({
+          initialized: await auth.initialized(),
+          authenticated,
+        });
       }
-      if (route.startsWith("/auth/") && method === "POST") auth.throttle();
+      if (route.startsWith("/auth/") && method === "POST")
+        await auth.throttle();
       if (route.startsWith("/auth/")) {
         if (method === "POST" && route === "/auth/mcp/challenge")
-          return response(auth.sshChallenge(body));
+          return response(await auth.sshChallenge(body));
         if (method === "POST" && route === "/auth/mcp/verify")
-          return response(auth.sshVerify(body));
+          return response(await auth.sshVerify(body));
         if (
           method === "POST" &&
           [
@@ -460,7 +460,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
           auth.checkOrigin(request);
           let identity: Identity | undefined;
           if (!body.setupToken && route.startsWith("/auth/register/"))
-            identity = auth.identify(request);
+            identity = await auth.identify(request);
           if (route === "/auth/register/options")
             return response(await auth.registrationOptions(body, identity));
           if (route === "/auth/login/options")
@@ -476,16 +476,138 @@ export function createApi(config: { databasePath: string; origin: string }) {
           );
         }
       }
-      const identity = auth.identify(request),
+      const identity = await auth.identify(request),
         actor = identity.actor;
+      if (route === "/profile" && method === "GET") {
+        const profile = (await store.get("profile", "owner-profile")) ?? {
+          id: "owner-profile",
+          displayName: String(
+            (await store.get("owner", "owner"))?.displayName ?? "Owner",
+          ),
+          version: 0,
+        };
+        return response({
+          profile,
+          database: {
+            engine: store.backend === "postgres" ? "postgresql" : "sqlite",
+          },
+        });
+      }
+      if (route === "/profile" && method === "PATCH")
+        return response(
+          await store.atomic(async () => {
+            const displayName = z
+              .string()
+              .trim()
+              .min(1)
+              .max(200)
+              .parse(body.displayName);
+            const version = z
+              .number()
+              .int()
+              .nonnegative()
+              .parse(body.expectedVersion);
+            const previous = await store.get("profile", "owner-profile");
+            requireValue(
+              (previous?.version ?? 0) === version,
+              "CONFLICT",
+              "Profile changed. Read it again.",
+              409,
+            );
+            const profile = previous
+              ? await store.update(
+                  "profile",
+                  { ...previous, displayName },
+                  version,
+                )
+              : await store.insert("profile", {
+                  id: "owner-profile",
+                  displayName,
+                });
+            await store.audit(
+              "profile.updated",
+              "profile",
+              profile.id,
+              actor,
+              previous,
+              profile,
+            );
+            return { profile };
+          }),
+        );
+      if (route === "/ai/settings" && method === "GET")
+        return response(await ai.settings());
+      if (route === "/ai/settings" && method === "PATCH")
+        return response(
+          await ai.configure(
+            {
+              ...body,
+              expectedVersion: z.coerce
+                .number()
+                .int()
+                .nonnegative()
+                .parse(
+                  body.expectedVersion ??
+                    request.headers.get("if-match")?.replaceAll('"', ""),
+                ),
+            },
+            actor,
+          ),
+        );
+      if (route === "/ai/test" && method === "POST")
+        return response(await ai.testProvider());
+      if (route === "/ai/jobs" && method === "GET")
+        return response({ jobs: await ai.jobs() });
+      if (route === "/ai/jobs" && method === "POST")
+        return response({ job: await ai.enqueue(body, actor) }, 202);
+      if (/^\/ai\/jobs\/[^/]+\/retry$/.test(route) && method === "POST")
+        return response(
+          {
+            job: await ai.retry(
+              route.split("/")[3] ?? "",
+              actor,
+              expected(body, request),
+            ),
+          },
+          202,
+        );
+      if (route === "/suggestions" && method === "GET")
+        return response({
+          suggestions: await ai.artifacts({
+            projectId: url.searchParams.get("projectId") ?? undefined,
+            projectIds: url.searchParams.getAll("projectIds").length
+              ? url.searchParams.getAll("projectIds")
+              : undefined,
+            crossProject: url.searchParams.get("crossProject") === "true",
+          }),
+        });
+      if (
+        /^\/suggestions\/[^/]+\/(accept|reject)$/.test(route) &&
+        method === "POST"
+      )
+        return response({
+          suggestion: await ai.review(
+            route.split("/")[2] ?? "",
+            route.endsWith("/accept") ? "accepted" : "rejected",
+            actor,
+            expected(body, request),
+          ),
+        });
+      if (route === "/search/semantic" && method === "POST")
+        return response(await ai.semanticSearch(body));
+      if (route === "/summaries/export" && method === "POST")
+        return response(
+          { job: await ai.enqueue({ ...body, type: "export" }, actor) },
+          202,
+        );
       if (route === "/auth/logout" && method === "POST") {
-        auth.logout(identity);
+        await auth.logout(identity);
         return response({ authenticated: false }, 200, {
           "Set-Cookie": auth.clearCookie(),
         });
       }
       if (route === "/auth/credentials" && method === "GET")
-        return response({ credentials: auth.publicCredentials() });
+        return response({ credentials: await auth.publicCredentials() });
       if (route.startsWith("/auth/credentials")) {
         requireValue(
           identity.browser,
@@ -494,21 +616,25 @@ export function createApi(config: { databasePath: string; origin: string }) {
           403,
         );
         if (method === "POST" && route === "/auth/credentials/challenge")
-          return response(auth.sshChallenge(body, identity));
+          return response(await auth.sshChallenge(body, identity));
         if (method === "POST" && route === "/auth/credentials/verify")
-          return response(auth.sshVerify(body, identity));
+          return response(await auth.sshVerify(body, identity));
         if (method === "DELETE") {
-          auth.revoke(route.split("/")[3] ?? "", identity);
+          await auth.revoke(route.split("/")[3] ?? "", identity);
           return response({ revoked: true });
         }
       }
       if (route === "/projects" && method === "GET")
         return response({
-          projects: store.list("project").map((p) => ({
-            ...p,
-            settings: settingsSchema.parse(p.settings),
-            sources: store.list("source").filter((s) => s.projectId === p.id),
-          })),
+          projects: await Promise.all(
+            (await store.list("project")).map(async (p) => ({
+              ...p,
+              settings: settingsSchema.parse(p.settings),
+              sources: (await store.list("source")).filter(
+                (s) => s.projectId === p.id,
+              ),
+            })),
+          ),
         });
       if (route === "/projects/resolve" && method === "POST") {
         const context = object.parse(body.context),
@@ -519,17 +645,15 @@ export function createApi(config: { databasePath: string; origin: string }) {
           "A Git remote or explicit project selection is required.",
         );
         const remote = normalizeRemote(git.remote);
-        const project = store.atomic(() => {
-          const row = store.sqlite
-            .prepare("SELECT project_id FROM identities WHERE identity=?")
-            .get(remote) as { project_id: string } | undefined;
-          if (row) return entity("project", row.project_id);
-          const created = projectCreate(
+        const project = await store.atomic(async () => {
+          const row = await store.resolveIdentity(remote);
+          if (row) return await entity("project", row);
+          const created = await projectCreate(
             remote.split("/").at(-1) ?? remote,
             "normal",
             remote,
           );
-          store.audit(
+          await store.audit(
             "project.created",
             "project",
             created.id,
@@ -547,7 +671,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (route === "/projects/resolve-explicit" && method === "POST") {
         if (body.projectId)
           return response({
-            project: entity("project", nonempty.parse(body.projectId)),
+            project: await entity("project", nonempty.parse(body.projectId)),
             resolution: { source: "manual", confidence: "high" },
           });
         const name = nonempty.parse(body.name),
@@ -555,9 +679,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
             .enum(["normal", "external"])
             .default("normal")
             .parse(body.kind);
-        const matches = store
-          .list("project")
-          .filter((p) => String(p.name).toLowerCase() === name.toLowerCase());
+        const matches = (await store.list("project")).filter(
+          (p) => String(p.name).toLowerCase() === name.toLowerCase(),
+        );
         requireValue(
           matches.length <= 1,
           "PROJECT_IDENTITY_AMBIGUOUS",
@@ -566,9 +690,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
         );
         const project =
           matches[0] ??
-          store.atomic(() => {
-            const p = projectCreate(name, kind);
-            store.audit(
+          (await store.atomic(async () => {
+            const p = await projectCreate(name, kind);
+            await store.audit(
               "project.created",
               "project",
               p.id,
@@ -577,7 +701,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
               p,
             );
             return p;
-          });
+          }));
         return response({
           project,
           resolution: { source: "manual", confidence: "high" },
@@ -586,10 +710,10 @@ export function createApi(config: { databasePath: string; origin: string }) {
       const projectRoute =
         /^\/projects\/([^/]+)(?:\/(settings|context))?$/.exec(route);
       if (projectRoute) {
-        const project = entity("project", projectRoute[1] ?? "");
+        const project = await entity("project", projectRoute[1] ?? "");
         if (method === "GET" && projectRoute[2] === "context") {
           return response(
-            projectContext(store, {
+            await projectContext(store, {
               ...project,
               settings: settingsSchema.parse(project.settings),
             }),
@@ -611,7 +735,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
           );
         if (method === "PATCH" && !projectRoute[2])
           return response(
-            store.atomic(() => {
+            await store.atomic(async () => {
               const changes = z
                 .object({
                   name: nonempty.optional(),
@@ -636,12 +760,12 @@ export function createApi(config: { databasePath: string; origin: string }) {
                       crossProjectAnalysis: false,
                     }
                   : settingsSchema.parse(project.settings);
-              const updated = store.update(
+              const updated = await store.update(
                 "project",
                 { ...project, ...changes, settings },
                 expected(body, request),
               );
-              store.audit(
+              await store.audit(
                 "project.updated",
                 "project",
                 project.id,
@@ -654,14 +778,14 @@ export function createApi(config: { databasePath: string; origin: string }) {
           );
         if (method === "PATCH" && projectRoute[2] === "settings")
           return response(
-            store.atomic(() => {
+            await store.atomic(async () => {
               const settings = settingsSchema.parse(body.settings ?? body);
-              const updated = store.update(
+              const updated = await store.update(
                 "project",
                 { ...project, settings },
                 expected(body, request),
               );
-              store.audit(
+              await store.audit(
                 "project.settings_updated",
                 "project",
                 project.id,
@@ -684,15 +808,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
           .parse(request.headers.get("Idempotency-Key") ?? undefined);
         const scope = `capture:${identity.credential.id}`,
           serialized = canonical({ projectId, record });
-        const result = store.atomic(() => {
+        const result = await store.atomic(async () => {
           if (requestKey) {
-            const previous = store.sqlite
-              .prepare(
-                "SELECT request,response FROM retries WHERE scope=? AND key=?",
-              )
-              .get(scope, requestKey) as
-              | { request: string; response: string }
-              | undefined;
+            const previous = await store.getRetry(scope, requestKey);
             if (previous) {
               requireValue(
                 previous.request === serialized,
@@ -702,7 +820,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
               );
               const replay = JSON.parse(previous.response) as JsonObject;
               const currentSettings = settingsSchema.parse(
-                entity("project", projectId).settings,
+                (await entity("project", projectId)).settings,
               );
               return {
                 ...replay,
@@ -716,22 +834,25 @@ export function createApi(config: { databasePath: string; origin: string }) {
               };
             }
           }
-          const created = createRecord(
+          const created = await createRecord(
             projectId,
             record,
             body.gitContext,
             actor,
           );
           if (requestKey)
-            store.sqlite
-              .prepare("INSERT INTO retries VALUES(?,?,?,?)")
-              .run(scope, requestKey, serialized, JSON.stringify(created));
+            await store.saveRetry(
+              scope,
+              requestKey,
+              serialized,
+              JSON.stringify(created),
+            );
           return created;
         });
         return response(result, 201);
       }
       if (route === "/records" && method === "GET")
-        return response(search(url.searchParams));
+        return response(await search(url.searchParams));
       if (route === "/search" && method === "POST") {
         const params = new URLSearchParams();
         if (body.query) params.set("q", z.string().max(2000).parse(body.query));
@@ -741,22 +862,22 @@ export function createApi(config: { databasePath: string; origin: string }) {
               params.append(key, value);
         if (body.limit) params.set("limit", String(body.limit));
         if (body.cursor) params.set("cursor", z.string().parse(body.cursor));
-        return response(search(params));
+        return response(await search(params));
       }
       const recordRoute =
         /^\/records\/([^/]+)(?:\/(metadata|revisions|evidence|mirror))?$/.exec(
           route,
         );
       if (recordRoute) {
-        const record = entity("record", recordRoute[1] ?? ""),
+        const record = await entity("record", recordRoute[1] ?? ""),
           operation = recordRoute[2];
         if (method === "GET" && !operation)
-          return response(recordDetail(record.id));
+          return response(await recordDetail(record.id));
         if (
           (operation === "metadata" && method === "PATCH") ||
           (operation === "revisions" && method === "POST")
         ) {
-          const metadata = entity("metadata", record.id),
+          const metadata = await entity("metadata", record.id),
             changes = z
               .object({
                 displayTitle: z.string().max(500).optional(),
@@ -775,13 +896,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
                     ),
               );
           return response(
-            store.atomic(() => {
-              const updated = store.update(
+            await store.atomic(async () => {
+              const updated = await store.update(
                 "metadata",
                 { ...metadata, ...changes },
                 expected(body, request),
               );
-              const revision = store.insert("revision", {
+              const revision = await store.insert("revision", {
                 id: id("rev"),
                 recordId: record.id,
                 revisionNumber: updated.version,
@@ -792,7 +913,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
                   typeof body.reason === "string" ? body.reason : undefined,
                 actor,
               });
-              store.audit(
+              await store.audit(
                 "record.curated",
                 "record",
                 record.id,
@@ -824,13 +945,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
             })
             .parse(body);
           return response(
-            store.atomic(() => {
-              const saved = store.insert("evidence", {
+            await store.atomic(async () => {
+              const saved = await store.insert("evidence", {
                 ...evidence,
                 id: id("evi"),
                 recordId: record.id,
               });
-              store.audit(
+              await store.audit(
                 "evidence.created",
                 "record",
                 record.id,
@@ -853,7 +974,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
             })
             .parse(body);
           const settings = settingsSchema.parse(
-            entity("project", String(record.projectId)).settings,
+            (await entity("project", String(record.projectId))).settings,
           );
           requireValue(
             settings.repoMirroring.enabled &&
@@ -865,8 +986,8 @@ export function createApi(config: { databasePath: string; origin: string }) {
             403,
           );
           return response(
-            store.atomic(() => {
-              const previous = store.get("mirror", record.id);
+            await store.atomic(async () => {
+              const previous = await store.get("mirror", record.id);
               const next = {
                 ...state,
                 id: record.id,
@@ -874,9 +995,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
                 updatedAt: now(),
               };
               const mirror = previous
-                ? store.update("mirror", { ...previous, ...next })
-                : store.insert("mirror", next);
-              store.audit(
+                ? await store.update("mirror", { ...previous, ...next })
+                : await store.insert("mirror", next);
+              await store.audit(
                 "record.mirror_reported",
                 "record",
                 record.id,
@@ -901,28 +1022,28 @@ export function createApi(config: { databasePath: string; origin: string }) {
             note: z.string().max(10_000).optional(),
           })
           .parse(body);
-        entity("record", data.fromRecordId);
-        entity("record", data.toRecordId);
+        await entity("record", data.fromRecordId);
+        await entity("record", data.toRecordId);
         requireValue(
           data.fromRecordId !== data.toRecordId,
           "INVALID_RELATIONSHIP",
           "A record cannot relate to itself.",
         );
         return response(
-          store.atomic(() => {
+          await store.atomic(async () => {
             if (data.authority !== "suggested")
-              assertRelationshipSafe(
+              await assertRelationshipSafe(
                 store,
                 data.fromRecordId,
                 data.toRecordId,
                 data.type,
               );
-            const relationship = store.insert("relationship", {
+            const relationship = await store.insert("relationship", {
               ...data,
               id: id("rel"),
               status: data.authority === "suggested" ? "suggested" : "accepted",
             });
-            store.audit(
+            await store.audit(
               "relationship.created",
               "relationship",
               relationship.id,
@@ -939,18 +1060,18 @@ export function createApi(config: { databasePath: string; origin: string }) {
         route,
       );
       if (relRoute && method === "POST") {
-        const previous = entity("relationship", relRoute[1] ?? "");
+        const previous = await entity("relationship", relRoute[1] ?? "");
         return response(
-          store.atomic(() => {
+          await store.atomic(async () => {
             if (relRoute[2] === "accept")
-              assertRelationshipSafe(
+              await assertRelationshipSafe(
                 store,
                 String(previous.fromRecordId),
                 String(previous.toRecordId),
                 String(previous.type),
                 previous.id,
               );
-            const relationship = store.update(
+            const relationship = await store.update(
               "relationship",
               {
                 ...previous,
@@ -960,7 +1081,7 @@ export function createApi(config: { databasePath: string; origin: string }) {
               },
               expected(body, request),
             );
-            store.audit(
+            await store.audit(
               `relationship.${relRoute[2]}`,
               "relationship",
               previous.id,
@@ -974,7 +1095,9 @@ export function createApi(config: { databasePath: string; origin: string }) {
       }
       if (route === "/export" && method === "POST") {
         const data = Object.fromEntries(
-          exportKinds.map((kind) => [kind, store.list(kind)]),
+          await Promise.all(
+            exportKinds.map(async (kind) => [kind, await store.list(kind)]),
+          ),
         );
         return response(
           { format: "scratchpad", version: 1, exportedAt: now(), data },
@@ -988,34 +1111,36 @@ export function createApi(config: { databasePath: string; origin: string }) {
       if (route === "/import" && method === "POST")
         return response(
           body.format === "scratchpad"
-            ? importNative(store, body, actor)
-            : (() => {
+            ? await importNative(store, body, actor)
+            : await (async () => {
                 requireValue(
                   body.format === "jsonl",
                   "IMPORT_INVALID",
                   "Use format scratchpad or jsonl.",
                 );
-                return importLegacy(store, body, actor);
+                return await importLegacy(store, body, actor);
               })(),
         );
       if (route === "/settings" && method === "GET")
         return response({
-          settings: store.get("settings", "global") ?? {
-            id: "global",
-            version: 0,
-            aiEnabled: false,
+          settings: {
+            ...((await store.get("settings", "global")) ?? {
+              id: "global",
+              version: 0,
+            }),
+            aiEnabled: (await ai.settings()).enabled,
           },
         });
       if (route === "/settings" && method === "PATCH") {
         const changes = z
           .object({
-            aiEnabled: z.literal(false),
+            aiEnabled: z.boolean().optional(),
             defaultProjectSettings: settingsSchema.optional(),
           })
           .parse(body.settings);
         return response(
-          store.atomic(() => {
-            const previous = store.get("settings", "global");
+          await store.atomic(async () => {
+            const previous = await store.get("settings", "global");
             if (!previous)
               requireValue(
                 body.expectedVersion === 0,
@@ -1024,13 +1149,13 @@ export function createApi(config: { databasePath: string; origin: string }) {
                 409,
               );
             const settings = previous
-              ? store.update(
+              ? await store.update(
                   "settings",
                   { ...previous, ...changes },
                   expected(body, request),
                 )
-              : store.insert("settings", { id: "global", ...changes });
-            store.audit(
+              : await store.insert("settings", { id: "global", ...changes });
+            await store.audit(
               "settings.updated",
               "settings",
               "global",
@@ -1038,7 +1163,20 @@ export function createApi(config: { databasePath: string; origin: string }) {
               previous,
               settings,
             );
-            return { settings };
+            if (changes.aiEnabled !== undefined)
+              await ai.configure(
+                {
+                  enabled: changes.aiEnabled,
+                  expectedVersion: (await ai.settings()).version,
+                },
+                actor,
+              );
+            return {
+              settings: {
+                ...settings,
+                aiEnabled: (await ai.settings()).enabled,
+              },
+            };
           }),
         );
       }
@@ -1047,18 +1185,29 @@ export function createApi(config: { databasePath: string; origin: string }) {
       return publicError(error);
     }
   }
-  return { store, auth, handleRequest, close: () => store.close() };
+  return {
+    store,
+    auth,
+    ai,
+    handleRequest,
+    close: async () => {
+      await ai.stop();
+      await store.close();
+    },
+  };
 }
 let singleton: ReturnType<typeof createApi> | undefined;
 export function getApi(): ReturnType<typeof createApi> {
   singleton ??= createApi({
+    databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
   });
+  singleton.ai.start();
   return singleton;
 }
 export const handleApiRequest = (request: Request): Promise<Response> =>
   getApi().handleRequest(request);
-export const createSetupToken = (recovery = false): string =>
-  getApi().auth.createSetupToken(recovery);
+export const createSetupToken = async (recovery = false): Promise<string> =>
+  await getApi().auth.createSetupToken(recovery);

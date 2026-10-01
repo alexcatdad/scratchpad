@@ -16,6 +16,7 @@
     "@tanstack/react-start": "1.168.59",
     "better-sqlite3": "13.0.3",
     "drizzle-orm": "0.45.3",
+    "postgres": "3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "srvx": "1.0.5",

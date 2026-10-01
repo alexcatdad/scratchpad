@@ -30,6 +30,8 @@ export const exportKinds = [
   "audit",
   "settings",
   "profile",
+  "ai_artifact",
+  "curated_artifact",
 ] as const;
 const digest = (value: string) =>
   createHash("sha256").update(value).digest("hex");
@@ -41,8 +43,12 @@ function readable(value: unknown): string | undefined {
     return value.map(readable).filter(Boolean).join("\n") || undefined;
   return undefined;
 }
-function requireEntity(store: Store, kind: string, value: unknown): Entity {
-  const entity = store.get(kind, identifier.parse(value));
+async function requireEntity(
+  store: Store,
+  kind: string,
+  value: unknown,
+): Promise<Entity> {
+  const entity = await store.get(kind, identifier.parse(value));
   requireValue(
     entity,
     kind === "project" ? "PROJECT_NOT_FOUND" : "IMPORT_INVALID",
@@ -51,12 +57,12 @@ function requireEntity(store: Store, kind: string, value: unknown): Entity {
   );
   return entity;
 }
-/** Knowledge restore preserves all source values. Authentication is restored only through SQLite backup. */
-export function importNative(
+/** Knowledge restore preserves all source values. Authentication is restored through full database backups, not portable archives. */
+export async function importNative(
   store: Store,
   body: JsonObject,
   actor: Actor,
-): JsonObject {
+): Promise<JsonObject> {
   requireValue(
     body.version === 1,
     "IMPORT_INVALID",
@@ -70,7 +76,7 @@ export function importNative(
     "IMPORT_INVALID",
     "Unknown export sections cannot be safely restored.",
   );
-  return store.atomic(() => {
+  return await store.atomic(async () => {
     let imported = 0,
       skipped = 0;
     for (const kind of exportKinds)
@@ -78,7 +84,7 @@ export function importNative(
         const key = identifier.parse(value.id);
         z.iso.datetime().parse(value.createdAt);
         z.number().int().positive().parse(value.version);
-        const previous = store.get(kind, key);
+        const previous = await store.get(kind, key);
         if (previous) {
           requireValue(
             canonical(previous) === canonical(value),
@@ -94,8 +100,57 @@ export function importNative(
           z.string().min(1).parse(value.name);
           z.enum(["normal", "external"]).parse(value.kind);
         }
+        if (kind === "profile") {
+          requireValue(
+            key === "owner-profile",
+            "IMPORT_INVALID",
+            "Unknown profile identity.",
+          );
+          z.string().trim().min(1).max(200).parse(value.displayName);
+        }
+        if (kind === "ai_artifact" || kind === "curated_artifact") {
+          z.literal("derived").parse(value.authority);
+          z.enum([
+            "summary",
+            "classification",
+            "duplicate_candidate",
+            "relationship_candidate",
+            "contradiction",
+            "cluster",
+            "pattern",
+            "recommendation",
+            "export",
+          ]).parse(value.kind);
+          object.parse(value.content);
+          object.parse(value.generator);
+          const sources = z
+            .array(identifier)
+            .min(1)
+            .parse(value.sourceRecordIds);
+          for (const source of sources)
+            await requireEntity(store, "record", source);
+          const projects = z.array(identifier).min(1).parse(value.projectIds);
+          for (const project of projects)
+            await requireEntity(store, "project", project);
+          requireValue(
+            sources.every((source) =>
+              projects.includes(
+                String(
+                  ((data.record as JsonObject[]) ?? []).find(
+                    (record) => record.id === source,
+                  )?.projectId ?? "",
+                ),
+              ),
+            ),
+            "IMPORT_INVALID",
+            "Derived source projects do not match citations.",
+          );
+          if (kind === "ai_artifact")
+            z.enum(["pending", "accepted", "rejected"]).parse(value.status);
+          else await requireEntity(store, "ai_artifact", value.artifactId);
+        }
         if (kind === "record") {
-          requireEntity(store, "project", value.projectId);
+          await requireEntity(store, "project", value.projectId);
           z.enum(recordTypes).parse(value.type);
           z.string().parse(value.title);
           z.string().parse(value.content);
@@ -104,20 +159,18 @@ export function importNative(
           z.iso.datetime().parse(value.recordedAt);
         }
         if (kind === "source") {
-          requireEntity(store, "project", value.projectId);
+          await requireEntity(store, "project", value.projectId);
           identifier.parse(value.identity);
-          const existing = store.sqlite
-            .prepare("SELECT project_id FROM identities WHERE identity=?")
-            .get(String(value.identity)) as { project_id: string } | undefined;
+          const existing = await store.resolveIdentity(String(value.identity));
           requireValue(
-            !existing || existing.project_id === value.projectId,
+            !existing || existing === value.projectId,
             "CONFLICT",
             "Project source identity belongs to another project.",
             409,
           );
         }
         if (["metadata", "revision", "evidence", "mirror"].includes(kind))
-          requireEntity(store, "record", value.recordId);
+          await requireEntity(store, "record", value.recordId);
         if (kind === "metadata") {
           z.array(z.string()).parse(value.tags);
           z.boolean().optional().parse(value.archived);
@@ -130,8 +183,8 @@ export function importNative(
           );
         }
         if (kind === "relationship") {
-          requireEntity(store, "record", value.fromRecordId);
-          requireEntity(store, "record", value.toRecordId);
+          await requireEntity(store, "record", value.fromRecordId);
+          await requireEntity(store, "record", value.toRecordId);
           z.enum(relationshipTypes).parse(value.type);
           z.enum(["suggested", "accepted", "rejected"]).parse(value.status);
           z.enum(["explicit", "inferred", "suggested"]).parse(value.authority);
@@ -141,50 +194,58 @@ export function importNative(
             "A relationship cannot refer to itself.",
           );
         }
-        store.insert(kind, value as JsonObject & { id: string });
+        await store.insert(kind, value as JsonObject & { id: string });
         imported++;
         if (kind === "record")
-          store.sqlite
-            .prepare(
-              "INSERT INTO record_search(record_id,title,content) VALUES(?,?,?)",
-            )
-            .run(key, String(value.title), String(value.content));
+          await store.indexRecord(
+            key,
+            String(value.title),
+            String(value.content),
+          );
         if (kind === "source")
-          store.sqlite
-            .prepare("INSERT OR IGNORE INTO identities VALUES(?,?)")
-            .run(String(value.identity), String(value.projectId));
+          await store.addIdentity(
+            String(value.identity),
+            String(value.projectId),
+          );
       }
-    for (const record of store.list("record"))
+    for (const record of await store.list("record"))
       requireValue(
-        store.get("metadata", record.id),
+        await store.get("metadata", record.id),
         "IMPORT_INVALID",
         "Every restored record must include metadata.",
       );
-    for (const relationship of store.list("relationship"))
+    for (const relationship of await store.list("relationship"))
       if (relationship.status === "accepted")
-        assertRelationshipSafe(
+        await assertRelationshipSafe(
           store,
           String(relationship.fromRecordId),
           String(relationship.toRecordId),
           String(relationship.type),
           relationship.id,
         );
-    store.audit("data.imported", "import", id("import"), actor, undefined, {
-      format: "scratchpad",
-      imported,
-      skipped,
-    });
+    await store.audit(
+      "data.imported",
+      "import",
+      id("import"),
+      actor,
+      undefined,
+      {
+        format: "scratchpad",
+        imported,
+        skipped,
+      },
+    );
     return { imported, skipped, warnings: [] };
   });
 }
 
-export function importLegacy(
+export async function importLegacy(
   store: Store,
   body: JsonObject,
   actor: Actor,
-): JsonObject {
+): Promise<JsonObject> {
   const projectId = identifier.parse(body.projectId);
-  requireEntity(store, "project", projectId);
+  await requireEntity(store, "project", projectId);
   const sourceName = z
     .string()
     .min(1)
@@ -209,7 +270,7 @@ export function importLegacy(
     skipped = 0;
   const warn = (line: number, code: string, details?: unknown) =>
     warnings.push({ record: line, code, ...(details ? { details } : {}) });
-  return store.atomic(() => {
+  return await store.atomic(async () => {
     for (const [offset, rawLine] of lines.entries()) {
       const line = offset + 1;
       if (!rawLine.trim()) continue;
@@ -231,11 +292,11 @@ export function importLegacy(
         originalId && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/.test(originalId)
           ? originalId
           : deterministic;
-      let existing = store.get("record", recordId);
+      let existing = await store.get("record", recordId);
       if (existing && existing.projectId !== projectId) {
         warn(line, "ID_COLLISION", { originalId });
         recordId = deterministic;
-        existing = store.get("record", recordId);
+        existing = await store.get("record", recordId);
       }
       if (existing) {
         const legacy = (existing.payload as JsonObject | undefined)
@@ -350,7 +411,7 @@ export function importLegacy(
         )
         .join("\n\n");
       payload.legacyOriginal = original;
-      const record = store.insert("record", {
+      const record = await store.insert("record", {
         id: recordId,
         projectId,
         type,
@@ -387,7 +448,7 @@ export function importLegacy(
           },
         },
       });
-      store.insert("metadata", {
+      await store.insert("metadata", {
         id: record.id,
         recordId: record.id,
         tags: [],
@@ -397,12 +458,8 @@ export function importLegacy(
           : {}),
         updatedAt: now(),
       });
-      store.sqlite
-        .prepare(
-          "INSERT INTO record_search(record_id,title,content) VALUES(?,?,?)",
-        )
-        .run(record.id, title, content);
-      store.audit(
+      await store.indexRecord(record.id, title, content);
+      await store.audit(
         "record.imported",
         "record",
         record.id,
@@ -411,7 +468,7 @@ export function importLegacy(
         record,
       );
       if (original.evidence !== undefined)
-        store.insert("evidence", {
+        await store.insert("evidence", {
           id: id("evi"),
           recordId: record.id,
           kind: "other",
@@ -454,7 +511,10 @@ export function importLegacy(
             typeof reference === "string"
               ? (ids.get(reference) ?? reference)
               : undefined;
-          if (!target || store.get("record", target)?.projectId !== projectId) {
+          if (
+            !target ||
+            (await store.get("record", target))?.projectId !== projectId
+          ) {
             warn(item.line, "UNRESOLVED_RELATIONSHIP", { reference });
             continue;
           }
@@ -465,9 +525,9 @@ export function importLegacy(
             continue;
           }
           const relationshipId = `rel_import_${digest(canonical({ fromRecordId, toRecordId, type: "replaces" })).slice(0, 32)}`;
-          if (!store.get("relationship", relationshipId)) {
+          if (!(await store.get("relationship", relationshipId))) {
             // Imported references are unverified suggestions until the owner accepts them.
-            const relationship = store.insert("relationship", {
+            const relationship = await store.insert("relationship", {
               id: relationshipId,
               fromRecordId,
               toRecordId,
@@ -477,7 +537,7 @@ export function importLegacy(
               note: "Imported explicit reference; historical applicability requires review.",
               provenance: { sourceName, line: item.line },
             });
-            store.audit(
+            await store.audit(
               "relationship.imported",
               "relationship",
               relationship.id,
@@ -489,12 +549,19 @@ export function importLegacy(
         }
       }
     }
-    store.audit("data.imported", "import", id("import"), actor, undefined, {
-      format: "jsonl",
-      sourceName,
-      imported,
-      skipped,
-    });
+    await store.audit(
+      "data.imported",
+      "import",
+      id("import"),
+      actor,
+      undefined,
+      {
+        format: "jsonl",
+        sourceName,
+        imported,
+        skipped,
+      },
+    );
     return { imported, skipped, warnings, records: results };
   });
 }
