@@ -46,7 +46,7 @@ const configSchema = z.object({
     .array(z.enum(kinds))
     .default([...kinds.filter((kind) => kind !== "export")]),
   maxOutputTokens: z.number().int().min(256).max(32768).default(4096),
-  requestTimeoutSeconds: z.number().int().min(5).max(600).default(600),
+  requestTimeoutSeconds: z.number().int().min(5).max(3600).default(600),
   reasoningEffort: z
     .enum(["default", "none", "low", "medium", "high", "xhigh"])
     .default("none"),

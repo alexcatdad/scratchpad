@@ -86,3 +86,11 @@ SCRATCHPAD_REAL_AI=1 SCRATCHPAD_REAL_AI_EXPORT_ONLY=1 SCRATCHPAD_E2E_DOCKER=1 SC
 ```
 
 This mode uses a fresh disposable container and synthetic sources. It does not claim fresh analysis acceptance. Node HTTP transport must allow the configured model deadline; the default dispatcher previously cancelled headers at 300 seconds despite a 600-second request setting. The application now supplies an explicit dispatcher and closes it on completion or abort.
+
+If the selected model reaches its configured deadline under memory pressure, preserve the diagnosis and adjust the existing provider timeout explicitly instead of silently truncating documents. The real fixture accepts a bounded timeout override:
+
+```sh
+SCRATCHPAD_REAL_AI=1 SCRATCHPAD_REAL_AI_EXPORT_ONLY=1 SCRATCHPAD_REAL_AI_TIMEOUT_SECONDS=1800 SCRATCHPAD_E2E_DOCKER=1 npx playwright test tests/real-ai.spec.ts --workers=1
+```
+
+The application accepts 5–3,600 seconds and keeps the default at 600. Worker leases remain longer than the configured request deadline. An override is not a passing result: inspect completed Markdown, provenance and immutable source comparisons.

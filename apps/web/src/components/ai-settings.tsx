@@ -191,7 +191,7 @@ export function AiSettings() {
                 name="requestTimeoutSeconds"
                 type="number"
                 min="5"
-                max="600"
+                max="3600"
                 required
                 defaultValue={configuration.requestTimeoutSeconds ?? 600}
               />

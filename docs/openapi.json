@@ -2974,7 +2974,7 @@
           "requestTimeoutSeconds": {
             "type": "integer",
             "minimum": 5,
-            "maximum": 600,
+            "maximum": 3600,
             "default": 600
           },
           "reasoningEffort": {
@@ -3051,7 +3051,7 @@
           "requestTimeoutSeconds": {
             "type": "integer",
             "minimum": 5,
-            "maximum": 600
+            "maximum": 3600
           },
           "reasoningEffort": {
             "type": "string",

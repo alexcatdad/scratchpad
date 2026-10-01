@@ -854,7 +854,7 @@ describe("OpenAI-compatible response validation", () => {
     });
     expect(await store.list("ai_artifact")).toHaveLength(0);
   });
-  it("keeps a configured provider timeout inside a longer renewable worker lease", async () => {
+  it("keeps an hour-long provider timeout inside a longer renewable worker lease", async () => {
     let leaseUntil = 0;
     let readLease: (() => Promise<number>) | undefined;
     const fetcher = (async (...args: Parameters<typeof fetch>) => {
@@ -864,7 +864,7 @@ describe("OpenAI-compatible response validation", () => {
     const { ai, store } = await fixture(fetcher);
     await ai.configure(
       {
-        requestTimeoutSeconds: 600,
+        requestTimeoutSeconds: 3600,
         expectedVersion: Number((await ai.settings()).version),
       },
       actor,
@@ -874,7 +874,7 @@ describe("OpenAI-compatible response validation", () => {
       Date.parse(String((await store.get("ai_job", job.id))?.leaseUntil));
     const before = Date.now();
     await ai.tick();
-    expect(leaseUntil - before).toBeGreaterThan(600000);
+    expect(leaseUntil - before).toBeGreaterThan(3600000);
   });
   it("returns a safe provider error without leaking response bodies or API keys", async () => {
     const fetcher = (async () =>

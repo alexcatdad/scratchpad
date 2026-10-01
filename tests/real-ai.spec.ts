@@ -8,6 +8,15 @@ import Database from "better-sqlite3";
 
 // Explicit opt-in: no external model service is required by ordinary CI.
 const enabled = process.env.SCRATCHPAD_REAL_AI === "1";
+const providerTimeoutSeconds = Number(
+  process.env.SCRATCHPAD_REAL_AI_TIMEOUT_SECONDS ?? 600,
+);
+if (
+  !Number.isInteger(providerTimeoutSeconds) ||
+  providerTimeoutSeconds < 5 ||
+  providerTimeoutSeconds > 3600
+)
+  throw new Error("Real AI timeout must be an integer from 5 to 3600 seconds.");
 const root = resolve(import.meta.dirname, "..");
 const origin = "http://localhost:3102";
 const temporary = enabled
@@ -91,7 +100,10 @@ async function waitForJob(page: Page, key: string): Promise<Job> {
           throw new Error(`Real provider job failed: ${JSON.stringify(job)}`);
         return job?.status;
       },
-      { timeout: 1820000, intervals: [1000, 3000, 5000] },
+      {
+        timeout: (providerTimeoutSeconds * 3 + 60) * 1000,
+        intervals: [1000, 3000, 5000],
+      },
     )
     .toBe("completed");
   return job as Job;
@@ -187,7 +199,7 @@ test.describe("real local Qwen processing", () => {
   test("authenticated application generates cited insights, 2560-dimensional semantic matches and a private project handoff", async ({
     page,
   }) => {
-    test.setTimeout(4000000);
+    test.setTimeout((providerTimeoutSeconds * 6 + 400) * 1000);
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
     const cdp = await page.context().newCDPSession(page);
@@ -308,7 +320,7 @@ test.describe("real local Qwen processing", () => {
       embeddingDimensions: 2560,
       scheduleMinutes: 0,
       similarityThreshold: 0.1,
-      requestTimeoutSeconds: 600,
+      requestTimeoutSeconds: providerTimeoutSeconds,
       reasoningEffort: "none",
       maxOutputTokens: 4096,
       expectedVersion: settings.version,
