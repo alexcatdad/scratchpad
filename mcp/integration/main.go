@@ -78,8 +78,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if len(listed.Tools) != 14 {
-		return fmt.Errorf("expected 14 tools, got %d", len(listed.Tools))
+	if len(listed.Tools) != 19 {
+		return fmt.Errorf("expected 19 tools, got %d", len(listed.Tools))
 	}
 	var saved state
 	if *phase == "capture" {
