@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import postgres from "postgres";
 
 type Entity = { id: string; version: number; [key: string]: unknown };
 type Project = Entity & { settings: Record<string, unknown> };
@@ -26,6 +27,10 @@ const root = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(resolve(tmpdir(), "scratchpad-post-mvp-"));
 const origin = "http://localhost:3101";
 const dockerMode = process.env.SCRATCHPAD_E2E_DOCKER === "1";
+const postgresMode = process.env.SCRATCHPAD_E2E_POSTGRES === "1";
+const postgresDatabase = `scratchpad_ai_browser_${randomUUID().replaceAll("-", "")}`;
+let postgresAdmin: ReturnType<typeof postgres> | undefined;
+let postgresCreated = false;
 const runId = `scratchpad-post-mvp-${randomUUID()}`;
 const volume = `${runId}-data`;
 const dockerImage = process.env.SCRATCHPAD_E2E_IMAGE ?? "scratchpad:ci";
@@ -43,6 +48,7 @@ let provider: Server | undefined;
 let providerUrl = "";
 let logs = "";
 const suppliedContent: string[] = [];
+let expectedJobCount = 0;
 
 async function request<T>(
   page: Page,
@@ -202,6 +208,35 @@ function setupToken() {
         { cwd: resolve(root, "apps/web"), env: environment, encoding: "utf8" },
       );
 }
+async function createDatabase() {
+  if (!postgresMode) return;
+  const connection = process.env.TEST_POSTGRES_URL;
+  if (!connection)
+    throw new Error(
+      "PostgreSQL browser acceptance requires TEST_POSTGRES_URL for a disposable test server.",
+    );
+  postgresAdmin = postgres(connection, { max: 1 });
+  await postgresAdmin.unsafe(`CREATE DATABASE "${postgresDatabase}"`);
+  postgresCreated = true;
+  const url = new URL(connection);
+  url.pathname = `/${postgresDatabase}`;
+  if (dockerMode && ["localhost", "127.0.0.1", "::1"].includes(url.hostname))
+    url.hostname = "host.docker.internal";
+  environment.SCRATCHPAD_DATABASE_URL = url.toString();
+}
+async function dropDatabase() {
+  if (!postgresAdmin) return;
+  try {
+    if (postgresCreated)
+      await postgresAdmin.unsafe(
+        `DROP DATABASE "${postgresDatabase}" WITH (FORCE)`,
+      );
+  } finally {
+    await postgresAdmin.end();
+    postgresAdmin = undefined;
+    postgresCreated = false;
+  }
+}
 async function startApplication() {
   if (dockerMode) {
     command("docker", ["volume", "create", volume]);
@@ -219,6 +254,12 @@ async function startApplication() {
       `SCRATCHPAD_PUBLIC_URL=${origin}`,
       "--env",
       "SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite",
+      ...(postgresMode
+        ? [
+            "--env",
+            `SCRATCHPAD_DATABASE_URL=${environment.SCRATCHPAD_DATABASE_URL}`,
+          ]
+        : []),
       "--volume",
       `${volume}:/data`,
       dockerImage,
@@ -289,6 +330,7 @@ async function stopApplication() {
   }
 }
 async function awaitJobs(page: Page) {
+  expectedJobCount++;
   await expect
     .poll(
       async () => {
@@ -296,7 +338,10 @@ async function awaitJobs(page: Page) {
         const failed = jobs.find((job) => job.status === "failed");
         if (failed)
           throw new Error(`Background job failed: ${JSON.stringify(failed)}`);
-        return jobs.every((job) => job.status === "completed");
+        return (
+          jobs.length >= expectedJobCount &&
+          jobs.every((job) => job.status === "completed")
+        );
       },
       { timeout: 45000, intervals: [250, 500, 1000] },
     )
@@ -307,6 +352,7 @@ async function awaitJobs(page: Page) {
 }
 
 test.beforeAll(async () => {
+  await createDatabase();
   await startProvider();
   await startApplication();
 });
@@ -315,6 +361,7 @@ test.afterAll(async () => {
     await stopApplication();
     await stopProvider();
   } finally {
+    await dropDatabase();
     rmSync(temporary, { recursive: true, force: true });
   }
 });
@@ -346,6 +393,12 @@ test("private AI settings, evidence review, semantic search and document downloa
   await expect(
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
+
+  const profile = await request<{ database: { engine: string } }>(
+    page,
+    "/profile",
+  );
+  expect(profile.database.engine).toBe(postgresMode ? "postgresql" : "sqlite");
 
   const projects: Project[] = [];
   for (const name of [
