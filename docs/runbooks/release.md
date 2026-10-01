@@ -4,6 +4,8 @@
 
 The release pipeline is implemented in `.github/workflows/release.yml`. The first distribution release, [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2), is published; its signed-artifact verification and fresh-runner installation acceptance passed. See the [readiness ledger](mvp-readiness.md) for exact source revisions and run links. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
 
+The current patch release is [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3), correcting exact timestamp ordering and SQLite readiness/startup validation. Its tagged source is `ef5cb1a30594b43657c5bc327101cdd0463cc4a4`; [publication run 36859022794](https://github.com/alexcatdad/scratchpad/actions/runs/36859022794) passed native verification, image publication, release publication and tap delivery. Keep prior published versions immutable.
+
 Apple private keys and notarization credentials stay in the owner's macOS Keychain. GitHub does not need an Apple certificate, certificate password, Apple account password, or notarization secret. This follows the owner's accepted local-signing instruction.
 
 ## One-time configuration
@@ -36,10 +38,10 @@ The repository has not selected a license. The tap formula does not invent one.
 
 Use a clean checkout of the intended commit with all relevant checks passing. CI must be successful at that exact SHA on `main`; an earlier green revision is insufficient. Use the pinned Go toolchain. Native builds disable automatic VCS metadata so local and CI binaries can be compared after normalizing signatures.
 
-The following example uses a prospective `v0.1.3` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
+The following example uses a prospective `v0.1.4` tag. Choose the actual release version deliberately; never replace an existing published tag or assets.
 
 ```sh
-export RELEASE_TAG=v0.1.3
+export RELEASE_TAG=v0.1.4
 git tag "$RELEASE_TAG"
 git push origin "$RELEASE_TAG"
 export APPLE_SIGNING_IDENTITY='Developer ID Application: YOUR NAME (TEAMID)'
@@ -115,6 +117,6 @@ The unpublished `v0.1.0` preparation exposed a ZIP layout mismatch and an applic
 After publication, dispatch `release-acceptance.yml` with the published tag. It installs and tests Homebrew on fresh macOS and Linux runners, exercises the installed executable against disposable authenticated server fixtures, verifies all published checksums, anonymously pulls both GHCR architectures, and tests the published Linux binary with the published image through backup/restore.
 
 ```sh
-gh workflow run release-acceptance.yml --repo alexcatdad/scratchpad --ref main -f tag=v0.1.2
+gh workflow run release-acceptance.yml --repo alexcatdad/scratchpad --ref main -f tag=v0.1.3
 gh run list --repo alexcatdad/scratchpad --workflow release-acceptance.yml
 ```

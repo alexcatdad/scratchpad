@@ -6,7 +6,7 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Status
 
-The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2) is the initial distribution release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; the SQLite workflow works without them.
+The first implementation includes a TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, search, audited metadata, navigable record relationships, source provenance, legacy JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is the current patch release. AI processing, embeddings, pattern analysis, and PostgreSQL remain post-MVP; the SQLite workflow works without them.
 
 ## Install the MCP
 
@@ -15,7 +15,7 @@ brew install alexcatdad/tap/scratchpad-mcp
 scratchpad-mcp --version
 ```
 
-The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
+The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
 
 ## Run with Docker
 
@@ -27,7 +27,7 @@ docker run -d --name scratchpad --restart unless-stopped \
   -p 127.0.0.1:3000:3000 \
   -e SCRATCHPAD_PUBLIC_URL=http://localhost:3000 \
   -v scratchpad-data:/data \
-  ghcr.io/alexcatdad/scratchpad:v0.1.2
+  ghcr.io/alexcatdad/scratchpad:v0.1.3
 docker exec scratchpad npm run admin -- setup
 ```
 

@@ -1,11 +1,11 @@
 ---
 title: Releases & installation channels
-description: Install Scratchpad v0.1.2 and understand how its release artifacts are verified.
+description: Install Scratchpad v0.1.3 and understand how its release artifacts are verified.
 ---
 
-## v0.1.2
+## v0.1.3
 
-[v0.1.2 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2) provides native MCP archives, release checksums, and the versioned application image `ghcr.io/alexcatdad/scratchpad:v0.1.2`. It is an initial distribution release, not a claim that every deployment environment has been tested.
+[v0.1.3 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) provides native MCP archives, release checksums, and the versioned application image `ghcr.io/alexcatdad/scratchpad:v0.1.3`. This patch corrects exact timestamp ordering and SQLite readiness; it is not a claim that every deployment environment has been tested.
 
 | Component   | Published format                                                              |
 | ----------- | ----------------------------------------------------------------------------- |
@@ -39,4 +39,4 @@ Bare command-line binaries and ZIPs do not support stapled notarization tickets.
 
 Use the versioned image tag to make upgrades deliberate. Keep a full SQLite backup before upgrading, and retain the matching older application image for rollback. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) and [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) for operations and maintainer procedures.
 
-The [fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36853884482) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records scope and remaining historical acceptance gaps. Verify browser sign-in and a real MCP session in your own deployment.
+The [v0.1.3 fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36859768053) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The expanded workflow also verifies contractor repositories, linked worktrees and explicit non-Git identity through the actual API. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records scope and the remaining unverified historical pause example. Verify browser sign-in and a real MCP session in your own deployment.
