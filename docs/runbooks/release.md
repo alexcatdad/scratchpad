@@ -12,11 +12,11 @@ Use the existing `action-runners` GitHub environment, restricted to `main` and `
 
 | Kind     | Name            | Purpose                                                                         |
 | -------- | --------------- | ------------------------------------------------------------------------------- |
-| Variable | `APP_ID`        | Existing GitHub App ID for tap delivery                                         |
+| Variable | `APP_ID`        | GitHub App client ID for tap delivery                                           |
 | Secret   | `APP_SECRET`    | App private key with contents-write access to `alexcatdad/homebrew-tap`         |
 | Variable | `APPLE_TEAM_ID` | Public team identifier used to verify the locally signed binaries independently |
 
-On 1 October 2026, the owner requested placeholder configuration. `APP_ID` and `APP_SECRET` now exist in `action-runners` with dummy values. Replace both with the actual GitHub App configuration before release; their presence does not establish working tap access. The public `APPLE_TEAM_ID` variable remains to be configured.
+On 1 October 2026, the owner requested placeholder configuration. `APP_ID` now contains the owner-supplied GitHub App client ID. `APP_SECRET` was created with a dummy value and must be replaced with the actual private key before release; their presence does not establish working tap access. The public `APPLE_TEAM_ID` variable remains to be configured.
 
 Configure the Developer ID Application identity and a `notarytool` credential profile in the local Keychain using Apple's [notarization workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow). Never paste secret values into commands recorded in history, issues, or agent messages. The scripts use an existing profile by name.
 
