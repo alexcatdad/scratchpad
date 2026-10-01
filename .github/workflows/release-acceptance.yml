@@ -114,3 +114,25 @@ jobs:
         run: npm run test:e2e
         env:
           SCRATCHPAD_E2E_DOCKER: "1"
+  clients:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.tag }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: packages/clients/go/go.mod
+          cache-dependency-path: packages/clients/go/go.sum
+      - run: npm ci
+      - name: Install and exercise released clients against authenticated HTTP
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: bash scripts/verify-released-clients.sh

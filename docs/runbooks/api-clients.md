@@ -54,6 +54,24 @@ npm pack --workspace @scratchpad/api-client --pack-destination /tmp
 npm install /tmp/scratchpad-api-client-0.3.0.tgz
 ```
 
+Published v0.3.0 and later client releases include `scratchpad-api-client-X.Y.Z.tgz`
+under the GitHub release assets and `checksums.txt`. Download and verify the
+checksums before installing that tarball. The Go client uses the matching
+`packages/clients/go/vX.Y.Z` module tag; consumers can run:
+
+```sh
+go get github.com/alexcatdad/scratchpad/packages/clients/go@v0.3.0
+```
+
+These are the v0.3.0 delivery instructions; publication is tracked separately in
+the optional readiness ledger. Release acceptance installs the published tarball
+and remote Go module into independent temporary projects, then repeats the real
+SSH-authenticated HTTP integration with those installed implementations:
+
+```sh
+RELEASE_TAG=v0.3.0 bash scripts/verify-released-clients.sh
+```
+
 The tarball contains JavaScript, declarations and package metadata; npm installs
 its pinned transport dependency. No package registry publication is required.
 

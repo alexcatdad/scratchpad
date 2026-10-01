@@ -10,3 +10,10 @@ The owner requested these additions on 2 October 2026. Published v0.2.0 remains 
 | Operations and delivery | New runbooks and public guides describe configuration and consumption. Canonical CI includes extension-enabled PostgreSQL and generated-client integration. New release publication, installation acceptance and owner upgrade must be proved before calling delivery complete.                                                                                                                                                                  |
 
 Implementation checks use disposable records, keys and databases. The owner's live instance remains on published v0.2.0 while development is verified. No public profile is linked and no AI/project permissions are enabled automatically.
+
+Canonical [CI run 36933787062](https://github.com/alexcatdad/scratchpad/actions/runs/36933787062)
+passed all jobs at `f5f1158c11ee9b99f0d4caa02c399135b20184ff`, including native
+pgvector, ordinary PostgreSQL, Docker, authenticated generated-client integration,
+Go and web/document checks. Local Node 24 Docker browser acceptance passed both
+the AI/settings and authenticated memory/MCP/restart workflows. Release workflow
+changes after that source require a new exact-source check before tagging.

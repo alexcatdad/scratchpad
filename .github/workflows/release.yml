@@ -148,6 +148,36 @@ jobs:
             dist/release/*.tar.gz
             dist/release/notarization-*.json
             dist/release/macos-release.json
+  clients:
+    if: inputs.homebrew_only != true
+    needs: preflight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm run sdk:build
+      - name: Pack compiled TypeScript client for the selected release
+        env:
+          RELEASE_TAG: ${{ needs.preflight.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./packages/clients/typescript/package.json').version")
+          [[ "$version" == "${RELEASE_TAG#v}" ]]
+          mkdir -p dist/clients
+          npm pack --workspace @scratchpad/api-client --pack-destination dist/clients
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: clients-typescript
+          if-no-files-found: error
+          retention-days: 7
+          path: dist/clients/*.tgz
   image:
     needs: [preflight, native]
     runs-on: ubuntu-latest
@@ -183,7 +213,7 @@ jobs:
           provenance: true
           sbom: true
   publish:
-    needs: [preflight, native, image]
+    needs: [preflight, native, image, clients]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -192,6 +222,10 @@ jobs:
         with:
           pattern: native-*
           merge-multiple: true
+          path: assets
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: clients-typescript
           path: assets
       - name: Verify artifact inventory and notarization before release
         env:
@@ -204,7 +238,8 @@ jobs:
             jq -e '.status == "Accepted"' "assets/notarization-darwin-${arch}.json" > /dev/null
           done
           test -s assets/macos-release.json
-          (cd assets && sha256sum ./*.zip ./*.tar.gz notarization-*.json macos-release.json > checksums.txt)
+          test -s "assets/scratchpad-api-client-${RELEASE_TAG#v}.tgz"
+          (cd assets && sha256sum ./*.zip ./*.tar.gz ./*.tgz notarization-*.json macos-release.json > checksums.txt)
       - name: Publish versioned assets and container digest
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

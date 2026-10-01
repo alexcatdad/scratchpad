@@ -82,6 +82,21 @@ Use `gh release view` before retrying creation/upload. Do not overwrite assets w
 4. Linux ARM64 and AMD64 are built in CI. The image job publishes both Linux platforms to `ghcr.io/alexcatdad/scratchpad:vX.Y.Z` only after native verification succeeds.
 5. Publication checks the complete inventory, generates checksums, revalidates the tag SHA, and publishes the draft. The tap job downloads the published assets, verifies checksums, and updates `Formula/scratchpad-mcp.rb` using the GitHub App. Downgrades and force pushes are prohibited.
 
+## Optional-extension release preparation
+
+The next release is v0.3.0 for pgvector, public GitHub profiles and generated clients.
+Before tagging, require successful CI at its exact source. Create both `v0.3.0`
+and `packages/clients/go/v0.3.0` at that source; push both without changing older
+tags. The second tag makes the separate Go module consumable through normal Go
+module resolution. Follow the same local signing, draft upload and publication
+procedure using the new product tag.
+
+The release pipeline builds and packs the TypeScript workspace at the tagged source,
+checks its package version matches the release, and includes the compiled tarball
+in the release checksum inventory. Fresh release acceptance installs this asset
+and the matching remote Go module into separate temporary consumer projects and
+exercises real authenticated HTTP calls. No npm registry publication is required.
+
 ## Artifact inventory
 
 - `scratchpad-mcp-vX.Y.Z-darwin-arm64.zip`
@@ -91,6 +106,7 @@ Use `gh release view` before retrying creation/upload. Do not overwrite assets w
 - `notarization-darwin-arm64.json`
 - `notarization-darwin-amd64.json`
 - `macos-release.json`
+- `scratchpad-api-client-X.Y.Z.tgz` (v0.3.0 and later)
 - `checksums.txt`
 
 ## Recovery and acceptance

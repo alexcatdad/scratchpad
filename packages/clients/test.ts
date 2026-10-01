@@ -5,7 +5,13 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createApi } from "../../apps/web/src/server/api.ts";
-import { createScratchpadClient } from "./typescript/index.ts";
+import { createScratchpadClient as sourceClient } from "./typescript/index.ts";
+
+// Release acceptance uses the installed tarball with the same actual HTTP checks.
+const createScratchpadClient: typeof sourceClient = process.env
+  .SCRATCHPAD_SDK_TS_MODULE
+  ? (await import(process.env.SCRATCHPAD_SDK_TS_MODULE)).createScratchpadClient
+  : sourceClient;
 
 // Disposable credentials exist only in this in-memory fixture. Production authentication is unchanged.
 const api = createApi({
@@ -109,7 +115,9 @@ try {
   assert.equal(missing.error?.error.code, "RECORD_NOT_FOUND");
   await new Promise<void>((resolve, reject) => {
     const child = spawn("go", ["test", "./...", "-count=1"], {
-      cwd: new URL("./go", import.meta.url),
+      cwd:
+        process.env.SCRATCHPAD_SDK_GO_DIRECTORY ??
+        new URL("./go", import.meta.url),
       stdio: "inherit",
       env: {
         ...process.env,
