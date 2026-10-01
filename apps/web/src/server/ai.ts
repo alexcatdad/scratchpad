@@ -792,6 +792,8 @@ export class AiService {
       (e) =>
         source.has(String(e.recordId)) &&
         e.fingerprint === fingerprint(provider.config) &&
+        e.model === provider.config.embeddingModel &&
+        e.dimensions === provider.config.embeddingDimensions &&
         e.contentHash === contentHash(source.get(String(e.recordId)) as Entity),
     );
     if (!eligible.length)
@@ -805,12 +807,25 @@ export class AiService {
     const allowedAfterCall = new Set(
       (await this.records(parsed)).map((r) => r.id),
     );
+    const authorized = eligible.filter((e) =>
+      allowedAfterCall.has(String(e.recordId)),
+    );
+    const nativeScores = await this.store.vectorScores(authorized, query);
+    const allowedAfterRanking = new Set(
+      (await this.records(parsed)).map((r) => r.id),
+    );
+    const scores =
+      nativeScores ??
+      authorized.map((e) => ({
+        recordId: String(e.recordId),
+        score: cosine(query, e.vector as number[]),
+      }));
     return {
-      results: eligible
-        .filter((e) => allowedAfterCall.has(String(e.recordId)))
-        .map((e) => ({
-          record: source.get(String(e.recordId)),
-          score: cosine(query, e.vector as number[]),
+      results: scores
+        .filter((item) => allowedAfterRanking.has(item.recordId))
+        .map((item) => ({
+          record: source.get(item.recordId),
+          score: item.score,
         }))
         .filter((item) => item.score >= provider.config.similarityThreshold)
         .sort((a, b) => b.score - a.score)

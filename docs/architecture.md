@@ -982,3 +982,11 @@ The dashboard exposes provider/model/schedule/analysis settings, project partici
 Portable knowledge exports include source/audit/derived knowledge and owner presentation, excluding authentication state, provider secrets, jobs and embeddings. Full operational backups preserve the entire selected database: SQLite's administrator snapshot command or PostgreSQL's `pg_dump`/`pg_restore`. Follow the respective runbooks and verify a restore in a disposable environment.
 
 Mock-provider browser acceptance proves application wiring, consent boundaries, review, downloads and failure isolation. Real selected-provider acceptance separately proves model interoperability and source-linked output. Neither substitutes for the other or for exact-revision canonical CI/release verification. Track final evidence in the remaining-product ledger.
+
+## 31. Optional extensions
+
+The owner requested these additions on 2 October 2026. PostgreSQL may explicitly opt into pgvector through `SCRATCHPAD_PGVECTOR=true`; the operator installs the extension in the application database. SQLite retains its existing comparator. A derived secondary vector table supports native exact cosine search after candidate eligibility checks. The original JSON embedding remains authoritative for rebuilds and precision preservation. Native vector float32 representation can differ slightly from the original JavaScript numbers; unsupported native vectors retain the existing comparator rather than being truncated. Approximate indexes are not enabled implicitly.
+
+Public GitHub profile enrichment uses the fixed public GitHub user API with bounded requests. An authenticated owner selects a username; the server stores a validated public snapshot separately from authentication state. Link, refresh and unlink use optimistic profile versioning and audited writes. GitHub downtime does not affect capture, sign-in or readiness.
+
+Generated TypeScript and Go clients are derived from OpenAPI, with deterministic regeneration and actual authenticated HTTP integration. Their source and build artifacts are independently consumable. They do not replace the MCP SDK or its HTTP compatibility boundary.

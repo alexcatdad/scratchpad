@@ -57,12 +57,20 @@ type PgTx = Parameters<Parameters<PgDb["transaction"]>[0]>[0];
 export class Store {
   readonly backend: "sqlite" | "postgres";
   readonly sqlite: Database.Database;
+  readonly pgvector: boolean;
   private pg?: Sql;
   private context = new AsyncLocalStorage<PgTx | true>();
   private orm?: PgDb;
   private ready: Promise<void>;
   private queue: Promise<unknown> = Promise.resolve();
-  constructor(path: string, databaseUrl?: string) {
+  constructor(
+    path: string,
+    databaseUrl?: string,
+    options: { pgvector?: boolean } = {},
+  ) {
+    this.pgvector = options.pgvector ?? false;
+    if (this.pgvector && !databaseUrl)
+      throw new Error("pgvector requires SCRATCHPAD_DATABASE_URL.");
     this.backend = databaseUrl ? "postgres" : "sqlite";
     if (databaseUrl) {
       if (!/^postgres(?:ql)?:\/\//.test(databaseUrl))
@@ -116,6 +124,7 @@ export class Store {
         await tx`SELECT tablename FROM pg_tables WHERE schemaname=current_schema()`;
       if (tables.length) {
         await this.checkPostgres(tx as unknown as Sql);
+        if (this.pgvector) await this.initializeVectors(tx as unknown as Sql);
         return;
       }
       await tx.unsafe(`CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,applied_at TEXT NOT NULL);
@@ -127,6 +136,84 @@ export class Store {
       CREATE INDEX record_search_document ON record_search USING GIN(document);`);
       await tx`INSERT INTO schema_migrations VALUES(1,${now()})`;
       await this.checkPostgres(tx as unknown as Sql);
+      if (this.pgvector) await this.initializeVectors(tx as unknown as Sql);
+    });
+  }
+  private async initializeVectors(pg: Sql) {
+    // Operators install the extension explicitly; ordinary PostgreSQL and SQLite never require it.
+    const extension =
+      await pg`SELECT extversion FROM pg_extension WHERE extname='vector' AND extnamespace=(SELECT oid FROM pg_namespace WHERE nspname=current_schema())`;
+    if (!extension.length)
+      throw new Error(
+        "Install pgvector in the application schema before enabling it.",
+      );
+    await pg.unsafe(`CREATE TABLE IF NOT EXISTS pgvector_embeddings(id TEXT PRIMARY KEY, fingerprint TEXT NOT NULL, model TEXT NOT NULL, dimensions INTEGER NOT NULL, content_hash TEXT NOT NULL, embedding vector NOT NULL, CHECK(vector_dims(embedding)=dimensions));
+      CREATE INDEX IF NOT EXISTS pgvector_embeddings_compatibility ON pgvector_embeddings(fingerprint,model,dimensions);`);
+    // Rebuild from persisted derived entities on every opt-in startup, including after a disabled interval.
+    // Transaction/advisory locking makes this restart-safe and prevents partial indexes becoming visible.
+    await pg`DELETE FROM pgvector_embeddings`;
+    const embeddings =
+      await pg`SELECT data FROM entities WHERE kind='ai_embedding'`;
+    for (const row of embeddings) {
+      const entity = row.data as Entity;
+      const vector = entity.vector as number[];
+      if (
+        vector.length > 16000 ||
+        !vector.every((n) => Number.isFinite(Math.fround(n))) ||
+        !vector.some((n) => Math.fround(n) !== 0)
+      )
+        continue;
+      await pg`INSERT INTO pgvector_embeddings VALUES(${entity.id},${String(entity.fingerprint)},${String(entity.model)},${Number(entity.dimensions)},${String(entity.contentHash)},${JSON.stringify(vector)}::vector)`;
+    }
+    await pg`SELECT id,fingerprint,model,dimensions,content_hash,vector_dims(embedding) FROM pgvector_embeddings LIMIT 0`;
+  }
+  private async syncEmbedding(entity: Entity) {
+    if (!this.pgvector) return;
+    const vector = entity.vector as number[];
+    if (
+      Number(entity.dimensions) > 16000 ||
+      !vector.every((n) => Number.isFinite(Math.fround(n))) ||
+      !vector.some((n) => Math.fround(n) !== 0)
+    ) {
+      await this.query(
+        sql`DELETE FROM pgvector_embeddings WHERE id=${entity.id}`,
+      );
+      return;
+    }
+    await this.query(
+      sql`INSERT INTO pgvector_embeddings(id,fingerprint,model,dimensions,content_hash,embedding) VALUES(${entity.id},${String(entity.fingerprint)},${String(entity.model)},${Number(entity.dimensions)},${String(entity.contentHash)},${JSON.stringify(entity.vector)}::vector) ON CONFLICT(id) DO UPDATE SET fingerprint=EXCLUDED.fingerprint,model=EXCLUDED.model,dimensions=EXCLUDED.dimensions,content_hash=EXCLUDED.content_hash,embedding=EXCLUDED.embedding`,
+    );
+  }
+  async vectorScores(
+    eligible: Entity[],
+    vector: number[],
+  ): Promise<{ recordId: string; score: number }[] | undefined> {
+    if (
+      !this.pgvector ||
+      vector.length > 16000 ||
+      !vector.every((n) => Number.isFinite(Math.fround(n))) ||
+      !vector.some((n) => Math.fround(n) !== 0)
+    )
+      return undefined;
+    if (!eligible.length) return [];
+    return this.run(async () => {
+      // Candidate identities and all compatibility fields are checked before native cosine ranking.
+      const candidates = eligible.map((e) => ({
+        id: e.id,
+        fingerprint: String(e.fingerprint),
+        model: String(e.model),
+        dimensions: vector.length,
+        content_hash: String(e.contentHash),
+      }));
+      const rows = await this.query(
+        sql`WITH eligible AS MATERIALIZED (SELECT v.id,v.embedding FROM pgvector_embeddings v JOIN jsonb_to_recordset(${JSON.stringify(candidates)}::jsonb) AS c(id text,fingerprint text,model text,dimensions integer,content_hash text) ON v.id=c.id AND v.fingerprint=c.fingerprint AND v.model=c.model AND v.dimensions=c.dimensions AND v.content_hash=c.content_hash) SELECT id,1-(embedding <=> ${JSON.stringify(vector)}::vector) AS score FROM eligible ORDER BY score DESC,id`,
+      );
+      if (rows.length !== eligible.length) return undefined;
+      const records = new Map(eligible.map((e) => [e.id, String(e.recordId)]));
+      return rows.map((row) => ({
+        recordId: records.get(String(row.id)) as string,
+        score: Number(row.score),
+      }));
     });
   }
   private checkSqlite() {
@@ -177,8 +264,12 @@ export class Store {
   async assertReady() {
     try {
       await this.ready;
-      if (this.pg) await this.checkPostgres(this.pg);
-      else this.checkSqlite();
+      if (this.pg) {
+        await this.checkPostgres(this.pg);
+        if (this.pgvector)
+          await this
+            .pg`SELECT vector_dims(embedding),fingerprint,model,dimensions,content_hash FROM pgvector_embeddings LIMIT 0`;
+      } else this.checkSqlite();
     } catch {
       throw new ApiError(
         503,
@@ -243,6 +334,8 @@ export class Store {
     kind: string,
     value: JsonObject & { id: string },
   ): Promise<Entity> {
+    if (this.pgvector && kind === "ai_embedding" && !this.context.getStore())
+      return this.atomic(() => this.insert(kind, value));
     return this.run(async () => {
       const entity = {
         ...value,
@@ -257,8 +350,10 @@ export class Store {
         version: entity.version,
         createdAt: entity.createdAt,
       };
-      if (this.pg) await this.pgDatabase().insert(pgEntities).values(row);
-      else sqliteDrizzle(this.sqlite).insert(entities).values(row).run();
+      if (this.pg) {
+        await this.pgDatabase().insert(pgEntities).values(row);
+        if (kind === "ai_embedding") await this.syncEmbedding(entity);
+      } else sqliteDrizzle(this.sqlite).insert(entities).values(row).run();
       return entity;
     });
   }
@@ -314,11 +409,16 @@ export class Store {
           "CONFLICT",
           "Concurrent update. Read the item again.",
         );
+      if (kind === "ai_embedding") await this.syncEmbedding(next);
       return next;
     });
   }
-  async remove(kind: string, key: string) {
+  async remove(kind: string, key: string): Promise<void> {
+    if (this.pgvector && kind === "ai_embedding" && !this.context.getStore())
+      return this.atomic(() => this.remove(kind, key));
     await this.run(async () => {
+      if (this.pgvector && kind === "ai_embedding")
+        await this.query(sql`DELETE FROM pgvector_embeddings WHERE id=${key}`);
       if (this.pg)
         await this.pgDatabase()
           .delete(pgEntities)

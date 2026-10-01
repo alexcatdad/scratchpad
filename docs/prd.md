@@ -1391,3 +1391,13 @@ Short form:
 On 1 October 2026, the owner clarified that other projects are examples, not sources of truth for Scratchpad's requirements. USB Boop and stakeholder-history references illustrate the intended workflows; their exact past conversations or decisions are not prerequisites for MVP acceptance.
 
 Acceptance may use clearly labeled synthetic data to demonstrate the complete behavior in §§37–38, including a paused project, its reason, unresolved follow-up and relevant decisions surviving restart or restore. Synthetic examples must not be presented as facts about a real project. Real-history imports remain useful optional validation of import fidelity and retrieval, with their original provenance and uncertainty preserved.
+
+## 44. Accepted clarification — optional extensions
+
+On 2 October 2026, the owner requested the three previously optional additions: pgvector, public GitHub profile enrichment and generated API clients.
+
+PostgreSQL may opt into native vector similarity while SQLite keeps its existing semantic retrieval. Vector storage remains derived and rebuildable, preserves the original embedding dimensions, and applies existing project consent and compatibility checks. This request does not require approximate indexing or dimension reduction.
+
+Public GitHub profile linkage is an owner-controlled presentation feature with link, refresh and unlink behavior. It never enrolls an authentication credential, establishes an authenticated identity, or changes the passkey/SSH root of trust.
+
+Generate consumable TypeScript and Go clients from the HTTP contract. Verify deterministic regeneration, compilation, authenticated requests and typed failure handling. Generated clients do not introduce direct cross-runtime dependencies between the central API and MCP implementations.

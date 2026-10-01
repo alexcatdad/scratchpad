@@ -306,13 +306,25 @@ export function AiSettings() {
   );
 }
 
+type OwnerProfile = {
+  displayName: string;
+  version: number;
+  github?: {
+    username: string;
+    displayName: string | null;
+    avatarUrl: string | null;
+    profileUrl: string;
+    fetchedAt: string;
+  } | null;
+};
 export function OwnerSettings() {
   const [data, setData] = useState<{
-    profile: { displayName: string; version: number };
+    profile: OwnerProfile;
     database: { engine: string };
   } | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     void api<typeof data>("/profile")
       .then(setData)
@@ -341,16 +353,14 @@ export function OwnerSettings() {
                 new FormData(event.currentTarget).get("displayName"),
               );
               setError("");
-              void api<{ profile: { displayName: string; version: number } }>(
-                "/profile",
-                {
-                  method: "PATCH",
-                  body: JSON.stringify({
-                    displayName,
-                    expectedVersion: data.profile.version,
-                  }),
-                },
-              )
+              setNotice("");
+              void api<{ profile: OwnerProfile }>("/profile", {
+                method: "PATCH",
+                body: JSON.stringify({
+                  displayName,
+                  expectedVersion: data.profile.version,
+                }),
+              })
                 .then((result) => {
                   setData({ ...data, profile: result.profile });
                   setNotice("Profile saved.");
@@ -367,7 +377,107 @@ export function OwnerSettings() {
                 defaultValue={data.profile.displayName}
               />
             </label>
-            <button type="submit">Save profile</button>
+            <button type="submit" disabled={busy}>
+              Save profile
+            </button>
+          </form>
+          <h3>Public GitHub profile</h3>
+          <p>
+            Optional presentation only. Linking a public profile does not
+            authenticate you or verify account ownership.
+          </p>
+          {data.profile.github && (
+            <div>
+              {data.profile.github.avatarUrl && (
+                <img
+                  src={data.profile.github.avatarUrl}
+                  alt=""
+                  width={48}
+                  height={48}
+                  referrerPolicy="no-referrer"
+                />
+              )}
+              <p>
+                GitHub profile linked:{" "}
+                <a
+                  href={data.profile.github.profileUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {data.profile.github.username}
+                </a>
+                {data.profile.github.displayName &&
+                  ` (${data.profile.github.displayName})`}
+              </p>
+              <p>
+                Last retrieved:{" "}
+                {new Date(data.profile.github.fetchedAt).toLocaleString()}
+              </p>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setBusy(true);
+                  setError("");
+                  setNotice("");
+                  void api<{ profile: OwnerProfile }>("/profile/github", {
+                    method: "DELETE",
+                    body: JSON.stringify({
+                      expectedVersion: data.profile.version,
+                    }),
+                  })
+                    .then((result) => {
+                      setData({ ...data, profile: result.profile });
+                      setNotice("GitHub profile unlinked.");
+                    })
+                    .catch((reason: Error) => setError(reason.message))
+                    .finally(() => setBusy(false));
+                }}
+              >
+                Unlink GitHub profile
+              </button>
+            </div>
+          )}
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setBusy(true);
+              setError("");
+              setNotice("");
+              const username = String(
+                new FormData(event.currentTarget).get("githubUsername"),
+              );
+              void api<{ profile: OwnerProfile }>("/profile/github", {
+                method: "POST",
+                body: JSON.stringify({
+                  username,
+                  expectedVersion: data.profile.version,
+                }),
+              })
+                .then((result) => {
+                  setData({ ...data, profile: result.profile });
+                  setNotice("Public GitHub profile saved.");
+                })
+                .catch((reason: Error) => setError(reason.message))
+                .finally(() => setBusy(false));
+            }}
+          >
+            <label>
+              GitHub username
+              <input
+                key={data.profile.github?.username ?? "unlinked"}
+                name="githubUsername"
+                required
+                maxLength={39}
+                defaultValue={data.profile.github?.username ?? ""}
+                autoComplete="off"
+              />
+            </label>
+            <button disabled={busy} type="submit">
+              {data.profile.github
+                ? "Refresh GitHub profile"
+                : "Link GitHub profile"}
+            </button>
           </form>
         </>
       )}

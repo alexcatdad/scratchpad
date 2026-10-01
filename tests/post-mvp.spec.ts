@@ -466,6 +466,132 @@ test("private AI settings, evidence review, semantic search and document downloa
     .fill("Synthetic owner");
   await page.getByRole("button", { name: "Save profile", exact: true }).click();
   await expect(page.getByText("Profile saved.", { exact: true })).toBeVisible();
+  // Browser-boundary fixture only: production GitHub networking/persistence/auth are
+  // covered by github-profile.test.ts. Keep CI independent of public GitHub outages.
+  const savedProfile = await request<{
+    profile: Entity;
+    database: { engine: string };
+  }>(page, "/profile");
+  let presentationProfile = {
+    ...savedProfile.profile,
+    github: null as null | {
+      username: string;
+      displayName: string;
+      avatarUrl: null;
+      profileUrl: string;
+      fetchedAt: string;
+    },
+  };
+  let profileFailure = "";
+  const githubRoute = `${origin}/api/v1/profile/github`;
+  const profileRoute = `${origin}/api/v1/profile`;
+  await page.route(profileRoute, async (route) => {
+    if (route.request().method() === "GET")
+      await route.fulfill({
+        json: { ...savedProfile, profile: presentationProfile },
+      });
+    else await route.continue();
+  });
+  await page.route(githubRoute, async (route) => {
+    if (profileFailure) {
+      await route.fulfill({
+        status: profileFailure === "CONFLICT" ? 409 : 503,
+        json: {
+          error: {
+            code: profileFailure,
+            message:
+              profileFailure === "CONFLICT"
+                ? "Profile changed. Read it again."
+                : "Could not retrieve the public GitHub profile. Try again later.",
+          },
+        },
+      });
+      return;
+    }
+    const body = route.request().postDataJSON();
+    expect(body.expectedVersion).toBe(presentationProfile.version);
+    presentationProfile = {
+      ...presentationProfile,
+      version: presentationProfile.version + 1,
+      github:
+        route.request().method() === "DELETE"
+          ? null
+          : {
+              username: body.username,
+              displayName: "Synthetic public name",
+              avatarUrl: null,
+              profileUrl: `https://github.com/${body.username}`,
+              fetchedAt: new Date().toISOString(),
+            },
+    };
+    await route.fulfill({ json: { profile: presentationProfile } });
+  });
+  await expect(
+    page.getByText(
+      "Optional presentation only. Linking a public profile does not authenticate you or verify account ownership.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await page.getByLabel("GitHub username", { exact: true }).fill("octocat");
+  await page
+    .getByRole("button", { name: "Link GitHub profile", exact: true })
+    .click();
+  await expect(
+    page.getByText("Public GitHub profile saved.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "octocat", exact: true }),
+  ).toHaveAttribute("href", "https://github.com/octocat");
+  await expect(page.getByText(/GitHub profile linked:/)).toContainText(
+    "Synthetic public name",
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("GitHub username", { exact: true })).toHaveValue(
+    "octocat",
+  );
+  await page
+    .getByRole("button", { name: "Refresh GitHub profile", exact: true })
+    .click();
+  await expect(
+    page.getByText("Public GitHub profile saved.", { exact: true }),
+  ).toBeVisible();
+  profileFailure = "GITHUB_UNAVAILABLE";
+  await page
+    .getByRole("button", { name: "Refresh GitHub profile", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "Could not retrieve the public GitHub profile" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "octocat", exact: true }),
+  ).toBeVisible();
+  profileFailure = "CONFLICT";
+  await page
+    .getByRole("button", { name: "Unlink GitHub profile", exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("alert")
+      .filter({ hasText: "Profile changed. Read it again." }),
+  ).toBeVisible();
+  profileFailure = "";
+  await page
+    .getByRole("button", { name: "Unlink GitHub profile", exact: true })
+    .click();
+  await expect(
+    page.getByText("GitHub profile unlinked.", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "octocat", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Link GitHub profile", exact: true }),
+  ).toBeVisible();
+  await page.unroute(githubRoute);
+  await page.unroute(profileRoute);
   const defaults = page.getByRole("region", { name: "New project defaults" });
   await defaults
     .getByLabel("Allow repository mirroring by default", { exact: true })

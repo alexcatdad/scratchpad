@@ -19,6 +19,11 @@ import {
   requireValue,
   settingsSchema,
 } from "./domain";
+import {
+  fetchGithubProfile,
+  githubUsername,
+  presentGithubProfile,
+} from "./github-profile";
 import { exportKinds, importLegacy, importNative } from "./imports";
 import { Store } from "./store";
 import { compareTimestamps } from "./timestamps";
@@ -100,8 +105,12 @@ export function createApi(config: {
   databasePath: string;
   databaseUrl?: string;
   origin: string;
+  githubFetch?: typeof fetch;
+  pgvector?: boolean;
 }) {
-  const store = new Store(config.databasePath, config.databaseUrl),
+  const store = new Store(config.databasePath, config.databaseUrl, {
+      pgvector: config.pgvector,
+    }),
     auth = new Auth(store, config.origin),
     ai = new AiService(store, undefined, undefined, config.origin);
   async function entity(kind: string, key: string): Promise<Entity> {
@@ -485,9 +494,10 @@ export function createApi(config: {
             (await store.get("owner", "owner"))?.displayName ?? "Owner",
           ),
           version: 0,
+          github: null,
         };
         return response({
-          profile,
+          profile: { ...profile, github: presentGithubProfile(profile.github) },
           database: {
             engine: store.backend === "postgres" ? "postgresql" : "sqlite",
           },
@@ -532,9 +542,75 @@ export function createApi(config: {
               previous,
               profile,
             );
-            return { profile };
+            return {
+              profile: {
+                ...profile,
+                github: presentGithubProfile(profile.github),
+              },
+            };
           }),
         );
+      if (
+        route === "/profile/github" &&
+        (method === "POST" || method === "DELETE")
+      ) {
+        const version = z
+          .number()
+          .int()
+          .nonnegative()
+          .parse(body.expectedVersion);
+        const before = await store.get("profile", "owner-profile");
+        requireValue(
+          (before?.version ?? 0) === version,
+          "CONFLICT",
+          "Profile changed. Read it again.",
+          409,
+        );
+        // Network access stays outside the transaction. Recheck the version before saving.
+        const github =
+          method === "POST"
+            ? await fetchGithubProfile(
+                githubUsername.parse(body.username),
+                config.githubFetch,
+              )
+            : null;
+        return response(
+          await store.atomic(async () => {
+            const previous = await store.get("profile", "owner-profile");
+            requireValue(
+              (previous?.version ?? 0) === version,
+              "CONFLICT",
+              "Profile changed. Read it again.",
+              409,
+            );
+            const profile = previous
+              ? await store.update("profile", { ...previous, github }, version)
+              : await store.insert("profile", {
+                  id: "owner-profile",
+                  displayName: String(
+                    (await store.get("owner", "owner"))?.displayName ?? "Owner",
+                  ),
+                  github,
+                });
+            await store.audit(
+              method === "DELETE"
+                ? "profile.github.unlinked"
+                : "profile.github.updated",
+              "profile",
+              profile.id,
+              actor,
+              previous,
+              profile,
+            );
+            return {
+              profile: {
+                ...profile,
+                github: presentGithubProfile(profile.github),
+              },
+            };
+          }),
+        );
+      }
       if (route === "/ai/settings" && method === "GET")
         return response(await ai.settings());
       if (route === "/ai/settings" && method === "PATCH")
@@ -1200,6 +1276,7 @@ let singleton: ReturnType<typeof createApi> | undefined;
 export function getApi(): ReturnType<typeof createApi> {
   singleton ??= createApi({
     databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
+    pgvector: process.env.SCRATCHPAD_PGVECTOR === "true",
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",

@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Scratchpad HTTP API",
-    "version": "source-post-mvp",
-    "description": "Current source contract, including SQLite/PostgreSQL parity and optional AI. Published v0.1.3 artifacts predate the post-MVP interfaces. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. Setup/recovery tokens are local administrator capabilities, never ordinary API credentials. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and imported provenance fields remain preserved. Implemented routes are listed; illustrative earlier contract routes are not invented here."
+    "version": "source-optionals",
+    "description": "Current source contract for Scratchpad, including SQLite/PostgreSQL parity, optional AI and optional public GitHub profile enrichment. Published v0.2.0 provides the AI and PostgreSQL foundation; new optional interfaces remain source additions until a later release is published. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. GitHub profile linkage is descriptive public information and never authentication. Setup/recovery tokens are local administrator capabilities. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and provenance remain preserved."
   },
   "servers": [
     {
@@ -637,19 +637,7 @@
                   "type": "object",
                   "properties": {
                     "profile": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string"
-                        },
-                        "displayName": {
-                          "type": "string"
-                        },
-                        "version": {
-                          "type": "integer",
-                          "minimum": 0
-                        }
-                      }
+                      "$ref": "#/components/schemas/OwnerProfile"
                     },
                     "database": {
                       "type": "object",
@@ -682,8 +670,7 @@
                   "type": "object",
                   "properties": {
                     "profile": {
-                      "type": "object",
-                      "additionalProperties": true
+                      "$ref": "#/components/schemas/OwnerProfile"
                     }
                   }
                 }
@@ -2654,6 +2641,101 @@
           }
         }
       }
+    },
+    "/api/v1/profile/github": {
+      "post": {
+        "operationId": "link_github_profile",
+        "summary": "Link or refresh public GitHub profile",
+        "description": "Owner-authenticated operation. Uses optimistic profile versioning; public GitHub data cannot change authentication or credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "username": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 39
+                  }
+                },
+                "required": ["expectedVersion", "username"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated owner profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "$ref": "#/components/schemas/OwnerProfile"
+                    }
+                  },
+                  "required": ["profile"]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "unlink_github_profile",
+        "summary": "Unlink public GitHub profile",
+        "description": "Owner-authenticated operation. Uses optimistic profile versioning; public GitHub data cannot change authentication or credentials.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "expectedVersion": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                },
+                "required": ["expectedVersion"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated owner profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "profile": {
+                      "$ref": "#/components/schemas/OwnerProfile"
+                    }
+                  },
+                  "required": ["profile"]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3362,6 +3444,64 @@
           }
         },
         "required": ["format", "projectId", "jsonl"]
+      },
+      "GithubProfile": {
+        "type": "object",
+        "description": "Public GitHub profile snapshot; not an authenticated identity.",
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": ["string", "null"]
+          },
+          "avatarUrl": {
+            "type": ["string", "null"],
+            "format": "uri"
+          },
+          "profileUrl": {
+            "type": "string",
+            "format": "uri"
+          },
+          "fetchedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "username",
+          "displayName",
+          "avatarUrl",
+          "profileUrl",
+          "fetchedAt"
+        ]
+      },
+      "OwnerProfile": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "github": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GithubProfile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": ["id", "displayName", "version"],
+        "additionalProperties": true
       }
     },
     "responses": {
