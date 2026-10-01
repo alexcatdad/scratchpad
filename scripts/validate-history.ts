@@ -129,8 +129,11 @@ async function main() {
   const endpoint = `http://127.0.0.1:${address.port}`;
   api = createApi({ databasePath: ":memory:", origin: endpoint });
   // This credential belongs only to the disposable validation database, never a live instance.
-  api.store.insert("credential", { id: "isolated-validation", kind: "ssh" });
-  api.store.insert("session", {
+  await api.store.insert("credential", {
+    id: "isolated-validation",
+    kind: "ssh",
+  });
+  await api.store.insert("session", {
     id: createHash("sha256").update(token).digest("hex"),
     credentialId: "isolated-validation",
     browser: false,
@@ -166,10 +169,9 @@ async function main() {
       jsonl: text,
       sourceName: "private-validation.jsonl",
     });
-    const records =
-      api?.store
-        .list("record")
-        .filter((record) => record.projectId === project.id) ?? [];
+    const records = ((await api?.store.list("record")) ?? []).filter(
+      (record) => record.projectId === project.id,
+    );
     const lines = text.split(/\r?\n/);
     for (const record of records) {
       const source = (record.provenance as JsonObject).import as JsonObject;
@@ -369,7 +371,7 @@ async function main() {
     await new Promise<void>((resolve, reject) =>
       server.close((error) => (error ? reject(error) : resolve())),
     );
-    api.close();
+    await api.close();
   }
 }
 main().catch((error) => {
