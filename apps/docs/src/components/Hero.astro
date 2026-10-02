@@ -1,0 +1,127 @@
+---
+// biome-ignore-all lint/correctness/noUnusedImports lint/correctness/noUnusedVariables: Astro templates consume these frontmatter bindings.
+import { Image } from "astro:assets";
+import { LinkButton } from "@astrojs/starlight/components";
+import DefaultHero from "@astrojs/starlight/components/Hero.astro";
+import folio from "../assets/context-folio.png";
+
+const { entry } = Astro.locals.starlightRoute;
+const isHome = entry.id === "index" || entry.id === "";
+---
+
+{isHome ? (
+  <section class="scratchpad-hero" aria-labelledby="_top">
+    <div class="hero-copy">
+      <h1 id="_top" data-page-title>
+        Leave a trail
+        <br class="desktop-break" /> worth finding.
+      </h1>
+      <p class="hero-subtitle">
+        Private project memory for developers and coding agents.
+      </p>
+      <p class="hero-description">
+        Your code remembers what changed. Scratchpad keeps the why—decisions,
+        discoveries, and lessons for the next session.
+      </p>
+      <div class="hero-actions">
+        <LinkButton href="/scratchpad/guides/installation/" icon="right-arrow">
+          Get started
+        </LinkButton>
+        <LinkButton
+          href="/scratchpad/guides/mcp/"
+          variant="minimal"
+          icon="right-arrow"
+        >
+          Connect your MCP
+        </LinkButton>
+      </div>
+    </div>
+    <figure class="context-folio">
+      <Image
+        src={folio}
+        alt="Illustrative notes: Capture asks why SQLite first; Context says start small and keep deployment simple; History keeps the original reasoning."
+        width={680}
+        loading="eager"
+      />
+      <figcaption>An example of the context worth keeping.</figcaption>
+    </figure>
+  </section>
+) : (
+  <DefaultHero />
+)}
+
+<style>
+  .scratchpad-hero {
+    display: grid;
+    grid-template-columns: 1.08fr 1fr;
+    gap: 1rem;
+    align-items: center;
+    padding-block: 4rem 4.5rem;
+  }
+  .hero-copy h1 {
+    font-family: var(--sp-display);
+    font-size: clamp(3rem, 6.2vw, 5.8rem);
+    line-height: 1.04;
+    letter-spacing: -0.055em;
+    font-weight: 700;
+    color: var(--sl-color-white);
+    margin: 0;
+  }
+  .hero-subtitle {
+    color: var(--sl-color-gray-3);
+    font-size: 1.3rem;
+    line-height: 1.5;
+    margin-top: 1.75rem;
+    max-width: 35rem;
+  }
+  .hero-description {
+    font-size: 1.15rem;
+    line-height: 1.7;
+    margin-top: 1.75rem;
+    max-width: 34rem;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1.75rem;
+  }
+  .context-folio {
+    margin: 0;
+    min-width: 0;
+  }
+  .context-folio img {
+    width: 100%;
+    height: auto;
+  }
+  .context-folio figcaption {
+    font-size: 0.75rem;
+    text-align: center;
+    color: var(--sl-color-gray-3);
+    margin-top: 0.5rem;
+  }
+  @media (max-width: 49.99rem) {
+    .scratchpad-hero {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+      padding-block: 2.5rem 2rem;
+    }
+    .hero-copy h1 {
+      font-size: clamp(2.8rem, 9vw, 4rem);
+    }
+    .desktop-break {
+      display: none;
+    }
+    .context-folio {
+      max-width: 32rem;
+      width: 100%;
+      margin-inline: auto;
+    }
+    .hero-subtitle,
+    .hero-description {
+      max-width: 35rem;
+      margin-top: 1.25rem;
+    }
+  }
+</style>

@@ -16,6 +16,12 @@ export default defineConfig({
       defaultLocale: "root",
       locales: { root: { label: "English", lang: "en" } },
       favicon: "/favicon.svg",
+      customCss: ["./src/styles/custom.css"],
+      logo: { src: "./public/favicon.svg", alt: "" },
+      components: {
+        Hero: "./src/components/Hero.astro",
+        PageTitle: "./src/components/PageTitle.astro",
+      },
       social: [
         {
           icon: "github",
@@ -44,6 +50,8 @@ export default defineConfig({
               slug: "guides/optional-extensions",
             },
             { label: "MCP & project context", slug: "guides/mcp" },
+            { label: "Connect Codex", slug: "guides/codex" },
+            { label: "Connect ChatGPT on macOS", slug: "guides/chatgpt" },
             {
               label: "Releases & installation channels",
               slug: "guides/releases",

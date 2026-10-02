@@ -5,6 +5,15 @@ description: The local stdio interface, project discovery, and authentication de
 
 The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context, authenticates to the central API, and optionally mirrors eligible captures into the selected checkout. Record business rules remain server-side.
 
+## Connect your client
+
+Start with the guide for your client:
+
+- [Codex setup](/scratchpad/guides/codex/) — CLI registration, configuration, and a first read.
+- [ChatGPT macOS setup](/scratchpad/guides/chatgpt/) — the desktop STDIO connection and the distinction from ChatGPT web.
+
+Install the binary and enroll your public key before adding it to either client. Homebrew installs the MCP; your Scratchpad server runs separately.
+
 ## Selecting the project
 
 By default, discovery starts from the process launch directory. Clients do not all launch a globally configured MCP inside the active repository, so project-scoped calls can pass `workingDirectory` explicitly.
@@ -35,7 +44,7 @@ Sign the exact displayed nonce **without a newline**, using the displayed namesp
 
 ## Client configuration
 
-Point your MCP client's stdio command at the absolute path to your locally built `dist/scratchpad-mcp` binary. Set these environment variables in that client's configuration:
+Point your MCP client's stdio command at the absolute path to the installed `scratchpad-mcp` binary, or your locally built `dist/scratchpad-mcp`. Find an installed binary with `command -v scratchpad-mcp`. Set these environment variables in that client's configuration:
 
 | Variable                 | Meaning                                                                       |
 | ------------------------ | ----------------------------------------------------------------------------- |

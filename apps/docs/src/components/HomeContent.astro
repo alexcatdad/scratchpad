@@ -1,0 +1,184 @@
+---
+// biome-ignore-all lint/correctness/noUnusedImports lint/correctness/noUnusedVariables: Astro templates consume these frontmatter bindings.
+import { Icon } from "@astrojs/starlight/components";
+
+const principles = [
+  [
+    "Capture while you work",
+    "Record a decision, a useful answer, or a failed investigation through your local MCP.",
+  ],
+  [
+    "Pick up the thread",
+    "Give your next coding session the constraints and reasoning behind the current project.",
+  ],
+  [
+    "Keep it yours",
+    "Self-hosted storage. SQLite by default. Optional PostgreSQL and AI when you need them.",
+  ],
+];
+const routes = [
+  [
+    "Install Scratchpad",
+    "Run the server and enroll your first passkey.",
+    "guides/installation",
+  ],
+  [
+    "Connect your coding client",
+    "Set up MCP in Codex or ChatGPT on macOS.",
+    "guides/mcp",
+  ],
+  [
+    "Explore optional AI",
+    "Configure a compatible provider and choose participating projects.",
+    "guides/ai",
+  ],
+  [
+    "Understand the architecture",
+    "See how captures, provenance, and derived knowledge fit together.",
+    "reference/architecture",
+  ],
+];
+---
+
+<div class="not-content home-content">
+  <section class="home-section" aria-labelledby="context-heading">
+    <h2 id="context-heading">A home for the context between commits</h2>
+    <div class="principles">
+      {principles.map(([title, copy]) => (
+        <div>
+          <h3>{title}</h3>
+          <p>{copy}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+  <section class="home-section next-steps" aria-labelledby="next-heading">
+    <h2 id="next-heading">Find your next step</h2>
+    <div class="guide-routes">
+      {routes.map(([title, copy, path]) => (
+        <a class="guide-route" href={`/scratchpad/${path}/`}>
+          <strong>{title}</strong>
+          <span>{copy}</span>
+          <Icon name="right-arrow" size="1.5rem" />
+        </a>
+      ))}
+    </div>
+  </section>
+  <div class="home-note">
+    <p>Public documentation. Your memory stays on your instance.</p>
+    <a href="https://github.com/alexcatdad/scratchpad">
+      View on GitHub <Icon name="right-arrow" />
+    </a>
+  </div>
+</div>
+
+<style>
+  .home-content h2,
+  .home-content h3 {
+    font-family: var(--sp-display);
+    color: var(--sl-color-white);
+  }
+  .home-section {
+    margin-top: 1rem;
+  }
+  .home-content h2 {
+    font-size: clamp(1.8rem, 3.1vw, 2.8rem);
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.035em;
+    margin: 0 0 2.25rem;
+  }
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3rem;
+  }
+  .home-content h3 {
+    font-size: 1.6rem;
+    letter-spacing: -0.025em;
+    font-weight: 650;
+    margin: 0 0 0.75rem;
+  }
+  .home-content p {
+    margin: 0;
+    line-height: 1.7;
+    font-size: 1.15rem;
+  }
+  .next-steps {
+    margin-top: 5rem;
+  }
+  .guide-route {
+    display: grid;
+    grid-template-columns: 19rem 1fr auto;
+    gap: 1.5rem;
+    align-items: center;
+    padding: 1.5rem 0;
+    border-bottom: 1px solid var(--sl-color-hairline-light);
+    text-decoration: none;
+    color: var(--sl-color-text);
+    transition: color 150ms ease;
+  }
+  .guide-route strong {
+    font-family: var(--sp-display);
+    font-size: 1.15rem;
+    color: var(--sl-color-white);
+    font-weight: 650;
+  }
+  .guide-route svg {
+    color: var(--sl-color-text-accent);
+  }
+  .guide-route:hover strong {
+    color: var(--sl-color-text-accent);
+  }
+  .guide-route:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: 5px;
+  }
+  .home-note {
+    margin-top: 3.5rem;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    font-size: 0.8rem;
+    color: var(--sl-color-gray-3);
+  }
+  .home-note p {
+    font-size: inherit;
+  }
+  .home-note a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+  @media (max-width: 49.99rem) {
+    .principles {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    .next-steps {
+      margin-top: 3rem;
+    }
+    .guide-route {
+      grid-template-columns: 1fr auto;
+      gap: 0.5rem 1rem;
+    }
+    .guide-route span {
+      grid-column: 1;
+      grid-row: 2;
+    }
+    .guide-route svg {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+    .home-note {
+      flex-direction: column;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .guide-route {
+      transition: none;
+    }
+  }
+</style>

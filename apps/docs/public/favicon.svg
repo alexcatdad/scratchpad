@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
   <title>Scratchpad cat</title>
-  <rect width="64" height="64" rx="14" fill="#172c28"/>
-  <path d="M15 43V18l12 9h10l12-9v25c0 10-34 10-34 0Z" fill="#b4dfb4"/>
-  <path d="M25 37h2m10 0h2m-9 7h4" stroke="#172c28" stroke-width="4" stroke-linecap="round"/>
+  <rect width="64" height="64" rx="14" fill="#4a50dc"/>
+  <path d="M15 43V18l12 9h10l12-9v25c0 10-34 10-34 0Z" fill="#ededff"/>
+  <path d="M25 37h2m10 0h2m-9 7h4" stroke="#4a50dc" stroke-width="4" stroke-linecap="round"/>
 </svg>

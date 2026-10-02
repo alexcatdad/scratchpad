@@ -18,6 +18,8 @@ CI must verify formatting without rewriting it (`test -z "$(gofmt -l .)"`), then
 
 ## Connect
 
+Client walkthroughs: [Codex](https://alexcatdad.github.io/scratchpad/guides/codex/) and [ChatGPT macOS](https://alexcatdad.github.io/scratchpad/guides/chatgpt/). Both use the local stdio binary. ChatGPT web's hosted plugin path requires a separate integration; the Scratchpad dashboard/REST API is not a remote MCP endpoint.
+
 Enroll an SSH public key from the authenticated dashboard first. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
 
 | Variable                 | Meaning                                                                                         |
