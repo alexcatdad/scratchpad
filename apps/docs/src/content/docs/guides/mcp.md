@@ -7,6 +7,8 @@ The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers
 
 ## Connect your client
 
+For an agent-oriented workflow and shareable Markdown documentation, see [Agent integration](/scratchpad/guides/agents/).
+
 Start with the guide for your client:
 
 - [Codex setup](/scratchpad/guides/codex/) — CLI registration, configuration, and a first read.
