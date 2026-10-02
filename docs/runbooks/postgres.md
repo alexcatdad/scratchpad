@@ -98,3 +98,18 @@ docker rm --force scratchpad-postgres-test
 ```
 
 GitHub Actions supplies its own disposable PostgreSQL service and is the canonical runner. Local verification does not establish deployment or release completion.
+
+## Native vector startup permissions
+
+The released native vector startup creates its derived table and compatibility
+index on every opt-in initialization using `IF NOT EXISTS`. The application role
+needs CREATE in its dedicated schema and ownership of the derived vector table.
+It does not need superuser, database creation or role creation. Existing
+operational tables can retain a separate migration owner with runtime DML grants.
+After a restore without ownership, reapply derived table ownership and schema
+permissions before starting with `SCRATCHPAD_PGVECTOR=true`.
+
+The owner instance enabled this mode on 2 October 2026. Native 2560-dimensional
+cosine ranking, compatibility exclusion and transaction rollback passed against
+the released Store; existing entities were preserved. Restart and backup copy
+passed. Enabling native storage does not enable AI or create embeddings.
