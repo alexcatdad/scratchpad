@@ -139,5 +139,7 @@ provide rollback state.
 Owner recovery requires clicking **Recover access** below the sign-in button,
 then entering the private administrator token and completing **Register passkey**.
 The regular sign-in screen remains the default for an initialized instance.
-Browser recovery, MCP SSH-key enrollment/acceptance and guest autostart are
-still pending; deployment health alone does not complete migration acceptance.
+Owner recovery and browser access are verified at the new HTTPS origin. The
+authenticated dashboard shows all four original records and both passkeys.
+MCP SSH-key enrollment/acceptance and guest autostart remain pending; deployment
+health alone does not complete migration acceptance.
