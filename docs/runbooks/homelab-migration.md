@@ -1,5 +1,9 @@
 # Local Docker to a private Proxmox CT
 
+The owner instance subsequently moved from SQLite to PostgreSQL on 2 October 2026. See [full operational migration](sqlite-to-postgres.md) for the current
+database transfer and backup contract. This runbook retains the earlier host
+migration sequence and SQLite rollback history.
+
 The owner authorized this migration on 2 October 2026. This procedure is not
 evidence of completed deployment. Read the owner's current homelab handoff and canonical
 infrastructure repository first. Keep private host inventory and evidence outside
