@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
 import { Insights } from "../components/insights";
+import { NavIcon } from "../components/nav-icon";
 import { Projects } from "../components/projects";
 import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
@@ -152,14 +153,19 @@ function Dashboard() {
               key={name}
               type="button"
               className={tab === name ? "active" : ""}
+              aria-current={tab === name ? "page" : undefined}
               onClick={() => setTab(name)}
             >
+              <NavIcon name={name} />
               {name}
             </button>
           ))}
         </nav>
         <div className="sidebar-bottom">
-          <a href="https://alexcatdad.github.io/scratchpad/">Documentation</a>
+          <a href="https://alexcatdad.github.io/scratchpad/">
+            <NavIcon name="Documentation" />
+            Documentation
+          </a>
           <button
             type="button"
             onClick={() => {
@@ -168,6 +174,7 @@ function Dashboard() {
                 .catch((e: Error) => setError(e.message));
             }}
           >
+            <NavIcon name="Sign out" />
             Sign out
           </button>
         </div>

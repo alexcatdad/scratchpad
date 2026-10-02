@@ -95,8 +95,8 @@ export function RecordDetail({
       <button className="close-detail" type="button" onClick={onClose}>
         Close
       </button>
-      <h2>{metadata.displayTitle || record.title}</h2>
       <span className="record-type">{label(record.type)}</span>
+      <h2>{metadata.displayTitle || record.title}</h2>
       {metadata.archived && <p>Archived from project context.</p>}
       {metadata.curatedSummary && (
         <section>
