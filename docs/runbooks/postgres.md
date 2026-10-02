@@ -113,3 +113,8 @@ The owner instance enabled this mode on 2 October 2026. Native 2560-dimensional
 cosine ranking, compatibility exclusion and transaction rollback passed against
 the released Store; existing entities were preserved. Restart and backup copy
 passed. Enabling native storage does not enable AI or create embeddings.
+
+The owner subsequently enabled local Qwen AI for the two Scratchpad projects.
+Initial embedding and analysis jobs completed, semantic search returned indexed
+source records, and original captures and metadata remained unchanged. Other
+project permissions and new-project defaults remain separate from global enablement.
