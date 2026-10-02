@@ -141,5 +141,16 @@ then entering the private administrator token and completing **Register passkey*
 The regular sign-in screen remains the default for an initialized instance.
 Owner recovery and browser access are verified at the new HTTPS origin. The
 authenticated dashboard shows all four original records and both passkeys.
-MCP SSH-key enrollment/acceptance and guest autostart remain pending; deployment
-health alone does not complete migration acceptance.
+MCP SSH-key enrollment and acceptance subsequently passed. The installed stdio
+client authenticated, retrieved project context, captured one labeled synthetic
+finding, retried with the same identity and retrieved the same record. The
+complete CT reboot preserved private HTTPS and MCP access; guest autostart is
+enabled. A final backup on the Mac passes integrity and retains every original
+project/record/metadata row. The local Docker service remains stopped for rollback.
+
+The Git-derived MCP connection resolved the checkout as a new project identity;
+this is separate from the existing manually created project. The acceptance
+finding remains clearly labeled synthetic. The test did not change original
+captures or enable AI processing. The workstation's stable MCP environment and
+launcher are stored with its private deployment files; use the new HTTPS origin
+and the existing enrolled public key through the unlocked SSH agent.
