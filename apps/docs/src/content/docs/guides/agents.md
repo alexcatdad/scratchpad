@@ -7,6 +7,27 @@ Scratchpad gives coding agents persistent project memory through a **local stdio
 
 Share the [agent documentation index](/scratchpad/llms.txt) or the [complete Markdown bundle](/scratchpad/llms-full.txt) with another agent. These files and Markdown copies of the guides are generated from the public documentation on every site build. They contain no private project memory or deployment credentials.
 
+## Add the companion skill
+
+The optional [`scratchpad-memory` skill](https://github.com/alexcatdad/scratchpad/tree/main/skills/scratchpad-memory) teaches agents when to retrieve memory, which capture tool to choose, how to preserve provenance, and how to handle retries and repository files. It complements the MCP connection; it does not install or authenticate the binary.
+
+From a Scratchpad source checkout containing `skills/scratchpad-memory/SKILL.md`, install the complete folder into your client's supported skill location. For Codex, a user-level installation makes it available across repositories:
+
+```sh
+mkdir -p "$HOME/.agents/skills"
+cp -R -i skills/scratchpad-memory "$HOME/.agents/skills/"
+```
+
+Keep one active installation of this skill. Inspect an existing copy before replacing it; do not also install a second copy under the target repository's `.agents/skills`. The source folder `skills/` is for distribution and is not automatically discovered by Codex. Other clients need their own supported skill-loading mechanism.
+
+Invoke it explicitly with `$scratchpad-memory` in Codex, or let the client select it when a task needs Scratchpad project memory. For example:
+
+- “Use $scratchpad-memory to resume this project and identify relevant constraints.”
+- “Why did we choose this approach, and has that decision been replaced?”
+- “Record the agreed decision and the reason we rejected the alternative.”
+
+The skill follows existing task authorization and project instructions. Core capture and retrieval still work in clients without skill support. See [official skill guidance](https://learn.chatgpt.com/docs/build-skills) for Codex discovery and invocation. Source availability, client installation, and published documentation are separate steps; use the checked-out skill until the corresponding source revision has been published.
+
 ## Connect once
 
 1. Install `scratchpad-mcp` using the [installation guide](/scratchpad/guides/installation/). Homebrew installs the local binary; it does not start the server.
