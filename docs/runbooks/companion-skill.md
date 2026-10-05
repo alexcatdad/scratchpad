@@ -221,6 +221,25 @@ git ls-remote --heads origin refs/heads/codex/scratchpad-memory-skill
 Compare the returned remote SHA with local HEAD. A branch push publishes the
 source for review; it does not merge to `main`, deploy Pages, or publish a plugin.
 
+### Review and merge after green checks
+
+The owner additionally requested a PR and merge after green checks. Refresh
+`origin/main`, inspect the final diff and create a PR using a body file with real
+newlines. Attach the PR to the Codex chat. If conflicts require a new commit,
+preserve all append-only decision entries and wait for checks on that new head.
+
+Inspect the PR's current head SHA, mergeability and all reported checks. Wait for
+every reported check to finish successfully (or be intentionally skipped); never
+merge while a check is failing, pending or cancelled. Recheck the exact head and
+base immediately before merge, and use `gh pr merge --match-head-commit` to prevent
+a stale-head merge. Do not bypass branch protection or use administrator overrides.
+
+After merging, verify the PR's merged state and merge commit, then refresh
+`origin/main` and confirm that commit is an ancestor. Pages deployment is a
+separate workflow: inspect the run for the merged revision before claiming the
+documentation is live. Local skill installation already works independently of
+merging the repository source.
+
 ## External guidance checked
 
 - [Agent Skills specification](https://agentskills.io/specification): portable
