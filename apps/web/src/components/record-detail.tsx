@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, label, type MemoryRecord, post } from "../lib/api";
+
+import { RecordContent, safeReference } from "./record-content";
 
 type Snapshot = Record<string, unknown>;
 type Relationship = {
@@ -62,16 +64,23 @@ function Json({ value }: { value: unknown }) {
 }
 export function RecordDetail({
   detail,
+  projectName,
   onClose,
   onChanged,
   onNavigate,
 }: {
   detail: Detail;
+  projectName?: string;
   onClose: () => void;
   onChanged: () => void;
   onNavigate: (id: string) => void;
 }) {
   const { record, metadata } = detail;
+  const heading = useRef<HTMLHeadingElement>(null);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+  }, []);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [matches, setMatches] = useState<MemoryRecord[]>([]);
@@ -96,12 +105,40 @@ export function RecordDetail({
         Close
       </button>
       <span className="record-type">{label(record.type)}</span>
-      <h2>{metadata.displayTitle || record.title}</h2>
+      <h2 ref={heading} tabIndex={-1}>
+        {metadata.displayTitle || record.title}
+      </h2>
+      <p className="quiet">
+        {projectName ?? "Project"} ·{" "}
+        {new Date(record.recordedAt).toLocaleString("en")}
+      </p>
+      <div className="action-row">
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard
+              .writeText(window.location.href)
+              .then(() => setCopied(true))
+              .catch(() =>
+                setError(
+                  "Could not copy. Copy the address from your browser instead.",
+                ),
+              );
+          }}
+        >
+          {copied ? "Link copied" : "Copy link"}
+        </button>
+        {metadata.tags?.map((tag) => (
+          <span className="record-type" key={tag}>
+            #{tag}
+          </span>
+        ))}
+      </div>
       {metadata.archived && <p>Archived from project context.</p>}
       {metadata.curatedSummary && (
         <section>
           <h3>Curated summary</h3>
-          <p className="preserve">{metadata.curatedSummary}</p>
+          <RecordContent value={metadata.curatedSummary} />
           <small>Added after the original capture.</small>
         </section>
       )}
@@ -113,10 +150,8 @@ export function RecordDetail({
           </details>
         ) : (
           <section key={key}>
-            <h3>{label(key)}</h3>
-            <p className="preserve break-word">
-              {typeof value === "string" ? value : JSON.stringify(value)}
-            </p>
+            <h3>{label(key.replace(/([a-z])([A-Z])/g, "$1 $2"))}</h3>
+            <RecordContent value={value} />
           </section>
         ),
       )}
@@ -369,7 +404,19 @@ export function RecordDetail({
           detail.evidence.map((e) => (
             <p key={e.id}>
               {e.description ?? e.kind}:{" "}
-              <span className="break-word">{e.reference}</span>
+              <span className="break-word">
+                {safeReference(e.reference) ? (
+                  <a
+                    href={safeReference(e.reference)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {e.reference}
+                  </a>
+                ) : (
+                  e.reference
+                )}
+              </span>
             </p>
           ))
         ) : (
@@ -423,6 +470,10 @@ export function RecordDetail({
           </form>
         </details>
       </section>
+      <details>
+        <summary>Original capture</summary>
+        <Json value={record} />
+      </details>
       <details>
         <summary>Audit trail ({detail.audit.length})</summary>
         {detail.audit.map((event) => (

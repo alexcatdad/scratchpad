@@ -11,10 +11,12 @@ export function Projects({
   projects,
   onChanged,
   onInspect,
+  onOpen,
 }: {
   projects: Project[];
   onChanged: () => void;
   onInspect: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
   const [name, setName] = useState("");
   const [kind, setKind] = useState("normal");
@@ -23,6 +25,7 @@ export function Projects({
     try {
       await api("/projects/resolve-explicit", post({ name, kind }));
       setName("");
+      setError("");
       onChanged();
     } catch (reason) {
       setError(
@@ -77,6 +80,7 @@ export function Projects({
             project={project}
             onChanged={onChanged}
             onInspect={onInspect}
+            onOpen={onOpen}
           />
         ))}
       </div>
@@ -94,10 +98,12 @@ function ProjectCard({
   project,
   onChanged,
   onInspect,
+  onOpen,
 }: {
   project: Project;
   onChanged: () => void;
   onInspect: (id: string) => void;
+  onOpen: (id: string) => void;
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -135,6 +141,15 @@ function ProjectCard({
             ? "External / client"
             : "Personal / internal"}
         </p>
+      </div>
+      <div className="action-row">
+        <button
+          className="primary"
+          type="button"
+          onClick={() => onOpen(project.id)}
+        >
+          Open memory
+        </button>
       </div>
       <details>
         <summary>Project settings</summary>
