@@ -40,3 +40,16 @@ visual polish. Do not merge the PR without an explicit merge request.
    readiness. Do not alter database state or rotate credentials as rollback.
 6. Capture source, PR/check evidence, image, rollout and limitations in Scratchpad.
    Preserve the operational deployment receipt in the homelab's existing inventory.
+
+## Project dialogs follow-up
+
+The owner requested dialogs instead of inline project disclosures. Keep project
+cards compact with direct Open memory, Project settings, Edit project and context
+actions. Each secondary action opens a named native dialog with contained keyboard
+focus, Escape/Close dismissal and focus restoration. Successful saves close the
+dialog; failed saves remain visible in it. Closing without saving discards edits.
+Context opens records in the existing reader after closing its dialog.
+
+Verify settings persistence, cancelled edit isolation, mobile overflow, keyboard
+closure and context-to-reader navigation in the authenticated workflow before
+repeating the same PR-check, image rollout and recovery-inventory procedure.

@@ -282,6 +282,39 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       .getByRole("group", { name: "Enabled capture types", exact: true })
       .getByLabel("Question & answer", { exact: true }),
   ).not.toBeChecked();
+  await page.getByRole("dialog").press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Project settings", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Edit project", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByLabel("Project display name", { exact: true }),
+  ).toHaveValue("Scratchpad");
+  await page
+    .getByRole("dialog")
+    .getByLabel("Project display name", { exact: true })
+    .fill("Unsaved name");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Edit project", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByLabel("Project display name", { exact: true }),
+  ).toHaveValue("Scratchpad");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("dialog").press("Escape");
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "Memory", exact: true }).click();
   await page.getByRole("button", { name: "New record", exact: true }).click();
   await expect(
@@ -742,6 +775,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       .getByRole("group", { name: "Record types to mirror", exact: true })
       .getByLabel("Finding", { exact: true }),
   ).toBeChecked();
+  await restoredProject
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   await restoredProject
     .getByRole("button", { name: "Show project context", exact: true })
     .click();

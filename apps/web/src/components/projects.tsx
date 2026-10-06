@@ -7,6 +7,8 @@ import {
   post,
   types,
 } from "../lib/api";
+import { Dialog } from "./dialog";
+
 export function Projects({
   projects,
   onChanged,
@@ -76,7 +78,7 @@ export function Projects({
       <div className="project-list">
         {projects.map((project) => (
           <ProjectCard
-            key={`${project.id}-${project.version}`}
+            key={project.id}
             project={project}
             onChanged={onChanged}
             onInspect={onInspect}
@@ -107,6 +109,9 @@ function ProjectCard({
 }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [panel, setPanel] = useState<"settings" | "edit" | "context" | null>(
+    null,
+  );
   const [context, setContext] = useState<{
     state: MemoryRecord[];
     recentDecisions: MemoryRecord[];
@@ -123,6 +128,7 @@ function ProjectCard({
         headers: { "If-Match": String(project.version) },
         body: JSON.stringify(body),
       });
+      setPanel(null);
       onChanged();
     } catch (reason) {
       setError(
@@ -151,178 +157,214 @@ function ProjectCard({
           Open memory
         </button>
       </div>
-      <details>
-        <summary>Project settings</summary>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = new FormData(e.currentTarget);
-            void save(`/projects/${project.id}/settings`, {
-              ...project.settings,
-              repoMirroring: {
-                enabled: form.get("mirroring") === "on",
-                recordTypes: form.getAll("mirrorTypes"),
-              },
-              crossProjectAnalysis: form.get("crossProject") === "on",
-              aiProcessing: form.get("aiProcessing") === "on",
-              enabledRecordTypes: form.getAll("enabledTypes"),
-            });
+      <div className="action-row">
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setPanel("settings");
           }}
         >
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              name="mirroring"
-              defaultChecked={project.settings.repoMirroring.enabled}
-            />
-            Allow repository mirroring
-          </label>
-          <fieldset>
-            <legend>Record types to mirror</legend>
-            {types.map((type) => (
-              <label className="checkbox" key={type}>
-                <input
-                  type="checkbox"
-                  name="mirrorTypes"
-                  value={type}
-                  defaultChecked={project.settings.repoMirroring.recordTypes.includes(
-                    type,
-                  )}
-                />
-                {label(type)}
-              </label>
-            ))}
-          </fieldset>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              name="crossProject"
-              defaultChecked={project.settings.crossProjectAnalysis}
-            />
-            Include in cross-project analysis
-          </label>
-          <label className="checkbox">
-            <input
-              type="checkbox"
-              name="aiProcessing"
-              defaultChecked={project.settings.aiProcessing}
-            />
-            Allow AI processing for this project
-          </label>
-          <p className="quiet">
-            Enabling this sends this project's records to your configured AI
-            provider. Cross-project analysis requires both permissions.
-          </p>
-          <fieldset>
-            <legend>Enabled capture types</legend>
-            {types.map((type) => (
-              <label className="checkbox" key={type}>
-                <input
-                  type="checkbox"
-                  name="enabledTypes"
-                  value={type}
-                  defaultChecked={
-                    !project.settings.enabledRecordTypes ||
-                    project.settings.enabledRecordTypes.includes(type)
-                  }
-                />
-                {label(type)}
-              </label>
-            ))}
-          </fieldset>
-          <button type="submit" disabled={busy}>
-            Save project settings
-          </button>
-        </form>
-      </details>
-      <details>
-        <summary>Edit project</summary>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const form = new FormData(e.currentTarget);
-            void save(`/projects/${project.id}`, Object.fromEntries(form));
+          Project settings
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setPanel("edit");
           }}
         >
-          <label>
-            Project display name
-            <input name="name" defaultValue={project.name} required />
-          </label>
-          <label>
-            Project classification
-            <select
-              name="kind"
-              aria-label="Project classification"
-              defaultValue={project.kind}
+          Edit project
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setError("");
+            setContext(null);
+            setPanel("context");
+            void api<typeof context>(`/projects/${project.id}/context`)
+              .then(setContext)
+              .catch((reason: Error) => setError(reason.message));
+          }}
+        >
+          Show project context
+        </button>
+      </div>
+      {panel && (
+        <Dialog
+          title={`${panel === "settings" ? "Project settings" : panel === "edit" ? "Edit project" : "Project context"} · ${project.name}`}
+          busy={busy}
+          onClose={() => setPanel(null)}
+        >
+          {error && (
+            <p role="alert" className="error">
+              {error}
+            </p>
+          )}
+          {panel === "settings" && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = new FormData(e.currentTarget);
+                void save(`/projects/${project.id}/settings`, {
+                  ...project.settings,
+                  repoMirroring: {
+                    enabled: form.get("mirroring") === "on",
+                    recordTypes: form.getAll("mirrorTypes"),
+                  },
+                  crossProjectAnalysis: form.get("crossProject") === "on",
+                  aiProcessing: form.get("aiProcessing") === "on",
+                  enabledRecordTypes: form.getAll("enabledTypes"),
+                });
+              }}
             >
-              <option value="normal">Personal / internal</option>
-              <option value="external">External / client</option>
-            </select>
-          </label>
-          <p>
-            Review mirroring and cross-project settings after changing
-            classification.
-          </p>
-          <button type="submit" disabled={busy}>
-            Save project
-          </button>
-        </form>
-      </details>
-      <button
-        type="button"
-        onClick={() => {
-          setError("");
-          void api<typeof context>(`/projects/${project.id}/context`)
-            .then(setContext)
-            .catch((reason: Error) => setError(reason.message));
-        }}
-      >
-        Show project context
-      </button>
-      {context && (
-        <section aria-label={`${project.name} context`}>
-          <h3>Project context</h3>
-          {(
-            [
-              ["State", context.state],
-              ["Decisions", context.recentDecisions],
-              ["Constraints", context.constraints],
-              ["Findings", context.openFindings],
-              ["Failures and lessons", context.failures],
-            ] as [string, MemoryRecord[]][]
-          ).map(([title, records]) => (
-            <section key={title}>
-              <h4>{title}</h4>
-              {records.length ? (
-                records.map((record) => (
-                  <p key={record.id}>
-                    <button type="button" onClick={() => onInspect(record.id)}>
-                      {record.title}
-                    </button>
-                    <small className="preserve">{record.content}</small>
-                    {record.applicability &&
-                      record.applicability !== "current" && (
-                        <small>{label(record.applicability)}</small>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  name="mirroring"
+                  defaultChecked={project.settings.repoMirroring.enabled}
+                />
+                Allow repository mirroring
+              </label>
+              <fieldset>
+                <legend>Record types to mirror</legend>
+                {types.map((type) => (
+                  <label className="checkbox" key={type}>
+                    <input
+                      type="checkbox"
+                      name="mirrorTypes"
+                      value={type}
+                      defaultChecked={project.settings.repoMirroring.recordTypes.includes(
+                        type,
                       )}
-                    {record.actor?.kind === "import" && (
-                      <small>
-                        Imported history; verify applicability before relying on
-                        it.
-                      </small>
-                    )}
-                  </p>
-                ))
-              ) : (
-                <p className="quiet">None recorded.</p>
-              )}
+                    />
+                    {label(type)}
+                  </label>
+                ))}
+              </fieldset>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  name="crossProject"
+                  defaultChecked={project.settings.crossProjectAnalysis}
+                />
+                Include in cross-project analysis
+              </label>
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  name="aiProcessing"
+                  defaultChecked={project.settings.aiProcessing}
+                />
+                Allow AI processing for this project
+              </label>
+              <p className="quiet">
+                Enabling this sends this project's records to your configured AI
+                provider. Cross-project analysis requires both permissions.
+              </p>
+              <fieldset>
+                <legend>Enabled capture types</legend>
+                {types.map((type) => (
+                  <label className="checkbox" key={type}>
+                    <input
+                      type="checkbox"
+                      name="enabledTypes"
+                      value={type}
+                      defaultChecked={
+                        !project.settings.enabledRecordTypes ||
+                        project.settings.enabledRecordTypes.includes(type)
+                      }
+                    />
+                    {label(type)}
+                  </label>
+                ))}
+              </fieldset>
+              <button type="submit" disabled={busy}>
+                Save project settings
+              </button>
+            </form>
+          )}
+          {panel === "edit" && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const form = new FormData(e.currentTarget);
+                void save(`/projects/${project.id}`, Object.fromEntries(form));
+              }}
+            >
+              <label>
+                Project display name
+                <input name="name" defaultValue={project.name} required />
+              </label>
+              <label>
+                Project classification
+                <select
+                  name="kind"
+                  aria-label="Project classification"
+                  defaultValue={project.kind}
+                >
+                  <option value="normal">Personal / internal</option>
+                  <option value="external">External / client</option>
+                </select>
+              </label>
+              <p>
+                Review mirroring and cross-project settings after changing
+                classification.
+              </p>
+              <button type="submit" disabled={busy}>
+                Save project
+              </button>
+            </form>
+          )}
+          {panel === "context" && !context && !error && (
+            <p role="status">Loading project context…</p>
+          )}
+          {panel === "context" && context && (
+            <section aria-label={`${project.name} context`}>
+              {(
+                [
+                  ["State", context.state],
+                  ["Decisions", context.recentDecisions],
+                  ["Constraints", context.constraints],
+                  ["Findings", context.openFindings],
+                  ["Failures and lessons", context.failures],
+                ] as [string, MemoryRecord[]][]
+              ).map(([title, records]) => (
+                <section key={title}>
+                  <h4>{title}</h4>
+                  {records.length ? (
+                    records.map((record) => (
+                      <p key={record.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setPanel(null);
+                            onInspect(record.id);
+                          }}
+                        >
+                          {record.title}
+                        </button>
+                        <small className="preserve">{record.content}</small>
+                        {record.applicability &&
+                          record.applicability !== "current" && (
+                            <small>{label(record.applicability)}</small>
+                          )}
+                        {record.actor?.kind === "import" && (
+                          <small>
+                            Imported history; verify applicability before
+                            relying on it.
+                          </small>
+                        )}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="quiet">None recorded.</p>
+                  )}
+                </section>
+              ))}
             </section>
-          ))}
-        </section>
-      )}
-      {error && (
-        <p role="alert" className="error">
-          {error}
-        </p>
+          )}
+        </Dialog>
       )}
     </article>
   );
