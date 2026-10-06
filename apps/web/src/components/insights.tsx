@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, label, type MemoryRecord, type Project, post } from "../lib/api";
 
+import { RecordContent } from "./record-content";
+
 type Job = {
   id: string;
   version: number;
@@ -50,12 +52,32 @@ function download(suggestion: Suggestion) {
 
 export function Insights({
   projects,
+  projectId,
+  onProjectChange,
+  section,
+  onSectionChange,
+  onSettings,
   onInspect,
 }: {
   projects: Project[];
+  projectId: string;
+  onProjectChange: (id: string) => void;
+  section?: string;
+  onSectionChange: (section: string) => void;
+  onSettings: () => void;
   onInspect: (id: string) => void;
 }) {
-  const [projectId, setProjectId] = useState("");
+  const sections = [
+    ["review", "Suggestions"],
+    ["search", "Meaning search"],
+    ["documents", "Documents"],
+    ["jobs", "Background jobs"],
+  ] as const;
+  const selected = sections.some(([key]) => key === section)
+    ? section
+    : "review";
+  const [showAllJobs, setShowAllJobs] = useState(false);
+  const [aiEnabled, setAiEnabled] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [results, setResults] = useState<SemanticResult[]>([]);
@@ -76,11 +98,13 @@ export function Insights({
     const params = new URLSearchParams(
       projectId ? { projectId } : { crossProject: "true" },
     );
-    const [artifacts, queued] = await Promise.all([
+    const [artifacts, queued, config] = await Promise.all([
       api<{ suggestions: Suggestion[] }>(`/suggestions?${params}`),
       api<{ jobs: Job[] }>("/ai/jobs"),
+      api<{ enabled: boolean }>("/ai/settings"),
     ]);
     if (sequence !== requestSequence.current) return;
+    setAiEnabled(config.enabled);
     setSuggestions(artifacts.suggestions);
     setJobs(queued.jobs);
   }, [projectId]);
@@ -152,12 +176,39 @@ export function Insights({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
+      <nav className="section-nav" aria-label="Insights sections">
+        {sections.map(([key, name]) => (
+          <button
+            type="button"
+            key={key}
+            aria-current={selected === key ? "page" : undefined}
+            onClick={() => {
+              setNotice("");
+              onSectionChange(key);
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </nav>
+      {!aiEnabled && (
+        <p className="notice">
+          AI is disabled. Browsing and exact search still work.{" "}
+          <button type="button" onClick={onSettings}>
+            Configure AI provider
+          </button>
+        </p>
+      )}
       <section className="insight-scope">
         <label>
           Insight project
           <select
             value={projectId}
-            onChange={(event) => setProjectId(event.target.value)}
+            onChange={(event) => {
+              setNotice("");
+              setError("");
+              onProjectChange(event.target.value);
+            }}
           >
             <option value="">Across participating projects</option>
             {projects.map((project) => (
@@ -174,24 +225,17 @@ export function Insights({
           {participating.length} participating{" "}
           {participating.length === 1 ? "project" : "projects"}.
         </p>
-        <div className="action-row">
+        <div className="action-row" hidden={selected !== "review"}>
           <button
             type="button"
-            disabled={busy || !participating.length}
+            disabled={busy || !aiEnabled || !participating.length}
             onClick={() => void perform(() => enqueue("analyze"))}
           >
             Analyze memory
           </button>
-          <button
-            type="button"
-            disabled={busy || !participating.length}
-            onClick={() => void perform(() => enqueue("embed"))}
-          >
-            Build embeddings
-          </button>
         </div>
       </section>
-      <section className="settings-section">
+      <section className="settings-section" hidden={selected !== "search"}>
         <h2>Search by meaning</h2>
         <p>
           Semantic results are derived matches. Your exact search in Memory
@@ -226,10 +270,27 @@ export function Insights({
               maxLength={10000}
             />
           </label>
-          <button type="submit" disabled={busy || !participating.length}>
+          <button
+            type="submit"
+            disabled={busy || !aiEnabled || !participating.length}
+          >
             Search by meaning
           </button>
         </form>
+        <details>
+          <summary>Search index</summary>
+          <p>
+            Build or refresh the index after changing the embedding model. This
+            sends eligible records to your configured provider.
+          </p>
+          <button
+            type="button"
+            disabled={busy || !aiEnabled || !participating.length}
+            onClick={() => void perform(() => enqueue("embed"))}
+          >
+            Build embeddings
+          </button>
+        </details>
         {results.map(({ record, score }) => (
           <article className="insight-card" key={record.id}>
             <button type="button" onClick={() => onInspect(record.id)}>
@@ -242,11 +303,11 @@ export function Insights({
               }{" "}
               · Similarity {score.toFixed(3)}
             </small>
-            <p className="preserve">{record.content}</p>
+            <RecordContent value={record.content} />
           </article>
         ))}
       </section>
-      <section className="settings-section">
+      <section className="settings-section" hidden={selected !== "documents"}>
         <h2>Prepare a document</h2>
         <p>
           Generated documents stay private here. Download one when you choose to
@@ -268,7 +329,7 @@ export function Insights({
           </label>
           <button
             type="button"
-            disabled={busy || !projectId || !participating.length}
+            disabled={busy || !aiEnabled || !projectId || !participating.length}
             onClick={() =>
               void perform(async () => {
                 await api(
@@ -287,7 +348,10 @@ export function Insights({
         </div>
         {!projectId && <small>Select one project to prepare a document.</small>}
       </section>
-      <section aria-label="AI suggestions">
+      <section
+        aria-label="AI suggestions"
+        hidden={selected !== "review" && selected !== "documents"}
+      >
         <h2>Suggestions and documents</h2>
         <p className="quiet">
           AI output is derived knowledge. Accepting suggestions adds audited
@@ -299,75 +363,98 @@ export function Insights({
             run analysis to get started.
           </p>
         )}
-        {suggestions.map((suggestion) => (
-          <article className="insight-card" key={suggestion.id}>
-            <div className="action-row">
-              <span className="record-type">{label(suggestion.kind)}</span>
-              <span>{label(suggestion.status ?? "suggested")}</span>
-            </div>
-            <h3>
-              {String(
-                suggestion.title ??
-                  suggestion.content.title ??
-                  label(suggestion.kind),
-              )}
-            </h3>
-            <p className="preserve">{readable(suggestion.content)}</p>
-            <small>
-              Generated {new Date(suggestion.createdAt).toLocaleString("en")} ·{" "}
-              {suggestion.generator?.model ?? "Derived analysis"}
-            </small>
-            <div className="source-links">
-              {suggestion.sourceRecordIds.map((id) => (
-                <button type="button" key={id} onClick={() => onInspect(id)}>
-                  Source {id.slice(-8)}
-                </button>
-              ))}
-            </div>
-            <div className="action-row">
-              {(!suggestion.status ||
-                ["suggested", "pending"].includes(suggestion.status)) &&
-                ["accept", "reject"].map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    disabled={busy}
-                    onClick={() =>
-                      void perform(async () => {
-                        await api(
-                          `/suggestions/${suggestion.id}/${action}`,
-                          post({ expectedVersion: suggestion.version }),
-                        );
-                        await refresh();
-                        setNotice(
-                          action === "accept"
-                            ? "Suggestion accepted with an audit entry."
-                            : "Suggestion rejected.",
-                        );
-                      })
-                    }
-                  >
-                    {action === "accept"
-                      ? "Accept suggestion"
-                      : "Reject suggestion"}
+        {suggestions
+          .filter(
+            (suggestion) =>
+              selected !== "documents" || suggestion.kind === "export",
+          )
+          .map((suggestion) => (
+            <article className="insight-card" key={suggestion.id}>
+              <div className="action-row">
+                <span className="record-type">{label(suggestion.kind)}</span>
+                <span>{label(suggestion.status ?? "suggested")}</span>
+              </div>
+              <h3>
+                {String(
+                  suggestion.title ??
+                    suggestion.content.title ??
+                    label(suggestion.kind),
+                )}
+              </h3>
+              <RecordContent value={readable(suggestion.content)} />
+              <small>
+                Generated {new Date(suggestion.createdAt).toLocaleString("en")}{" "}
+                · {suggestion.generator?.model ?? "Derived analysis"}
+              </small>
+              <div className="source-links">
+                {suggestion.sourceRecordIds.map((id) => (
+                  <button type="button" key={id} onClick={() => onInspect(id)}>
+                    Source {id.slice(-8)}
                   </button>
                 ))}
-              {typeof suggestion.content.markdown === "string" && (
-                <button type="button" onClick={() => download(suggestion)}>
-                  Download Markdown
-                </button>
-              )}
-            </div>
-          </article>
-        ))}
+              </div>
+              <div className="action-row">
+                {(!suggestion.status ||
+                  ["suggested", "pending"].includes(suggestion.status)) &&
+                  ["accept", "reject"].map((action) => (
+                    <button
+                      key={action}
+                      type="button"
+                      disabled={busy}
+                      onClick={() =>
+                        void perform(async () => {
+                          await api(
+                            `/suggestions/${suggestion.id}/${action}`,
+                            post({ expectedVersion: suggestion.version }),
+                          );
+                          await refresh();
+                          setNotice(
+                            action === "accept"
+                              ? "Suggestion accepted with an audit entry."
+                              : "Suggestion rejected.",
+                          );
+                        })
+                      }
+                    >
+                      {action === "accept"
+                        ? "Accept suggestion"
+                        : "Reject suggestion"}
+                    </button>
+                  ))}
+                {typeof suggestion.content.markdown === "string" && (
+                  <button type="button" onClick={() => download(suggestion)}>
+                    Download Markdown
+                  </button>
+                )}
+              </div>
+            </article>
+          ))}
       </section>
-      <section className="settings-section">
+      <section className="settings-section" hidden={selected !== "jobs"}>
         <h2>Background jobs</h2>
+        <p>
+          {jobs.filter((job) => job.status === "failed").length} failed ·{" "}
+          {
+            jobs.filter((job) => ["queued", "running"].includes(job.status))
+              .length
+          }{" "}
+          active · {jobs.length} recent jobs across projects.
+        </p>
+        {jobs.some((job) => job.status === "failed") && (
+          <p className="notice">
+            Check the saved provider connection and project permissions before
+            retrying.{" "}
+            <button type="button" onClick={onSettings}>
+              Check AI settings
+            </button>
+          </p>
+        )}
         {!jobs.length && <p>No jobs queued yet.</p>}
         <ul className="job-list">
-          {jobs.map((job) => (
+          {(showAllJobs ? jobs : jobs.slice(0, 10)).map((job) => (
             <li key={job.id}>
               <strong>{label(job.type)}</strong>
+              <small>{new Date(job.createdAt).toLocaleString("en")}</small>
               <span>
                 {label(job.status)} · Attempt {job.attempts}
               </span>
@@ -405,6 +492,11 @@ export function Insights({
             </li>
           ))}
         </ul>
+        {jobs.length > 10 && (
+          <button type="button" onClick={() => setShowAllJobs(!showAllJobs)}>
+            {showAllJobs ? "Show recent jobs" : `Show all ${jobs.length} jobs`}
+          </button>
+        )}
       </section>
     </section>
   );

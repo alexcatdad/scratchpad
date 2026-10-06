@@ -3,51 +3,56 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
 import { Insights } from "../components/insights";
+import { MemoryFilters } from "../components/memory-filters";
 import { NavIcon } from "../components/nav-icon";
 import { Projects } from "../components/projects";
 import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
+import { api, label, type MemoryRecord, type Project, post } from "../lib/api";
 import {
-  api,
-  label,
-  type MemoryRecord,
-  type Project,
-  post,
-  types,
-} from "../lib/api";
+  type DashboardSearch,
+  dashboardSearch,
+  filterNames,
+  recordParams,
+  recordPreview,
+  type View,
+  views,
+} from "../lib/dashboard";
+
 export const Route = createFileRoute("/")({
   component: Dashboard,
-  validateSearch: (search: Record<string, unknown>) => ({
-    recordId: typeof search.recordId === "string" ? search.recordId : undefined,
-  }),
+  validateSearch: dashboardSearch,
 });
 function Dashboard() {
-  const { recordId } = Route.useSearch();
-  const recordRequest = useRef(0);
-  const detailRequest = useRef(0);
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const tab = search.view ?? "Memory";
+  const recordId = search.recordId;
   const [status, setStatus] = useState<{
     initialized: boolean;
     authenticated: boolean;
   } | null>(null);
-  const [tab, setTab] = useState("Memory");
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<MemoryRecord[]>([]);
-  const [project, setProject] = useState("");
-  const [type, setType] = useState("");
-  const [query, setQuery] = useState("");
-  const [search, setSearch] = useState("");
-  const [filters, setFilters] = useState<Record<string, string>>({});
   const [detail, setDetail] = useState<Detail | null>(null);
+  const [detailError, setDetailError] = useState("");
   const [capture, setCapture] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [cursor, setCursor] = useState<string | null>(null);
-  const authenticate = useCallback(async () => {
-    setStatus(await api("/auth/status"));
-  }, []);
+  const recordRequest = useRef(0);
+  const detailRequest = useRef(0);
+  const resultScroll = useRef(0);
+  const lastRow = useRef<HTMLButtonElement | null>(null);
+  const hadDetail = useRef(false);
+  const params = recordParams(search).toString();
+  const authenticate = useCallback(
+    async () => setStatus(await api("/auth/status")),
+    [],
+  );
   const loadProjects = useCallback(async () => {
-    const data = await api<{ projects: Project[] }>("/projects");
-    setProjects(data.projects);
+    setProjects((await api<{ projects: Project[] }>("/projects")).projects);
   }, []);
   const loadRecords = useCallback(
     async (next?: string) => {
@@ -55,47 +60,70 @@ function Dashboard() {
       setLoading(true);
       setError("");
       try {
-        const params = new URLSearchParams({ limit: "30" });
-        if (project) params.set("projectId", project);
-        if (type) params.set("type", type);
-        if (search) params.set("q", search);
-        if (next) params.set("cursor", next);
-        for (const [name, value] of Object.entries(filters))
-          if (value) params.set(name, value);
+        const query = new URLSearchParams(params);
+        if (next) query.set("cursor", next);
         const data = await api<{
           records: MemoryRecord[];
           nextCursor: string | null;
-        }>(`/records?${params}`);
+        }>(`/records?${query}`);
         if (request !== recordRequest.current) return;
         setRecords((previous) =>
           next ? [...previous, ...data.records] : data.records,
         );
         setCursor(data.nextCursor);
       } catch (reason) {
-        if (request !== recordRequest.current) return;
-        setError(
-          reason instanceof Error ? reason.message : "Could not load records.",
-        );
+        if (request === recordRequest.current)
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : "Could not load records.",
+          );
       } finally {
         if (request === recordRequest.current) setLoading(false);
       }
     },
-    [project, type, search, filters],
+    [params],
   );
-  const select = useCallback(async (record: MemoryRecord) => {
+  const loadDetail = useCallback(async () => {
     const request = ++detailRequest.current;
+    if (!recordId) {
+      setDetail(null);
+      return;
+    }
+    setDetailError("");
     try {
       const data = await api<Detail>(
-        `/records/${encodeURIComponent(record.id)}`,
+        `/records/${encodeURIComponent(recordId)}`,
       );
       if (request === detailRequest.current) setDetail(data);
     } catch (reason) {
       if (request === detailRequest.current)
-        setError(
-          reason instanceof Error ? reason.message : "Could not load record.",
+        setDetailError(
+          reason instanceof Error ? reason.message : "Could not open record.",
         );
     }
-  }, []);
+  }, [recordId]);
+  const update = (patch: DashboardSearch) =>
+    void navigate({
+      search: (previous) => ({ ...previous, ...patch }),
+      resetScroll: false,
+    });
+  const changeTab = (view: View) => {
+    setNotice("");
+    update({ view, recordId: undefined, section: undefined });
+    window.scrollTo(0, 0);
+  };
+  const inspect = (id: string) => {
+    if (!recordId) resultScroll.current = window.scrollY;
+    update({ recordId: id });
+  };
+  const applyFilters = (next: DashboardSearch) => {
+    const cleared = Object.fromEntries(
+      filterNames.map((name) => [name, undefined]),
+    );
+    update({ ...cleared, ...next, view: "Memory", recordId: undefined });
+    resultScroll.current = 0;
+  };
   useEffect(() => {
     void authenticate().catch((e: Error) => setError(e.message));
   }, [authenticate]);
@@ -105,18 +133,31 @@ function Dashboard() {
   }, [status?.authenticated, loadProjects]);
   useEffect(() => {
     if (status?.authenticated) {
-      detailRequest.current++;
-      setDetail(null);
       setRecords([]);
       void loadRecords();
     }
+    return () => {
+      recordRequest.current++;
+    };
   }, [status?.authenticated, loadRecords]);
   useEffect(() => {
-    if (status?.authenticated && recordId) {
-      setTab("Memory");
-      void select({ id: recordId } as MemoryRecord);
+    setDetail(null);
+    if (status?.authenticated) void loadDetail();
+    return () => {
+      detailRequest.current++;
+    };
+  }, [status?.authenticated, loadDetail]);
+  useEffect(() => {
+    if (recordId) {
+      hadDetail.current = true;
+      window.scrollTo(0, 0);
+    } else if (hadDetail.current) {
+      hadDetail.current = false;
+      window.scrollTo(0, resultScroll.current);
+      lastRow.current?.focus({ preventScroll: true });
     }
-  }, [status?.authenticated, recordId, select]);
+  }, [recordId]);
+
   if (!status)
     return (
       <main className="auth-page">
@@ -124,7 +165,12 @@ function Dashboard() {
           <h1>Scratchpad</h1>
           <p role="status">{error || "Opening your memory…"}</p>
           {error && (
-            <button type="button" onClick={() => void authenticate()}>
+            <button
+              type="button"
+              onClick={() =>
+                void authenticate().catch((e: Error) => setError(e.message))
+              }
+            >
               Retry
             </button>
           )}
@@ -138,8 +184,12 @@ function Dashboard() {
         onAuthenticated={() => void authenticate()}
       />
     );
+  const selectedProject = projects.find((p) => p.id === search.projectId);
   return (
     <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to content
+      </a>
       <aside className="sidebar">
         <a href="/" className="wordmark">
           <span className="scratch" aria-hidden="true">
@@ -148,13 +198,13 @@ function Dashboard() {
           Scratchpad
         </a>
         <nav aria-label="Main navigation">
-          {["Memory", "Projects", "Insights", "Settings"].map((name) => (
+          {views.map((name) => (
             <button
               key={name}
               type="button"
               className={tab === name ? "active" : ""}
               aria-current={tab === name ? "page" : undefined}
-              onClick={() => setTab(name)}
+              onClick={() => changeTab(name)}
             >
               <NavIcon name={name} />
               {name}
@@ -168,186 +218,152 @@ function Dashboard() {
           </a>
           <button
             type="button"
-            onClick={() => {
+            onClick={() =>
               void api("/auth/logout", post({}))
                 .then(authenticate)
-                .catch((e: Error) => setError(e.message));
-            }}
+                .catch((e: Error) => setError(e.message))
+            }
           >
             <NavIcon name="Sign out" />
             Sign out
           </button>
         </div>
       </aside>
-      <main className="main-pane">
-        {tab === "Projects" ? (
-          <Projects
-            projects={projects}
-            onChanged={() => void loadProjects()}
-            onInspect={(id) => {
-              setTab("Memory");
-              void select({ id } as MemoryRecord);
-            }}
-          />
-        ) : tab === "Insights" ? (
-          <Insights
-            projects={projects}
-            onInspect={(id) => {
-              setTab("Memory");
-              void select({ id } as MemoryRecord);
-            }}
-          />
-        ) : tab === "Settings" ? (
-          <Settings
-            projects={projects}
-            onImported={() => {
-              void loadProjects();
-              void loadRecords();
-            }}
-          />
-        ) : (
+      <main className="main-pane" id="main-content">
+        {notice && (
+          <p role="status" className="notice">
+            {notice}
+          </p>
+        )}
+        {recordId ? (
           <>
-            <header className="page-heading">
-              <div>
-                <h1>Project memory</h1>
-                <p>Decisions, findings, and the reasons behind your work.</p>
-              </div>
+            <div className="reader-toolbar">
               <button
-                className="primary"
                 type="button"
-                onClick={() =>
-                  projects.length ? setCapture(true) : setTab("Projects")
-                }
+                onClick={() => update({ recordId: undefined })}
               >
+                Back to {tab === "Memory" ? "results" : tab.toLowerCase()}
+              </button>
+              <button type="button" onClick={() => setCapture(true)}>
                 New record
               </button>
-            </header>
-            <form
-              className="filters"
-              onSubmit={(e) => {
-                e.preventDefault();
-                setSearch(query);
-                const form = new FormData(e.currentTarget);
-                const next: Record<string, string> = {};
-                for (const name of ["tag", "branch", "status", "authority"])
-                  next[name] = String(form.get(name) ?? "");
-                const from = String(form.get("from") ?? "");
-                const to = String(form.get("to") ?? "");
-                next.from = from ? `${from}T00:00:00.000Z` : "";
-                next.to = to ? `${to}T23:59:59.999Z` : "";
-                setFilters(next);
-              }}
-            >
-              <input
-                aria-label="Search your memory"
-                placeholder="Search your memory"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
+            </div>
+            {detailError ? (
+              <div role="alert" className="error">
+                <p>{detailError}</p>
+                <button type="button" onClick={() => void loadDetail()}>
+                  Retry opening record
+                </button>
+              </div>
+            ) : detail ? (
+              <RecordDetail
+                key={detail.record.id}
+                detail={detail}
+                projectName={
+                  projects.find((p) => p.id === detail.record.projectId)?.name
+                }
+                onNavigate={inspect}
+                onClose={() => update({ recordId: undefined })}
+                onChanged={() => {
+                  void loadDetail();
+                  void loadRecords();
+                }}
               />
-              <button type="submit">Search</button>
-              <select
-                aria-label="Project"
-                value={project}
-                onChange={(e) => setProject(e.target.value)}
-              >
-                <option value="">All projects</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label="Record type"
-                value={type}
-                onChange={(e) => setType(e.target.value)}
-              >
-                <option value="">All types</option>
-                {types.map((t) => (
-                  <option key={t} value={t}>
-                    {label(t)}
-                  </option>
-                ))}
-              </select>
-              <details className="advanced-filters">
-                <summary>More filters</summary>
-                <div className="form-grid">
-                  <label>
-                    Tag
-                    <input name="tag" defaultValue={filters.tag} />
-                  </label>
-                  <label>
-                    Git branch
-                    <input name="branch" defaultValue={filters.branch} />
-                  </label>
-                  <label>
-                    From date (UTC)
-                    <input
-                      type="date"
-                      name="from"
-                      defaultValue={filters.from?.slice(0, 10)}
-                    />
-                  </label>
-                  <label>
-                    Through date (UTC)
-                    <input
-                      type="date"
-                      name="to"
-                      defaultValue={filters.to?.slice(0, 10)}
-                    />
-                  </label>
-                  <label>
-                    Lifecycle
-                    <select
-                      aria-label="Lifecycle"
-                      name="status"
-                      defaultValue={filters.status ?? ""}
-                    >
-                      <option value="">All statuses</option>
-                      {[
-                        "active",
-                        "superseded",
-                        "partially_superseded",
-                        "archived",
-                      ].map((value) => (
-                        <option value={value} key={value}>
-                          {label(value)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Record authority
-                    <select
-                      aria-label="Record authority"
-                      name="authority"
-                      defaultValue={filters.authority ?? ""}
-                    >
-                      <option value="">All authorities</option>
-                      {[
-                        "explicit",
-                        "observed",
-                        "inferred",
-                        "derived",
-                        "suggested",
-                      ].map((value) => (
-                        <option value={value} key={value}>
-                          {label(value)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-                <button type="submit">Apply filters</button>
-              </details>
-            </form>
-            {error && (
-              <p role="alert" className="error">
-                {error}
-              </p>
+            ) : (
+              <p role="status">Opening record…</p>
             )}
-            <div className={detail ? "memory-grid" : "memory-grid no-detail"}>
-              <section aria-label="Records">
+          </>
+        ) : null}
+        <div hidden={Boolean(recordId)}>
+          {tab === "Projects" ? (
+            <Projects
+              projects={projects}
+              onChanged={() => void loadProjects()}
+              onInspect={inspect}
+              onOpen={(id) => applyFilters({ projectId: id })}
+            />
+          ) : tab === "Insights" ? (
+            <Insights
+              projects={projects}
+              projectId={search.projectId ?? ""}
+              onProjectChange={(projectId) =>
+                update({ projectId: projectId || undefined })
+              }
+              section={search.section}
+              onSectionChange={(section) => update({ section })}
+              onSettings={() => update({ view: "Settings", section: "ai" })}
+              onInspect={inspect}
+            />
+          ) : tab === "Settings" ? (
+            <Settings
+              projects={projects}
+              section={search.section}
+              onSectionChange={(section) => update({ section })}
+              onImported={() => {
+                void loadProjects();
+                void loadRecords();
+              }}
+            />
+          ) : (
+            <>
+              <header className="page-heading">
+                <div>
+                  <h1>Project memory</h1>
+                  <p>
+                    {selectedProject
+                      ? selectedProject.name
+                      : "Decisions, findings, and the reasons behind your work."}
+                  </p>
+                </div>
+                <button
+                  className="primary"
+                  type="button"
+                  onClick={() =>
+                    projects.length ? setCapture(true) : changeTab("Projects")
+                  }
+                >
+                  New record
+                </button>
+              </header>
+              <MemoryFilters
+                key={`${params}:${projects.map((project) => project.id).join(",")}`}
+                projects={projects}
+                search={search}
+                onApply={applyFilters}
+              />
+              <div className="results-toolbar">
+                <span role="status">
+                  {loading
+                    ? "Loading records…"
+                    : `${records.length}${cursor ? "+" : ""} records${selectedProject ? ` in ${selectedProject.name}` : ""}`}
+                </span>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() =>
+                    update({ view: "Insights", section: "search" })
+                  }
+                >
+                  Search by meaning (AI)
+                </button>
+              </div>
+              {error && (
+                <div role="alert" className="error">
+                  <p>{error}</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void loadProjects().catch((e: Error) =>
+                        setError(e.message),
+                      );
+                      void loadRecords();
+                    }}
+                  >
+                    Retry
+                  </button>
+                </div>
+              )}
+              <section aria-label="Records" aria-busy={loading}>
                 <div className="list-heading">
                   <span>Type</span>
                   <span>Title</span>
@@ -357,15 +373,23 @@ function Dashboard() {
                   <button
                     key={record.id}
                     type="button"
-                    className={`memory-row ${detail?.record.id === record.id ? "selected" : ""}`}
-                    onClick={() => void select(record)}
+                    className="memory-row"
+                    onClick={(event) => {
+                      lastRow.current = event.currentTarget;
+                      inspect(record.id);
+                    }}
                   >
                     <span className="record-type">{label(record.type)}</span>
                     <span>
                       <strong>
                         {record.metadata?.displayTitle || record.title}
                       </strong>
-                      <small>{record.content}</small>
+                      <small>{recordPreview(record)}</small>
+                      <span className="record-tags">
+                        {record.metadata?.tags?.map((tag) => (
+                          <span key={tag}>#{tag}</span>
+                        ))}
+                      </span>
                     </span>
                     <span className="project-name">
                       {projects.find((p) => p.id === record.projectId)?.name ??
@@ -377,62 +401,53 @@ function Dashboard() {
                           year: "numeric",
                         })}
                       </small>
+                      <small>{label(record.authority)}</small>
                     </span>
                   </button>
                 ))}
-                {loading && <p role="status">Loading records…</p>}
-                {!records.length && !loading && (
+                {!records.length && !loading && !error && (
                   <div className="empty">
                     <h2>
-                      {search ||
-                      project ||
-                      type ||
-                      Object.values(filters).some(Boolean)
+                      {filterNames.some((name) => search[name])
                         ? "No matching records."
                         : "Your next session starts here."}
                     </h2>
                     <p>
-                      {search ||
-                      project ||
-                      type ||
-                      Object.values(filters).some(Boolean)
-                        ? "Try a different search or filter."
+                      {filterNames.some((name) => search[name])
+                        ? "Try another search, or clear your filters to see all records."
                         : "Capture a decision, finding, or question worth remembering."}
                     </p>
+                    {filterNames.some((name) => search[name]) && (
+                      <button type="button" onClick={() => applyFilters({})}>
+                        Show all records
+                      </button>
+                    )}
                   </div>
                 )}
                 {cursor && (
                   <button
+                    className="load-more"
                     type="button"
                     disabled={loading}
                     onClick={() => void loadRecords(cursor)}
                   >
-                    Load more
+                    {loading ? "Loading…" : "Load more"}
                   </button>
                 )}
               </section>
-              {detail && (
-                <RecordDetail
-                  key={detail.record.id}
-                  detail={detail}
-                  onNavigate={(id) => void select({ id } as MemoryRecord)}
-                  onClose={() => setDetail(null)}
-                  onChanged={() => {
-                    void select(detail.record);
-                    void loadRecords();
-                  }}
-                />
-              )}
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
         {capture && (
           <Capture
             projects={projects}
+            initialProjectId={detail?.record.projectId ?? search.projectId}
             onClose={() => setCapture(false)}
-            onSaved={() => {
+            onSaved={(projectId) => {
               setCapture(false);
+              setNotice("Record saved.");
               void loadRecords();
+              applyFilters({ projectId });
             }}
           />
         )}

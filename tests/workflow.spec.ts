@@ -282,6 +282,39 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       .getByRole("group", { name: "Enabled capture types", exact: true })
       .getByLabel("Question & answer", { exact: true }),
   ).not.toBeChecked();
+  await page.getByRole("dialog").press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Project settings", exact: true }),
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Edit project", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByLabel("Project display name", { exact: true }),
+  ).toHaveValue("Scratchpad");
+  await page
+    .getByRole("dialog")
+    .getByLabel("Project display name", { exact: true })
+    .fill("Unsaved name");
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await page.getByRole("button", { name: "Edit project", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog")
+      .getByLabel("Project display name", { exact: true }),
+  ).toHaveValue("Scratchpad");
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  await page.getByRole("dialog").press("Escape");
+  await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole("button", { name: "Memory", exact: true }).click();
   await page.getByRole("button", { name: "New record", exact: true }).click();
   await expect(
@@ -333,6 +366,9 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       exact: true,
     }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Back to results", exact: true })
+    .click();
   await page.getByText("More filters", { exact: true }).click();
   await page.getByLabel("Tag", { exact: true }).fill("nonexistent-tag");
   await page
@@ -410,6 +446,9 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   ).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page
+    .getByRole("button", { name: "Import & export", exact: true })
+    .click();
+  await page
     .getByLabel("Import into project", { exact: true })
     .selectOption({ label: "Scratchpad" });
   await page
@@ -452,9 +491,137 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       })
       .getByText("Awaiting a test device", { exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Projects", exact: true }).click();
+  await page
+    .getByLabel("Project name", { exact: true })
+    .fill("UX second project");
+  await page
+    .getByRole("button", { name: "Create project", exact: true })
+    .click();
+  const second = page.locator("article").filter({
+    has: page.getByRole("heading", {
+      name: "UX second project",
+      exact: true,
+    }),
+  });
+  await second
+    .getByRole("button", { name: "Open memory", exact: true })
+    .click();
+  await expect(page.getByLabel("Project", { exact: true })).not.toHaveValue("");
+  const projectScope = await page
+    .getByLabel("Project", { exact: true })
+    .inputValue();
+  await expect(page).toHaveURL(/projectId=/);
+  await page.reload();
+  await expect(page.getByLabel("Project", { exact: true })).toHaveValue(
+    projectScope,
+  );
+  await page.getByRole("button", { name: "New record", exact: true }).click();
+  await expect(
+    page.getByRole("dialog").getByLabel("Project", { exact: true }),
+  ).toHaveValue(projectScope);
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        document.querySelector("dialog")?.contains(document.activeElement),
+      ),
+    )
+    .toBe(true);
+  await page.keyboard.press("Shift+Tab");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        document.querySelector("dialog")?.contains(document.activeElement),
+      ),
+    )
+    .toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "New record", exact: true }),
+  ).toBeFocused();
+  const longRecord = await page.evaluate(async (projectId) => {
+    for (let index = 0; index < 31; index++) {
+      const response = await fetch("/api/v1/records", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          record: {
+            type: "finding",
+            title: `UX fixture ${index}`,
+            authority: "observed",
+            payload: {
+              finding:
+                "## Readable heading\n\n- First point\n- Second point\n\n| Check | Result |\n| --- | --- |\n| Reading | Works |",
+              limitations: ["One limitation", "Another limitation"],
+            },
+          },
+        }),
+      });
+      if (!response.ok) throw new Error("Could not seed UX fixture");
+    }
+    return true;
+  }, projectScope);
+  expect(longRecord).toBe(true);
+  await page.reload();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /UX fixture 30/ }).click();
+  await expect(page).toHaveURL(/recordId=/);
+  await expect(
+    page.getByRole("heading", { name: "UX fixture 30", exact: true }),
+  ).toBeInViewport();
+  await expect(
+    page.getByRole("heading", { name: "Readable heading", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("cell", { name: "Works", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("listitem").filter({ hasText: "One limitation" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
+  ).toBe(true);
+  const recordUrl = page.url();
+  await page.reload();
+  await expect(
+    page.getByRole("heading", { name: "UX fixture 30", exact: true }),
+  ).toBeInViewport();
+  await page
+    .getByRole("button", { name: "Back to results", exact: true })
+    .click();
+  await expect(page.getByLabel("Project", { exact: true })).toHaveValue(
+    projectScope,
+  );
+  await page.goBack();
+  await expect(page).toHaveURL(recordUrl);
+  await expect(
+    page.getByRole("heading", { name: "UX fixture 30", exact: true }),
+  ).toBeInViewport();
+  await page.goForward();
+  await page
+    .getByLabel("Search your memory", { exact: true })
+    .fill("zzzz-no-match");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(
+    page.getByText("No matching records.", { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Clear filters", exact: true })
+    .click();
+  await expect(page.getByLabel("Project", { exact: true })).toHaveValue("");
+  await expect(
+    page.getByLabel("Search your memory", { exact: true }),
+  ).toHaveValue("");
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
   const key = resolve(temporary, "identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
   await page
     .getByLabel("Public key", { exact: true })
     .fill(readFileSync(`${key}.pub`, "utf8"));
@@ -567,11 +734,17 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   command("go", [...args, "-phase", "verify"], resolve(root, "mcp"));
   await page.reload();
   await expect(
+    page.getByRole("heading", { name: "Settings", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await expect(
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
   // The restored copy must retain more than raw captures: browser sessions,
   // curated metadata, revisions, evidence, relationships, imports and settings.
   await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await page.getByLabel("Search your memory", { exact: true }).fill("SQLite");
+  await page.getByRole("button", { name: "Search", exact: true }).click();
   await page.getByRole("button", { name: /SQLite keeps setup simple/ }).click();
   await expect(
     page.getByRole("heading", {
@@ -602,6 +775,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       .getByRole("group", { name: "Record types to mirror", exact: true })
       .getByLabel("Finding", { exact: true }),
   ).toBeChecked();
+  await restoredProject
+    .getByRole("dialog")
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
   await restoredProject
     .getByRole("button", { name: "Show project context", exact: true })
     .click();
