@@ -283,7 +283,7 @@ export class Auth {
   }
   async publicCredentials(): Promise<JsonObject[]> {
     return (await this.store.list("credential")).map(
-      ({ id, kind, label, fingerprint, createdAt, lastUsedAt, revokedAt }) => ({
+      ({
         id,
         kind,
         label,
@@ -291,12 +291,28 @@ export class Auth {
         createdAt,
         lastUsedAt,
         revokedAt,
+        source,
+      }) => ({
+        id,
+        kind,
+        label,
+        fingerprint,
+        createdAt,
+        lastUsedAt,
+        revokedAt,
+        source: source ?? "local",
       }),
     );
   }
   async revoke(credentialId: string, identity: Identity): Promise<void> {
     const credential = await this.store.get("credential", credentialId);
     requireValue(credential, "NOT_FOUND", "Credential not found.", 404);
+    requireValue(
+      credential.source !== "github",
+      "CONFLICT",
+      "Use GitHub key blocking or unlink GitHub to revoke managed access.",
+      409,
+    );
     requireValue(
       credential.kind !== "webauthn" ||
         (await this.store.get("github_binding", "owner")) !== undefined ||

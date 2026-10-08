@@ -1,15 +1,110 @@
 import { spawnSync } from "node:child_process";
+import {
+  createHash,
+  generateKeyPairSync,
+  randomBytes,
+  sign,
+} from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isoCBOR } from "@simplewebauthn/server/helpers";
+import postgres from "postgres";
 import { afterEach, expect, it } from "vitest";
 import { createApi } from "./api";
 
+/** A software authenticator signs actual WebAuthn bytes; no verification mocks. */
+function authenticator() {
+  const { privateKey, publicKey } = generateKeyPairSync("ec", {
+    namedCurve: "prime256v1",
+  });
+  const jwk = publicKey.export({ format: "jwk" }),
+    credentialId = randomBytes(32);
+  if (!jwk.x || !jwk.y) throw new Error("EC key coordinates missing");
+  const cose = isoCBOR.encode(
+    new Map<number, number | Uint8Array>([
+      [1, 2],
+      [3, -7],
+      [-1, 1],
+      [-2, Buffer.from(jwk.x, "base64url")],
+      [-3, Buffer.from(jwk.y, "base64url")],
+    ]),
+  );
+  const rpHash = createHash("sha256").update("localhost").digest();
+  function clientData(challenge: string, type: string, origin: string) {
+    return Buffer.from(
+      JSON.stringify({ type, challenge, origin, crossOrigin: false }),
+    );
+  }
+  return {
+    register(challenge: string, origin = "http://localhost:3000") {
+      const length = Buffer.alloc(2);
+      length.writeUInt16BE(credentialId.length);
+      const authData = Buffer.concat([
+        rpHash,
+        Buffer.from([0x45]),
+        Buffer.alloc(4),
+        Buffer.alloc(16),
+        length,
+        credentialId,
+        cose,
+      ]);
+      const attestation = isoCBOR.encode(
+        new Map<string, string | Uint8Array | Map<string, string>>([
+          ["fmt", "none"],
+          ["authData", authData],
+          ["attStmt", new Map()],
+        ]),
+      );
+      return {
+        id: credentialId.toString("base64url"),
+        rawId: credentialId.toString("base64url"),
+        type: "public-key",
+        response: {
+          attestationObject: Buffer.from(attestation).toString("base64url"),
+          clientDataJSON: clientData(
+            challenge,
+            "webauthn.create",
+            origin,
+          ).toString("base64url"),
+          transports: ["internal"],
+        },
+        clientExtensionResults: {},
+        authenticatorAttachment: "platform",
+      };
+    },
+    login(challenge: string, counter = 1, origin = "http://localhost:3000") {
+      const count = Buffer.alloc(4);
+      count.writeUInt32BE(counter);
+      const authData = Buffer.concat([rpHash, Buffer.from([0x05]), count]);
+      const client = clientData(challenge, "webauthn.get", origin);
+      const signature = sign(
+        "sha256",
+        Buffer.concat([authData, createHash("sha256").update(client).digest()]),
+        privateKey,
+      );
+      return {
+        id: credentialId.toString("base64url"),
+        rawId: credentialId.toString("base64url"),
+        type: "public-key",
+        response: {
+          authenticatorData: authData.toString("base64url"),
+          clientDataJSON: client.toString("base64url"),
+          signature: signature.toString("base64url"),
+          userHandle: null,
+        },
+        clientExtensionResults: {},
+        authenticatorAttachment: "platform",
+      };
+    },
+  };
+}
+
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
-  for (const fn of cleanup.splice(0)) await fn();
+  for (const fn of cleanup.splice(0).reverse()) await fn();
 });
-async function fixture() {
+async function fixture(databaseUrl?: string) {
   const dir = mkdtempSync(join(tmpdir(), "scratchpad-github-"));
   let time = Date.now();
   const provider = {
@@ -36,7 +131,13 @@ async function fixture() {
         : url.endsWith("/user") ||
             /\/user\/\d+$/.test(url) ||
             /\/users\/[^/]+$/.test(url)
-          ? { id: provider.id, login: provider.login, type: "User" }
+          ? {
+              id: provider.id,
+              login: provider.login,
+              type: "User",
+              name: "Synthetic owner",
+              avatar_url: null,
+            }
           : url.includes("ssh_signing_keys")
             ? provider.signingKeys
             : provider.keys,
@@ -44,9 +145,11 @@ async function fixture() {
   };
   const config = {
     databasePath: join(dir, "db.sqlite"),
+    databaseUrl,
     origin: "http://localhost:3000",
     githubOAuth: { clientId: "synthetic", clientSecret: "synthetic-secret" },
     githubAuthFetch: fetcher,
+    githubFetch: fetcher,
     clock: () => time,
   };
   let api = createApi(config);
@@ -69,7 +172,10 @@ async function fixture() {
     );
     return {
       response,
-      data: response.status === 302 ? null : await response.json(),
+      data:
+        response.status >= 300 && response.status < 400
+          ? null
+          : await response.json(),
       cookie: response.headers.get("set-cookie")?.split(";")[0] ?? "",
     };
   };
@@ -93,8 +199,14 @@ async function fixture() {
   };
   spawnSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", join(dir, "key")]);
   const publicKey = readFileSync(join(dir, "key.pub"), "utf8").trim();
-  const machine = async () => {
-    const challenge = await call("/auth/mcp/challenge", "POST", { publicKey });
+  const machine = async (keyName = "key", enrollmentCookie?: string) => {
+    const publicKey = readFileSync(join(dir, `${keyName}.pub`), "utf8").trim();
+    const challenge = await call(
+      enrollmentCookie ? "/auth/credentials/challenge" : "/auth/mcp/challenge",
+      "POST",
+      { publicKey },
+      enrollmentCookie,
+    );
     if (challenge.response.status !== 200) return challenge;
     const file = join(dir, "nonce");
     writeFileSync(file, challenge.data.nonce);
@@ -104,16 +216,60 @@ async function fixture() {
         "-Y",
         "sign",
         "-f",
-        join(dir, "key"),
+        join(dir, keyName),
         "-n",
         "scratchpad-auth",
         file,
       ]).status,
     ).toBe(0);
-    return await call("/auth/mcp/verify", "POST", {
-      publicKey,
-      challengeId: challenge.data.challengeId,
-      signature: readFileSync(`${file}.sig`, "utf8"),
+    return await call(
+      enrollmentCookie ? "/auth/credentials/verify" : "/auth/mcp/verify",
+      "POST",
+      {
+        publicKey,
+        challengeId: challenge.data.challengeId,
+        signature: readFileSync(`${file}.sig`, "utf8"),
+      },
+      enrollmentCookie,
+    );
+  };
+  const enrollLocal = async (cookie: string) => {
+    spawnSync("ssh-keygen", [
+      "-t",
+      "ed25519",
+      "-N",
+      "",
+      "-f",
+      join(dir, "local"),
+    ]);
+    return await machine("local", cookie);
+  };
+  const device = authenticator();
+  const passkey = async (cookie?: string, setupToken?: string) => {
+    const options = await call(
+      "/auth/register/options",
+      "POST",
+      { setupToken },
+      cookie,
+    );
+    expect(options.response.status).toBe(200);
+    return await call(
+      "/auth/register/verify",
+      "POST",
+      {
+        setupToken,
+        challengeId: options.data.challengeId,
+        response: device.register(options.data.options.challenge),
+      },
+      cookie,
+    );
+  };
+  let counter = 0;
+  const passkeyLogin = async () => {
+    const options = await call("/auth/login/options", "POST", {});
+    return await call("/auth/login/verify", "POST", {
+      challengeId: options.data.challengeId,
+      response: device.login(options.data.options.challenge, ++counter),
     });
   };
   const read = async (accessToken: string) =>
@@ -132,6 +288,9 @@ async function fixture() {
     },
     call,
     oauth,
+    passkey,
+    passkeyLogin,
+    enrollLocal,
     provider,
     machine,
     read,
@@ -153,7 +312,7 @@ it("initializes one owner through token-authorized GitHub OAuth and rejects wron
       .authenticated,
   ).toBe(true);
   f.provider.id = 99;
-  expect((await f.oauth("login")).response.status).toBe(401);
+  expect((await f.oauth("login")).response.status).toBe(303);
 });
 it("automatically authorizes a published SSH key, renews during outage and denies cached access at exactly 24 hours", async () => {
   const f = await fixture();
@@ -220,13 +379,13 @@ it("binds OAuth to the initiating browser and rejects callback replay", async ()
   const url = new URL(start.data.authorizationUrl);
   expect(url.searchParams.get("code_challenge_method")).toBe("S256");
   const path = `/auth/github/callback?code=synthetic-code&state=${url.searchParams.get("state")}`;
-  expect((await f.call(path)).response.status).toBe(401);
+  expect((await f.call(path)).response.status).toBe(303);
   expect(
     (await f.call(path, "GET", undefined, start.cookie)).response.status,
   ).toBe(302);
   expect(
     (await f.call(path, "GET", undefined, start.cookie)).response.status,
-  ).toBe(401);
+  ).toBe(303);
 });
 it("replacement requires fresh auth and invalidates old managed access while denying unlink through GitHub alone", async () => {
   const f = await fixture();
@@ -367,3 +526,239 @@ it("five-minute scheduling refreshes the persisted cache, and restart does not e
   f.advance(60 * 60 * 1000);
   expect((await f.read(renewed.data.accessToken)).status).toBe(401);
 });
+it("a late synchronization cannot restore keys removed by a newer synchronization", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  let release: ((value: Response) => void) | undefined;
+  let started: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  f.provider.override = async (url) => {
+    if (!url.includes("/keys?")) return undefined;
+    if (!release)
+      return await new Promise<Response>((resolve) => {
+        release = resolve;
+        started?.();
+      });
+    return Response.json([]);
+  };
+  f.provider.keys = [];
+  const old = f.call("/auth/github/sync", "POST", {}, browser.cookie);
+  await pending;
+  expect(
+    (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+      .status,
+  ).toBe(200);
+  release?.(Response.json([{ key: f.publicKey }]));
+  await old;
+  expect((await f.machine()).response.status).toBe(401);
+});
+it("preserves passkeys, local SSH credentials and projects through GitHub linking, unlinking and administrator recovery", async () => {
+  const f = await fixture();
+  const local = await f.passkey(undefined, await f.api.auth.createSetupToken());
+  expect(local.response.status).toBe(200);
+  const project = await f.call(
+    "/projects/resolve-explicit",
+    "POST",
+    { name: "Synthetic recovery project" },
+    local.cookie,
+  );
+  expect(project.response.status).toBe(200);
+  expect((await f.enrollLocal(local.cookie)).response.status).toBe(200);
+  const localMachine = await f.machine("local");
+  expect(localMachine.response.status).toBe(200);
+  f.provider.keys = [{ key: f.publicKey }];
+  const github = await f.oauth("link", undefined, local.cookie);
+  expect(github.response.status).toBe(302);
+  const managed = await f.machine();
+  expect(managed.response.status).toBe(200);
+  expect(
+    (await f.call("/auth/github", "DELETE", {}, local.cookie)).response.status,
+  ).toBe(200);
+  expect((await f.read(managed.data.accessToken)).status).toBe(401);
+  expect((await f.read(localMachine.data.accessToken)).status).toBe(200);
+  f.provider.id = 99;
+  f.provider.login = "recovered";
+  const recovery = await f.oauth(
+    "recover",
+    await f.api.auth.createSetupToken(true),
+  );
+  expect(recovery.response.status).toBe(302);
+  const projects = await f.call("/projects", "GET", undefined, recovery.cookie);
+  expect(projects.data.projects.map((p: { name: string }) => p.name)).toContain(
+    "Synthetic recovery project",
+  );
+  const login = await f.passkeyLogin();
+  expect(login.response.status).toBe(200);
+  expect(
+    (await f.call("/auth/github", "DELETE", {}, login.cookie)).response.status,
+  ).toBe(200);
+  expect((await f.machine("local")).response.status).toBe(200);
+});
+it("does not promote descriptive GitHub profile linkage into owner authentication", async () => {
+  const f = await fixture();
+  const local = await f.passkey(undefined, await f.api.auth.createSetupToken());
+  expect(
+    (
+      await f.call(
+        "/profile/github",
+        "POST",
+        { username: "owner", expectedVersion: 0 },
+        local.cookie,
+      )
+    ).response.status,
+  ).toBe(200);
+  expect(
+    (await f.call("/auth/github", "GET", undefined, local.cookie)).data.binding,
+  ).toBeNull();
+  expect(
+    (await f.call("/auth/github/options", "POST", { intent: "login" })).response
+      .status,
+  ).toBe(401);
+});
+it("allows existing browser sessions during an outage but requires GitHub for new sign-in, and accepts account rename by stable ID", async () => {
+  const f = await fixture();
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  f.provider.login = "renamed";
+  expect((await f.oauth("login")).response.status).toBe(302);
+  expect(
+    (await f.call("/auth/github", "GET", undefined, browser.cookie)).data
+      .binding,
+  ).toEqual({ accountId: "42", username: "renamed" });
+  f.provider.unavailable = true;
+  expect(
+    (await f.call("/projects", "GET", undefined, browser.cookie)).response
+      .status,
+  ).toBe(200);
+  expect((await f.oauth("login")).response.status).toBe(303);
+  f.advance(24 * 60 * 60 * 1000);
+  expect(
+    (await f.call("/projects", "GET", undefined, browser.cookie)).response
+      .status,
+  ).toBe(401);
+});
+it("never permits username reuse to replace the bound stable identity", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  const first = await f.machine();
+  f.provider.override = async (url) =>
+    url.endsWith("/users/owner")
+      ? Response.json({ id: 99, login: "owner", type: "User" })
+      : undefined;
+  f.provider.keys = [];
+  expect(
+    (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+      .status,
+  ).toBe(503);
+  expect((await f.read(first.data.accessToken)).status).toBe(200);
+});
+it("disables ordinary setup after initialization and rejects an expired OAuth state", async () => {
+  const f = await fixture();
+  const token = await f.api.auth.createSetupToken();
+  const first = await f.call("/auth/github/options", "POST", {
+    intent: "setup",
+    setupToken: token,
+  });
+  const second = await f.call("/auth/github/options", "POST", {
+    intent: "setup",
+    setupToken: token,
+  });
+  const callback = (start: Awaited<ReturnType<typeof f.call>>) =>
+    `/auth/github/callback?code=synthetic-code&state=${new URL(start.data.authorizationUrl).searchParams.get("state")}`;
+  expect(
+    (await f.call(callback(first), "GET", undefined, first.cookie)).response
+      .status,
+  ).toBe(302);
+  expect(
+    (await f.call(callback(second), "GET", undefined, second.cookie)).response
+      .status,
+  ).toBe(303);
+  expect(
+    (
+      await f.call("/auth/github/options", "POST", {
+        intent: "setup",
+        setupToken: token,
+      })
+    ).response.status,
+  ).toBe(401);
+  const login = await f.call("/auth/github/options", "POST", {
+    intent: "login",
+  });
+  f.advance(10 * 60 * 1000);
+  expect(
+    (await f.call(callback(login), "GET", undefined, login.cookie)).response
+      .status,
+  ).toBe(303);
+});
+it("late synchronization for a replaced account cannot apply an old account's keys", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  let release: ((response: Response) => void) | undefined;
+  let started: (() => void) | undefined;
+  const pending = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  f.provider.override = async (url) => {
+    if (url.includes("/users/owner/keys?"))
+      return await new Promise<Response>((resolve) => {
+        release = resolve;
+        started?.();
+      });
+    return undefined;
+  };
+  const old = f.call("/auth/github/sync", "POST", {}, browser.cookie);
+  await pending;
+  f.provider.id = 99;
+  f.provider.login = "replacement";
+  f.provider.keys = [];
+  const replacement = await f.oauth("replace", undefined, browser.cookie);
+  expect(replacement.response.status).toBe(302);
+  release?.(Response.json([{ key: f.publicKey }]));
+  await old;
+  expect((await f.machine()).response.status).toBe(401);
+});
+it("fails closed if the persisted key cache appears to come from the future", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  f.advance(-1000);
+  expect((await f.machine()).response.status).toBe(401);
+  expect(
+    (await f.call("/auth/github", "GET", undefined, browser.cookie)).data
+      .cacheValid,
+  ).toBe(false);
+});
+it.skipIf(!process.env.TEST_POSTGRES_URL)(
+  "supports GitHub OAuth, cache persistence and immediate revocation on PostgreSQL",
+  async () => {
+    const admin = postgres(process.env.TEST_POSTGRES_URL ?? "", { max: 1 });
+    const name = `scratchpad_github_${randomBytes(12).toString("hex")}`;
+    await admin.unsafe(`CREATE DATABASE "${name}"`);
+    const url = new URL(process.env.TEST_POSTGRES_URL ?? "");
+    url.pathname = `/${name}`;
+    cleanup.unshift(async () => {
+      await admin.unsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
+      await admin.end();
+    });
+    const f = await fixture(url.href);
+    f.provider.keys = [{ key: f.publicKey }];
+    const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+    const first = await f.machine();
+    expect((await f.read(first.data.accessToken)).status).toBe(200);
+    await f.restart();
+    expect((await f.read(first.data.accessToken)).status).toBe(200);
+    await f.call(
+      "/auth/github/block",
+      "POST",
+      { publicKey: f.publicKey, blocked: true },
+      browser.cookie,
+    );
+    expect((await f.read(first.data.accessToken)).status).toBe(401);
+    await f.restart();
+    expect((await f.machine()).response.status).toBe(401);
+  },
+);

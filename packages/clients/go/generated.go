@@ -650,6 +650,141 @@ func (e RecordType) Valid() bool {
 	}
 }
 
+// Defines values for GetAuthCredentials200JSONResponseBodyCredentialsKind.
+const (
+	GetAuthCredentials200JSONResponseBodyCredentialsKindGithub   GetAuthCredentials200JSONResponseBodyCredentialsKind = "github"
+	GetAuthCredentials200JSONResponseBodyCredentialsKindSsh      GetAuthCredentials200JSONResponseBodyCredentialsKind = "ssh"
+	GetAuthCredentials200JSONResponseBodyCredentialsKindWebauthn GetAuthCredentials200JSONResponseBodyCredentialsKind = "webauthn"
+)
+
+// Valid indicates whether the value is a known member of the GetAuthCredentials200JSONResponseBodyCredentialsKind enum.
+func (e GetAuthCredentials200JSONResponseBodyCredentialsKind) Valid() bool {
+	switch e {
+	case GetAuthCredentials200JSONResponseBodyCredentialsKindGithub:
+		return true
+	case GetAuthCredentials200JSONResponseBodyCredentialsKindSsh:
+		return true
+	case GetAuthCredentials200JSONResponseBodyCredentialsKindWebauthn:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetAuthCredentials200JSONResponseBodyCredentialsSource.
+const (
+	GetAuthCredentials200JSONResponseBodyCredentialsSourceGithub GetAuthCredentials200JSONResponseBodyCredentialsSource = "github"
+	GetAuthCredentials200JSONResponseBodyCredentialsSourceLocal  GetAuthCredentials200JSONResponseBodyCredentialsSource = "local"
+)
+
+// Valid indicates whether the value is a known member of the GetAuthCredentials200JSONResponseBodyCredentialsSource enum.
+func (e GetAuthCredentials200JSONResponseBodyCredentialsSource) Valid() bool {
+	switch e {
+	case GetAuthCredentials200JSONResponseBodyCredentialsSourceGithub:
+		return true
+	case GetAuthCredentials200JSONResponseBodyCredentialsSourceLocal:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DeleteAuthGithub200JSONResponseBodyUnlinked.
+const (
+	True DeleteAuthGithub200JSONResponseBodyUnlinked = true
+)
+
+// Valid indicates whether the value is a known member of the DeleteAuthGithub200JSONResponseBodyUnlinked enum.
+func (e DeleteAuthGithub200JSONResponseBodyUnlinked) Valid() bool {
+	switch e {
+	case True:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetAuthGithub200JSONResponseBodyKeysCategories.
+const (
+	GetAuthGithub200JSONResponseBodyKeysCategoriesAuthentication GetAuthGithub200JSONResponseBodyKeysCategories = "authentication"
+	GetAuthGithub200JSONResponseBodyKeysCategoriesSigning        GetAuthGithub200JSONResponseBodyKeysCategories = "signing"
+)
+
+// Valid indicates whether the value is a known member of the GetAuthGithub200JSONResponseBodyKeysCategories enum.
+func (e GetAuthGithub200JSONResponseBodyKeysCategories) Valid() bool {
+	switch e {
+	case GetAuthGithub200JSONResponseBodyKeysCategoriesAuthentication:
+		return true
+	case GetAuthGithub200JSONResponseBodyKeysCategoriesSigning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthGithubBlock200JSONResponseBodyKeysCategories.
+const (
+	PostAuthGithubBlock200JSONResponseBodyKeysCategoriesAuthentication PostAuthGithubBlock200JSONResponseBodyKeysCategories = "authentication"
+	PostAuthGithubBlock200JSONResponseBodyKeysCategoriesSigning        PostAuthGithubBlock200JSONResponseBodyKeysCategories = "signing"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthGithubBlock200JSONResponseBodyKeysCategories enum.
+func (e PostAuthGithubBlock200JSONResponseBodyKeysCategories) Valid() bool {
+	switch e {
+	case PostAuthGithubBlock200JSONResponseBodyKeysCategoriesAuthentication:
+		return true
+	case PostAuthGithubBlock200JSONResponseBodyKeysCategoriesSigning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthGithubOptionsJSONBodyIntent.
+const (
+	Link    PostAuthGithubOptionsJSONBodyIntent = "link"
+	Login   PostAuthGithubOptionsJSONBodyIntent = "login"
+	Recover PostAuthGithubOptionsJSONBodyIntent = "recover"
+	Replace PostAuthGithubOptionsJSONBodyIntent = "replace"
+	Setup   PostAuthGithubOptionsJSONBodyIntent = "setup"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthGithubOptionsJSONBodyIntent enum.
+func (e PostAuthGithubOptionsJSONBodyIntent) Valid() bool {
+	switch e {
+	case Link:
+		return true
+	case Login:
+		return true
+	case Recover:
+		return true
+	case Replace:
+		return true
+	case Setup:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthGithubSync200JSONResponseBodyKeysCategories.
+const (
+	PostAuthGithubSync200JSONResponseBodyKeysCategoriesAuthentication PostAuthGithubSync200JSONResponseBodyKeysCategories = "authentication"
+	PostAuthGithubSync200JSONResponseBodyKeysCategoriesSigning        PostAuthGithubSync200JSONResponseBodyKeysCategories = "signing"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthGithubSync200JSONResponseBodyKeysCategories enum.
+func (e PostAuthGithubSync200JSONResponseBodyKeysCategories) Valid() bool {
+	switch e {
+	case PostAuthGithubSync200JSONResponseBodyKeysCategoriesAuthentication:
+		return true
+	case PostAuthGithubSync200JSONResponseBodyKeysCategoriesSigning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetProfile200JSONResponseBodyDatabaseEngine.
 const (
 	GetProfile200JSONResponseBodyDatabaseEnginePostgresql GetProfile200JSONResponseBodyDatabaseEngine = "postgresql"
@@ -1198,6 +1333,19 @@ type PatchAiSettingsParams struct {
 // PostAiTestJSONBody defines parameters for PostAiTest.
 type PostAiTestJSONBody map[string]interface{}
 
+// GetAuthCredentials200JSONResponseBodyCredentialsKind defines parameters for GetAuthCredentials.
+type GetAuthCredentials200JSONResponseBodyCredentialsKind string
+
+// GetAuthCredentials200JSONResponseBodyCredentialsSource defines parameters for GetAuthCredentials.
+type GetAuthCredentials200JSONResponseBodyCredentialsSource string
+
+// GetAuthCredentials200JSONResponseBody_Credentials_Item defines parameters for GetAuthCredentials.
+type GetAuthCredentials200JSONResponseBody_Credentials_Item struct {
+	Kind                 *GetAuthCredentials200JSONResponseBodyCredentialsKind   `json:"kind,omitempty"`
+	Source               *GetAuthCredentials200JSONResponseBodyCredentialsSource `json:"source,omitempty"`
+	AdditionalProperties map[string]interface{}                                  `json:"-"`
+}
+
 // PostAuthCredentialsChallengeJSONBody defines parameters for PostAuthCredentialsChallenge.
 type PostAuthCredentialsChallengeJSONBody struct {
 	Label     *string `json:"label,omitempty"`
@@ -1210,6 +1358,39 @@ type PostAuthCredentialsVerifyJSONBody struct {
 	PublicKey   string `json:"publicKey"`
 	Signature   string `json:"signature"`
 }
+
+// DeleteAuthGithub200JSONResponseBodyUnlinked defines parameters for DeleteAuthGithub.
+type DeleteAuthGithub200JSONResponseBodyUnlinked bool
+
+// GetAuthGithub200JSONResponseBodyKeysCategories defines parameters for GetAuthGithub.
+type GetAuthGithub200JSONResponseBodyKeysCategories string
+
+// PostAuthGithubBlockJSONBody defines parameters for PostAuthGithubBlock.
+type PostAuthGithubBlockJSONBody struct {
+	Blocked   bool   `json:"blocked"`
+	PublicKey string `json:"publicKey"`
+}
+
+// PostAuthGithubBlock200JSONResponseBodyKeysCategories defines parameters for PostAuthGithubBlock.
+type PostAuthGithubBlock200JSONResponseBodyKeysCategories string
+
+// GetAuthGithubCallbackParams defines parameters for GetAuthGithubCallback.
+type GetAuthGithubCallbackParams struct {
+	Code  string `form:"code" json:"code"`
+	State string `form:"state" json:"state"`
+}
+
+// PostAuthGithubOptionsJSONBody defines parameters for PostAuthGithubOptions.
+type PostAuthGithubOptionsJSONBody struct {
+	Intent     PostAuthGithubOptionsJSONBodyIntent `json:"intent"`
+	SetupToken *string                             `json:"setupToken,omitempty"`
+}
+
+// PostAuthGithubOptionsJSONBodyIntent defines parameters for PostAuthGithubOptions.
+type PostAuthGithubOptionsJSONBodyIntent string
+
+// PostAuthGithubSync200JSONResponseBodyKeysCategories defines parameters for PostAuthGithubSync.
+type PostAuthGithubSync200JSONResponseBodyKeysCategories string
 
 // PostAuthLoginOptionsJSONBody defines parameters for PostAuthLoginOptions.
 type PostAuthLoginOptionsJSONBody map[string]interface{}
@@ -1557,6 +1738,12 @@ type PostAuthCredentialsChallengeJSONRequestBody PostAuthCredentialsChallengeJSO
 // PostAuthCredentialsVerifyJSONRequestBody defines body for PostAuthCredentialsVerify for application/json ContentType.
 type PostAuthCredentialsVerifyJSONRequestBody PostAuthCredentialsVerifyJSONBody
 
+// PostAuthGithubBlockJSONRequestBody defines body for PostAuthGithubBlock for application/json ContentType.
+type PostAuthGithubBlockJSONRequestBody PostAuthGithubBlockJSONBody
+
+// PostAuthGithubOptionsJSONRequestBody defines body for PostAuthGithubOptions for application/json ContentType.
+type PostAuthGithubOptionsJSONRequestBody PostAuthGithubOptionsJSONBody
+
 // PostAuthLoginOptionsJSONRequestBody defines body for PostAuthLoginOptions for application/json ContentType.
 type PostAuthLoginOptionsJSONRequestBody PostAuthLoginOptionsJSONBody
 
@@ -1743,6 +1930,89 @@ func (a OwnerProfile) MarshalJSON() ([]byte, error) {
 	object["version"], err = json.Marshal(a.Version)
 	if err != nil {
 		return nil, fmt.Errorf("error marshaling 'version': %w", err)
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for GetAuthCredentials200JSONResponseBody_Credentials_Item. Returns the specified
+// element and whether it was found
+func (a GetAuthCredentials200JSONResponseBody_Credentials_Item) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for GetAuthCredentials200JSONResponseBody_Credentials_Item
+func (a *GetAuthCredentials200JSONResponseBody_Credentials_Item) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for GetAuthCredentials200JSONResponseBody_Credentials_Item to handle AdditionalProperties
+func (a *GetAuthCredentials200JSONResponseBody_Credentials_Item) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["kind"]; found {
+		err = json.Unmarshal(raw, &a.Kind)
+		if err != nil {
+			return fmt.Errorf("error reading 'kind': %w", err)
+		}
+		delete(object, "kind")
+	}
+
+	if raw, found := object["source"]; found {
+		err = json.Unmarshal(raw, &a.Source)
+		if err != nil {
+			return fmt.Errorf("error reading 'source': %w", err)
+		}
+		delete(object, "source")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for GetAuthCredentials200JSONResponseBody_Credentials_Item to handle AdditionalProperties
+func (a GetAuthCredentials200JSONResponseBody_Credentials_Item) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.Kind != nil {
+		object["kind"], err = json.Marshal(a.Kind)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'kind': %w", err)
+		}
+	}
+
+	if a.Source != nil {
+		object["source"], err = json.Marshal(a.Source)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'source': %w", err)
+		}
 	}
 
 	for fieldName, field := range a.AdditionalProperties {
@@ -1993,6 +2263,66 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /api/v1/auth/credentials/{id} (the `DeleteAuthCredentialsId` operationId).
 	DeleteAuthCredentialsId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteAuthGithub Unlink GitHub using fresh independent local browser authentication
+	//
+	// Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.
+	//
+	// Corresponds with DELETE /api/v1/auth/github (the `DeleteAuthGithub` operationId).
+	DeleteAuthGithub(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAuthGithub Verified GitHub binding, complete cache freshness and key blocking status
+	//
+	// Corresponds with GET /api/v1/auth/github (the `GetAuthGithub` operationId).
+	GetAuthGithub(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAuthGithubBlockWithBody Persistently block or explicitly unblock canonical SSH key material
+	//
+	// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+	PostAuthGithubBlockWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAuthGithubBlock Persistently block or explicitly unblock canonical SSH key material
+	//
+	// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+	PostAuthGithubBlock(ctx context.Context, body PostAuthGithubBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAuthGithubCallback Consume GitHub OAuth code and browser-bound single-use state
+	//
+	// Corresponds with GET /api/v1/auth/github/callback (the `GetAuthGithubCallback` operationId).
+	GetAuthGithubCallback(ctx context.Context, params *GetAuthGithubCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAuthGithubOptionsWithBody Begin browser-bound GitHub OAuth with PKCE
+	//
+	// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+	PostAuthGithubOptionsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAuthGithubOptions Begin browser-bound GitHub OAuth with PKCE
+	//
+	// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+	PostAuthGithubOptions(ctx context.Context, body PostAuthGithubOptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAuthGithubSync Refresh the complete synchronized GitHub SSH key cache
+	//
+	// Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.
+	//
+	// Corresponds with POST /api/v1/auth/github/sync (the `PostAuthGithubSync` operationId).
+	PostAuthGithubSync(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostAuthLoginOptionsWithBody Passkey login options
 	//
@@ -2761,6 +3091,146 @@ func (c *Client) PostAuthCredentialsVerify(ctx context.Context, body PostAuthCre
 // Corresponds with DELETE /api/v1/auth/credentials/{id} (the `DeleteAuthCredentialsId` operationId).
 func (c *Client) DeleteAuthCredentialsId(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteAuthCredentialsIdRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteAuthGithub Unlink GitHub using fresh independent local browser authentication
+//
+// Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.
+//
+// Corresponds with DELETE /api/v1/auth/github (the `DeleteAuthGithub` operationId).
+func (c *Client) DeleteAuthGithub(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteAuthGithubRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAuthGithub Verified GitHub binding, complete cache freshness and key blocking status
+//
+// Corresponds with GET /api/v1/auth/github (the `GetAuthGithub` operationId).
+func (c *Client) GetAuthGithub(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAuthGithubRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAuthGithubBlockWithBody Persistently block or explicitly unblock canonical SSH key material
+//
+// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+func (c *Client) PostAuthGithubBlockWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAuthGithubBlockRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAuthGithubBlock Persistently block or explicitly unblock canonical SSH key material
+//
+// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+func (c *Client) PostAuthGithubBlock(ctx context.Context, body PostAuthGithubBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAuthGithubBlockRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAuthGithubCallback Consume GitHub OAuth code and browser-bound single-use state
+//
+// Corresponds with GET /api/v1/auth/github/callback (the `GetAuthGithubCallback` operationId).
+func (c *Client) GetAuthGithubCallback(ctx context.Context, params *GetAuthGithubCallbackParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAuthGithubCallbackRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAuthGithubOptionsWithBody Begin browser-bound GitHub OAuth with PKCE
+//
+// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+func (c *Client) PostAuthGithubOptionsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAuthGithubOptionsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAuthGithubOptions Begin browser-bound GitHub OAuth with PKCE
+//
+// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+func (c *Client) PostAuthGithubOptions(ctx context.Context, body PostAuthGithubOptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAuthGithubOptionsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAuthGithubSync Refresh the complete synchronized GitHub SSH key cache
+//
+// Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.
+//
+// Corresponds with POST /api/v1/auth/github/sync (the `PostAuthGithubSync` operationId).
+func (c *Client) PostAuthGithubSync(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAuthGithubSyncRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4388,6 +4858,225 @@ func NewDeleteAuthCredentialsIdRequest(server string, id string) (*http.Request,
 	}
 
 	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewDeleteAuthGithubRequest constructs an http.Request for the DeleteAuthGithub method
+func NewDeleteAuthGithubRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAuthGithubRequest constructs an http.Request for the GetAuthGithub method
+func NewGetAuthGithubRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostAuthGithubBlockRequest calls the generic PostAuthGithubBlock builder with application/json body
+func NewPostAuthGithubBlockRequest(server string, body PostAuthGithubBlockJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostAuthGithubBlockRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostAuthGithubBlockRequestWithBody constructs an http.Request for the PostAuthGithubBlock method, with any body, and a specified content type
+func NewPostAuthGithubBlockRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github/block")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetAuthGithubCallbackRequest constructs an http.Request for the GetAuthGithubCallback method
+func NewGetAuthGithubCallbackRequest(server string, params *GetAuthGithubCallbackParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github/callback")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "code", params.Code, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "state", params.State, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostAuthGithubOptionsRequest calls the generic PostAuthGithubOptions builder with application/json body
+func NewPostAuthGithubOptionsRequest(server string, body PostAuthGithubOptionsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostAuthGithubOptionsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostAuthGithubOptionsRequestWithBody constructs an http.Request for the PostAuthGithubOptions method, with any body, and a specified content type
+func NewPostAuthGithubOptionsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github/options")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostAuthGithubSyncRequest constructs an http.Request for the PostAuthGithubSync method
+func NewPostAuthGithubSyncRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/auth/github/sync")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -6617,6 +7306,74 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with DELETE /api/v1/auth/credentials/{id} (the `DeleteAuthCredentialsId` operationId).
 	DeleteAuthCredentialsIdWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*DeleteAuthCredentialsIdResponse, error)
 
+	// DeleteAuthGithubWithResponse Unlink GitHub using fresh independent local browser authentication
+	//
+	// Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /api/v1/auth/github (the `DeleteAuthGithub` operationId).
+	DeleteAuthGithubWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteAuthGithubResponse, error)
+
+	// GetAuthGithubWithResponse Verified GitHub binding, complete cache freshness and key blocking status
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/github (the `GetAuthGithub` operationId).
+	GetAuthGithubWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAuthGithubResponse, error)
+
+	// PostAuthGithubBlockWithBodyWithResponse Persistently block or explicitly unblock canonical SSH key material
+	//
+	// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+	PostAuthGithubBlockWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAuthGithubBlockResponse, error)
+
+	// PostAuthGithubBlockWithResponse Persistently block or explicitly unblock canonical SSH key material
+	//
+	// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+	PostAuthGithubBlockWithResponse(ctx context.Context, body PostAuthGithubBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAuthGithubBlockResponse, error)
+
+	// GetAuthGithubCallbackWithResponse Consume GitHub OAuth code and browser-bound single-use state
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/auth/github/callback (the `GetAuthGithubCallback` operationId).
+	GetAuthGithubCallbackWithResponse(ctx context.Context, params *GetAuthGithubCallbackParams, reqEditors ...RequestEditorFn) (*GetAuthGithubCallbackResponse, error)
+
+	// PostAuthGithubOptionsWithBodyWithResponse Begin browser-bound GitHub OAuth with PKCE
+	//
+	// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+	PostAuthGithubOptionsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAuthGithubOptionsResponse, error)
+
+	// PostAuthGithubOptionsWithResponse Begin browser-bound GitHub OAuth with PKCE
+	//
+	// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+	PostAuthGithubOptionsWithResponse(ctx context.Context, body PostAuthGithubOptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAuthGithubOptionsResponse, error)
+
+	// PostAuthGithubSyncWithResponse Refresh the complete synchronized GitHub SSH key cache
+	//
+	// Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/auth/github/sync (the `PostAuthGithubSync` operationId).
+	PostAuthGithubSyncWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostAuthGithubSyncResponse, error)
+
 	// PostAuthLoginOptionsWithBodyWithResponse Passkey login options
 	//
 	// Registration requires an authenticated owner or a valid one-use administrator setup/recovery token; authentication options are public. Requests require matching browser origin.
@@ -7469,7 +8226,7 @@ type GetAuthCredentialsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		Credentials *[]map[string]interface{} `json:"credentials,omitempty"`
+		Credentials *[]GetAuthCredentials200JSONResponseBody_Credentials_Item `json:"credentials,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -7477,7 +8234,7 @@ type GetAuthCredentialsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAuthCredentialsResponse) GetJSON200() *struct {
-	Credentials *[]map[string]interface{} `json:"credentials,omitempty"`
+	Credentials *[]GetAuthCredentials200JSONResponseBody_Credentials_Item `json:"credentials,omitempty"`
 } {
 	return r.JSON200
 }
@@ -7674,6 +8431,412 @@ func (r DeleteAuthCredentialsIdResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r DeleteAuthCredentialsIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteAuthGithubResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Unlinked DeleteAuthGithub200JSONResponseBodyUnlinked `json:"unlinked"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteAuthGithubResponse) GetJSON200() *struct {
+	Unlinked DeleteAuthGithub200JSONResponseBodyUnlinked `json:"unlinked"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r DeleteAuthGithubResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteAuthGithubResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteAuthGithubResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteAuthGithubResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteAuthGithubResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAuthGithubResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Binding *struct {
+			AccountId string `json:"accountId"`
+			Username  string `json:"username"`
+		} `json:"binding"`
+		CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+		CacheValid                  bool       `json:"cacheValid"`
+		Configured                  bool       `json:"configured"`
+		FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+		Keys                        []struct {
+			Blocked     bool                                             `json:"blocked"`
+			Categories  []GetAuthGithub200JSONResponseBodyKeysCategories `json:"categories"`
+			Fingerprint string                                           `json:"fingerprint"`
+			PublicKey   string                                           `json:"publicKey"`
+		} `json:"keys"`
+		LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+		LastSyncError        *string    `json:"lastSyncError"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAuthGithubResponse) GetJSON200() *struct {
+	Binding *struct {
+		AccountId string `json:"accountId"`
+		Username  string `json:"username"`
+	} `json:"binding"`
+	CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+	CacheValid                  bool       `json:"cacheValid"`
+	Configured                  bool       `json:"configured"`
+	FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+	Keys                        []struct {
+		Blocked     bool                                             `json:"blocked"`
+		Categories  []GetAuthGithub200JSONResponseBodyKeysCategories `json:"categories"`
+		Fingerprint string                                           `json:"fingerprint"`
+		PublicKey   string                                           `json:"publicKey"`
+	} `json:"keys"`
+	LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+	LastSyncError        *string    `json:"lastSyncError"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetAuthGithubResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAuthGithubResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAuthGithubResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAuthGithubResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAuthGithubResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostAuthGithubBlockResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Binding *struct {
+			AccountId string `json:"accountId"`
+			Username  string `json:"username"`
+		} `json:"binding"`
+		CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+		CacheValid                  bool       `json:"cacheValid"`
+		Configured                  bool       `json:"configured"`
+		FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+		Keys                        []struct {
+			Blocked     bool                                                   `json:"blocked"`
+			Categories  []PostAuthGithubBlock200JSONResponseBodyKeysCategories `json:"categories"`
+			Fingerprint string                                                 `json:"fingerprint"`
+			PublicKey   string                                                 `json:"publicKey"`
+		} `json:"keys"`
+		LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+		LastSyncError        *string    `json:"lastSyncError"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostAuthGithubBlockResponse) GetJSON200() *struct {
+	Binding *struct {
+		AccountId string `json:"accountId"`
+		Username  string `json:"username"`
+	} `json:"binding"`
+	CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+	CacheValid                  bool       `json:"cacheValid"`
+	Configured                  bool       `json:"configured"`
+	FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+	Keys                        []struct {
+		Blocked     bool                                                   `json:"blocked"`
+		Categories  []PostAuthGithubBlock200JSONResponseBodyKeysCategories `json:"categories"`
+		Fingerprint string                                                 `json:"fingerprint"`
+		PublicKey   string                                                 `json:"publicKey"`
+	} `json:"keys"`
+	LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+	LastSyncError        *string    `json:"lastSyncError"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostAuthGithubBlockResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostAuthGithubBlockResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostAuthGithubBlockResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostAuthGithubBlockResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostAuthGithubBlockResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetAuthGithubCallbackResponse302Headers the declared response headers of an HTTP 302 response for GetAuthGithubCallback
+type GetAuthGithubCallbackResponse302Headers struct {
+	Location  *string
+	SetCookie *string
+}
+
+// GetAuthGithubCallbackResponse303Headers the declared response headers of an HTTP 303 response for GetAuthGithubCallback
+type GetAuthGithubCallbackResponse303Headers struct {
+	Location *string
+}
+
+type GetAuthGithubCallbackResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+	// Headers302 the parsed response headers for an HTTP 302 response
+	Headers302 *GetAuthGithubCallbackResponse302Headers
+	// Headers303 the parsed response headers for an HTTP 303 response
+	Headers303 *GetAuthGithubCallbackResponse303Headers
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetAuthGithubCallbackResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAuthGithubCallbackResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAuthGithubCallbackResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAuthGithubCallbackResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAuthGithubCallbackResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostAuthGithubOptionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		AuthorizationUrl string `json:"authorizationUrl"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostAuthGithubOptionsResponse) GetJSON200() *struct {
+	AuthorizationUrl string `json:"authorizationUrl"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostAuthGithubOptionsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostAuthGithubOptionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostAuthGithubOptionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostAuthGithubOptionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostAuthGithubOptionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostAuthGithubSyncResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Binding *struct {
+			AccountId string `json:"accountId"`
+			Username  string `json:"username"`
+		} `json:"binding"`
+		CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+		CacheValid                  bool       `json:"cacheValid"`
+		Configured                  bool       `json:"configured"`
+		FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+		Keys                        []struct {
+			Blocked     bool                                                  `json:"blocked"`
+			Categories  []PostAuthGithubSync200JSONResponseBodyKeysCategories `json:"categories"`
+			Fingerprint string                                                `json:"fingerprint"`
+			PublicKey   string                                                `json:"publicKey"`
+		} `json:"keys"`
+		LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+		LastSyncError        *string    `json:"lastSyncError"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostAuthGithubSyncResponse) GetJSON200() *struct {
+	Binding *struct {
+		AccountId string `json:"accountId"`
+		Username  string `json:"username"`
+	} `json:"binding"`
+	CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+	CacheValid                  bool       `json:"cacheValid"`
+	Configured                  bool       `json:"configured"`
+	FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+	Keys                        []struct {
+		Blocked     bool                                                  `json:"blocked"`
+		Categories  []PostAuthGithubSync200JSONResponseBodyKeysCategories `json:"categories"`
+		Fingerprint string                                                `json:"fingerprint"`
+		PublicKey   string                                                `json:"publicKey"`
+	} `json:"keys"`
+	LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+	LastSyncError        *string    `json:"lastSyncError"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostAuthGithubSyncResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostAuthGithubSyncResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostAuthGithubSyncResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostAuthGithubSyncResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostAuthGithubSyncResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8065,8 +9228,9 @@ type GetAuthStatusResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		Authenticated *bool `json:"authenticated,omitempty"`
-		Initialized   *bool `json:"initialized,omitempty"`
+		Authenticated    *bool `json:"authenticated,omitempty"`
+		GithubConfigured *bool `json:"githubConfigured,omitempty"`
+		Initialized      *bool `json:"initialized,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -8074,8 +9238,9 @@ type GetAuthStatusResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAuthStatusResponse) GetJSON200() *struct {
-	Authenticated *bool `json:"authenticated,omitempty"`
-	Initialized   *bool `json:"initialized,omitempty"`
+	Authenticated    *bool `json:"authenticated,omitempty"`
+	GithubConfigured *bool `json:"githubConfigured,omitempty"`
+	Initialized      *bool `json:"initialized,omitempty"`
 } {
 	return r.JSON200
 }
@@ -10150,6 +11315,122 @@ func (c *ClientWithResponses) DeleteAuthCredentialsIdWithResponse(ctx context.Co
 	return ParseDeleteAuthCredentialsIdResponse(rsp)
 }
 
+// DeleteAuthGithubWithResponse Unlink GitHub using fresh independent local browser authentication
+//
+// Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /api/v1/auth/github (the `DeleteAuthGithub` operationId).
+func (c *ClientWithResponses) DeleteAuthGithubWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*DeleteAuthGithubResponse, error) {
+	rsp, err := c.DeleteAuthGithub(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteAuthGithubResponse(rsp)
+}
+
+// GetAuthGithubWithResponse Verified GitHub binding, complete cache freshness and key blocking status
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/github (the `GetAuthGithub` operationId).
+func (c *ClientWithResponses) GetAuthGithubWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAuthGithubResponse, error) {
+	rsp, err := c.GetAuthGithub(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAuthGithubResponse(rsp)
+}
+
+// PostAuthGithubBlockWithBodyWithResponse Persistently block or explicitly unblock canonical SSH key material
+//
+// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+func (c *ClientWithResponses) PostAuthGithubBlockWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAuthGithubBlockResponse, error) {
+	rsp, err := c.PostAuthGithubBlockWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAuthGithubBlockResponse(rsp)
+}
+
+// PostAuthGithubBlockWithResponse Persistently block or explicitly unblock canonical SSH key material
+//
+// Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/github/block (the `PostAuthGithubBlock` operationId).
+func (c *ClientWithResponses) PostAuthGithubBlockWithResponse(ctx context.Context, body PostAuthGithubBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAuthGithubBlockResponse, error) {
+	rsp, err := c.PostAuthGithubBlock(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAuthGithubBlockResponse(rsp)
+}
+
+// GetAuthGithubCallbackWithResponse Consume GitHub OAuth code and browser-bound single-use state
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/auth/github/callback (the `GetAuthGithubCallback` operationId).
+func (c *ClientWithResponses) GetAuthGithubCallbackWithResponse(ctx context.Context, params *GetAuthGithubCallbackParams, reqEditors ...RequestEditorFn) (*GetAuthGithubCallbackResponse, error) {
+	rsp, err := c.GetAuthGithubCallback(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAuthGithubCallbackResponse(rsp)
+}
+
+// PostAuthGithubOptionsWithBodyWithResponse Begin browser-bound GitHub OAuth with PKCE
+//
+// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+func (c *ClientWithResponses) PostAuthGithubOptionsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAuthGithubOptionsResponse, error) {
+	rsp, err := c.PostAuthGithubOptionsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAuthGithubOptionsResponse(rsp)
+}
+
+// PostAuthGithubOptionsWithResponse Begin browser-bound GitHub OAuth with PKCE
+//
+// Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/github/options (the `PostAuthGithubOptions` operationId).
+func (c *ClientWithResponses) PostAuthGithubOptionsWithResponse(ctx context.Context, body PostAuthGithubOptionsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAuthGithubOptionsResponse, error) {
+	rsp, err := c.PostAuthGithubOptions(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAuthGithubOptionsResponse(rsp)
+}
+
+// PostAuthGithubSyncWithResponse Refresh the complete synchronized GitHub SSH key cache
+//
+// Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/auth/github/sync (the `PostAuthGithubSync` operationId).
+func (c *ClientWithResponses) PostAuthGithubSyncWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*PostAuthGithubSyncResponse, error) {
+	rsp, err := c.PostAuthGithubSync(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAuthGithubSyncResponse(rsp)
+}
+
 // PostAuthLoginOptionsWithBodyWithResponse Passkey login options
 //
 // Registration requires an authenticated owner or a valid one-use administrator setup/recovery token; authentication options are public. Requests require matching browser origin.
@@ -11343,7 +12624,7 @@ func ParseGetAuthCredentialsResponse(rsp *http.Response) (*GetAuthCredentialsRes
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Credentials *[]map[string]interface{} `json:"credentials,omitempty"`
+			Credentials *[]GetAuthCredentials200JSONResponseBody_Credentials_Item `json:"credentials,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -11453,6 +12734,288 @@ func ParseDeleteAuthCredentialsIdResponse(rsp *http.Response) (*DeleteAuthCreden
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			Revoked *bool `json:"revoked,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteAuthGithubResponse parses an HTTP response from a DeleteAuthGithubWithResponse call
+func ParseDeleteAuthGithubResponse(rsp *http.Response) (*DeleteAuthGithubResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteAuthGithubResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Unlinked DeleteAuthGithub200JSONResponseBodyUnlinked `json:"unlinked"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAuthGithubResponse parses an HTTP response from a GetAuthGithubWithResponse call
+func ParseGetAuthGithubResponse(rsp *http.Response) (*GetAuthGithubResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAuthGithubResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Binding *struct {
+				AccountId string `json:"accountId"`
+				Username  string `json:"username"`
+			} `json:"binding"`
+			CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+			CacheValid                  bool       `json:"cacheValid"`
+			Configured                  bool       `json:"configured"`
+			FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+			Keys                        []struct {
+				Blocked     bool                                             `json:"blocked"`
+				Categories  []GetAuthGithub200JSONResponseBodyKeysCategories `json:"categories"`
+				Fingerprint string                                           `json:"fingerprint"`
+				PublicKey   string                                           `json:"publicKey"`
+			} `json:"keys"`
+			LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+			LastSyncError        *string    `json:"lastSyncError"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostAuthGithubBlockResponse parses an HTTP response from a PostAuthGithubBlockWithResponse call
+func ParsePostAuthGithubBlockResponse(rsp *http.Response) (*PostAuthGithubBlockResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostAuthGithubBlockResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Binding *struct {
+				AccountId string `json:"accountId"`
+				Username  string `json:"username"`
+			} `json:"binding"`
+			CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+			CacheValid                  bool       `json:"cacheValid"`
+			Configured                  bool       `json:"configured"`
+			FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+			Keys                        []struct {
+				Blocked     bool                                                   `json:"blocked"`
+				Categories  []PostAuthGithubBlock200JSONResponseBodyKeysCategories `json:"categories"`
+				Fingerprint string                                                 `json:"fingerprint"`
+				PublicKey   string                                                 `json:"publicKey"`
+			} `json:"keys"`
+			LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+			LastSyncError        *string    `json:"lastSyncError"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAuthGithubCallbackResponse parses an HTTP response from a GetAuthGithubCallbackWithResponse call
+func ParseGetAuthGithubCallbackResponse(rsp *http.Response) (*GetAuthGithubCallbackResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAuthGithubCallbackResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 302:
+		break // No content-type
+
+	case rsp.StatusCode == 303:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 302:
+		var headers GetAuthGithubCallbackResponse302Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		if values := rsp.Header.Values("Set-Cookie"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Set-Cookie", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.SetCookie = &value
+		}
+		response.Headers302 = &headers
+	case rsp.StatusCode == 303:
+		var headers GetAuthGithubCallbackResponse303Headers
+		if values := rsp.Header.Values("Location"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "Location", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.Location = &value
+		}
+		response.Headers303 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostAuthGithubOptionsResponse parses an HTTP response from a PostAuthGithubOptionsWithResponse call
+func ParsePostAuthGithubOptionsResponse(rsp *http.Response) (*PostAuthGithubOptionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostAuthGithubOptionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			AuthorizationUrl string `json:"authorizationUrl"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostAuthGithubSyncResponse parses an HTTP response from a PostAuthGithubSyncWithResponse call
+func ParsePostAuthGithubSyncResponse(rsp *http.Response) (*PostAuthGithubSyncResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostAuthGithubSyncResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Binding *struct {
+				AccountId string `json:"accountId"`
+				Username  string `json:"username"`
+			} `json:"binding"`
+			CacheExpiresAt              *time.Time `json:"cacheExpiresAt"`
+			CacheValid                  bool       `json:"cacheValid"`
+			Configured                  bool       `json:"configured"`
+			FreshAuthenticationRequired bool       `json:"freshAuthenticationRequired"`
+			Keys                        []struct {
+				Blocked     bool                                                  `json:"blocked"`
+				Categories  []PostAuthGithubSync200JSONResponseBodyKeysCategories `json:"categories"`
+				Fingerprint string                                                `json:"fingerprint"`
+				PublicKey   string                                                `json:"publicKey"`
+			} `json:"keys"`
+			LastSuccessfulSyncAt *time.Time `json:"lastSuccessfulSyncAt"`
+			LastSyncError        *string    `json:"lastSyncError"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -11740,8 +13303,9 @@ func ParseGetAuthStatusResponse(rsp *http.Response) (*GetAuthStatusResponse, err
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Authenticated *bool `json:"authenticated,omitempty"`
-			Initialized   *bool `json:"initialized,omitempty"`
+			Authenticated    *bool `json:"authenticated,omitempty"`
+			GithubConfigured *bool `json:"githubConfigured,omitempty"`
+			Initialized      *bool `json:"initialized,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

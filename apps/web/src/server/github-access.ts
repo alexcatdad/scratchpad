@@ -122,6 +122,9 @@ export class GithubAccess {
   private cookie(value: string, age = 600): string {
     return `scratchpad_github_state=${value}; HttpOnly; SameSite=Lax; Path=/api/v1/auth/github; Max-Age=${age}${this.auth.origin.startsWith("https:") ? "; Secure" : ""}`;
   }
+  clearStateCookie(): string {
+    return this.cookie("", 0);
+  }
   async options(
     body: JsonObject,
     request: Request,
@@ -164,6 +167,9 @@ export class GithubAccess {
         "No GitHub account is linked.",
         401,
       );
+    for (const entry of await this.store.list("github_oauth"))
+      if (String(entry.expiresAt) <= this.auth.now())
+        await this.store.remove("github_oauth", entry.id);
     const state = random(),
       verifier = random(),
       browserNonce = random();
@@ -223,6 +229,7 @@ export class GithubAccess {
       await this.store.update("github_oauth", {
         ...entry,
         consumedAt: this.auth.now(),
+        verifier: undefined,
       });
       return entry;
     });
@@ -325,6 +332,12 @@ export class GithubAccess {
             userId: "scratchpad-owner",
           });
       }
+      if (challenge.intent === "recover")
+        for (const session of await this.store.list("session"))
+          await this.store.update("session", {
+            ...session,
+            revokedAt: this.auth.now(),
+          });
       if (challenge.intent === "login")
         requireValue(
           binding && binding.accountId === String(account.data.id),
@@ -439,7 +452,11 @@ export class GithubAccess {
         : null,
       lastSuccessfulSyncAt: binding?.lastSuccessfulSyncAt ?? null,
       cacheExpiresAt: expiry,
-      cacheValid: Boolean(expiry && expiry > this.auth.now()),
+      cacheValid: Boolean(
+        expiry &&
+          expiry > this.auth.now() &&
+          String(binding?.lastSuccessfulSyncAt) <= this.auth.now(),
+      ),
       lastSyncError: binding?.lastSyncError ?? null,
       keys: keys.map((k) => ({
         ...k,
@@ -459,8 +476,9 @@ export class GithubAccess {
   async eligible(key: string): Promise<boolean> {
     const binding = await this.store.get("github_binding", "owner");
     return Boolean(
-      binding &&
-        binding.lastSuccessfulSyncAt &&
+      binding?.lastSuccessfulSyncAt &&
+        this.auth.clock() - Date.parse(String(binding.lastSuccessfulSyncAt)) >=
+          0 &&
         this.auth.clock() - Date.parse(String(binding.lastSuccessfulSyncAt)) <
           cacheLifetime &&
         !(await this.store.get("github_block", fingerprint(key))) &&
@@ -528,8 +546,18 @@ export class GithubAccess {
     });
   }
   async sync(): Promise<void> {
-    const binding = await this.store.get("github_binding", "owner");
+    const syncRequest = id("sync");
+    const binding = await this.store.atomic(async () => {
+      const current = await this.store.get("github_binding", "owner");
+      if (!current) return undefined;
+      return await this.store.update("github_binding", {
+        ...current,
+        syncRequest,
+        lastAttemptAt: this.auth.now(),
+      });
+    });
     if (!binding) return;
+
     try {
       const account = accountSchema.parse(
         (await this.json(`https://api.github.com/user/${binding.accountId}`))
@@ -618,7 +646,12 @@ export class GithubAccess {
       );
       await this.store.atomic(async () => {
         const current = await this.store.get("github_binding", "owner");
-        if (!current || current.generation !== binding.generation) return;
+        if (
+          !current ||
+          current.generation !== binding.generation ||
+          current.syncRequest !== syncRequest
+        )
+          return;
         const removed = new Set<string>();
         for (const c of await this.store.list("credential"))
           if (
@@ -656,7 +689,11 @@ export class GithubAccess {
     } catch (error) {
       await this.store.atomic(async () => {
         const current = await this.store.get("github_binding", "owner");
-        if (current && current.generation === binding.generation)
+        if (
+          current &&
+          current.generation === binding.generation &&
+          current.syncRequest === syncRequest
+        )
           await this.store.update("github_binding", {
             ...current,
             lastSyncError:
@@ -693,10 +730,10 @@ export class GithubAccess {
   start(): void {
     if (!this.timer) {
       this.timer = setInterval(() => {
-        void this.tick();
+        void this.tick().catch(() => {});
       }, 30000);
       this.timer.unref();
-      void this.tick();
+      void this.tick().catch(() => {});
     }
   }
   async stop(): Promise<void> {

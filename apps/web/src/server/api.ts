@@ -471,14 +471,37 @@ export function createApi(config: {
         });
       }
       if (route === "/auth/github/callback" && method === "GET") {
-        const result = await github.callback(request);
-        const headers = new Headers({
-          Location: "/",
-          "Cache-Control": "no-store",
-        });
-        headers.append("Set-Cookie", auth.cookie(result.accessToken));
-        headers.append("Set-Cookie", result.clearState);
-        return new Response(null, { status: 302, headers });
+        try {
+          const result = await github.callback(request);
+          const headers = new Headers({
+            Location: "/",
+            "Cache-Control": "no-store",
+          });
+          headers.append("Set-Cookie", auth.cookie(result.accessToken));
+          headers.append("Set-Cookie", result.clearState);
+          return new Response(null, { status: 302, headers });
+        } catch (error) {
+          const allowed = [
+            "AUTH_INVALID",
+            "AUTH_FRESH_REQUIRED",
+            "CONFLICT",
+            "GITHUB_NOT_CONFIGURED",
+            "GITHUB_UNAVAILABLE",
+            "GITHUB_RATE_LIMITED",
+          ];
+          const code =
+            error instanceof ApiError && allowed.includes(error.code)
+              ? error.code
+              : "AUTH_INVALID";
+          return new Response(null, {
+            status: 303,
+            headers: {
+              Location: `/?authError=${code}`,
+              "Cache-Control": "no-store",
+              "Set-Cookie": github.clearStateCookie(),
+            },
+          });
+        }
       }
       if (route.startsWith("/auth/")) {
         if (method === "POST" && route === "/auth/mcp/challenge")

@@ -3,7 +3,7 @@
   "info": {
     "title": "Scratchpad HTTP API",
     "version": "0.3.0",
-    "description": "Published v0.3.0 contract for Scratchpad, including SQLite/PostgreSQL parity, optional AI and optional public GitHub profile enrichment. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. GitHub profile linkage is descriptive public information and never authentication. Setup/recovery tokens are local administrator capabilities. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and provenance remain preserved."
+    "description": "Source contract for Scratchpad, including SQLite/PostgreSQL parity, optional AI and optional public GitHub profile enrichment. Browser requests authenticate with an HttpOnly same-site cookie; MCP authenticates with an opaque bearer token. Browser mutations require the configured origin. GitHub profile linkage is descriptive public information. Optional administrator-configured GitHub OAuth separately authenticates the one owner by stable account ID and synchronizes published SSH authentication/signing keys. Complete snapshots are refreshed every five minutes, cached for less than 24 hours, and enforce persistent local blocks and revocation on every managed request. Setup/recovery tokens are local administrator capabilities. JSON bodies are capped at 8 MiB except /import (64 MiB; JSONL text 32 MiB). Flexible original payload and provenance remain preserved."
   },
   "servers": [
     {
@@ -96,6 +96,9 @@
                       "type": "boolean"
                     },
                     "authenticated": {
+                      "type": "boolean"
+                    },
+                    "githubConfigured": {
                       "type": "boolean"
                     }
                   }
@@ -574,7 +577,17 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "additionalProperties": true
+                        "additionalProperties": true,
+                        "properties": {
+                          "source": {
+                            "type": "string",
+                            "enum": ["local", "github"]
+                          },
+                          "kind": {
+                            "type": "string",
+                            "enum": ["webauthn", "ssh", "github"]
+                          }
+                        }
                       }
                     }
                   }
@@ -2727,6 +2740,464 @@
                     }
                   },
                   "required": ["profile"]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github/options": {
+      "post": {
+        "operationId": "post_auth_github_options",
+        "summary": "Begin browser-bound GitHub OAuth with PKCE",
+        "description": "Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["intent"],
+                "properties": {
+                  "intent": {
+                    "type": "string",
+                    "enum": ["setup", "login", "link", "replace", "recover"]
+                  },
+                  "setupToken": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["authorizationUrl"],
+                  "properties": {
+                    "authorizationUrl": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github/callback": {
+      "get": {
+        "operationId": "get_auth_github_callback",
+        "summary": "Consume GitHub OAuth code and browser-bound single-use state",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Establishes browser session and redirects to the dashboard; sets HttpOnly session cookie and clears state cookie",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "303": {
+            "description": "Failed authorization redirects to the dashboard with authError set to a fixed safe error code; no upstream message, token or private data is exposed.",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github": {
+      "get": {
+        "operationId": "get_auth_github",
+        "summary": "Verified GitHub binding, complete cache freshness and key blocking status",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configured",
+                    "binding",
+                    "lastSuccessfulSyncAt",
+                    "cacheExpiresAt",
+                    "cacheValid",
+                    "lastSyncError",
+                    "keys",
+                    "freshAuthenticationRequired"
+                  ],
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "binding": {
+                      "type": ["object", "null"],
+                      "required": ["accountId", "username"],
+                      "properties": {
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "lastSuccessfulSyncAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheExpiresAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheValid": {
+                      "type": "boolean"
+                    },
+                    "lastSyncError": {
+                      "type": ["string", "null"]
+                    },
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "publicKey",
+                          "fingerprint",
+                          "categories",
+                          "blocked"
+                        ],
+                        "properties": {
+                          "publicKey": {
+                            "type": "string"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          },
+                          "categories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["authentication", "signing"]
+                            }
+                          },
+                          "blocked": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "freshAuthenticationRequired": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "delete_auth_github",
+        "summary": "Unlink GitHub using fresh independent local browser authentication",
+        "description": "Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["unlinked"],
+                  "properties": {
+                    "unlinked": {
+                      "type": "boolean",
+                      "const": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github/sync": {
+      "post": {
+        "operationId": "post_auth_github_sync",
+        "summary": "Refresh the complete synchronized GitHub SSH key cache",
+        "description": "Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configured",
+                    "binding",
+                    "lastSuccessfulSyncAt",
+                    "cacheExpiresAt",
+                    "cacheValid",
+                    "lastSyncError",
+                    "keys",
+                    "freshAuthenticationRequired"
+                  ],
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "binding": {
+                      "type": ["object", "null"],
+                      "required": ["accountId", "username"],
+                      "properties": {
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "lastSuccessfulSyncAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheExpiresAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheValid": {
+                      "type": "boolean"
+                    },
+                    "lastSyncError": {
+                      "type": ["string", "null"]
+                    },
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "publicKey",
+                          "fingerprint",
+                          "categories",
+                          "blocked"
+                        ],
+                        "properties": {
+                          "publicKey": {
+                            "type": "string"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          },
+                          "categories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["authentication", "signing"]
+                            }
+                          },
+                          "blocked": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "freshAuthenticationRequired": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/github/block": {
+      "post": {
+        "operationId": "post_auth_github_block",
+        "summary": "Persistently block or explicitly unblock canonical SSH key material",
+        "description": "Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.",
+        "security": [
+          {
+            "browserSession": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["publicKey", "blocked"],
+                "properties": {
+                  "publicKey": {
+                    "type": "string"
+                  },
+                  "blocked": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "configured",
+                    "binding",
+                    "lastSuccessfulSyncAt",
+                    "cacheExpiresAt",
+                    "cacheValid",
+                    "lastSyncError",
+                    "keys",
+                    "freshAuthenticationRequired"
+                  ],
+                  "properties": {
+                    "configured": {
+                      "type": "boolean"
+                    },
+                    "binding": {
+                      "type": ["object", "null"],
+                      "required": ["accountId", "username"],
+                      "properties": {
+                        "accountId": {
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "lastSuccessfulSyncAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheExpiresAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time"
+                    },
+                    "cacheValid": {
+                      "type": "boolean"
+                    },
+                    "lastSyncError": {
+                      "type": ["string", "null"]
+                    },
+                    "keys": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "publicKey",
+                          "fingerprint",
+                          "categories",
+                          "blocked"
+                        ],
+                        "properties": {
+                          "publicKey": {
+                            "type": "string"
+                          },
+                          "fingerprint": {
+                            "type": "string"
+                          },
+                          "categories": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": ["authentication", "signing"]
+                            }
+                          },
+                          "blocked": {
+                            "type": "boolean"
+                          }
+                        }
+                      }
+                    },
+                    "freshAuthenticationRequired": {
+                      "type": "boolean"
+                    }
+                  }
                 }
               }
             }
