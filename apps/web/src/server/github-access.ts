@@ -1,5 +1,8 @@
 import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { z } from "zod";
 import { type Auth, fingerprint, type Identity, keySchema } from "./auth";
 import {
@@ -592,23 +595,33 @@ export class GithubAccess {
             const key = canonicalKey(entry.key);
             // Use the same OpenSSH boundary as possession verification. A text
             // prefix and base64 alphabet alone do not establish a valid key.
-            if (!keys.has(key))
-              await new Promise<void>((resolve, reject) => {
-                const child = spawn("ssh-keygen", ["-l", "-f", "/dev/stdin"], {
-                  stdio: ["pipe", "ignore", "ignore"],
+            if (!keys.has(key)) {
+              // Linux cannot reopen Node's subprocess stdin socket through
+              // /dev/stdin. Use a regular file as possession verification does.
+              const directory = mkdtempSync(join(tmpdir(), "scratchpad-key-"));
+              try {
+                const publicFile = join(directory, "public-key");
+                writeFileSync(publicFile, `${key}\n`, { mode: 0o600 });
+                await new Promise<void>((resolve, reject) => {
+                  const child = spawn("ssh-keygen", ["-l", "-f", publicFile], {
+                    stdio: "ignore",
+                  });
+                  const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+                  child.once("error", (error) => {
+                    clearTimeout(timer);
+                    reject(error);
+                  });
+                  child.once("exit", (code) => {
+                    clearTimeout(timer);
+                    code === 0
+                      ? resolve()
+                      : reject(new Error("Invalid SSH key"));
+                  });
                 });
-                const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-                child.once("error", (error) => {
-                  clearTimeout(timer);
-                  reject(error);
-                });
-                child.once("exit", (code) => {
-                  clearTimeout(timer);
-                  code === 0 ? resolve() : reject(new Error("Invalid SSH key"));
-                });
-                child.stdin.on("error", () => {});
-                child.stdin.end(`${key}\n`);
-              });
+              } finally {
+                rmSync(directory, { recursive: true, force: true });
+              }
+            }
             const cats = keys.get(key) ?? new Set<string>();
             cats.add(category === "keys" ? "authentication" : "signing");
             keys.set(key, cats);
