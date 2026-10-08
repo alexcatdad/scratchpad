@@ -23,6 +23,12 @@ Use the same values for the server and administrator commands. Changing working 
 
 See [MCP setup](/scratchpad/guides/mcp/) for its separate connection and signing variables.
 
+## Optional GitHub sign-in
+
+Current source enables GitHub owner access when both `SCRATCHPAD_GITHUB_CLIENT_ID` and `SCRATCHPAD_GITHUB_CLIENT_SECRET` are configured on the server. Configure the OAuth callback as the exact `SCRATCHPAD_PUBLIC_URL` origin followed by `/api/v1/auth/github/callback`. Use a dedicated OAuth app per instance and keep its secret in private operator configuration. MCP clients need their own SSH signing access, not these OAuth values. Without this pair, passkey-only setup and manual credentials remain available.
+
+Follow the [OAuth operator runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-oauth.md). This addition is not present in released v0.3.0 servers.
+
 ## Public URL and storage
 
 Use one stable application origin. Browser passkeys bind to the configured relying party and origin; changing the URL is an authentication and migration concern, not just a cosmetic edit.

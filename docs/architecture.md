@@ -352,6 +352,8 @@ Sessions use secure HTTP-only cookies.
 
 ### 6.3 GitHub
 
+This historical baseline is superseded for optional owner authentication by §32.
+
 GitHub is not an authentication provider.
 
 GitHub may enrich the owner profile with:
@@ -990,3 +992,15 @@ The owner requested these additions on 2 October 2026. PostgreSQL may explicitly
 Public GitHub profile enrichment uses the fixed public GitHub user API with bounded requests. An authenticated owner selects a username; the server stores a validated public snapshot separately from authentication state. Link, refresh and unlink use optimistic profile versioning and audited writes. GitHub downtime does not affect capture, sign-in or readiness.
 
 Generated TypeScript and Go clients are derived from OpenAPI, with deterministic regeneration and actual authenticated HTTP integration. Their source and build artifacts are independently consumable. They do not replace the MCP SDK or its HTTP compatibility boundary.
+
+## 32. Accepted clarification — GitHub owner authentication
+
+The accepted [owner-access ADR](adr/0001-github-owner-access.md) supersedes the presentation-only GitHub restriction in §6.3 and §31. GitHub OAuth browser authentication is optional alongside passkeys; both authenticate the same owner. The existing local SSH challenge remains the MCP boundary. A verified GitHub account binding and its synchronized SSH authentication/signing keys provide machine eligibility; an old public profile snapshot grants no authority.
+
+The central server owns OAuth state, account binding, synchronization and authorization. Persist stable GitHub account identity, complete normalized key snapshots, last-success time, local blocks, credential provenance and sessions in the selected database. Fetch both paginated categories completely before applying removals or advancing freshness. A failed endpoint/page or malformed response is a failed refresh, not an empty key set. Restart preserves freshness and blocks. Local blocking, detected removal and the 24-hour cache deadline apply to existing requests as well as new authentication.
+
+Synchronization runs every five minutes; public-key discovery does not require private GitHub repository access. Browser OAuth state is short-lived, single-use and bound to its initiating browser and action. Verify identity on the server through GitHub before binding/signing in; bind stable account ID rather than username. Keep authorization codes, OAuth secrets and tokens out of logs, public API responses and knowledge exports. Fixed GitHub endpoints and bounded response/pagination handling contain the external-service boundary.
+
+GitHub outages leave complete cached keys usable for at most 24 hours since last success, independently of the machine session's lifetime. Browser sign-in requires GitHub; independent passkeys and administrator recovery remain available. Unlinking requires fresh independent authentication; replacement requires fresh existing authentication. Both invalidate GitHub-derived sessions and permissions and preserve data and independent credentials. Do not silently convert credential provenance.
+
+Machine onboarding is an instruction-only skill using existing client configuration and SSH tooling. It verifies a real authenticated MCP read with explicit project scope. The HTTP API remains authoritative; no dedicated setup command, client OAuth secret or new machine authentication mechanism is introduced.

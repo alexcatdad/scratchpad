@@ -3,11 +3,13 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Project, post } from "../lib/api";
 import { AiSettings, OwnerSettings } from "./ai-settings";
+import { GithubAccess } from "./github-access";
 import { ProjectDefaults } from "./project-defaults";
 
 type Credential = {
   id: string;
   kind: string;
+  source?: string;
   label?: string;
   revokedAt?: string;
   createdAt: string;
@@ -100,6 +102,7 @@ export function Settings({
       <OwnerSettings />
       <AiSettings />
       <ProjectDefaults />
+      <GithubAccess onChanged={refresh} />
       <section className="settings-section">
         <h2>Passkeys and identities</h2>
         <p>Revoking a credential ends its sessions immediately.</p>
@@ -113,10 +116,13 @@ export function Settings({
                 <strong>{c.label ?? c.kind}</strong>
                 <small>
                   {c.kind}
+                  {c.source === "github"
+                    ? " · GitHub-managed"
+                    : " · Independent local credential"}
                   {c.revokedAt ? " · Revoked" : ""}
                 </small>
               </div>
-              {!c.revokedAt && (
+              {!c.revokedAt && c.source !== "github" && (
                 <button
                   type="button"
                   onClick={() =>

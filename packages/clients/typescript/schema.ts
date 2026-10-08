@@ -780,6 +780,104 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/github/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin browser-bound GitHub OAuth with PKCE
+         * @description Expected Origin required. setup needs an initial single-use setupToken; recover needs a distinct administrator recovery setupToken. link requires an authenticated browser; replace requires browser authentication less than five minutes old. login requires an existing verified binding. The HttpOnly SameSite=Lax state cookie binds the single-use callback to this browser.
+         */
+        post: operations["post_auth_github_options"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/github/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consume GitHub OAuth code and browser-bound single-use state */
+        get: operations["get_auth_github_callback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/github": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Verified GitHub binding, complete cache freshness and key blocking status */
+        get: operations["get_auth_github"];
+        put?: never;
+        post?: never;
+        /**
+         * Unlink GitHub using fresh independent local browser authentication
+         * @description Authentication proof must be less than five minutes old. Invalidates GitHub-derived permissions and sessions, preserving independent local credentials and project knowledge. Administrator recovery can restore independent passkey access first.
+         */
+        delete: operations["delete_auth_github"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/github/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refresh the complete synchronized GitHub SSH key cache
+         * @description Failed, incomplete or malformed responses preserve the previous complete snapshot and its age. Removed keys invalidate existing managed sessions. Late responses cannot overwrite a newer synchronization or replaced binding.
+         */
+        post: operations["post_auth_github_sync"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/github/block": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Persistently block or explicitly unblock canonical SSH key material
+         * @description Blocks take effect immediately across credentials carrying the same canonical key identity and survive restart, synchronization and removal/readdition. Unblocking does not restore previously invalidated sessions or stale eligibility.
+         */
+        post: operations["post_auth_github_block"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1095,6 +1193,7 @@ export interface operations {
                     "application/json": {
                         initialized?: boolean;
                         authenticated?: boolean;
+                        githubConfigured?: boolean;
                     };
                 };
             };
@@ -1409,9 +1508,14 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        credentials?: {
+                        credentials?: ({
+                            /** @enum {string} */
+                            source?: "local" | "github";
+                            /** @enum {string} */
+                            kind?: "webauthn" | "ssh" | "github";
+                        } & {
                             [key: string]: unknown;
-                        }[];
+                        })[];
                     };
                 };
             };
@@ -2682,6 +2786,221 @@ export interface operations {
                 content: {
                     "application/json": {
                         profile: components["schemas"]["OwnerProfile"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_auth_github_options: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @enum {string} */
+                    intent: "setup" | "login" | "link" | "replace" | "recover";
+                    setupToken?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** Format: uri */
+                        authorizationUrl: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_auth_github_callback: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Establishes browser session and redirects to the dashboard; sets HttpOnly session cookie and clears state cookie */
+            302: {
+                headers: {
+                    Location?: string;
+                    "Set-Cookie"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Failed authorization redirects to the dashboard with authError set to a fixed safe error code; no upstream message, token or private data is exposed. */
+            303: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_auth_github: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        binding: {
+                            accountId: string;
+                            username: string;
+                        } | null;
+                        /** Format: date-time */
+                        lastSuccessfulSyncAt: string | null;
+                        /** Format: date-time */
+                        cacheExpiresAt: string | null;
+                        cacheValid: boolean;
+                        lastSyncError: string | null;
+                        keys: {
+                            publicKey: string;
+                            fingerprint: string;
+                            categories: ("authentication" | "signing")[];
+                            blocked: boolean;
+                        }[];
+                        freshAuthenticationRequired: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    delete_auth_github: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        unlinked: true;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_auth_github_sync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        binding: {
+                            accountId: string;
+                            username: string;
+                        } | null;
+                        /** Format: date-time */
+                        lastSuccessfulSyncAt: string | null;
+                        /** Format: date-time */
+                        cacheExpiresAt: string | null;
+                        cacheValid: boolean;
+                        lastSyncError: string | null;
+                        keys: {
+                            publicKey: string;
+                            fingerprint: string;
+                            categories: ("authentication" | "signing")[];
+                            blocked: boolean;
+                        }[];
+                        freshAuthenticationRequired: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_auth_github_block: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    publicKey: string;
+                    blocked: boolean;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        configured: boolean;
+                        binding: {
+                            accountId: string;
+                            username: string;
+                        } | null;
+                        /** Format: date-time */
+                        lastSuccessfulSyncAt: string | null;
+                        /** Format: date-time */
+                        cacheExpiresAt: string | null;
+                        cacheValid: boolean;
+                        lastSyncError: string | null;
+                        keys: {
+                            publicKey: string;
+                            fingerprint: string;
+                            categories: ("authentication" | "signing")[];
+                            blocked: boolean;
+                        }[];
+                        freshAuthenticationRequired: boolean;
                     };
                 };
             };

@@ -1649,3 +1649,21 @@ Document source links use the instance's configured public origin and open the a
 Semantic search retains the same HTTP interface and consent/compatibility behavior with native pgvector enabled. `SCRATCHPAD_PGVECTOR=true` requires PostgreSQL and an operator-installed extension; the original embedding dimensions are preserved. This changes the optional database implementation, not capture authority or the HTTP boundary.
 
 The OpenAPI contract drives deterministic TypeScript and Go client generation. Follow the API client runbook for generation, compilation, package consumption and actual authenticated integration checks. Generated clients preserve the central API's authentication, optimistic concurrency, typed errors and explicit project scope.
+
+## 68. GitHub owner-access authorization
+
+The accepted [GitHub owner-access ADR](adr/0001-github-owner-access.md) expands authentication beyond the historical presentation-only profile interface in §67. Public `/profile/github` snapshots remain descriptive; verified owner binding is separate and cannot be created by submitting a username.
+
+The existing `POST /auth/mcp/challenge` and `/auth/mcp/verify` wire contract accepts either an independent locally enrolled SSH credential or an eligible synchronized GitHub-managed public key. Challenge signatures remain OpenSSH SSHSIG over the exact nonce with namespace `scratchpad-auth`; private material stays local. Proof of possession is mandatory. Machine sessions last up to 24 hours, with eligibility rechecked on every request and renewal: persistent local blocks, successful-sync removals, account unlink/replacement and cache expiry invalidate GitHub-derived access immediately.
+
+GitHub synchronization collects both SSH authentication and SSH signing keys completely before applying changes. Its persisted last successful refresh defines the 24-hour authorization deadline; a failed or incomplete refresh and a server restart do not extend it. Independent local credentials are exempt from GitHub cache freshness. GPG keys are unsupported.
+
+GitHub browser sign-in authenticates only the bound stable GitHub user ID. Initial binding requires the single-use administrator setup token; an initialized instance requires authenticated linking. Account replacement requires fresh existing authentication; unlinking requires fresh independent authentication. Administrator recovery supplies the independent recovery path. Preserve projects and local credentials, invalidate GitHub-derived access and audit these transitions without exposing secrets. The implemented OpenAPI contract specifies concrete OAuth and administration request/response interfaces.
+
+### OAuth and management routes
+
+All paths below are relative to `/api/v1`. `GET /auth/status` includes `githubConfigured`. OAuth starts with `POST /auth/github/options`, passing `intent` as `setup`, `login`, `link`, `replace` or `recover` and the setup/recovery capability where required. It returns `{authorizationUrl}` and requires the expected Origin. `GET /auth/github/callback` consumes the browser-bound single-use state and authorization code, establishes the server session and redirects to the dashboard. Tokens and secrets are never returned to the client API.
+
+Authenticated browser `GET /auth/github` reports `configured`, nullable `binding: {accountId, username}`, nullable `lastSuccessfulSyncAt` and `cacheExpiresAt`, `cacheValid`, nullable `lastSyncError`, `keys: [{publicKey, fingerprint, categories, blocked}]` and `freshAuthenticationRequired`. `POST /auth/github/sync` performs a complete refresh and returns that status. `POST /auth/github/block` accepts `{publicKey, blocked}` and returns the updated status. Public key material is not a secret.
+
+`DELETE /auth/github` requires a fresh independent local browser authentication and returns `{unlinked: true}`. Replace requires fresh existing browser authentication. Freshness is at most five minutes from actual proof, not a renewed session timestamp. Recovery uses the administrator's distinct recovery capability. Configure the optional paired `SCRATCHPAD_GITHUB_CLIENT_ID` and `SCRATCHPAD_GITHUB_CLIENT_SECRET`; callback origin comes from `SCRATCHPAD_PUBLIC_URL` with `/api/v1/auth/github/callback`.
