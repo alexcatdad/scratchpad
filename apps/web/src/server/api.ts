@@ -19,6 +19,7 @@ import {
   requireValue,
   settingsSchema,
 } from "./domain";
+import { GithubAccess, type GithubOAuth } from "./github-access";
 import {
   fetchGithubProfile,
   githubUsername,
@@ -106,13 +107,23 @@ export function createApi(config: {
   databaseUrl?: string;
   origin: string;
   githubFetch?: typeof fetch;
+  githubOAuth?: GithubOAuth;
+  githubAuthFetch?: typeof fetch;
+  clock?: () => number;
   pgvector?: boolean;
 }) {
   const store = new Store(config.databasePath, config.databaseUrl, {
       pgvector: config.pgvector,
     }),
-    auth = new Auth(store, config.origin),
-    ai = new AiService(store, undefined, undefined, config.origin);
+    auth = new Auth(store, config.origin, config.clock),
+    ai = new AiService(store, undefined, undefined, config.origin),
+    github = new GithubAccess(
+      store,
+      auth,
+      config.githubOAuth,
+      config.githubAuthFetch,
+    );
+  auth.github = github;
   async function entity(kind: string, key: string): Promise<Entity> {
     const value = await store.get(kind, key);
     requireValue(
@@ -446,12 +457,29 @@ export function createApi(config: {
           /* Status intentionally supports signed-out clients. */
         }
         return response({
+          githubConfigured: Boolean(config.githubOAuth),
           initialized: await auth.initialized(),
           authenticated,
         });
       }
       if (route.startsWith("/auth/") && method === "POST")
         await auth.throttle();
+      if (route === "/auth/github/options" && method === "POST") {
+        const result = await github.options(body, request);
+        return response({ authorizationUrl: result.authorizationUrl }, 200, {
+          "Set-Cookie": result.cookie,
+        });
+      }
+      if (route === "/auth/github/callback" && method === "GET") {
+        const result = await github.callback(request);
+        const headers = new Headers({
+          Location: "/",
+          "Cache-Control": "no-store",
+        });
+        headers.append("Set-Cookie", auth.cookie(result.accessToken));
+        headers.append("Set-Cookie", result.clearState);
+        return new Response(null, { status: 302, headers });
+      }
       if (route.startsWith("/auth/")) {
         if (method === "POST" && route === "/auth/mcp/challenge")
           return response(await auth.sshChallenge(body));
@@ -487,6 +515,22 @@ export function createApi(config: {
       }
       const identity = await auth.identify(request),
         actor = identity.actor;
+      if (route === "/auth/github" && method === "GET")
+        return response(await github.status(identity));
+      if (route === "/auth/github" && method === "DELETE") {
+        await github.unlink(identity);
+        return response({ unlinked: true });
+      }
+      if (route === "/auth/github/sync" && method === "POST") {
+        await github.status(identity);
+        await github.sync();
+        return response(await github.status(identity));
+      }
+      if (route === "/auth/github/block" && method === "POST") {
+        await github.block(body, identity);
+        return response(await github.status(identity));
+      }
+
       if (route === "/profile" && method === "GET") {
         const profile = (await store.get("profile", "owner-profile")) ?? {
           id: "owner-profile",
@@ -1265,8 +1309,10 @@ export function createApi(config: {
     store,
     auth,
     ai,
+    github,
     handleRequest,
     close: async () => {
+      await github.stop();
       await ai.stop();
       await store.close();
     },
@@ -1275,12 +1321,21 @@ export function createApi(config: {
 let singleton: ReturnType<typeof createApi> | undefined;
 export function getApi(): ReturnType<typeof createApi> {
   singleton ??= createApi({
+    githubOAuth:
+      process.env.SCRATCHPAD_GITHUB_CLIENT_ID ||
+      process.env.SCRATCHPAD_GITHUB_CLIENT_SECRET
+        ? {
+            clientId: process.env.SCRATCHPAD_GITHUB_CLIENT_ID ?? "",
+            clientSecret: process.env.SCRATCHPAD_GITHUB_CLIENT_SECRET ?? "",
+          }
+        : undefined,
     databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
     pgvector: process.env.SCRATCHPAD_PGVECTOR === "true",
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
   });
+  singleton.github.start();
   singleton.ai.start();
   return singleton;
 }
