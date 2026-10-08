@@ -29,6 +29,9 @@ export type GithubOAuth = { clientId: string; clientSecret: string };
 
 /** GitHub is an optional authority for one owner's browser and published SSH credentials. */
 export class GithubAccess {
+  get configured(): boolean {
+    return Boolean(this.config);
+  }
   private timer?: ReturnType<typeof setInterval>;
   private running?: Promise<void>;
   constructor(
@@ -51,14 +54,26 @@ export class GithubAccess {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 5000);
     try {
+      const headers = new Headers({
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2026-03-10",
+        "User-Agent": "Scratchpad-owner-access",
+      });
+      new Headers(init.headers).forEach((value, name) => {
+        headers.set(name, value);
+      });
+      if (
+        this.config &&
+        new URL(url).origin === "https://api.github.com" &&
+        !headers.has("Authorization")
+      )
+        headers.set(
+          "Authorization",
+          `Basic ${Buffer.from(`${this.config.clientId}:${this.config.clientSecret}`).toString("base64")}`,
+        );
       const response = await this.fetcher(url, {
         ...init,
-        headers: {
-          Accept: "application/vnd.github+json",
-          "X-GitHub-Api-Version": "2026-03-10",
-          "User-Agent": "Scratchpad-owner-access",
-          ...init.headers,
-        },
+        headers,
         redirect: "error",
         signal: controller.signal,
       });
