@@ -66,3 +66,13 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 export function post(body: unknown): RequestInit {
   return { method: "POST", body: JSON.stringify(body) };
 }
+export async function signInWithGithub(
+  intent: "setup" | "login" | "link" | "replace" | "recover",
+  setupToken?: string,
+): Promise<void> {
+  const result = await api<{ authorizationUrl: string }>(
+    "/auth/github/options",
+    post({ intent, ...(setupToken ? { setupToken } : {}) }),
+  );
+  window.location.assign(result.authorizationUrl);
+}
