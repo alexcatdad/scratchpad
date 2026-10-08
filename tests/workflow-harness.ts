@@ -112,8 +112,9 @@ export function createWorkflowHarness() {
       }
       return;
     }
-    if (!server || server.exitCode !== null) return;
     const child = server;
+    server = undefined;
+    if (!child || child.exitCode !== null || child.signalCode !== null) return;
     const exited = new Promise<void>((done) =>
       child.once("exit", () => done()),
     );
