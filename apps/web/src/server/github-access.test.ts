@@ -119,13 +119,13 @@ async function fixture(
     signingKeys: [] as { key: string }[],
     failSigning: false,
     override: undefined as
-      | ((url: string) => Promise<Response | undefined>)
+      | ((url: string, init?: RequestInit) => Promise<Response | undefined>)
       | undefined,
   };
-  const fetcher: typeof fetch = async (input) => {
+  const fetcher: typeof fetch = async (input, init) => {
     if (provider.unavailable) return new Response("", { status: 503 });
     const url = String(input);
-    const overridden = await provider.override?.(url);
+    const overridden = await provider.override?.(url, init);
     if (overridden) return overridden;
     if (provider.failSigning && url.includes("ssh_signing_keys"))
       return new Response("", { status: 503 });
@@ -294,9 +294,12 @@ async function fixture(
     get api() {
       return api;
     },
-    restart: async () => {
+    restart: async (githubConfigured = true) => {
       await api.close();
-      api = createApi(config);
+      api = createApi({
+        ...config,
+        githubOAuth: githubConfigured ? config.githubOAuth : undefined,
+      });
     },
     call,
     oauth,
@@ -312,6 +315,41 @@ async function fixture(
     },
   };
 }
+it("refreshes public GitHub keys using OAuth app authentication while browser identity uses its bearer token", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  f.provider.override = async (url, init) => {
+    if (url.includes("synthetic-secret") || url.includes("client_id="))
+      return new Response("Credentials must not be in URLs", { status: 400 });
+    const authorization = new Headers(init?.headers).get("Authorization");
+    if (url.startsWith("https://api.github.com/")) {
+      const expected = url.endsWith("/user")
+        ? "Bearer synthetic-token"
+        : "Basic c3ludGhldGljOnN5bnRoZXRpYy1zZWNyZXQ=";
+      if (authorization !== expected)
+        return new Response("Authentication required", { status: 401 });
+    } else if (authorization)
+      return new Response("Unexpected authentication", { status: 400 });
+    if (url.includes("/keys?") && url.endsWith("page=1"))
+      return Response.json([], {
+        headers: {
+          link: '<https://api.github.com/users/owner/keys?per_page=100&page=2>; rel="next"',
+        },
+      });
+    return undefined;
+  };
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  expect(browser.response.status).toBe(302);
+  expect(
+    (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+      .status,
+  ).toBe(200);
+  expect((await f.machine()).response.status).toBe(200);
+  f.provider.keys = [];
+  f.advance(5 * 60 * 1000);
+  await f.api.github.tick();
+  expect((await f.machine()).response.status).toBe(401);
+});
 it("initializes one owner through token-authorized GitHub OAuth and rejects wrong account login", async () => {
   const f = await fixture();
   const token = await f.api.auth.createSetupToken();
@@ -668,6 +706,44 @@ it("a late synchronization cannot restore keys removed by a newer synchronizatio
   await old;
   expect((await f.machine()).response.status).toBe(401);
 });
+it.each(["blocked", "stale"])(
+  "cannot convert a never-proved %s synchronized key into an independent credential",
+  async (condition) => {
+    const f = await fixture();
+    const passkey = await f.passkey(
+      undefined,
+      await f.api.auth.createSetupToken(),
+    );
+    f.provider.keys = [{ key: f.publicKey }];
+    await f.oauth("link", undefined, passkey.cookie);
+    let cookie = passkey.cookie;
+    if (condition === "blocked") {
+      expect(
+        (
+          await f.call(
+            "/auth/github/block",
+            "POST",
+            { publicKey: f.publicKey, blocked: true },
+            cookie,
+          )
+        ).response.status,
+      ).toBe(200);
+    } else {
+      f.advance(24 * 60 * 60 * 1000 + 1);
+      cookie = (await f.passkeyLogin()).cookie;
+    }
+    const before = (await f.call("/auth/credentials", "GET", undefined, cookie))
+      .data.credentials;
+    expect(
+      before.filter((entry: { kind: string }) => entry.kind === "ssh"),
+    ).toHaveLength(0);
+    expect((await f.machine("key", cookie)).response.status).toBe(409);
+    expect(
+      (await f.call("/auth/credentials", "GET", undefined, cookie)).data
+        .credentials,
+    ).toEqual(before);
+  },
+);
 it("preserves passkeys, local SSH credentials and projects through GitHub linking, unlinking and administrator recovery", async () => {
   const f = await fixture();
   const local = await f.passkey(undefined, await f.api.auth.createSetupToken());
@@ -709,6 +785,67 @@ it("preserves passkeys, local SSH credentials and projects through GitHub linkin
     (await f.call("/auth/github", "DELETE", {}, login.cookie)).response.status,
   ).toBe(200);
   expect((await f.machine("local")).response.status).toBe(200);
+});
+it("retains the only independent passkey when OAuth configuration is removed despite a persisted binding", async () => {
+  const f = await fixture();
+  const local = await f.passkey(undefined, await f.api.auth.createSetupToken());
+  f.provider.keys = [{ key: f.publicKey }];
+  await f.oauth("link", undefined, local.cookie);
+  await f.restart(false);
+  const status = await f.call("/auth/status", "GET", undefined, local.cookie);
+  expect(status.data.githubConfigured).toBe(false);
+  const credentials = (
+    await f.call("/auth/credentials", "GET", undefined, local.cookie)
+  ).data.credentials;
+  const passkeyId = credentials.find(
+    (entry: { kind: string }) => entry.kind === "webauthn",
+  ).id;
+  expect(
+    (
+      await f.call(
+        `/auth/credentials/${passkeyId}`,
+        "DELETE",
+        undefined,
+        local.cookie,
+      )
+    ).response.status,
+  ).toBe(409);
+  expect((await f.passkeyLogin()).response.status).toBe(200);
+  expect(
+    (await f.call("/auth/github/options", "POST", { intent: "login" })).response
+      .status,
+  ).toBe(409);
+  f.provider.override = async (url, init) =>
+    url.startsWith("https://api.github.com/") &&
+    new Headers(init?.headers).has("Authorization")
+      ? new Response("Unexpected authentication", { status: 400 })
+      : undefined;
+  expect(
+    (await f.call("/auth/github/sync", "POST", {}, local.cookie)).response
+      .status,
+  ).toBe(200);
+});
+it("can revoke the last passkey while configured GitHub remains a working browser sign-in", async () => {
+  const f = await fixture();
+  const local = await f.passkey(undefined, await f.api.auth.createSetupToken());
+  await f.oauth("link", undefined, local.cookie);
+  const credentials = (
+    await f.call("/auth/credentials", "GET", undefined, local.cookie)
+  ).data.credentials;
+  const passkeyId = credentials.find(
+    (entry: { kind: string }) => entry.kind === "webauthn",
+  ).id;
+  expect(
+    (
+      await f.call(
+        `/auth/credentials/${passkeyId}`,
+        "DELETE",
+        undefined,
+        local.cookie,
+      )
+    ).response.status,
+  ).toBe(200);
+  expect((await f.oauth("login")).response.status).toBe(302);
 });
 it("does not promote descriptive GitHub profile linkage into owner authentication", async () => {
   const f = await fixture();

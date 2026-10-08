@@ -56,3 +56,24 @@ server or restore a known pre-feature operational backup with explicit attention
 to its older credential and project state; do not downgrade the live upgraded
 database merely to regain login. Deployment and live rollback remain outside this
 implementation task.
+
+## Review safeguards for GitHub authority
+
+Configured instances authenticate public synchronization requests with their existing
+OAuth app client ID and secret using an HTTP Basic authorization header, sent only
+to the fixed GitHub REST origin. GitHub's
+[OAuth app rate-limit documentation](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#primary-rate-limit-for-oauth-apps)
+provides this server-side method for public data. Keep the secret in operator
+configuration; never put it in request URLs, browser code, exports or logs. Browser
+identity lookup continues to use the freshly exchanged bearer token. No PAT or
+additional stored secret is required. Existing bindings can retain cached machine
+access when OAuth configuration is disabled, but such a binding does not qualify
+as an alternative browser sign-in when revoking the last passkey.
+
+Local enrollment must reject keys in the last persisted synchronized snapshot even
+when they are blocked, stale or have never successfully proved possession. Those
+conditions cannot convert GitHub-managed access into an independent credential.
+Retain separate manual enrollment for independently managed keys outside that
+snapshot. Validate these safeguards at the HTTP seam using synthetic provider
+credentials, paginated/scheduled refreshes, configuration removal and actual
+OpenSSH possession proofs.

@@ -50,6 +50,7 @@ export class Auth {
   readonly origin: string;
   readonly rpID: string;
   github?: {
+    readonly configured: boolean;
     eligible(key: string): Promise<boolean>;
     check(credential: Entity): Promise<void>;
   };
@@ -315,7 +316,8 @@ export class Auth {
     );
     requireValue(
       credential.kind !== "webauthn" ||
-        (await this.store.get("github_binding", "owner")) !== undefined ||
+        (this.github?.configured &&
+          (await this.store.get("github_binding", "owner")) !== undefined) ||
         (await this.store.list("credential")).some(
           (c) => c.kind === "webauthn" && !c.revokedAt && c.id !== credentialId,
         ),
@@ -608,10 +610,12 @@ export class Auth {
         (c) => c.kind === "ssh" && c.publicKey === publicKey && !c.revokedAt,
       );
       if (enrollment) {
+        const binding = await this.store.get("github_binding", "owner");
+        const publishedKeys = (binding?.keys ?? []) as { publicKey: string }[];
         requireValue(
           !(await this.store.list("credential")).some(
             (c) => c.source === "github" && c.publicKey === publicKey,
-          ) && !(await this.github?.eligible(publicKey)),
+          ) && !publishedKeys.some((key) => key.publicKey === publicKey),
           "CONFLICT",
           "GitHub-managed keys cannot be converted into local credentials.",
           409,
