@@ -14,7 +14,7 @@ Start with the guide for your client:
 - [Codex setup](/scratchpad/guides/codex/) — CLI registration, configuration, and a first read.
 - [ChatGPT macOS setup](/scratchpad/guides/chatgpt/) — the desktop STDIO connection and the distinction from ChatGPT web.
 
-Install the binary and enroll your public key before adding it to either client. Homebrew installs the MCP; your Scratchpad server runs separately.
+Install the binary and select an eligible synchronized GitHub SSH key or enroll an independent public key before adding it to either client. Homebrew installs the MCP; your Scratchpad server runs separately.
 
 ## Selecting the project
 
@@ -34,11 +34,17 @@ Initial payloads stay small and flexible. Adding optional fields later must not 
 
 ## Authentication
 
-The MCP proves possession of an enrolled signing key. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
+The MCP proves possession of an independent enrolled key or an eligible SSH authentication/signing key synchronized from the owner’s verified GitHub binding. GitHub-managed keys need no individual dashboard approval. Current server source supports GitHub access; released v0.3.0 servers predate it. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
 
 Tokens stay in the MCP process memory. Restarting MCP requires authentication again. Revoking its credential immediately invalidates its sessions. Private signing keys remain local.
 
+GitHub-managed requests and renewals also require an unblocked key and cache freshness within 24 hours of the last complete successful synchronization. Detected removal, unlinking or account replacement invalidates derived access immediately. Independent manual credentials remain locally managed. See [Security & recovery](/scratchpad/reference/security/).
+
+Use the [connection skill](/scratchpad/guides/agents/#connect-with-an-agent) for agent-assisted discovery, client configuration and a scoped authenticated read.
+
 ## Build and enroll
+
+This manual workflow creates an independent local credential. Use it when a key is not published on GitHub or independent access is desired.
 
 Build the local binary using the [installation guide](/scratchpad/guides/installation/). Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
 
