@@ -45,15 +45,15 @@ func run() error {
 	workspace := flag.String("workspace", "", "Existing disposable Git repository with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
 	statePath := flag.String("state", "", "Capture-state file retained across server restart")
-	phase := flag.String("phase", "capture", "capture, projects, or verify after server restart")
+	phase := flag.String("phase", "capture", "capture, projects, read-only context, or verify after server restart")
 	restrictedProject := flag.String("restricted-project", "", "Disposable external project ID for projects phase")
 	mirror := flag.Bool("mirror", false, "Require successful central and local mirroring for decisions (enable server project setting first)")
 	flag.Parse()
 	if *publicKey == "" || *workspace == "" || *binary == "" || *statePath == "" {
 		return errors.New("public-key, workspace, binary, and state flags are required")
 	}
-	if *phase != "capture" && *phase != "projects" && *phase != "verify" {
-		return errors.New("phase must be capture, projects, or verify")
+	if *phase != "capture" && *phase != "projects" && *phase != "verify" && *phase != "read" {
+		return errors.New("phase must be capture, projects, read, or verify")
 	}
 	absWorkspace, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -150,6 +150,17 @@ func run() error {
 		if len(saved.Captures) != 8 {
 			return errors.New("state must contain all eight captures")
 		}
+	}
+	if *phase == "read" {
+		resumeContext, err := call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace})
+		if err != nil {
+			return err
+		}
+		if err = verifyResumeContext(resumeContext, saved.Captures); err != nil {
+			return err
+		}
+		fmt.Println("PASS read: real stdio → SSH-agent possession → authenticated context in confirmed project")
+		return nil
 	}
 	if *phase == "projects" {
 		if *restrictedProject == "" {

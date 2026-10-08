@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { type Auth, fingerprint, type Identity, keySchema } from "./auth";
@@ -589,25 +590,63 @@ export class GithubAccess {
             .parse(result.data);
           for (const entry of entries) {
             const key = canonicalKey(entry.key);
+            // Use the same OpenSSH boundary as possession verification. A text
+            // prefix and base64 alphabet alone do not establish a valid key.
+            if (!keys.has(key))
+              await new Promise<void>((resolve, reject) => {
+                const child = spawn("ssh-keygen", ["-l", "-f", "/dev/stdin"], {
+                  stdio: ["pipe", "ignore", "ignore"],
+                });
+                const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
+                child.once("error", (error) => {
+                  clearTimeout(timer);
+                  reject(error);
+                });
+                child.once("exit", (code) => {
+                  clearTimeout(timer);
+                  code === 0 ? resolve() : reject(new Error("Invalid SSH key"));
+                });
+                child.stdin.on("error", () => {});
+                child.stdin.end(`${key}\n`);
+              });
             const cats = keys.get(key) ?? new Set<string>();
             cats.add(category === "keys" ? "authentication" : "signing");
             keys.set(key, cats);
           }
-          const links = result.link?.split(",") ?? [];
-          const nextLinks = links.filter((link) => /;\s*rel="next"/.test(link));
+          // GitHub uses registered pagination relations. Accept quoted lists
+          // and unquoted tokens; fail closed on every unrecognized link rather
+          // than interpreting an incomplete response as the complete key set.
+          const nextLinks: string[] = [];
+          if (result.link !== null) {
+            for (const link of result.link.split(",")) {
+              const parsed = link.match(
+                /^\s*<([^<>]+)>\s*;\s*rel\s*=\s*(?:"([a-z]+(?: [a-z]+)*)"|([a-z]+))\s*$/,
+              );
+              requireValue(
+                parsed,
+                "GITHUB_UNAVAILABLE",
+                "Invalid GitHub pagination.",
+                503,
+              );
+              const relations = (parsed[2] ?? parsed[3]).split(" ");
+              requireValue(
+                relations.every((rel) =>
+                  ["next", "prev", "first", "last"].includes(rel),
+                ),
+                "GITHUB_UNAVAILABLE",
+                "Unsupported GitHub pagination.",
+                503,
+              );
+              if (relations.includes("next")) nextLinks.push(parsed[1]);
+            }
+          }
           requireValue(
             nextLinks.length <= 1,
             "GITHUB_UNAVAILABLE",
             "Invalid GitHub pagination.",
             503,
           );
-          next = nextLinks[0]?.match(/^\s*<([^>]+)>/)?.[1];
-          requireValue(
-            !nextLinks.length || next,
-            "GITHUB_UNAVAILABLE",
-            "Invalid GitHub pagination.",
-            503,
-          );
+          next = nextLinks[0];
           if (next) {
             const url = new URL(next);
             requireValue(
