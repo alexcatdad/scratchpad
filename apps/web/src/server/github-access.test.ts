@@ -104,7 +104,11 @@ const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const fn of cleanup.splice(0).reverse()) await fn();
 });
-async function fixture(databaseUrl?: string) {
+async function fixture(
+  databaseUrl?: string,
+  algorithm = "ed25519",
+  bits?: number,
+) {
   const dir = mkdtempSync(join(tmpdir(), "scratchpad-github-"));
   let time = Date.now();
   const provider = {
@@ -197,7 +201,15 @@ async function fixture(databaseUrl?: string) {
       [cookie, start.cookie].filter(Boolean).join("; "),
     );
   };
-  spawnSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", join(dir, "key")]);
+  spawnSync("ssh-keygen", [
+    "-t",
+    algorithm,
+    ...(bits ? ["-b", String(bits)] : []),
+    "-N",
+    "",
+    "-f",
+    join(dir, "key"),
+  ]);
   const publicKey = readFileSync(join(dir, "key.pub"), "utf8").trim();
   const machine = async (keyName = "key", enrollmentCookie?: string) => {
     const publicKey = readFileSync(join(dir, `${keyName}.pub`), "utf8").trim();
@@ -492,6 +504,7 @@ it("rejects malformed and unsafe provider snapshots without replacing the last c
   for (const response of [
     Response.json({ keys: [] }),
     Response.json([{ key: "garbage" }]),
+    Response.json([{ key: f.publicKey.replace("ssh-ed25519", "ssh-rsa") }]),
     Response.json([], {
       headers: { link: '<https://attacker.example/keys?page=2>; rel="next"' },
     }),
@@ -505,6 +518,106 @@ it("rejects malformed and unsafe provider snapshots without replacing the last c
     expect((await f.read(first.data.accessToken)).status).toBe(200);
   }
 });
+it.each([
+  { algorithm: "rsa", bits: 2048 },
+  { algorithm: "ecdsa", bits: 256 },
+  { algorithm: "ecdsa", bits: 384 },
+  { algorithm: "ecdsa", bits: 521 },
+])(
+  "synchronizes and proves possession of a valid $algorithm $bits key",
+  async ({ algorithm, bits }) => {
+    const f = await fixture(undefined, algorithm, bits);
+    f.provider.keys = [{ key: f.publicKey }];
+    const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+    expect(
+      (await f.call("/auth/github", "GET", undefined, browser.cookie)).data
+        .keys,
+    ).toHaveLength(1);
+    expect((await f.machine()).response.status).toBe(200);
+  },
+);
+it("rejects a regex-compatible malformed SSH blob without changing keys, freshness or sessions", async () => {
+  const f = await fixture();
+  f.provider.keys = [{ key: f.publicKey }];
+  const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+  const machine = await f.machine();
+  const before = (
+    await f.call("/auth/github", "GET", undefined, browser.cookie)
+  ).data;
+  f.advance(5 * 60 * 1000);
+  f.provider.keys = [{ key: "ssh-ed25519 AAAAAAAAAAAAAAAAAAAA" }];
+  expect(
+    (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+      .status,
+  ).toBe(503);
+  const after = (await f.call("/auth/github", "GET", undefined, browser.cookie))
+    .data;
+  expect(after.keys).toEqual(before.keys);
+  expect(after.lastSuccessfulSyncAt).toBe(before.lastSuccessfulSyncAt);
+  expect((await f.read(machine.data.accessToken)).status).toBe(200);
+});
+it.each(['rel="next"', "rel=next", 'rel="next last"'])(
+  "follows valid pagination with %s before committing removals",
+  async (relation) => {
+    const f = await fixture();
+    f.provider.keys = [{ key: f.publicKey }];
+    const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+    const machine = await f.machine();
+    f.provider.override = async (url) =>
+      url.includes("/keys?")
+        ? url.endsWith("page=1")
+          ? Response.json([], {
+              headers: {
+                link: `<https://api.github.com/users/owner/keys?per_page=100&page=2>; ${relation}`,
+              },
+            })
+          : Response.json([{ key: f.publicKey }])
+        : undefined;
+    expect(
+      (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+        .status,
+    ).toBe(200);
+    expect((await f.read(machine.data.accessToken)).status).toBe(200);
+  },
+);
+it.each([
+  'rel="next',
+  "rel=",
+  "rel=unknown",
+  "rel=next; rel=last",
+  'title="next"',
+  "rel=next, broken",
+])(
+  "fails closed on unsupported or malformed pagination %s",
+  async (relation) => {
+    const f = await fixture();
+    f.provider.keys = [{ key: f.publicKey }];
+    const browser = await f.oauth("setup", await f.api.auth.createSetupToken());
+    const machine = await f.machine();
+    const before = (
+      await f.call("/auth/github", "GET", undefined, browser.cookie)
+    ).data;
+    f.advance(5 * 60 * 1000);
+    f.provider.override = async (url) =>
+      url.includes("/keys?")
+        ? Response.json([], {
+            headers: {
+              link: `<https://api.github.com/users/owner/keys?per_page=100&page=2>; ${relation}`,
+            },
+          })
+        : undefined;
+    expect(
+      (await f.call("/auth/github/sync", "POST", {}, browser.cookie)).response
+        .status,
+    ).toBe(503);
+    const after = (
+      await f.call("/auth/github", "GET", undefined, browser.cookie)
+    ).data;
+    expect(after.keys).toEqual(before.keys);
+    expect(after.lastSuccessfulSyncAt).toBe(before.lastSuccessfulSyncAt);
+    expect((await f.read(machine.data.accessToken)).status).toBe(200);
+  },
+);
 it("five-minute scheduling refreshes the persisted cache, and restart does not extend its 24-hour limit", async () => {
   const f = await fixture();
   f.provider.keys = [{ key: f.publicKey }];

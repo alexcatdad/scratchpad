@@ -17,3 +17,42 @@ Implement GitHub issue #3 on the `codex/github-owner-access` integration branch.
 ## Live configuration
 
 No production changes are included in implementation. Configure a per-instance OAuth app only in an explicitly authorized environment. Keep private keys, OAuth secrets and tokens out of repository files and logs.
+
+## Review regression validation
+
+Run the GitHub HTTP tests to confirm invalid OpenSSH key blobs and unsupported or
+malformed pagination preserve the entire last successful snapshot, its original
+freshness and existing sessions. The browser-to-MCP workflow additionally uses a
+disposable SSH agent with two published keys, selects the existing Git signing
+preference, and verifies authenticated stdio MCP access using only the agent-backed
+public-key path. An unavailable agent must fail possession proof. Private key
+contents are never inspected. Without a confirmed preference, several eligible
+keys require owner selection as described by the connect skill.
+
+Run both owner workflows and the harness lifecycle regression. Each suite owns its
+temporary directory, subprocess and Docker container/volume state; cleaning one
+scope must preserve another scope in the same worker. Run SQLite and PostgreSQL
+acceptance independently and retain canonical CI evidence for the current head.
+
+## Downgrade and rollback
+
+The previous server does not enforce GitHub credential sources, cache expiry or
+local key blocks. Restoring an old executable against the upgraded database without
+preparation can therefore restore access that this version denies.
+
+Before downgrading, verify an independent passkey and recovery path, sign in freshly
+with that passkey, and disconnect GitHub through Settings. This revokes its derived
+sessions and removes its machine permissions while preserving project knowledge
+and independent credentials. Resolve every locally blocked independent SSH key:
+revoke compromised local credentials and their sessions rather than relying on a
+GitHub block that the old executable cannot enforce. Verify those keys are denied
+and the independent passkey still works before taking the operational backup.
+
+Retain the current executable and full database backup, including authentication
+state, until downgrade validation completes. Test the previous executable against
+a disposable copy first: prove independent dashboard access, revoked-key denial,
+and retained project knowledge. If preparation cannot complete, keep the current
+server or restore a known pre-feature operational backup with explicit attention
+to its older credential and project state; do not downgrade the live upgraded
+database merely to regain login. Deployment and live rollback remain outside this
+implementation task.

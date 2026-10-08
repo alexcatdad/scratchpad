@@ -1,19 +1,15 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { createApi } from "../apps/web/src/server/api";
-import {
-  cleanupDocker,
-  command,
-  root,
-  start,
-  stop,
-  temporary,
-} from "./workflow-harness";
+import { createWorkflowHarness, root } from "./workflow-harness";
+
+const { cleanupDocker, command, start, stop, temporary } =
+  createWorkflowHarness();
 
 // Reuse the production frontend driver. Only the external GitHub service and
 // clock are synthetic; browser HTTP and subprocess MCP use the real API.
@@ -25,6 +21,7 @@ let api: ReturnType<typeof createApi>;
 let proxy: Server;
 const key = resolve(temporary, "github-identity");
 let publicKey: string;
+let extraPublicKey: string | undefined;
 let account = { id: 987654321, login: "synthetic-owner", type: "User" };
 let databaseUrl: string | undefined;
 let databaseAdmin: ReturnType<typeof postgres> | undefined;
@@ -49,7 +46,14 @@ function openApi() {
           scope: "",
         });
       if (url.includes("/keys?"))
-        return Response.json(published ? [{ id: 1, key: publicKey }] : []);
+        return Response.json(
+          published
+            ? [
+                { id: 1, key: publicKey },
+                ...(extraPublicKey ? [{ id: 3, key: extraPublicKey }] : []),
+              ]
+            : [],
+        );
       if (url.includes("/ssh_signing_keys?"))
         return Response.json(published ? [{ id: 2, key: publicKey }] : []);
       return Response.json(account);
@@ -150,10 +154,11 @@ async function readProjects(token: string) {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
-async function realMcp(args: string[]) {
+async function realMcp(args: string[], env = process.env) {
   return await new Promise<string>((done, reject) => {
     const child = spawn("go", args, {
       cwd: resolve(root, "mcp"),
+      env,
       stdio: ["ignore", "pipe", "pipe"],
     });
     let output = "";
@@ -282,6 +287,106 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect(
     realMcp([...unavailableSignerArgs, "-phase", "verify"]),
   ).rejects.toThrow(/sign challenge \(unlock your SSH agent\/key\)/);
+  // Exercise the connect skill with two agent-backed candidates and an
+  // existing Git signing preference, then verify real stdio MCP access.
+  const secondKey = resolve(temporary, "github-second-identity");
+  command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", secondKey]);
+  extraPublicKey = readFileSync(`${secondKey}.pub`, "utf8").trim();
+  command("git", ["config", "gpg.format", "ssh"], workspace);
+  command("git", ["config", "user.signingkey", `${secondKey}.pub`], workspace);
+  const agentOutput = command("ssh-agent", ["-s"]);
+  const socket = agentOutput.match(/SSH_AUTH_SOCK=([^;]+);/)?.[1];
+  const agentPid = agentOutput.match(/SSH_AGENT_PID=(\d+);/)?.[1];
+  if (!socket || !agentPid)
+    throw new Error("Disposable SSH agent did not start");
+  const agentEnv = {
+    ...process.env,
+    SSH_AUTH_SOCK: socket,
+    SSH_AGENT_PID: agentPid,
+  };
+  const agentCommand = (binary: string, arguments_: string[]) =>
+    execFileSync(binary, arguments_, {
+      env: agentEnv,
+      cwd: workspace,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+  try {
+    agentCommand("ssh-add", [key, secondKey]);
+    await page
+      .getByRole("button", { name: "Synchronize keys", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await (
+              await page.request.get(`${origin}/api/v1/auth/github`)
+            ).json()
+          ).keys.length,
+      )
+      .toBe(2);
+    const status = await (
+      await page.request.get(`${origin}/api/v1/auth/github`)
+    ).json();
+    const canonical = (value: string) =>
+      value.trim().split(/\s+/).slice(0, 2).join(" ");
+    const candidates = agentCommand("ssh-add", ["-L"])
+      .trim()
+      .split("\n")
+      .filter((candidate) =>
+        status.keys.some(
+          (entry: { publicKey: string }) =>
+            entry.publicKey === canonical(candidate),
+        ),
+      );
+    expect(candidates).toHaveLength(2);
+    const preference = agentCommand("git", [
+      "config",
+      "--get",
+      "user.signingkey",
+    ]).trim();
+    const preferredPublicKey = canonical(readFileSync(preference, "utf8"));
+    const selected = candidates.find(
+      (candidate) => canonical(candidate) === preferredPublicKey,
+    );
+    expect(selected).toBeDefined();
+    const selectedPath = resolve(temporary, "selected-agent-key.pub");
+    writeFileSync(selectedPath, `${selected}\n`);
+    const agentArgs = [...args];
+    agentArgs[agentArgs.indexOf("-public-key") + 1] = selectedPath;
+    agentArgs[agentArgs.indexOf("-signing-key") + 1] = "";
+    expect(await realMcp([...agentArgs, "-phase", "read"], agentEnv)).toContain(
+      "PASS read",
+    );
+    await expect(
+      realMcp([...agentArgs, "-phase", "read"], {
+        ...agentEnv,
+        SSH_AUTH_SOCK: resolve(temporary, "absent-agent.sock"),
+      }),
+    ).rejects.toThrow(/sign challenge \(unlock your SSH agent\/key\)/);
+    // No preference leaves a real ambiguity. Do not guess a credential.
+    agentCommand("git", ["config", "--unset", "user.signingkey"]);
+    expect(() =>
+      agentCommand("git", ["config", "--get", "user.signingkey"]),
+    ).toThrow();
+  } finally {
+    agentCommand("ssh-agent", ["-k"]);
+    extraPublicKey = undefined;
+    await page
+      .getByRole("button", { name: "Synchronize keys", exact: true })
+      .click();
+    await expect
+      .poll(
+        async () =>
+          (
+            await (
+              await page.request.get(`${origin}/api/v1/auth/github`)
+            ).json()
+          ).keys.length,
+      )
+      .toBe(1);
+  }
   const enrolled = await machineSession();
   expect(enrolled.status).toBe(200);
   expect((await readProjects(enrolled.token)).ok).toBe(true);

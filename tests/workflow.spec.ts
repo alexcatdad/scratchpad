@@ -4,7 +4,9 @@ import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
-import {
+import { createWorkflowHarness, root } from "./workflow-harness";
+
+const {
   admin,
   cleanupDocker,
   command,
@@ -13,11 +15,10 @@ import {
   origin,
   postgresMode,
   restartOrRestore,
-  root,
   start,
   stop,
   temporary,
-} from "./workflow-harness";
+} = createWorkflowHarness();
 
 test.beforeAll(start);
 test.afterAll(async () => {
