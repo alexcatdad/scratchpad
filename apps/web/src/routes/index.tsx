@@ -9,6 +9,7 @@ import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
 import {
   api,
+  githubSignInError,
   label,
   type MemoryRecord,
   type Project,
@@ -25,6 +26,7 @@ export const Route = createFileRoute("/")({
 });
 function Dashboard() {
   const { recordId, authError } = Route.useSearch();
+  const authenticationError = githubSignInError(authError);
   const recordRequest = useRef(0);
   const detailRequest = useRef(0);
   const [status, setStatus] = useState<{
@@ -139,7 +141,7 @@ function Dashboard() {
       <AuthScreen
         initialized={status.initialized}
         githubConfigured={status.githubConfigured}
-        initialError={authError}
+        initialError={authenticationError}
         onAuthenticated={() => void authenticate()}
       />
     );
@@ -185,9 +187,9 @@ function Dashboard() {
         </div>
       </aside>
       <main className="main-pane">
-        {authError && (
+        {authenticationError && (
           <p role="alert" className="error">
-            {authError}
+            {authenticationError}
           </p>
         )}
         {tab === "Projects" ? (
