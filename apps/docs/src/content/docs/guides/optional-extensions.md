@@ -13,7 +13,7 @@ Search preserves project participation, model compatibility and source identity.
 
 ## Public GitHub profile
 
-In **Settings → Your profile and storage**, choose a public GitHub username to link its public profile. Refresh updates the snapshot; unlink removes the association. The profile label is descriptive: GitHub does not authenticate you, enroll credentials or grant access to your instance. Your existing passkey and SSH credentials remain the authentication mechanism.
+In **Settings → Your profile and storage**, choose a public GitHub username to link its public profile. Refresh updates the snapshot; unlink removes the association. This profile label is descriptive and grants no authority. Verified [GitHub owner sign-in](/scratchpad/reference/security/) is a separate optional current-source feature; existing presentation snapshots are never promoted into authentication. Existing passkey and independent SSH credentials remain available.
 
 See the [profile runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-profile.md) for validation and failure behavior.
 

@@ -8,6 +8,12 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 Scratchpad v0.3.0 includes the TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, deterministic search, audited metadata and relationships, source provenance, JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. It adds optional PostgreSQL, persisted AI analysis jobs, source-linked suggestions and patterns, semantic retrieval, five private Markdown formats, and dashboard/MCP controls. SQLite and the capture/retrieval workflow remain useful without AI. This release additionally includes opt-in native pgvector similarity, public GitHub profile enrichment and generated TypeScript/Go HTTP clients; see [optional extension acceptance](docs/optional-readiness.md) for verification evidence. See [release verification](https://alexcatdad.github.io/scratchpad/guides/releases/) for publication and installation evidence; the [v0.1.3 MVP](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is historical acceptance evidence.
 
+## GitHub owner access in current source
+
+Current source adds optional GitHub browser sign-in and synchronized published SSH authentication/signing keys for the same owner across laptops and VMs. Configure one OAuth app per instance; first-owner setup still requires an administrator token. Machines prove possession locally without individual dashboard enrollment. Synchronization runs every five minutes, with a 24-hour cached-key limit during outages and persistent local blocking. Independent passkeys, manual keys and administrator recovery remain available. Published v0.3.0 artifacts predate this addition; verify the installed version before enabling it.
+
+See the [OAuth operator runbook](docs/runbooks/github-oauth.md), [security guide](https://alexcatdad.github.io/scratchpad/reference/security/) and portable [connection skill](skills/scratchpad-connect/SKILL.md).
+
 ## Install the MCP
 
 ```sh

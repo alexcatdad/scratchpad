@@ -6,6 +6,8 @@ services:
     environment:
       SCRATCHPAD_PUBLIC_URL: ${SCRATCHPAD_PUBLIC_URL:-http://localhost:3000}
       SCRATCHPAD_DATABASE_PATH: /data/scratchpad.sqlite
+      SCRATCHPAD_GITHUB_CLIENT_ID: ${SCRATCHPAD_GITHUB_CLIENT_ID:-}
+      SCRATCHPAD_GITHUB_CLIENT_SECRET: ${SCRATCHPAD_GITHUB_CLIENT_SECRET:-}
     volumes:
       - scratchpad-data:/data
     restart: unless-stopped

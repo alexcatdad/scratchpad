@@ -20,7 +20,7 @@ CI must verify formatting without rewriting it (`test -z "$(gofmt -l .)"`), then
 
 Client walkthroughs: [Codex](https://alexcatdad.github.io/scratchpad/guides/codex/) and [ChatGPT macOS](https://alexcatdad.github.io/scratchpad/guides/chatgpt/). Both use the local stdio binary. ChatGPT web's hosted plugin path requires a separate integration; the Scratchpad dashboard/REST API is not a remote MCP endpoint.
 
-Enroll an SSH public key from the authenticated dashboard first. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
+Use an SSH authentication or signing key synchronized from the owner’s verified GitHub binding, or enroll an independent SSH public key from the authenticated dashboard first. GitHub-managed access is available in the current server source; published v0.3.0 servers predate it. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
 
 | Variable                 | Meaning                                                                                         |
 | ------------------------ | ----------------------------------------------------------------------------------------------- |
@@ -36,9 +36,13 @@ Capture tools: `record_decision`, `record_adr`, `record_business_decision`, `rec
 
 Read tools: `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, `find_related`. Search supports optional type, tag, date/time bounds, branch, lifecycle status, relationship type/related record, descriptive source, Git path hint, authority, confidence, cursor, and limit filters. Decision history includes all three decision types by default, with optional type selection and pagination; related records are based on stored relationships, not an AI inference. `resolve_project` creates/resolves an owner-confirmed name for weak discovery contexts.
 
+The portable [scratchpad-connect skill](../skills/scratchpad-connect/SKILL.md) lets an agent discover existing public keys with its preferred Git/SSH tooling, configure the client and verify an authenticated scoped read. Each machine keeps its own private key; no GitHub OAuth token is needed by the MCP.
+
 ## Authentication wire contract
 
 `POST /api/v1/auth/mcp/challenge` with `{publicKey}` returns `{challengeId, nonce, namespace, expiresAt}`. MCP signs the exact nonce string, **without a newline**, using OpenSSH armored SSHSIG and namespace `scratchpad-auth`. `POST /api/v1/auth/mcp/verify` submits `{challengeId, publicKey, signature}` and receives `{accessToken, expiresAt}`. Tokens stay in process memory only and are reused until expiry (up to 24 hours). Revocation/invalid authentication clears cached credentials; the next call starts a fresh challenge. There are no refresh tokens or retry loops for failed writes.
+
+GitHub-managed sessions are also gated on every request by the synchronized key set, persistent local blocks and a 24-hour limit from the last complete successful synchronization. Failed refreshes and restarts do not extend that deadline. Detected removals and account unlink/replacement invalidate derived access; manual independent credentials retain local authority. Machines may renew sessions against valid cached keys during an outage. See the [OAuth runbook](../docs/runbooks/github-oauth.md).
 
 ## Mirroring and recovery
 

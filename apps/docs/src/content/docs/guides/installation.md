@@ -46,6 +46,12 @@ Open [localhost:3000](http://localhost:3000), enter the one-use token, and regis
 
 The named volume stores your database. Preserve it across container upgrades, and take a full SQLite backup before changing application versions. AI services and PostgreSQL are not required.
 
+## Optional GitHub-first setup
+
+Current server source supports GitHub-first owner setup and GitHub browser sign-in; the released v0.3.0 image above predates this capability. Configure the per-instance OAuth app using the [operator runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-oauth.md), then generate the same administrator setup token. Choose GitHub on the setup page and authorize your account. The token authorizes initial ownership; a GitHub username or login by itself does not. Passkey-only setup remains available. Existing owners link through authenticated Settings.
+
+After linking, your laptop and VMs can use synchronized published SSH authentication or signing keys by proving possession. Passkeys and independent manual keys remain optional alternatives. See [Security & recovery](/scratchpad/reference/security/) and [Agent integration](/scratchpad/guides/agents/).
+
 ## Develop from source
 
 Use Node.js **24.21.0** from `.node-version`, npm, Git, and OpenSSH `ssh-keygen`. Building the MCP also requires Go **1.27.1**. Docker Compose is an alternative for running the server.

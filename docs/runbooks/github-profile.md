@@ -1,6 +1,8 @@
 # Public GitHub profile enrichment
 
-Scratchpad uses a public GitHub profile for presentation only. It does not verify account ownership, enroll a credential, authorize access, or replace your owner display name. Your existing passkey or SSH credential continues to authenticate you.
+This runbook covers the separate descriptive profile interface. Optional verified GitHub owner authentication is documented in the [OAuth runbook](github-oauth.md); an existing presentation snapshot is never promoted into that binding.
+
+Scratchpad uses this public GitHub profile for presentation only. It does not verify account ownership, enroll a credential, authorize access, or replace your owner display name. Your existing passkey or SSH credential continues to authenticate you.
 
 ## Link, refresh and unlink
 
