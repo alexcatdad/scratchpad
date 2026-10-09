@@ -1,5 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmdirSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { relative, resolve } from "node:path";
 import test from "node:test";
 import { createServer } from "vite";
@@ -9,7 +16,10 @@ const web = resolve(root, "apps/web");
 
 for (const host of [undefined, "127.0.0.1", "0.0.0.0"]) {
   test(`development protects private state with host ${host ?? "default"}`, async () => {
-    const directory = mkdtempSync(resolve(web, "security-test-"));
+    const publicDirectory = resolve(web, "public");
+    const hadPublicDirectory = existsSync(publicDirectory);
+    mkdirSync(publicDirectory, { recursive: true });
+    const directory = mkdtempSync(resolve(publicDirectory, "security-test-"));
     mkdirSync(resolve(directory, "data"));
     const database = resolve(directory, "custom[state]");
     const before = { ...process.env };
@@ -42,12 +52,13 @@ for (const host of [undefined, "127.0.0.1", "0.0.0.0"]) {
     let server;
     try {
       server = await createServer({
-      root: web,
-      configFile: resolve(web, "vite.config.ts"),
-      logLevel: "silent",
-      server: { port: 0, ...(host ? { host } : {}) },
+        root: web,
+        configFile: resolve(web, "vite.config.ts"),
+        logLevel: "silent",
+        server: { port: 0, ...(host ? { host } : {}) },
       });
       if (!host) assert.equal(server.config.server.host, "127.0.0.1");
+      assert.equal(server.config.publicDir, "");
       await server.listen();
       const address = server.httpServer.address();
       assert.ok(address && typeof address !== "string");
@@ -56,6 +67,12 @@ for (const host of [undefined, "127.0.0.1", "0.0.0.0"]) {
       assert.equal((await fetch(`${origin}/@vite/client`)).status, 200);
       for (const file of files) {
         const path = resolve(directory, file);
+        const publicResponse = await fetch(
+          `${origin}/${relative(publicDirectory, path)}`,
+        );
+        assert.ok(
+          !(await publicResponse.text()).includes("synthetic private state"),
+        );
         for (const route of [
           `/${relative(web, path).split("\\").join("/")}`,
           `/@fs/${path.split("\\").join("/")}`,
@@ -74,6 +91,7 @@ for (const host of [undefined, "127.0.0.1", "0.0.0.0"]) {
         if (!(key in before)) delete process.env[key];
       Object.assign(process.env, before);
       rmSync(directory, { recursive: true, force: true });
+      if (!hadPublicDirectory) rmdirSync(publicDirectory);
     }
   });
 }

@@ -17,7 +17,8 @@ Use the Node version in `.node-version` and the existing installed dependencies.
 The development listener defaults to `127.0.0.1`. Existing Vite secret exclusions
 are retained, with additional denials for data directories, SQLite filename
 families and the configured database path, including WAL, SHM and journal files.
-These denials remain active with an explicit `--host` override.
+These denials remain active with an explicit `--host` override. The unused public
+directory is disabled because its middleware bypasses Vite filesystem denials.
 
 Use the same absolute database path for development and administrator commands.
 Changing it does not relocate or delete existing data. Keep private files outside
