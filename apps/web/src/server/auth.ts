@@ -51,7 +51,8 @@ export class Auth {
     string,
     { bucket: number; count: number }
   >();
-  private activeVerifications = { proof: 0, oauth: 0 };
+  private activeVerifications = { proof: 0, oauth: 0, anonymous: 0 };
+  private readonly anonymousVerifications = new Map<string, number>();
   readonly origin: string;
   readonly rpID: string;
   github?: {
@@ -98,7 +99,18 @@ export class Auth {
     }
     this.allowances.set(client, { bucket, count: count + 1 });
   }
-  reserveVerification(kind: "proof" | "oauth" = "proof"): () => void {
+  reserveVerification(
+    kind: "proof" | "oauth" | "anonymous" = "proof",
+    client = "unknown",
+  ): () => void {
+    const count = this.anonymousVerifications.get(client) ?? 0;
+    if (kind === "anonymous")
+      requireValue(
+        count < 2,
+        "RATE_LIMITED",
+        "Authentication verification is busy. Try again shortly.",
+        429,
+      );
     requireValue(
       this.activeVerifications[kind] < (kind === "oauth" ? 4 : 8),
       "RATE_LIMITED",
@@ -106,12 +118,22 @@ export class Auth {
       429,
     );
     this.activeVerifications[kind]++;
+    if (kind === "anonymous")
+      this.anonymousVerifications.set(client, count + 1);
     return () => {
       this.activeVerifications[kind]--;
+      if (kind === "anonymous") {
+        const remaining = (this.anonymousVerifications.get(client) ?? 1) - 1;
+        if (remaining) this.anonymousVerifications.set(client, remaining);
+        else this.anonymousVerifications.delete(client);
+      }
     };
   }
-  async verify<T>(operation: () => Promise<T>): Promise<T> {
-    const release = this.reserveVerification();
+  async verify<T>(operation: () => Promise<T>, client?: string): Promise<T> {
+    const release = this.reserveVerification(
+      client === undefined ? "proof" : "anonymous",
+      client,
+    );
     try {
       return await operation();
     } finally {

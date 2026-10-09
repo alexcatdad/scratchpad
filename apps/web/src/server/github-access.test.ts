@@ -1166,3 +1166,18 @@ it.each([false, true])(
     else expect((await f.oauth("login")).response.status).toBe(302);
   },
 );
+
+it("admits anonymous GitHub login before any binding lookup", async () => {
+  const f = await fixture();
+  await f.oauth("setup", await f.api.auth.createSetupToken());
+  for (let n = 0; n < 120; n++)
+    expect(
+      (await f.call("/auth/github/options", "POST", { intent: "login" }))
+        .response.status,
+    ).toBe(200);
+  await f.api.close();
+  expect(
+    (await f.call("/auth/github/options", "POST", { intent: "login" })).response
+      .status,
+  ).toBe(429);
+});

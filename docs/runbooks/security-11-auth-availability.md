@@ -5,7 +5,7 @@ Unsupported POST routes and invalid browser origins are rejected before charging
 an allowance. Valid setup and recovery tokens have separate allowances;
 authenticated management uses the credential identity. Each allowance permits
 120 requests per minute. At most 4096 client allowances are retained in memory,
-and at most eight proved-identity verifications plus four anonymous OAuth callbacks run concurrently.
+and at most eight protected verifications, eight anonymous cryptographic verifications and four anonymous OAuth callbacks run concurrently. Anonymous MCP and passkey-login verification permits at most two concurrent requests per transport client, preserving capacity for an independent client and keeping setup, recovery and credential enrollment separate.
 
 The TanStack server adapter obtains the address from runtime metadata through
 `getRequestIP({ xForwardedFor: false })`. The API ignores forwarding headers
@@ -37,3 +37,5 @@ Anonymous OAuth callbacks use a separate four-slot pool, preserving the eight cr
 Unknown or unbound OAuth state is rejected before acquiring the serialized write transaction. Valid state is rechecked atomically before consumption, preserving replay protection.
 
 Setup and session proof resolution has a separate 120-per-minute client admission lane checked before hashing or database access. Anonymous login traffic cannot consume this lane. Clients sharing a transport address also share proof lookup capacity; another client retains enrollment and management access when this lane is exhausted. IPv6 peers, allowlist entries and forwarded hops use canonical address forms, including IPv4-mapped IPv6.
+
+Anonymous GitHub login starts charge client admission before reading the binding; successful starts are charged once.

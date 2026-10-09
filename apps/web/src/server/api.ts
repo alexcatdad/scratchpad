@@ -523,14 +523,16 @@ export function createApi(config: {
           auth.throttle(allowance);
           throw error;
         }
-        if (route !== "/auth/github/options") auth.throttle(allowance);
+        if (route !== "/auth/github/options" || body.intent === "login")
+          auth.throttle(allowance);
       }
       if (route === "/auth/github/options" && method === "POST") {
-        let admitted = false;
+        let admitted = body.intent === "login";
         let result: Awaited<ReturnType<typeof github.options>>;
         try {
           result = await github.options(body, request, (allowance) => {
-            auth.throttle(allowance ?? `client:${client}`);
+            if (body.intent !== "login")
+              auth.throttle(allowance ?? `client:${client}`);
             admitted = true;
           });
         } catch (error) {
@@ -601,7 +603,9 @@ export function createApi(config: {
         if (method === "POST" && route === "/auth/mcp/challenge")
           return response(await auth.sshChallenge(body));
         if (method === "POST" && route === "/auth/mcp/verify")
-          return response(await auth.verify(() => auth.sshVerify(body)));
+          return response(
+            await auth.verify(() => auth.sshVerify(body), client),
+          );
         if (
           method === "POST" &&
           [
@@ -622,7 +626,7 @@ export function createApi(config: {
           const session =
             route === "/auth/register/verify"
               ? await auth.verify(() => auth.registrationVerify(body, identity))
-              : await auth.verify(() => auth.loginVerify(body));
+              : await auth.verify(() => auth.loginVerify(body), client);
           return response(
             { authenticated: true, expiresAt: session.expiresAt },
             200,

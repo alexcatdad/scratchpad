@@ -170,13 +170,21 @@ it("keeps MCP proof available to another client after an anonymous budget is exh
         signature: signature.stdout,
       });
     }
-    const burst = await Promise.all(
-      proofs.map((proof) => call("verify", proof, "192.0.2.1", "192.0.2.2")),
-    );
-    expect(burst.filter((entry) => entry.status === 200)).toHaveLength(8);
-    expect(burst.filter((entry) => entry.status === 429)).toHaveLength(1);
+    const burst = await Promise.all([
+      ...proofs
+        .slice(0, 8)
+        .map((proof) => call("verify", proof, "192.0.2.1", "192.0.2.2")),
+      call("verify", proofs[8], "192.0.2.3", "192.0.2.2"),
+    ]);
     expect(
-      (await call("verify", proofs[8], "192.0.2.1", "192.0.2.2")).status,
+      burst.slice(0, 8).filter((entry) => entry.status === 200),
+    ).toHaveLength(2);
+    expect(
+      burst.slice(0, 8).filter((entry) => entry.status === 429),
+    ).toHaveLength(6);
+    expect(burst[8].status).toBe(200);
+    expect(
+      (await call("verify", proofs[7], "192.0.2.1", "192.0.2.2")).status,
     ).toBe(200);
     const logout = await api.handleRequest(
       new Request("http://localhost:3000/api/v1/auth/logout", {
