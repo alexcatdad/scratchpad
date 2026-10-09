@@ -250,8 +250,14 @@ export class OpenAiProvider {
     readonly config: Config,
     private apiKey = "",
     private fetcher: Fetcher = providerFetch,
+    readonly dispatchGeneration = 0,
+    readonly assertCurrent: () => Promise<void> = async () => {},
+    private dispatch: (send: () => Promise<Response>) => Promise<Response> = (
+      send,
+    ) => send(),
   ) {}
   private async post(path: string, body: unknown): Promise<unknown> {
+    await this.assertCurrent();
     const base = new URL(this.config.baseUrl);
     if (
       !["http:", "https:"].includes(base.protocol) ||
@@ -272,9 +278,8 @@ export class OpenAiProvider {
       bodyTimeout: (this.config.requestTimeoutSeconds + 1) * 1000,
     });
     try {
-      const response = await this.fetcher(
-        `${base.href.replace(/\/$/, "")}/${path}`,
-        {
+      const response = await this.dispatch(() =>
+        this.fetcher(`${base.href.replace(/\/$/, "")}/${path}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -284,7 +289,7 @@ export class OpenAiProvider {
           signal: AbortSignal.timeout(this.config.requestTimeoutSeconds * 1000),
           redirect: "error",
           dispatcher,
-        } as RequestInit & { dispatcher: Agent },
+        } as RequestInit & { dispatcher: Agent }),
       );
       if (!response.ok)
         throw failure(`AI provider returned HTTP ${response.status}.`);
@@ -420,7 +425,7 @@ export class AiService {
   async settings(): Promise<Record<string, unknown>> {
     const stored = await this.store.get("ai_settings", "global");
     return {
-      ...(await this.config()),
+      ...configSchema.parse(stored ?? {}),
       version: stored?.version ?? 0,
       apiKeyConfigured: Boolean(stored?.apiKey),
     };
@@ -447,7 +452,7 @@ export class AiService {
         );
       const { apiKey, expectedVersion: _version, ...changes } = parsed;
       const config = configSchema.parse({
-        ...(await this.config()),
+        ...configSchema.parse(previous ?? {}),
         ...Object.fromEntries(
           Object.entries(changes).filter(([key]) =>
             Object.hasOwn(input as object, key),
@@ -472,6 +477,7 @@ export class AiService {
         ...config,
         id: "global",
         apiKey: apiKey ?? previous?.apiKey ?? "",
+        dispatchGeneration: Number(previous?.dispatchGeneration ?? 0) + 1,
       };
       if (previous)
         await this.store.update(
@@ -497,13 +503,41 @@ export class AiService {
     });
   }
   private async provider(): Promise<OpenAiProvider> {
-    const config = await this.config();
+    const stored = await this.store.get("ai_settings", "global");
+    const config = configSchema.parse(stored ?? {});
     if (!config.enabled)
       throw new ApiError(409, "AI_DISABLED", "Enable optional AI first.");
+    const generation = Number(stored?.dispatchGeneration ?? 0);
+    const assertCurrent = async () => {
+      const current = await this.store.get("ai_settings", "global");
+      if (!configSchema.parse(current ?? {}).enabled)
+        throw new ApiError(409, "AI_DISABLED", "Enable optional AI first.");
+      if (Number(current?.dispatchGeneration ?? 0) !== generation)
+        throw new ApiError(
+          409,
+          "AI_CONFIGURATION_CHANGED",
+          "AI configuration changed; future dispatch stopped. Retry with current settings.",
+        );
+    };
     return new OpenAiProvider(
       config,
-      String((await this.store.get("ai_settings", "global"))?.apiKey ?? ""),
+      String(stored?.apiKey ?? ""),
       this.fetcher,
+      generation,
+      assertCurrent,
+      async (send) => {
+        // Linearize admission with configuration writes, without holding the
+        // transaction open while the already transmitted request completes.
+        const admitted = await this.store.atomic(async () => {
+          await assertCurrent();
+          const response = send();
+          // Keep an immediate rejection handled until transaction admission
+          // completes; the original promise still propagates its error below.
+          void response.catch(() => {});
+          return { response };
+        });
+        return admitted.response;
+      },
     );
   }
   async testProvider(): Promise<Record<string, unknown>> {
@@ -518,6 +552,7 @@ export class AiService {
     );
     if (!z.object({ ok: z.literal(true) }).safeParse(result).success)
       throw failure("Provider did not return the expected test JSON.");
+    await provider.assertCurrent();
     return {
       ok: true,
       model: provider.config.model,
@@ -821,7 +856,7 @@ export class AiService {
         indexRequired: true,
       };
     const query = (await provider.embed([parsed.query]))[0] as number[];
-    await this.provider();
+    await provider.assertCurrent();
     const allowedAfterCall = new Set(
       (await this.records(parsed)).map((r) => r.id),
     );
@@ -1007,6 +1042,7 @@ export class AiService {
         artifacts: [],
         sourceCount: records.length,
         signature,
+        dispatchGeneration: provider.dispatchGeneration,
       };
     }
     const instruction =
@@ -1203,6 +1239,7 @@ export class AiService {
       embeddings: [],
       sourceCount: records.length,
       signature,
+      dispatchGeneration: provider.dispatchGeneration,
     };
   }
   private async renew(job: Entity): Promise<void> {
@@ -1256,6 +1293,17 @@ export class AiService {
           )
             return;
           await this.provider();
+          const settings = await this.store.get("ai_settings", "global");
+          if (
+            result.dispatchGeneration !== undefined &&
+            result.dispatchGeneration !==
+              Number(settings?.dispatchGeneration ?? 0)
+          )
+            throw new ApiError(
+              409,
+              "AI_CONFIGURATION_CHANGED",
+              "AI configuration changed; future dispatch stopped. Retry with current settings.",
+            );
           await this.allowed(job.scope as Scope); // Revoked consent blocks persistence after provider response.
           if (
             result.signature &&
@@ -1326,9 +1374,12 @@ export class AiService {
           const terminal =
             Number(current.attempts) >= 3 ||
             (error instanceof ApiError &&
-              ["AI_NOT_ALLOWED", "AI_DISABLED", "AI_SCOPE_TOO_LARGE"].includes(
-                error.code,
-              ));
+              [
+                "AI_NOT_ALLOWED",
+                "AI_DISABLED",
+                "AI_SCOPE_TOO_LARGE",
+                "AI_CONFIGURATION_CHANGED",
+              ].includes(error.code));
           const failed = await this.store.update(
             "ai_job",
             {
