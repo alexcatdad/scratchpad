@@ -60,6 +60,11 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
+Development listens on loopback by default. Private data directories, SQLite
+files and the configured database path remain denied by Vite even with an
+explicit wider `--host` override. Keep private runtime state outside served
+workspaces where practical.
+
 In another terminal, use the same absolute database path and public URL for the server and administrator command (see `.env.example`):
 
 ```sh

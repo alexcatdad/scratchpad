@@ -293,10 +293,28 @@ export class OpenAiProvider {
       );
       if (!response.ok)
         throw failure(`AI provider returned HTTP ${response.status}.`);
-      const text = await response.text();
-      if (text.length > 8 * 1024 * 1024)
-        throw failure("AI response exceeds the limit.");
-      return JSON.parse(text);
+      // Fetch exposes decompressed bytes. Bound them before decoding or parsing.
+      const reader = response.body?.getReader();
+      if (!reader) throw failure("AI provider returned an empty body.");
+      // One buffer also bounds retained metadata when a provider sends tiny chunks.
+      const bytes = Buffer.alloc(8 * 1024 * 1024);
+      let size = 0;
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value.byteLength > bytes.byteLength - size)
+            throw failure("AI response exceeds the limit.");
+          bytes.set(value, size);
+          size += value.byteLength;
+        }
+        return JSON.parse(bytes.subarray(0, size).toString("utf8"));
+      } catch (error) {
+        await reader.cancel().catch(() => {});
+        throw error;
+      } finally {
+        reader.releaseLock();
+      }
     } catch (error) {
       if (error instanceof ApiError) throw error;
       if (

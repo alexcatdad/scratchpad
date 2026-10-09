@@ -48,7 +48,7 @@ This manual workflow creates an independent local credential. Use it when a key 
 
 Build the local binary using the [installation guide](/scratchpad/guides/installation/). Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
 
-Sign the exact displayed nonce **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The MCP handles subsequent authentication challenges automatically.
+Sign the exact displayed JSON proof **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The MCP handles subsequent authentication challenges automatically. Version 2 binds each proof to the locally configured instance, key, purpose and expiry. Upgrade the server and MCP together; old nonce-only signatures are rejected. Existing sessions retain their expiry and revocation rules until renewal.
 
 ## Client configuration
 
