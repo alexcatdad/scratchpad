@@ -145,6 +145,7 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 		t.Fatalf("%s %v", out, err)
 	}
 	pub, _ := os.ReadFile(key + ".pub")
+	expiresAt := time.Now().Add(2 * time.Minute).UTC().Format(time.RFC3339Nano)
 	allowed := filepath.Join(dir, "allowed")
 	if err := os.WriteFile(allowed, append([]byte("owner "), pub...), 0600); err != nil {
 		t.Fatal(err)
@@ -153,7 +154,7 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v1/auth/mcp/challenge":
-			fmt.Fprint(w, `{"challengeId":"challenge","nonce":"random-nonce","namespace":"scratchpad-auth"}`)
+			json.NewEncoder(w).Encode(map[string]any{"challengeId": "challenge", "nonce": "random-nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": "http://" + r.Host, "expiresAt": expiresAt})
 		case "/api/v1/auth/mcp/verify":
 			var body map[string]string
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -163,8 +164,9 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 			if err := os.WriteFile(sig, []byte(body["signature"]), 0600); err != nil {
 				t.Error(err)
 			}
-			cmd := exec.Command("ssh-keygen", "-Y", "verify", "-f", allowed, "-I", "owner", "-n", "scratchpad-auth", "-s", sig)
-			cmd.Stdin = strings.NewReader("random-nonce")
+			proof, _ := json.Marshal([]any{"scratchpad-ssh-proof", 2, "http://" + r.Host, "ssh_login", "challenge", "random-nonce", strings.Join(strings.Fields(string(pub))[:2], " "), expiresAt})
+			cmd := exec.Command("ssh-keygen", "-Y", "verify", "-f", allowed, "-I", "owner", "-n", "scratchpad-auth-v2", "-s", sig)
+			cmd.Stdin = strings.NewReader(string(proof))
 			if out, err := cmd.CombinedOutput(); err != nil {
 				t.Errorf("signature %s %v", out, err)
 			}
@@ -181,6 +183,44 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 	token, err := c.authenticate(context.Background())
 	if err != nil || token != "session" {
 		t.Fatalf("%q %v", token, err)
+	}
+}
+
+func TestSSHChallengeRejectsUntrustedContextBeforeSigning(t *testing.T) {
+	for _, invalid := range []string{"legacy", "recipient", "purpose", "expired"} {
+		t.Run(invalid, func(t *testing.T) {
+			dir := t.TempDir()
+			pub := filepath.Join(dir, "public.pub")
+			if err := os.WriteFile(pub, []byte("ssh-ed25519 synthetic-test-key"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/api/v1/auth/mcp/challenge" {
+					t.Error("invalid context reached verification")
+				}
+				challenge := map[string]any{"challengeId": "challenge", "nonce": "nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": "http://" + r.Host, "expiresAt": time.Now().Add(time.Minute).UTC().Format(time.RFC3339Nano)}
+				switch invalid {
+				case "legacy":
+					delete(challenge, "version")
+					challenge["namespace"] = "scratchpad-auth"
+				case "recipient":
+					challenge["recipient"] = "https://other.example.test"
+				case "purpose":
+					challenge["purpose"] = "ssh_enroll"
+				case "expired":
+					challenge["expiresAt"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
+				}
+				json.NewEncoder(w).Encode(challenge)
+			}))
+			defer api.Close()
+			c, err := NewClient(Config{URL: api.URL, PublicKeyPath: pub, SigningKeyPath: filepath.Join(dir, "nonexistent-private-key")})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := c.authenticate(context.Background()); err == nil || err.Error() != "invalid signing challenge" {
+				t.Fatalf("expected rejection before signing, got %v", err)
+			}
+		})
 	}
 }
 

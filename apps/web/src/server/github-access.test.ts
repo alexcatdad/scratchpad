@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { isoCBOR } from "@simplewebauthn/server/helpers";
 import postgres from "postgres";
 import { afterEach, expect, it } from "vitest";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import { createApi } from "./api";
 
 /** A software authenticator signs actual WebAuthn bytes; no verification mocks. */
@@ -221,7 +222,15 @@ async function fixture(
     );
     if (challenge.response.status !== 200) return challenge;
     const file = join(dir, "nonce");
-    writeFileSync(file, challenge.data.nonce);
+    writeFileSync(
+      file,
+      sshProof(
+        challenge.data,
+        publicKey,
+        "http://localhost:3000",
+        enrollmentCookie ? "ssh_enroll" : "ssh_login",
+      ),
+    );
     rmSync(`${file}.sig`, { force: true });
     expect(
       spawnSync("ssh-keygen", [
@@ -230,7 +239,7 @@ async function fixture(
         "-f",
         join(dir, keyName),
         "-n",
-        "scratchpad-auth",
+        sshNamespace,
         file,
       ]).status,
     ).toBe(0);

@@ -12,6 +12,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { z } from "zod";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import {
   type Actor,
   ApiError,
@@ -538,6 +539,8 @@ export class Auth {
     if (existing && !enrollment) await this.github?.check(existing);
     const binding = await this.store.get("github_binding", "owner");
     const challenge = await this.challenge(enrollment ? "ssh_enroll" : "ssh", {
+      proofVersion: 2,
+      recipient: this.origin,
       bindingGeneration: binding?.generation,
 
       publicKey,
@@ -547,8 +550,11 @@ export class Auth {
     });
     return {
       challengeId: challenge.id,
+      version: 2,
+      recipient: this.origin,
+      purpose: enrollment ? "ssh_enroll" : "ssh_login",
       nonce: challenge.nonce,
-      namespace: "scratchpad-auth",
+      namespace: sshNamespace,
       expiresAt: challenge.expiresAt,
     };
   }
@@ -565,6 +571,27 @@ export class Auth {
       .split(/\s+/)
       .slice(0, 2)
       .join(" ");
+    requireValue(
+      challenge.proofVersion === 2 && challenge.recipient === this.origin,
+      "AUTH_INVALID",
+      "Request a new SSH challenge after the protocol upgrade.",
+      401,
+    );
+    const proof = sshProof(
+      {
+        version: 2,
+        namespace: sshNamespace,
+        recipient: this.origin,
+        purpose: enrollment ? "ssh_enroll" : "ssh_login",
+        challengeId: challenge.id,
+        nonce: challenge.nonce,
+        expiresAt: challenge.expiresAt,
+      },
+      publicKey,
+      this.origin,
+      enrollment ? "ssh_enroll" : "ssh_login",
+      this.clock(),
+    );
     requireValue(
       publicKey === challenge.publicKey &&
         (!enrollment || enrollment.credential.id === challenge.enrolledBy),
@@ -589,11 +616,11 @@ export class Auth {
           "-I",
           "owner",
           "-n",
-          "scratchpad-auth",
+          sshNamespace,
           "-s",
           join(directory, "signature"),
         ],
-        { input: String(challenge.nonce), timeout: 5000, maxBuffer: 65536 },
+        { input: proof, timeout: 5000, maxBuffer: 65536 },
       );
       requireValue(
         result.status === 0,

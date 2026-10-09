@@ -3,6 +3,7 @@ import { readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
+import { sshProof } from "../apps/web/src/lib/ssh-proof";
 
 import { createWorkflowHarness, root } from "./workflow-harness";
 
@@ -299,7 +300,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   const signature = execFileSync(
     "ssh-keygen",
     ["-Y", "sign", "-f", key, "-n", challenge.namespace],
-    { input: challenge.nonce, encoding: "utf8" },
+    {
+      input: sshProof(challenge, publicKey, origin, "ssh_enroll"),
+      encoding: "utf8",
+    },
   );
   await page
     .getByLabel("Armored SSH signature", { exact: true })
