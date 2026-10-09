@@ -56,6 +56,8 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	// A checkout must not hide untracked parent changes from capture provenance.
+	run(t, root, "config", "status.showUntrackedFiles", "no")
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/api/v1/projects/resolve" {

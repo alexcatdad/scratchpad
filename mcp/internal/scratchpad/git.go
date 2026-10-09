@@ -77,7 +77,7 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 	g := &GitContext{RootPathHint: root}
 	g.Branch, _ = git(ctx, root, "symbolic-ref", "--short", "-q", "HEAD")
 	g.Commit, _ = git(ctx, root, "rev-parse", "HEAD")
-	status, _ := git(ctx, root, "status", "--porcelain", "--ignore-submodules=all")
+	status, _ := git(ctx, root, "status", "--porcelain", "--ignore-submodules=all", "--untracked-files=all")
 	g.Dirty = status != ""
 	common, _ := git(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	actual, _ := git(ctx, root, "rev-parse", "--absolute-git-dir")
