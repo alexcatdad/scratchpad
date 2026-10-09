@@ -13,3 +13,8 @@ The Go signer canonicalizes internationalized hostnames with the official golang
 Recipient canonicalization applies IDNA lookup to the original hostname, preserving Unicode mappings such as dotted capital I (`İ` → `xn--i-9bb`). Numeric ports are serialized canonically before default-port removal (`:0443` → no HTTPS port; `:08443` → `:8443`). Synthetic challenge and real OpenSSH signature regressions compare these cases against Node's URL origin.
 
 IPv4-mapped IPv6 recipients use WHATWG hexadecimal tails (`[::ffff:127.0.0.1]` → `[::ffff:7f00:1]`). Ordinary IPv6 retains canonical longest-zero-run compression; real signature tests cover mapped zero/nonzero tails, default/nondefault ports, uppercase input, expanded literals and compression ties.
+
+Already-ASCII internal hosts retain WHATWG-compatible names such as
+`scratch_pad.example`, lowercased without stricter DNS label validation. Forbidden
+host code points are rejected; non-ASCII names still use IDNA lookup. Real
+OpenSSH regressions cover underscore names, case and default-port normalization.

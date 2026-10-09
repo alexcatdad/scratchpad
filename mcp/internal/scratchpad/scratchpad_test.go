@@ -199,6 +199,8 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 	}
 
 	for _, entry := range []struct{ configured, recipient string }{
+		{"https://scratch_pad.example", "https://scratch_pad.example"},
+		{"https://SCRATCH_PAD.example:0443", "https://scratch_pad.example"},
 		{"https://mémory.example:443", "https://xn--mmory-bsa.example"},
 		{"https://memory.example.com:0443", "https://memory.example.com"},
 		{"https://memory.example.com:08443", "https://memory.example.com:8443"},

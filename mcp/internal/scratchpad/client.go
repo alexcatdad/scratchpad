@@ -136,11 +136,20 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 			pieces := address.As16()
 			hostname = fmt.Sprintf("::ffff:%x:%x", uint16(pieces[12])<<8|uint16(pieces[13]), uint16(pieces[14])<<8|uint16(pieces[15]))
 		}
-	} else {
+	} else if strings.IndexFunc(hostname, func(r rune) bool { return r > 127 }) >= 0 {
 		hostname, err = idna.Lookup.ToASCII(hostname)
 		if err != nil {
 			return "", errors.New("invalid local recipient hostname")
 		}
+	} else {
+		// WHATWG permits ASCII internal names such as scratch_pad; DNS IDNA
+		// label validation is stricter. Reject forbidden host code points instead.
+		if strings.IndexFunc(hostname, func(r rune) bool {
+			return r <= 32 || r == 127 || strings.ContainsRune("#%/:<>?@[\\]^|", r)
+		}) >= 0 {
+			return "", errors.New("invalid local recipient hostname")
+		}
+		hostname = strings.ToLower(hostname)
 	}
 	port := configured.Port()
 	if port != "" {
