@@ -204,3 +204,38 @@ it("keeps MCP proof available to another client after an anonymous budget is exh
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+it.each([
+  "::1",
+  "0:0:0:0:0:0:0:1",
+  "::ffff:127.0.0.1",
+  "0:0:0:0:0:ffff:7f00:1",
+])("canonicalizes IPv6 proxy peer %s before admission", async (peer) => {
+  const api = createApi({
+    databasePath: ":memory:",
+    origin: "http://localhost:3000",
+    trustedProxies: ["::1", "127.0.0.1"],
+  });
+  try {
+    await api.store.insert("owner", { id: "owner" });
+    const call = (forwarded: string) =>
+      api.handleRequest(
+        new Request("http://localhost:3000/api/v1/auth/login/options", {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:3000",
+            "x-forwarded-for": forwarded,
+          },
+          body: "{}",
+        }),
+        peer,
+      );
+    for (let n = 0; n < 121; n++)
+      expect(
+        (await call(n % 2 ? "2001:0db8:0:0:0:0:0:1" : "2001:db8::1")).status,
+      ).toBe(n < 120 ? 200 : 429);
+    expect((await call("2001:db8::2")).status).toBe(200);
+  } finally {
+    await api.close();
+  }
+});

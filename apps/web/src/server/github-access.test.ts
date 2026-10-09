@@ -166,6 +166,7 @@ async function fixture(
     method = "GET",
     body?: unknown,
     cookie = "",
+    peer?: string,
   ) => {
     const response = await api.handleRequest(
       new Request(`http://localhost:3000/api/v1${path}`, {
@@ -173,6 +174,7 @@ async function fixture(
         headers: { origin: "http://localhost:3000", cookie },
         body: body === undefined ? undefined : JSON.stringify(body),
       }),
+      peer,
     );
     return {
       response,
@@ -1061,11 +1063,37 @@ it.each([
     }
     expect(
       (
-        await f.call("/auth/register/options", "POST", {
-          setupToken: await f.api.auth.createSetupToken(),
-        })
+        await f.call(
+          "/auth/register/options",
+          "POST",
+          {
+            setupToken: await f.api.auth.createSetupToken(),
+          },
+          "",
+          "192.0.2.1",
+        )
       ).response.status,
     ).toBe(200);
+    const token = await f.api.auth.createSetupToken();
+    expect(
+      (await f.call("/auth/register/options", "POST", { setupToken: token }))
+        .response.status,
+    ).toBe(429);
+    expect(
+      (
+        await f.call(
+          "/auth/register/options",
+          "POST",
+          { setupToken: token },
+          "",
+          "192.0.2.3",
+        )
+      ).response.status,
+    ).toBe(200);
+    await f.api.close();
+    // Exhausted proof admission must not touch even an unavailable database.
+    const blocked = await f.call(path, "POST", body, cookie);
+    expect(blocked.response.status).toBe(429);
   },
 );
 

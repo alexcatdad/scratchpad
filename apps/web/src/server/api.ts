@@ -493,6 +493,13 @@ export function createApi(config: {
         );
         if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
           auth.checkOrigin(request);
+        // Proof lookup has its own bounded client lane before any hashing or SQL.
+        // Anonymous login traffic cannot spend this protected lookup allowance.
+        const resolvesProof =
+          managementRoutes.includes(route) ||
+          route.startsWith("/auth/register/") ||
+          (route === "/auth/github/options" && body.intent !== "login");
+        if (resolvesProof) auth.throttle(`proof-client:${client}`);
         let allowance = `client:${client}`;
         try {
           if (
