@@ -2,9 +2,27 @@ package scratchpad
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 )
+
+func TestSSHChallengePreservesExpiryLexeme(t *testing.T) {
+	const expiry = "2026-10-09T12:00:00.120Z"
+	response := func(purpose string) *http.Response {
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"version":2,"recipient":"https://memory.example.test","purpose":"` + purpose + `","challengeId":"synthetic","nonce":"synthetic","namespace":"scratchpad-auth-v2","expiresAt":"` + expiry + `"}`))}
+	}
+	login, err := ParsePostAuthMcpChallengeResponse(response("ssh_login"))
+	if err != nil || login.JSON200 == nil || login.JSON200.ExpiresAt != expiry {
+		t.Fatalf("login expiry lexeme: %#v %v", login, err)
+	}
+	enroll, err := ParsePostAuthCredentialsChallengeResponse(response("ssh_enroll"))
+	if err != nil || enroll.JSON200 == nil || enroll.JSON200.ExpiresAt != expiry {
+		t.Fatalf("enrollment expiry lexeme: %#v %v", enroll, err)
+	}
+}
 
 // The Node integration harness serves the actual API/auth/database, not canned responses.
 func TestAuthenticatedHTTP(t *testing.T) {

@@ -6,6 +6,7 @@ import { join } from "node:path";
 import type { ServerRequest } from "srvx";
 import { serve } from "srvx/node";
 import { expect, it } from "vitest";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import { createApi } from "./api";
 
 it("uses actual srvx socket metadata for configured proxy clients", async () => {
@@ -137,8 +138,17 @@ it("keeps MCP proof available to another client after an anonymous budget is exh
     expect(challenge.status).toBe(200);
     const signed = spawnSync(
       "ssh-keygen",
-      ["-Y", "sign", "-f", key, "-n", "scratchpad-auth"],
-      { input: challenge.data.nonce, encoding: "utf8" },
+      ["-Y", "sign", "-f", key, "-n", sshNamespace],
+      {
+        input: sshProof(
+          challenge.data,
+          publicKey,
+          "http://localhost:3000",
+          "ssh_login",
+          Date.parse("2026-10-09T12:00:00Z"),
+        ),
+        encoding: "utf8",
+      },
     );
     expect(signed.status).toBe(0);
     const result = await call(
@@ -163,8 +173,17 @@ it("keeps MCP proof available to another client after an anonymous budget is exh
       );
       const signature = spawnSync(
         "ssh-keygen",
-        ["-Y", "sign", "-f", key, "-n", "scratchpad-auth"],
-        { input: next.data.nonce, encoding: "utf8" },
+        ["-Y", "sign", "-f", key, "-n", sshNamespace],
+        {
+          input: sshProof(
+            next.data,
+            publicKey,
+            "http://localhost:3000",
+            "ssh_login",
+            Date.parse("2026-10-09T12:00:00Z"),
+          ),
+          encoding: "utf8",
+        },
       );
       expect(signature.status).toBe(0);
       proofs.push({

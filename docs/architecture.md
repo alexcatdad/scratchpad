@@ -309,7 +309,7 @@ Preferred mechanism:
 
 ```text
 MCP → request challenge
-API → nonce
+API → versioned challenge with recipient, purpose and expiry
 MCP → signs canonical challenge using developer key
 API → verifies enrolled public key
 API → issues short-lived bearer token
