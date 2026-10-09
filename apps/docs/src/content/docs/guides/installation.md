@@ -54,7 +54,7 @@ After linking, your laptop and VMs can use synchronized published SSH authentica
 
 ## Develop from source
 
-Use Node.js **24.21.0** from `.node-version`, npm, Git, and OpenSSH `ssh-keygen`. Building the MCP also requires Go **1.27.1**. Docker Compose is an alternative for running the server.
+Use Node.js **24.21.0** from `.node-version`, npm, Git, and OpenSSH `ssh-keygen`. Building the MCP also requires Go **1.27.2**. Docker Compose is an alternative for running the server.
 
 Clone [the repository](https://github.com/alexcatdad/scratchpad) and run these commands from its root:
 

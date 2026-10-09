@@ -1004,3 +1004,7 @@ Synchronization runs every five minutes; public-key discovery does not require p
 GitHub outages leave complete cached keys usable for at most 24 hours since last success, independently of the machine session's lifetime. Browser sign-in requires GitHub; independent passkeys and administrator recovery remain available. Unlinking requires fresh independent authentication; replacement requires fresh existing authentication. Both invalidate GitHub-derived sessions and permissions and preserve data and independent credentials. Do not silently convert credential provenance.
 
 Machine onboarding is an instruction-only skill using existing client configuration and SSH tooling. It verifies a real authenticated MCP read with explicit project scope. The HTTP API remains authoritative; no dedicated setup command, client OAuth secret or new machine authentication mechanism is introduced.
+
+## Accepted clarification: private SQLite storage
+
+Issue #21 requires owner-only live SQLite storage before opening the database. Startup creates private new storage and refuses unsafe existing directory/file ownership, mode, links or macOS ACLs with repair guidance. Backup directories follow the same boundary; unrelated parent directories are not modified. Runtime UID peers and administrators remain trusted. See [the storage runbook](runbooks/security-21-private-sqlite.md); PostgreSQL selection remains independent.
