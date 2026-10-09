@@ -10,7 +10,7 @@ test.afterAll(async () => {
   rmSync(harness.temporary, { recursive: true, force: true });
 });
 
-for (const maliciousId of ["victim/accept?", "../../auth/logout#"])
+for (const maliciousId of ["victim/accept?", "../../auth/logout#", "\ud800"])
   test(`a displayed Reject for ${maliciousId} never sends Accept or logout`, async ({
     page,
   }) => {

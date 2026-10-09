@@ -259,6 +259,26 @@ describe("persistent API domain", () => {
       ).toBe(400);
       expect(await auditDestination.api.store.list("project")).toHaveLength(0);
       expect(await auditDestination.api.store.list("record")).toHaveLength(0);
+      const historical = await fixture();
+      await historical.api.store.insert("audit", badAudit.data.audit[0]);
+      expect(
+        (await historical.call("/api/v1/import", "POST", badAudit)).status,
+      ).toBe(400);
+      expect(await historical.api.store.list("project")).toHaveLength(0);
+      expect(await historical.api.store.list("record")).toHaveLength(0);
+      for (const [kind, reference] of [
+        ["record", "projectId"],
+        ["metadata", "recordId"],
+      ]) {
+        const duplicate = await fixture();
+        const invalid = structuredClone(exported);
+        invalid.data[kind][0][reference] = id;
+        await duplicate.api.store.insert(kind, invalid.data[kind][0]);
+        expect(
+          (await duplicate.call("/api/v1/import", "POST", invalid)).status,
+        ).toBe(400);
+        expect(await duplicate.api.store.list("project")).toHaveLength(0);
+      }
     }
     const destination = await fixture();
     const legacy = await destination.call("/api/v1/import", "POST", {

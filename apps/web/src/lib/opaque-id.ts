@@ -8,7 +8,9 @@ export function isOpaqueId(value: string): boolean {
     value !== ".."
   );
 }
-export const encodedId = (value: string): string => encodeURIComponent(value);
+// Invalid historical IDs reach the request guard without throwing in UI handlers.
+export const encodedId = (value: string): string =>
+  isOpaqueId(value) ? encodeURIComponent(value) : "%00";
 export function decodedId(value: string): string {
   const id = decodeURIComponent(value);
   if (!isOpaqueId(id)) throw new Error("Invalid entity identifier.");
