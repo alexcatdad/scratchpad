@@ -51,7 +51,7 @@ For a source checkout, the repository's `docker compose up --build -d` builds th
 
 ## Develop
 
-Use the Node 24 version in `.node-version`, npm, Go 1.27.1, Git and OpenSSH.
+Use the Node 24 version in `.node-version`, npm, Go 1.27.2, Git and OpenSSH.
 
 ```sh
 npm ci
