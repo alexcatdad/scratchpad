@@ -131,6 +131,11 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	hostname := configured.Hostname()
 	if address, err := netip.ParseAddr(hostname); err == nil {
 		hostname = address.String()
+		if address.Is4In6() {
+			// WHATWG serializes mapped IPv6 tails as hex, not dotted IPv4.
+			pieces := address.As16()
+			hostname = fmt.Sprintf("::ffff:%x:%x", uint16(pieces[12])<<8|uint16(pieces[13]), uint16(pieces[14])<<8|uint16(pieces[15]))
+		}
 	} else {
 		hostname, err = idna.Lookup.ToASCII(hostname)
 		if err != nil {

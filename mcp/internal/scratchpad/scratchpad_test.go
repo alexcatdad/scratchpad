@@ -204,6 +204,13 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 		{"https://memory.example.com:08443", "https://memory.example.com:8443"},
 		{"https://İ.example", "https://xn--i-9bb.example"},
 		{"https://MÉMORY.example:0443", "https://xn--mmory-bsa.example"},
+		{"https://[::ffff:127.0.0.1]", "https://[::ffff:7f00:1]"},
+		{"https://[::ffff:192.0.2.128]:0443", "https://[::ffff:c000:280]"},
+		{"https://[::ffff:0.0.0.0]:08443", "https://[::ffff:0:0]:8443"},
+		{"https://[::127.0.0.1]", "https://[::7f00:1]"},
+		{"https://[2001:0:0:1:0:0:1:1]", "https://[2001::1:0:0:1:1]"},
+		{"https://[2001:0db8:0000:0000:0000:0000:0000:0001]", "https://[2001:db8::1]"},
+		{"https://[::FFFF:127.0.0.1]", "https://[::ffff:7f00:1]"},
 	} {
 		t.Run(entry.configured, func(t *testing.T) {
 			trustedRecipient = entry.recipient
