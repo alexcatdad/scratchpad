@@ -871,7 +871,10 @@ Response:
 {
   "challengeId": "...",
   "nonce": "...",
-  "namespace": "scratchpad-auth",
+  "namespace": "scratchpad-auth-v2",
+  "version": 2,
+  "recipient": "https://scratchpad.example.com",
+  "purpose": "ssh_login",
   "expiresAt": "..."
 }
 ```
@@ -1654,7 +1657,7 @@ The OpenAPI contract drives deterministic TypeScript and Go client generation. F
 
 The accepted [GitHub owner-access ADR](adr/0001-github-owner-access.md) expands authentication beyond the historical presentation-only profile interface in §67. Public `/profile/github` snapshots remain descriptive; verified owner binding is separate and cannot be created by submitting a username.
 
-The existing `POST /auth/mcp/challenge` and `/auth/mcp/verify` wire contract accepts either an independent locally enrolled SSH credential or an eligible synchronized GitHub-managed public key. Challenge signatures remain OpenSSH SSHSIG over the exact nonce with namespace `scratchpad-auth`; private material stays local. Proof of possession is mandatory. Machine sessions last up to 24 hours, with eligibility rechecked on every request and renewal: persistent local blocks, successful-sync removals, account unlink/replacement and cache expiry invalidate GitHub-derived access immediately.
+The existing `POST /auth/mcp/challenge` and `/auth/mcp/verify` wire contract accepts either an independent locally enrolled SSH credential or an eligible synchronized GitHub-managed public key. Challenge signatures use the version 2 recipient-bound OpenSSH SSHSIG transcript described below; private material stays local. Proof of possession is mandatory. Machine sessions last up to 24 hours, with eligibility rechecked on every request and renewal: persistent local blocks, successful-sync removals, account unlink/replacement and cache expiry invalidate GitHub-derived access immediately.
 
 GitHub synchronization collects both SSH authentication and SSH signing keys completely before applying changes. Its persisted last successful refresh defines the 24-hour authorization deadline; a failed or incomplete refresh and a server restart do not extend it. Independent local credentials are exempt from GitHub cache freshness. GPG keys are unsupported.
 
@@ -1667,3 +1670,19 @@ All paths below are relative to `/api/v1`. `GET /auth/status` includes `githubCo
 Authenticated browser `GET /auth/github` reports `configured`, nullable `binding: {accountId, username}`, nullable `lastSuccessfulSyncAt` and `cacheExpiresAt`, `cacheValid`, nullable `lastSyncError`, `keys: [{publicKey, fingerprint, categories, blocked}]` and `freshAuthenticationRequired`. `POST /auth/github/sync` performs a complete refresh and returns that status. `POST /auth/github/block` accepts `{publicKey, blocked}` and returns the updated status. Public key material is not a secret.
 
 `DELETE /auth/github` requires a fresh independent local browser authentication and returns `{unlinked: true}`. Replace requires fresh existing browser authentication. Freshness is at most five minutes from actual proof, not a renewed session timestamp. Recovery uses the administrator's distinct recovery capability. Configure the optional paired `SCRATCHPAD_GITHUB_CLIENT_ID` and `SCRATCHPAD_GITHUB_CLIENT_SECRET`; callback origin comes from `SCRATCHPAD_PUBLIC_URL` with `/api/v1/auth/github/callback`.
+
+## Accepted clarification: recipient-bound SSH proof (2026-10-09)
+
+Both SSH challenge endpoints return version `2`, namespace `scratchpad-auth-v2`, recipient (the configured server origin), purpose (`ssh_login` for MCP login or `ssh_enroll` for browser enrollment), challengeId, nonce and expiresAt. Sign the UTF-8 encoding of this compact JSON array, without a trailing newline:
+
+`["scratchpad-ssh-proof",2,recipient,purpose,challengeId,nonce,publicKey,expiresAt]`
+
+Use JSON string escaping and no whitespace between elements. Normalize publicKey to its first two whitespace-separated OpenSSH fields, joined by one space; omit the comment. Preserve the exact returned expiry string. The signer derives recipient from its locally configured Scratchpad URL origin (or the dashboard's local browser origin), requires the returned recipient to match, and requires the expected purpose, version, namespace and unexpired challenge before signing. The challenger cannot select the signer's trusted recipient. The server independently reconstructs the transcript from stored challenge context and its configured origin. Challenges retain their two-minute expiry and single-use consumption; credential eligibility and revocation remain authoritative.
+
+Upgrade the server, MCP binary and manual/SDK signing integrations together. Version 1 nonce-only signatures and pending version 1 challenges are rejected; request a fresh version 2 challenge. There is no legacy fallback. Existing issued sessions retain their existing expiry and revocation policy; their next renewal requires version 2.
+
+## Accepted clarification: AI dispatch configuration snapshots (2026-10-09)
+
+Each provider request uses endpoint, models, API key and dispatch generation from one stored AI settings snapshot. Configuration updates, including key-only replacement or removal, increment a persisted dispatch generation under the existing optimistic version check. The generation lives in the existing entity JSON for both SQLite and PostgreSQL; legacy settings start at generation zero without a destructive migration. Credentials and generation do not enter public settings or audits.
+
+Before each outbound request, admission checks the generation against current settings in the same short store transaction used to serialize configuration updates. The transaction ends after initiating the request, without waiting for the provider response. A request already admitted/transmitted cannot be recalled. A changed configuration stops future batches, discards job outputs and exposes a failed job with a safe configuration-change message. The owner may retry using current settings. Connectivity tests and semantic search use the same boundary; global/project consent checks remain required. Key-only changes do not alter the embedding compatibility fingerprint or invalidate compatible stored embeddings.

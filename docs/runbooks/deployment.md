@@ -39,6 +39,18 @@ memory.example.com {
 
 The hostname, DNS, firewall, and certificate must be configured for your environment. A proxy running inside another container cannot reach the host service at its own `127.0.0.1`; use an explicitly configured host gateway or a private Docker network instead. Do not expose port 3000 publicly as a substitute for TLS.
 
+Set `SCRATCHPAD_TRUSTED_PROXIES` to the exact IP addresses of proxy peers seen by
+the application, separated by commas. Native host servers normally use
+`127.0.0.1,::1`. Docker may present the bridge gateway instead of loopback;
+inspect the Compose network gateway with `docker network inspect` and verify
+the actual peer before trusting that address. Compose forwards this setting
+into the service. The default is empty and ignores all forwarding headers.
+Keep direct access restricted and ensure the proxy appends the actual client
+address to `X-Forwarded-For` or overwrites caller-provided forwarding data.
+Scratchpad walks trusted hops from right to left, preventing a caller's forged
+prefix from choosing its allowance. An incorrect or empty allowlist behind a
+proxy makes anonymous clients share its allowance.
+
 Apply the configured origin:
 
 ```sh
