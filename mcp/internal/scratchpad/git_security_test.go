@@ -28,6 +28,13 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 	}
 	run(t, root, "-c", "protocol.file.allow=always", "submodule", "add", source, "child")
 	run(t, root, "-c", "user.name=test", "-c", "user.email=test@example.test", "commit", "-am", "synthetic submodule")
+	for name, content := range map[string]string{".gitattributes": "synthetic-tracked filter=evil\n", "synthetic-tracked": "initial synthetic\n"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run(t, root, "add", ".gitattributes", "synthetic-tracked")
+	run(t, root, "-c", "user.name=test", "-c", "user.email=test@example.test", "commit", "-m", "synthetic filter fixture")
 	run(t, root, "remote", "add", "origin", "https://github.com/synthetic/prepared.git")
 	worktree := filepath.Join(t.TempDir(), "worktree")
 	run(t, root, "worktree", "add", "-b", "synthetic-feature", worktree)
@@ -46,6 +53,16 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 	}
 	run(t, root, "config", "submodule.recurse", "true")
 	run(t, root, "config", "status.submoduleSummary", "true")
+	filterMarker := filepath.Join(t.TempDir(), "filter-executed")
+	filter := filepath.Join(t.TempDir(), "clean-filter")
+	if err := os.WriteFile(filter, []byte(fmt.Sprintf("#!/bin/sh\nprintf synthetic > %q\ncat\n", filterMarker)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "config", "filter.evil.clean", filter)
+	run(t, root, "config", "filter.evil.required", "true")
+	if err := os.WriteFile(filepath.Join(root, "synthetic-tracked"), []byte("changed synthetic\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	// Positive controls prove the harmless hooks are live before testing MCP.
 	for i, dir := range []string{root, filepath.Join(root, "child")} {
 		run(t, dir, "status", "--porcelain")
@@ -56,6 +73,13 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := os.Stat(filterMarker); err != nil {
+		t.Fatal("clean filter did not execute in positive control", err)
+	}
+	if err := os.Remove(filterMarker); err != nil {
+		t.Fatal(err)
+	}
+	markers = append(markers, filterMarker)
 	// A checkout must not hide untracked parent changes from capture provenance.
 	run(t, root, "config", "status.showUntrackedFiles", "no")
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -127,6 +151,30 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 		if _, err := os.Stat(marker); !os.IsNotExist(err) {
 			t.Fatal("worktree executed helper", err)
 		}
+	}
+}
+
+func TestDiscoveryDirtyProvenanceIgnoresStatusConfiguration(t *testing.T) {
+	for _, stagedGitlink := range []bool{false, true} {
+		t.Run(fmt.Sprint(stagedGitlink), func(t *testing.T) {
+			root := t.TempDir()
+			run(t, root, "init")
+			run(t, root, "-c", "user.name=test", "-c", "user.email=test@example.test", "commit", "--allow-empty", "-m", "synthetic")
+			run(t, root, "config", "status.showUntrackedFiles", "no")
+			if stagedGitlink {
+				commit, err := exec.Command("git", "-C", root, "rev-parse", "HEAD").Output()
+				if err != nil {
+					t.Fatal(err)
+				}
+				run(t, root, "update-index", "--add", "--cacheinfo", "160000,"+strings.TrimSpace(string(commit))+",child")
+			} else if err := os.WriteFile(filepath.Join(root, "untracked"), []byte("synthetic"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			g, err := Discover(context.Background(), root)
+			if err != nil || g == nil || !g.Dirty {
+				t.Fatalf("lost parent dirty provenance: %+v %v", g, err)
+			}
+		})
 	}
 }
 

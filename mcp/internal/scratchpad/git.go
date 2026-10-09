@@ -55,7 +55,25 @@ func NormalizeRemote(remote string) (string, error) {
 	return strings.ToLower(host) + "/" + path, nil
 }
 func git(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "submodule.recurse=false", "-c", "status.submoduleSummary=false", "-C", dir}, args...)...)
+	options := []string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "submodule.recurse=false", "-c", "status.submoduleSummary=false", "-C", dir}
+	if len(args) > 0 && args[0] == "status" {
+		// Read names only: never execute or expose repository-selected commands.
+		keys, err := git(ctx, dir, "config", "--null", "--name-only", "--get-regexp", `^filter\..*\.(clean|smudge|process|required)$`)
+		var exit *exec.ExitError
+		if err != nil && (!errors.As(err, &exit) || exit.ExitCode() != 1) {
+			return "", err
+		}
+		drivers := map[string]bool{}
+		for _, key := range strings.Split(keys, "\x00") {
+			if i := strings.LastIndex(key, "."); i > 0 {
+				drivers[key[:i]] = true
+			}
+		}
+		for driver := range drivers {
+			options = append(options, "-c", driver+".clean=", "-c", driver+".smudge=", "-c", driver+".process=", "-c", driver+".required=false")
+		}
+	}
+	cmd := exec.CommandContext(ctx, "git", append(options, args...)...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }
@@ -77,8 +95,21 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 	g := &GitContext{RootPathHint: root}
 	g.Branch, _ = git(ctx, root, "symbolic-ref", "--short", "-q", "HEAD")
 	g.Commit, _ = git(ctx, root, "rev-parse", "HEAD")
-	status, _ := git(ctx, root, "status", "--porcelain", "--ignore-submodules=all", "--untracked-files=all")
+	status, err := git(ctx, root, "status", "--porcelain", "--ignore-submodules=all", "--untracked-files=normal")
+	if err != nil {
+		return g, err
+	}
 	g.Dirty = status != ""
+	// Cached diff examines the parent index only, retaining staged gitlinks
+	// without inspecting a child worktree or invoking diff converters/helpers.
+	_, err = git(ctx, root, "diff", "--cached", "--quiet", "--no-ext-diff", "--no-textconv", "--ignore-submodules=none")
+	if err != nil {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+			return g, err
+		}
+		g.Dirty = true
+	}
 	common, _ := git(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	actual, _ := git(ctx, root, "rev-parse", "--absolute-git-dir")
 	g.Worktree.Detected = common != actual
