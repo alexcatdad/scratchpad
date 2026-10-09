@@ -51,7 +51,7 @@ export class Auth {
     string,
     { bucket: number; count: number }
   >();
-  private activeVerifications = 0;
+  private activeVerifications = { proof: 0, oauth: 0 };
   readonly origin: string;
   readonly rpID: string;
   github?: {
@@ -98,18 +98,24 @@ export class Auth {
     }
     this.allowances.set(client, { bucket, count: count + 1 });
   }
-  async verify<T>(operation: () => Promise<T>): Promise<T> {
+  reserveVerification(kind: "proof" | "oauth" = "proof"): () => void {
     requireValue(
-      this.activeVerifications < 8,
+      this.activeVerifications[kind] < (kind === "oauth" ? 4 : 8),
       "RATE_LIMITED",
       "Authentication verification is busy. Try again shortly.",
       429,
     );
-    this.activeVerifications++;
+    this.activeVerifications[kind]++;
+    return () => {
+      this.activeVerifications[kind]--;
+    };
+  }
+  async verify<T>(operation: () => Promise<T>): Promise<T> {
+    const release = this.reserveVerification();
     try {
       return await operation();
     } finally {
-      this.activeVerifications--;
+      release();
     }
   }
   async initialized(): Promise<boolean> {

@@ -5,7 +5,7 @@ Unsupported POST routes and invalid browser origins are rejected before charging
 an allowance. Valid setup and recovery tokens have separate allowances;
 authenticated management uses the credential identity. Each allowance permits
 120 requests per minute. At most 4096 client allowances are retained in memory,
-and at most eight proof or OAuth verifications run concurrently.
+and at most eight proved-identity verifications plus four anonymous OAuth callbacks run concurrently.
 
 The TanStack server adapter obtains the address from runtime metadata through
 `getRequestIP({ xForwardedFor: false })`. The API ignores forwarding headers
@@ -31,3 +31,5 @@ test data only.
 
 The Go 1.27.2 pin is included independently because the previous toolchain fails
 canonical vulnerability checks on known standard-library vulnerabilities.
+
+Anonymous OAuth callbacks use a separate four-slot pool, preserving the eight cryptographic proof slots for setup, recovery, passkey and MCP verification, including token/session-authorized OAuth callbacks. Slot selection occurs only after validating the stored OAuth state and browser binding. A pre-consumption `RATE_LIMITED` callback returns HTTP 429 without clearing its browser state cookie, so it can be retried. Failed setup/session proofs consume the anonymous client allowance; a proved token or credential retains its independent allowance.

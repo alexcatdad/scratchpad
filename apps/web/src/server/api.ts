@@ -494,31 +494,52 @@ export function createApi(config: {
         if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
           auth.checkOrigin(request);
         let allowance = `client:${client}`;
-        if (
-          managementRoutes.includes(route) ||
-          (route.startsWith("/auth/register/") && !body.setupToken)
-        ) {
-          const identity = await auth.identify(request);
-          allowance = `credential:${identity.credential.id}`;
-        } else if (route.startsWith("/auth/register/") && body.setupToken) {
-          const token = await auth.setup(body.setupToken);
-          allowance = `setup:${token.id}`;
+        try {
+          if (
+            managementRoutes.includes(route) ||
+            (route.startsWith("/auth/register/") && !body.setupToken)
+          ) {
+            const identity = await auth.identify(request);
+            allowance = `credential:${identity.credential.id}`;
+          } else if (route.startsWith("/auth/register/") && body.setupToken) {
+            const token = await auth.setup(body.setupToken);
+            allowance = `setup:${token.id}`;
+          }
+        } catch (error) {
+          auth.throttle(allowance);
+          throw error;
         }
         if (route !== "/auth/github/options") auth.throttle(allowance);
       }
       if (route === "/auth/github/options" && method === "POST") {
-        const result = await github.options(body, request, (allowance) =>
-          auth.throttle(allowance ?? `client:${client}`),
-        );
+        let admitted = false;
+        let result: Awaited<ReturnType<typeof github.options>>;
+        try {
+          result = await github.options(body, request, (allowance) => {
+            auth.throttle(allowance ?? `client:${client}`);
+            admitted = true;
+          });
+        } catch (error) {
+          if (
+            !admitted &&
+            !(error instanceof ApiError && error.code === "RATE_LIMITED")
+          )
+            auth.throttle(`client:${client}`);
+          throw error;
+        }
         return response({ authorizationUrl: result.authorizationUrl }, 200, {
           "Set-Cookie": result.cookie,
         });
       }
       if (route === "/auth/github/callback" && method === "GET") {
+        let release: (() => void) | undefined;
         try {
-          const result = await auth.verify(() =>
-            github.callback(request, (allowance) => auth.throttle(allowance)),
-          );
+          const result = await github.callback(request, (allowance) => {
+            auth.throttle(allowance);
+            release = auth.reserveVerification(
+              allowance.startsWith("oauth:") ? "oauth" : "proof",
+            );
+          });
           const headers = new Headers({
             Location: "/",
             "Cache-Control": "no-store",
@@ -527,6 +548,12 @@ export function createApi(config: {
           headers.append("Set-Cookie", result.clearState);
           return new Response(null, { status: 302, headers });
         } catch (error) {
+          if (error instanceof ApiError && error.code === "RATE_LIMITED")
+            return response(
+              { error: { code: error.code, message: error.message } },
+              429,
+              { "Cache-Control": "no-store" },
+            );
           const allowed = [
             "AUTH_INVALID",
             "AUTH_FRESH_REQUIRED",
@@ -547,6 +574,8 @@ export function createApi(config: {
               "Set-Cookie": github.clearStateCookie(),
             },
           });
+        } finally {
+          release?.();
         }
       }
       if (route.startsWith("/auth/")) {

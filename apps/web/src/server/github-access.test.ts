@@ -1043,3 +1043,95 @@ it.skipIf(!process.env.TEST_POSTGRES_URL)(
     expect((await f.machine()).response.status).toBe(401);
   },
 );
+
+it.each([
+  ["/auth/github/options", { intent: "setup", setupToken: "bogus-token" }, ""],
+  ["/auth/register/options", { setupToken: "bogus-token" }, ""],
+  ["/auth/credentials/challenge", {}, "scratchpad_session=bogus-session"],
+])(
+  "charges failed identity proofs on %s to the anonymous client allowance",
+  async (path, body, cookie) => {
+    const f = await fixture();
+    for (let attempt = 0; attempt < 121; attempt++) {
+      const result = await f.call(path, "POST", body, cookie);
+      expect(result.response.status).toBe(attempt < 120 ? 401 : 429);
+    }
+    expect(
+      (
+        await f.call("/auth/register/options", "POST", {
+          setupToken: await f.api.auth.createSetupToken(),
+        })
+      ).response.status,
+    ).toBe(200);
+  },
+);
+
+it.each([false, true])(
+  "isolates slow OAuth callbacks and preserves busy retries (authorized recovery: %s)",
+  async (recover) => {
+    const f = await fixture();
+    f.provider.keys = [{ key: f.publicKey }];
+    await f.oauth("setup", await f.api.auth.createSetupToken());
+    const starts = [];
+    for (let i = 0; i < 9; i++)
+      starts.push(
+        await f.call("/auth/github/options", "POST", { intent: "login" }),
+      );
+    const releases: (() => void)[] = [];
+    let reached = 0;
+    let signal: () => void = () => {};
+    const fourReached = new Promise<void>((resolve) => {
+      signal = resolve;
+    });
+    f.provider.override = async (url, init) => {
+      if (
+        url.includes("access_token") &&
+        new URLSearchParams(String(init?.body)).get("code") !==
+          "owner-recovery-code"
+      ) {
+        reached++;
+        if (reached === 4) signal();
+        await new Promise<void>((resolve) => releases.push(resolve));
+      }
+      return undefined;
+    };
+    const callback = (start: Awaited<ReturnType<typeof f.call>>) =>
+      f.call(
+        `/auth/github/callback?code=synthetic-code&state=${new URL(start.data.authorizationUrl).searchParams.get("state")}`,
+        "GET",
+        undefined,
+        start.cookie,
+      );
+    const pending = starts.slice(0, 8).map(callback);
+    await fourReached;
+    try {
+      expect((await f.machine()).response.status).toBe(200);
+      const busy = await callback(starts[8]);
+      expect(busy.response.status).toBe(429);
+      expect(busy.response.headers.get("set-cookie")).toBeNull();
+      expect(busy.data.error.code).toBe("RATE_LIMITED");
+      if (recover) {
+        const recovery = await f.call("/auth/github/options", "POST", {
+          intent: "recover",
+          setupToken: await f.api.auth.createSetupToken(true),
+        });
+        expect(
+          (
+            await f.call(
+              `/auth/github/callback?code=owner-recovery-code&state=${new URL(recovery.data.authorizationUrl).searchParams.get("state")}`,
+              "GET",
+              undefined,
+              recovery.cookie,
+            )
+          ).response.status,
+        ).toBe(302);
+      }
+    } finally {
+      f.provider.override = undefined;
+      for (const release of releases) release();
+      await Promise.all(pending);
+    }
+    if (!recover) expect((await callback(starts[8])).response.status).toBe(302);
+    else expect((await f.oauth("login")).response.status).toBe(302);
+  },
+);
