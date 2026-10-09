@@ -26,6 +26,7 @@ import {
   presentGithubProfile,
 } from "./github-profile";
 import { exportKinds, importLegacy, importNative } from "./imports";
+import { requestClient } from "./request-client";
 import { Store } from "./store";
 import { compareTimestamps } from "./timestamps";
 
@@ -110,6 +111,7 @@ export function createApi(config: {
   githubOAuth?: GithubOAuth;
   githubAuthFetch?: typeof fetch;
   clock?: () => number;
+  trustedProxies?: string[];
   pgvector?: boolean;
 }) {
   const store = new Store(config.databasePath, config.databaseUrl, {
@@ -409,6 +411,7 @@ export function createApi(config: {
     request: Request,
     clientAddress?: string,
   ): Promise<Response> {
+    const client = requestClient(request, clientAddress, config.trustedProxies);
     try {
       const url = new URL(request.url),
         path = url.pathname.replace(/\/$/, "") || "/",
@@ -490,7 +493,7 @@ export function createApi(config: {
         );
         if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
           auth.checkOrigin(request);
-        let allowance = `client:${clientAddress ?? "unknown"}`;
+        let allowance = `client:${client}`;
         if (
           managementRoutes.includes(route) ||
           (route.startsWith("/auth/register/") && !body.setupToken)
@@ -501,18 +504,21 @@ export function createApi(config: {
           const token = await auth.setup(body.setupToken);
           allowance = `setup:${token.id}`;
         }
-        auth.throttle(allowance);
+        if (route !== "/auth/github/options") auth.throttle(allowance);
       }
       if (route === "/auth/github/options" && method === "POST") {
-        const result = await github.options(body, request);
+        const result = await github.options(body, request, (allowance) =>
+          auth.throttle(allowance ?? `client:${client}`),
+        );
         return response({ authorizationUrl: result.authorizationUrl }, 200, {
           "Set-Cookie": result.cookie,
         });
       }
       if (route === "/auth/github/callback" && method === "GET") {
         try {
-          auth.throttle(`client:${clientAddress ?? "unknown"}`);
-          const result = await auth.verify(() => github.callback(request));
+          const result = await auth.verify(() =>
+            github.callback(request, (allowance) => auth.throttle(allowance)),
+          );
           const headers = new Headers({
             Location: "/",
             "Cache-Control": "no-store",
@@ -1396,6 +1402,9 @@ export function getApi(): ReturnType<typeof createApi> {
         : undefined,
     databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
     pgvector: process.env.SCRATCHPAD_PGVECTOR === "true",
+    trustedProxies: process.env.SCRATCHPAD_TRUSTED_PROXIES?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",

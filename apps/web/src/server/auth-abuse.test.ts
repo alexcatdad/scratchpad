@@ -2,8 +2,84 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ServerRequest } from "srvx";
+import { serve } from "srvx/node";
 import { expect, it } from "vitest";
 import { createApi } from "./api";
+
+it("uses actual srvx socket metadata for configured proxy clients", async () => {
+  const api = createApi({
+    databasePath: ":memory:",
+    origin: "http://localhost:3000",
+    trustedProxies: ["127.0.0.1"],
+  });
+  const server = serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    trustProxy: false,
+    fetch: (request: ServerRequest) => api.handleRequest(request, request.ip),
+  });
+  try {
+    await api.store.insert("owner", { id: "owner" });
+    await server.ready();
+    if (!server.url) throw new Error("Missing local test server URL");
+    const endpoint = new URL("/api/v1/auth/login/options", server.url);
+    const options = (forwarded: string) =>
+      fetch(endpoint, {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          "x-forwarded-for": forwarded,
+        },
+        body: "{}",
+      });
+    for (let attempt = 0; attempt < 125; attempt++) {
+      const response = await options(`198.51.100.${attempt}, 192.0.2.2`);
+      expect(response.status).toBe(attempt < 120 ? 200 : 429);
+      await response.arrayBuffer();
+    }
+    const independent = await options("192.0.2.1");
+    expect(independent.status).toBe(200);
+    await independent.arrayBuffer();
+  } finally {
+    await server.close(true);
+    await api.close();
+  }
+});
+
+it("resolves independent proxy clients from the nearest untrusted hop and ignores forged direct headers", async () => {
+  const api = createApi({
+    databasePath: ":memory:",
+    origin: "http://localhost:3000",
+    trustedProxies: ["127.0.0.1"],
+  });
+  try {
+    await api.store.insert("owner", { id: "owner" });
+    const options = (peer: string, forwarded: string) =>
+      api.handleRequest(
+        new Request("http://localhost:3000/api/v1/auth/login/options", {
+          method: "POST",
+          headers: {
+            origin: "http://localhost:3000",
+            "x-forwarded-for": forwarded,
+          },
+          body: "{}",
+        }),
+        peer,
+      );
+    for (let attempt = 0; attempt < 125; attempt++)
+      expect(
+        (await options("127.0.0.1", `198.51.100.${attempt}, 192.0.2.2`)).status,
+      ).toBe(attempt < 120 ? 200 : 429);
+    expect((await options("127.0.0.1", "192.0.2.1")).status).toBe(200);
+    expect((await options("192.0.2.2", "192.0.2.1")).status).toBe(429);
+    expect(
+      (await options("127.0.0.1", "invalid-prefix, 192.0.2.2")).status,
+    ).toBe(429);
+  } finally {
+    await api.close();
+  }
+});
 
 it("keeps MCP proof available to another client after an anonymous budget is exhausted", async () => {
   const directory = mkdtempSync(join(tmpdir(), "scratchpad-abuse-"));

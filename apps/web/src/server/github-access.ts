@@ -147,6 +147,7 @@ export class GithubAccess {
   async options(
     body: JsonObject,
     request: Request,
+    admit?: (allowance: string | undefined) => void,
   ): Promise<{ authorizationUrl: string; cookie: string }> {
     requireValue(
       this.config,
@@ -186,6 +187,13 @@ export class GithubAccess {
         "No GitHub account is linked.",
         401,
       );
+    admit?.(
+      token
+        ? `setup:${token.id}`
+        : identity
+          ? `credential:${identity.credential.id}`
+          : undefined,
+    );
     for (const entry of await this.store.list("github_oauth"))
       if (String(entry.expiresAt) <= this.auth.now())
         await this.store.remove("github_oauth", entry.id);
@@ -217,6 +225,7 @@ export class GithubAccess {
   }
   async callback(
     request: Request,
+    admit?: (allowance: string) => void,
   ): Promise<{ accessToken: string; clearState: string }> {
     requireValue(
       this.config,
@@ -244,6 +253,13 @@ export class GithubAccess {
         "AUTH_INVALID",
         "Invalid, expired or used GitHub authorization state.",
         401,
+      );
+      admit?.(
+        entry.setupTokenId
+          ? `setup:${entry.setupTokenId}`
+          : entry.credentialId
+            ? `credential:${entry.credentialId}`
+            : `oauth:${entry.id}`,
       );
       await this.store.update("github_oauth", {
         ...entry,

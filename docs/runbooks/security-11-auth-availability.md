@@ -8,11 +8,12 @@ authenticated management uses the credential identity. Each allowance permits
 and at most eight proof or OAuth verifications run concurrently.
 
 The TanStack server adapter obtains the address from runtime metadata through
-`getRequestIP({ xForwardedFor: false })`. The API never reads forwarding headers
-to select a bucket. Srvx defaults to trusting no proxy. If configuring its
-`trustProxy` option, specify only actual proxy addresses, prevent direct access
-through those addresses, and have the proxy append or replace forwarding data.
-Never use unrestricted proxy trust for an internet-facing listener. Clients
+`getRequestIP({ xForwardedFor: false })`. The API ignores forwarding headers
+unless the socket peer appears in `SCRATCHPAD_TRUSTED_PROXIES`, an explicit
+comma-separated IP allowlist. It then walks `X-Forwarded-For` from right to left
+and selects the nearest untrusted hop. The proxy must append or replace incoming
+forwarding data. Srvx's own proxy trust stays disabled. See the deployment runbook
+for host/Docker address selection; never trust every address. Clients
 sharing an address share anonymous allowances. Missing transport metadata uses
 a conservative shared unknown-client allowance; authenticated and setup flows
 still use their own proven identities. Allowances reset on process restart.

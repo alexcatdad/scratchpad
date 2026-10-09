@@ -352,6 +352,15 @@ it("refreshes public GitHub keys using OAuth app authentication while browser id
 });
 it("initializes one owner through token-authorized GitHub OAuth and rejects wrong account login", async () => {
   const f = await fixture();
+  for (let attempt = 0; attempt < 125; attempt++)
+    expect(
+      (
+        await f.call(
+          "/auth/github/callback?code=synthetic&state=unknown-synthetic-state",
+          "GET",
+        )
+      ).response.status,
+    ).toBe(303);
   const token = await f.api.auth.createSetupToken();
   const login = await f.oauth("setup", token);
   expect(login.response.status).toBe(302);
@@ -361,6 +370,21 @@ it("initializes one owner through token-authorized GitHub OAuth and rejects wron
     (await f.call("/auth/status", "GET", undefined, login.cookie)).data
       .authenticated,
   ).toBe(true);
+  f.provider.id = 99;
+  for (let attempt = 0; attempt < 125; attempt++)
+    expect(
+      (await f.call("/auth/github/options", "POST", { intent: "login" }))
+        .response.status,
+    ).toBe(attempt < 120 ? 200 : 429);
+  f.provider.id = 42;
+  expect(
+    (await f.oauth("replace", undefined, login.cookie)).response.status,
+  ).toBe(302);
+  expect(
+    (await f.oauth("recover", await f.api.auth.createSetupToken(true))).response
+      .status,
+  ).toBe(302);
+  f.advance(60000);
   f.provider.id = 99;
   expect((await f.oauth("login")).response.status).toBe(303);
 });
@@ -759,8 +783,14 @@ it("preserves passkeys, local SSH credentials and projects through GitHub linkin
   const localMachine = await f.machine("local");
   expect(localMachine.response.status).toBe(200);
   f.provider.keys = [{ key: f.publicKey }];
+  f.advance(60000);
+  for (let attempt = 0; attempt < 125; attempt++)
+    expect(
+      (await f.call("/auth/login/options", "POST", {})).response.status,
+    ).toBe(attempt < 120 ? 200 : 429);
   const github = await f.oauth("link", undefined, local.cookie);
   expect(github.response.status).toBe(302);
+  f.advance(60000);
   const managed = await f.machine();
   expect(managed.response.status).toBe(200);
   expect(
@@ -779,6 +809,7 @@ it("preserves passkeys, local SSH credentials and projects through GitHub linkin
   expect(projects.data.projects.map((p: { name: string }) => p.name)).toContain(
     "Synthetic recovery project",
   );
+  f.advance(60000);
   const login = await f.passkeyLogin();
   expect(login.response.status).toBe(200);
   expect(
