@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiService, OpenAiProvider } from "./ai";
 import { defaults, type Entity } from "./domain";
@@ -656,6 +658,194 @@ describe("optional AI boundary", () => {
 });
 
 describe("OpenAI-compatible response validation", () => {
+  it("consumes many one-byte chunks within a constrained heap", async () => {
+    const { ai } = await fixture();
+    const config = { ...(await ai.settings()), embeddingDimensions: 2 };
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--max-old-space-size=96",
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
+          import { OpenAiProvider } from ${JSON.stringify(new URL("./ai.ts", import.meta.url).href)};
+          const prefix = Buffer.from('{"data":[{"index":0,"embedding":[1,2]}],"padding":"');
+          const padding = 1024 * 1024;
+          let offset = 0;
+          const stream = new ReadableStream({
+            pull(controller) {
+              if (offset < prefix.length) controller.enqueue(new Uint8Array([prefix[offset]]));
+              else if (offset < prefix.length + padding) controller.enqueue(new Uint8Array([32]));
+              else if (offset === prefix.length + padding) controller.enqueue(new Uint8Array([34]));
+              else if (offset === prefix.length + padding + 1) controller.enqueue(new Uint8Array([125]));
+              else { controller.close(); return; }
+              offset++;
+            },
+          });
+          const provider = new OpenAiProvider(${JSON.stringify(config)}, "synthetic-key", async () => new Response(stream));
+          console.log(JSON.stringify(await provider.embed(["Synthetic"])));
+        `,
+      ],
+      { encoding: "utf8", timeout: 20000, maxBuffer: 1024 * 1024 },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual([[1, 2]]);
+  });
+
+  it.each(["complete", "embed"] as const)(
+    "cancels oversized chunked %s bodies before consuming the tail",
+    async (operation) => {
+      const { ai } = await fixture();
+      const config = {
+        ...(await ai.settings()),
+        embeddingDimensions: 2,
+      } as ConstructorParameters<typeof OpenAiProvider>[0];
+      let pulled = 0,
+        cancelled = false;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled++ < 20)
+            controller.enqueue(new Uint8Array(1024 * 1024).fill(32));
+          else controller.close();
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const provider = new OpenAiProvider(
+        config,
+        "synthetic-key",
+        (async () => new Response(stream)) as typeof fetch,
+      );
+      await expect(
+        operation === "embed"
+          ? provider.embed(["Synthetic"])
+          : provider.complete("Synthetic", {}),
+      ).rejects.toMatchObject({
+        code: "AI_UNAVAILABLE",
+        message: "AI response exceeds the limit.",
+      });
+      expect(cancelled).toBe(true);
+      expect(pulled).toBeLessThan(20);
+    },
+  );
+  it.each([0, 1])(
+    "measures the exact 8 MiB boundary in UTF-8 bytes with %s excess bytes",
+    async (excess) => {
+      const { ai } = await fixture();
+      const config = {
+        ...(await ai.settings()),
+        embeddingDimensions: 2,
+      } as ConstructorParameters<typeof OpenAiProvider>[0];
+      const prefix = '{"data":[{"index":0,"embedding":[1,2]}],"padding":"';
+      const suffix = '"}';
+      const paddingBytes =
+        8 * 1024 * 1024 + excess - Buffer.byteLength(prefix + suffix);
+      const padding =
+        "é".repeat(Math.floor(paddingBytes / 2)) +
+        (paddingBytes % 2 ? " " : "");
+      const payload = Buffer.from(prefix + padding + suffix);
+      const provider = new OpenAiProvider(
+        config,
+        "",
+        (async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                for (let offset = 0; offset < payload.length; offset += 65535)
+                  controller.enqueue(payload.subarray(offset, offset + 65535));
+                controller.close();
+              },
+            }),
+          )) as typeof fetch,
+      );
+      if (excess)
+        await expect(provider.embed(["Synthetic"])).rejects.toMatchObject({
+          code: "AI_UNAVAILABLE",
+          message: "AI response exceeds the limit.",
+        });
+      else
+        await expect(provider.embed(["Synthetic"])).resolves.toEqual([[1, 2]]);
+    },
+  );
+  it("bounds decompressed gzip bytes rather than the compressed Content-Length", async () => {
+    const compressed = gzipSync(
+      Buffer.from(
+        JSON.stringify({
+          data: [{ index: 0, embedding: [1, 2] }],
+          padding: " ".repeat(9 * 1024 * 1024),
+        }),
+      ),
+    );
+    expect(compressed.byteLength).toBeLessThan(8 * 1024 * 1024);
+    const server = createServer((_request, response) => {
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "Content-Length": compressed.byteLength,
+      });
+      response.end(compressed);
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing test server address");
+    const { ai } = await fixture();
+    const config = {
+      ...(await ai.settings()),
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      embeddingDimensions: 2,
+    } as ConstructorParameters<typeof OpenAiProvider>[0];
+    try {
+      await expect(
+        new OpenAiProvider(config).embed(["Synthetic"]),
+      ).rejects.toMatchObject({
+        code: "AI_UNAVAILABLE",
+        message: "AI response exceeds the limit.",
+      });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+  it("uses the bound for semantic search and connectivity while core storage stays ready", async () => {
+    let oversized = false;
+    const normal = mockProvider();
+    const fetcher = (async (...args: Parameters<typeof fetch>) =>
+      oversized
+        ? new Response(new Uint8Array(8 * 1024 * 1024 + 1))
+        : normal(...args)) as typeof fetch;
+    const { ai, store } = await fixture(fetcher);
+    await ai.enqueue({ type: "embed", projectId: "p1" }, actor);
+    await ai.tick();
+    oversized = true;
+    await expect(
+      ai.semanticSearch({ projectId: "p1", query: "Synthetic query" }),
+    ).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI response exceeds the limit.",
+    });
+    await expect(ai.testProvider()).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI response exceeds the limit.",
+    });
+    await expect(store.assertReady()).resolves.toBeUndefined();
+    expect((await store.get("record", "r1"))?.title).toBe("Use local storage");
+    await expect(
+      store.insert("record", {
+        id: "r2",
+        projectId: "p1",
+        title: "Core capture remains available",
+      }),
+    ).resolves.toMatchObject({ id: "r2" });
+  });
   it("uses the configured transport deadline for delayed model headers and aborts at the overall deadline", async () => {
     const server = createServer((_request, response) => {
       const timer = setTimeout(() => {
