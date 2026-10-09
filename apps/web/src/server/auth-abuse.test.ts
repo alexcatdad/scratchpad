@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -235,6 +236,59 @@ it.each([
         (await call(n % 2 ? "2001:0db8:0:0:0:0:0:1" : "2001:db8::1")).status,
       ).toBe(n < 120 ? 200 : 429);
     expect((await call("2001:db8::2")).status).toBe(200);
+  } finally {
+    await api.close();
+  }
+});
+
+it("rejects invalid browser management origins before proof lookup admission", async () => {
+  const api = createApi({
+    databasePath: ":memory:",
+    origin: "http://localhost:3000",
+  });
+  try {
+    await api.store.insert("owner", { id: "owner" });
+    await api.store.insert("credential", { id: "browser", kind: "webauthn" });
+    await api.store.insert("session", {
+      id: createHash("sha256").update("synthetic").digest("hex"),
+      credentialId: "browser",
+      browser: true,
+      expiresAt: new Date(Date.now() + 60000).toISOString(),
+    });
+    const token = await api.auth.createSetupToken(true);
+    for (let n = 0; n < 121; n++) {
+      const rejected = await api.handleRequest(
+        new Request("http://localhost:3000/api/v1/auth/logout", {
+          method: "POST",
+          headers: {
+            origin: "https://evil.example",
+            cookie: "scratchpad_session=synthetic",
+          },
+        }),
+        "192.0.2.1",
+      );
+      expect(rejected.status).toBe(403);
+    }
+    const accepted = await api.handleRequest(
+      new Request("http://localhost:3000/api/v1/auth/register/options", {
+        method: "POST",
+        headers: { origin: "http://localhost:3000" },
+        body: JSON.stringify({ setupToken: token }),
+      }),
+      "192.0.2.1",
+    );
+    expect(accepted.status).toBe(200);
+    const logout = await api.handleRequest(
+      new Request("http://localhost:3000/api/v1/auth/logout", {
+        method: "POST",
+        headers: {
+          origin: "http://localhost:3000",
+          cookie: "scratchpad_session=synthetic",
+        },
+      }),
+      "192.0.2.1",
+    );
+    expect(logout.status).toBe(200);
   } finally {
     await api.close();
   }

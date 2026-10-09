@@ -493,6 +493,13 @@ export function createApi(config: {
         );
         if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
           auth.checkOrigin(request);
+        if (
+          managementRoutes.includes(route) &&
+          !request.headers
+            .get("authorization")
+            ?.match(/^Bearer ([A-Za-z0-9_-]+)$/)
+        )
+          auth.checkOrigin(request);
         // Proof lookup has its own bounded client lane before any hashing or SQL.
         // Anonymous login traffic cannot spend this protected lookup allowance.
         const resolvesProof =
