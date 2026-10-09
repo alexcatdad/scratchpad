@@ -301,7 +301,12 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     "ssh-keygen",
     ["-Y", "sign", "-f", key, "-n", challenge.namespace],
     {
-      input: sshProof(challenge, publicKey, origin, "ssh_enroll"),
+      input: sshProof(
+        challenge,
+        readFileSync(`${key}.pub`, "utf8"),
+        origin,
+        "ssh_enroll",
+      ),
       encoding: "utf8",
     },
   );
