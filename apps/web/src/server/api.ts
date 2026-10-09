@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decodedId } from "../lib/opaque-id";
 import { AiService } from "./ai";
 import { Auth, type Identity } from "./auth";
 import { assertRelationshipSafe, projectContext } from "./context";
@@ -32,6 +33,13 @@ import { compareTimestamps } from "./timestamps";
 const object = z.record(z.string(), z.unknown());
 const nonempty = z.string().trim().min(1).max(500);
 const bodyLimit = 8 * 1024 * 1024;
+function routeId(value: string): string {
+  try {
+    return decodedId(value);
+  } catch {
+    throw new ApiError(400, "VALIDATION_FAILED", "Invalid entity identifier.");
+  }
+}
 function response(
   value: unknown,
   status = 200,
@@ -707,7 +715,7 @@ export function createApi(config: {
         return response(
           {
             job: await ai.retry(
-              route.split("/")[3] ?? "",
+              routeId(route.split("/")[3] ?? ""),
               actor,
               expected(body, request),
             ),
@@ -730,7 +738,7 @@ export function createApi(config: {
       )
         return response({
           suggestion: await ai.review(
-            route.split("/")[2] ?? "",
+            routeId(route.split("/")[2] ?? ""),
             route.endsWith("/accept") ? "accepted" : "rejected",
             actor,
             expected(body, request),
@@ -763,7 +771,7 @@ export function createApi(config: {
         if (method === "POST" && route === "/auth/credentials/verify")
           return response(await auth.sshVerify(body, identity));
         if (method === "DELETE") {
-          await auth.revoke(route.split("/")[3] ?? "", identity);
+          await auth.revoke(routeId(route.split("/")[3] ?? ""), identity);
           return response({ revoked: true });
         }
       }
@@ -853,7 +861,7 @@ export function createApi(config: {
       const projectRoute =
         /^\/projects\/([^/]+)(?:\/(settings|context))?$/.exec(route);
       if (projectRoute) {
-        const project = await entity("project", projectRoute[1] ?? "");
+        const project = await entity("project", routeId(projectRoute[1] ?? ""));
         if (method === "GET" && projectRoute[2] === "context") {
           return response(
             await projectContext(store, {
@@ -1012,7 +1020,7 @@ export function createApi(config: {
           route,
         );
       if (recordRoute) {
-        const record = await entity("record", recordRoute[1] ?? ""),
+        const record = await entity("record", routeId(recordRoute[1] ?? "")),
           operation = recordRoute[2];
         if (method === "GET" && !operation)
           return response(await recordDetail(record.id));
@@ -1203,7 +1211,10 @@ export function createApi(config: {
         route,
       );
       if (relRoute && method === "POST") {
-        const previous = await entity("relationship", relRoute[1] ?? "");
+        const previous = await entity(
+          "relationship",
+          routeId(relRoute[1] ?? ""),
+        );
         return response(
           await store.atomic(async () => {
             if (relRoute[2] === "accept")

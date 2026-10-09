@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isOpaqueId } from "../lib/opaque-id";
 import { assertRelationshipSafe } from "./context";
 import {
   type Actor,
@@ -17,7 +18,9 @@ import {
 import type { Store } from "./store";
 
 const object = z.record(z.string(), z.unknown());
-const identifier = z.string().min(1).max(500);
+const identifier = z
+  .string()
+  .refine(isOpaqueId, "Use a safe opaque identifier.");
 export const exportKinds = [
   "project",
   "source",
@@ -160,7 +163,7 @@ export async function importNative(
         }
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);
-          identifier.parse(value.identity);
+          z.string().min(1).max(500).parse(value.identity);
           const existing = await store.resolveIdentity(String(value.identity));
           requireValue(
             !existing || existing === value.projectId,
