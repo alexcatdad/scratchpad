@@ -1,3 +1,5 @@
+import { spawnSync } from "node:child_process";
+import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiService, OpenAiProvider } from "./ai";
 import { defaults, type Entity } from "./domain";
@@ -83,6 +85,150 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it("keeps compatible embeddings usable after a key-only change", async () => {
+    const { ai, store } = await fixture();
+    await ai.enqueue({ type: "embed", projectId: "p1" }, actor);
+    await ai.tick();
+    const before = await store.list("ai_embedding");
+    expect(before).toHaveLength(1);
+    const generation = (await store.get("ai_settings", "global"))
+      ?.dispatchGeneration;
+    await ai.configure(
+      { expectedVersion: 1, apiKey: "synthetic-replacement" },
+      actor,
+    );
+    expect((await store.get("ai_settings", "global"))?.dispatchGeneration).toBe(
+      Number(generation) + 1,
+    );
+    expect(await store.list("ai_embedding")).toEqual(before);
+    expect(
+      await ai.semanticSearch({ projectId: "p1", query: "Synthetic" }),
+    ).toMatchObject({
+      results: [
+        expect.objectContaining({
+          record: expect.objectContaining({ id: "r1" }),
+        }),
+      ],
+    });
+  });
+  it("never pairs an old endpoint with a replacement credential during snapshot acquisition", async () => {
+    const fetcher = mockProvider();
+    const { ai, store } = await fixture(fetcher);
+    await ai.configure({ apiKey: "synthetic-old", expectedVersion: 1 }, actor);
+    const original = store.get.bind(store);
+    let changed = false;
+    const read = vi
+      .spyOn(store, "get")
+      .mockImplementation(async (kind, key) => {
+        const value = await original(kind, key);
+        if (kind === "ai_settings" && !changed) {
+          changed = true;
+          await ai.configure(
+            {
+              baseUrl: "https://replacement.example.test/v1",
+              apiKey: "synthetic-new",
+              expectedVersion: 2,
+            },
+            actor,
+          );
+        }
+        return value;
+      });
+    await ai.testProvider().catch(() => {});
+    read.mockRestore();
+    for (const [url, options] of vi.mocked(fetcher).mock.calls) {
+      if (!String(url).startsWith("https://replacement.example.test"))
+        expect(new Headers(options?.headers).get("Authorization")).not.toBe(
+          "Bearer synthetic-new",
+        );
+    }
+  });
+  for (const type of ["embed", "analyze", "export", "connectivity"] as const)
+    for (const change of ["endpoint", "remove", "replace"] as const)
+      it(`fences later ${type} dispatch after ${change} while the first request is paused`, async () => {
+        let started!: () => void;
+        let resume!: () => void;
+        const firstStarted = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        const paused = new Promise<void>((resolve) => {
+          resume = resolve;
+        });
+        let calls = 0;
+        const respond = mockProvider(
+          type === "connectivity"
+            ? { ok: true }
+            : type === "export"
+              ? {
+                  artifacts: [
+                    {
+                      kind: "export",
+                      title: "Synthetic export",
+                      content: {
+                        text: "Synthetic",
+                        markdown: "Synthetic document",
+                      },
+                      sourceRecordIds: ["r1"],
+                    },
+                  ],
+                }
+              : undefined,
+        );
+        const fetcher: typeof fetch = async (url, options) => {
+          calls++;
+          if (calls === 1) {
+            started();
+            await paused;
+          }
+          return respond(url, options);
+        };
+        const { ai, store } = await fixture(fetcher);
+        await ai.configure(
+          { apiKey: "synthetic-old", expectedVersion: 1 },
+          actor,
+        );
+        const record = await store.get("record", "r1");
+        await store.update("record", {
+          ...record,
+          content: "Synthetic long record. ".repeat(2000),
+        } as Entity);
+        const job =
+          type === "connectivity"
+            ? undefined
+            : await ai.enqueue(
+                {
+                  type,
+                  projectId: "p1",
+                  ...(type === "export" ? { format: "handoff" } : {}),
+                },
+                actor,
+              );
+        const running =
+          type === "connectivity"
+            ? ai.testProvider().catch((error: unknown) => error)
+            : ai.tick();
+        await firstStarted;
+        await ai.configure(
+          {
+            expectedVersion: 2,
+            ...(change === "endpoint"
+              ? { baseUrl: "https://replacement.example.test/v1" }
+              : { apiKey: change === "remove" ? "" : "synthetic-new" }),
+          },
+          actor,
+        );
+        resume();
+        const result = await running;
+        expect(calls).toBe(1);
+        expect(await store.list("ai_embedding")).toHaveLength(0);
+        expect(await store.list("ai_artifact")).toHaveLength(0);
+        if (job)
+          expect(await store.get("ai_job", String(job.id))).toMatchObject({
+            status: "failed",
+            lastError: expect.stringContaining("future dispatch stopped"),
+          });
+        else expect(result).toMatchObject({ code: "AI_CONFIGURATION_CHANGED" });
+      });
   it("defaults disabled, keeps secrets out of settings and audits, and detects stale configuration", async () => {
     const store = new Store(":memory:");
     stores.push(store);
@@ -656,6 +802,194 @@ describe("optional AI boundary", () => {
 });
 
 describe("OpenAI-compatible response validation", () => {
+  it("consumes many one-byte chunks within a constrained heap", async () => {
+    const { ai } = await fixture();
+    const config = { ...(await ai.settings()), embeddingDimensions: 2 };
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--max-old-space-size=96",
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
+          import { OpenAiProvider } from ${JSON.stringify(new URL("./ai.ts", import.meta.url).href)};
+          const prefix = Buffer.from('{"data":[{"index":0,"embedding":[1,2]}],"padding":"');
+          const padding = 1024 * 1024;
+          let offset = 0;
+          const stream = new ReadableStream({
+            pull(controller) {
+              if (offset < prefix.length) controller.enqueue(new Uint8Array([prefix[offset]]));
+              else if (offset < prefix.length + padding) controller.enqueue(new Uint8Array([32]));
+              else if (offset === prefix.length + padding) controller.enqueue(new Uint8Array([34]));
+              else if (offset === prefix.length + padding + 1) controller.enqueue(new Uint8Array([125]));
+              else { controller.close(); return; }
+              offset++;
+            },
+          });
+          const provider = new OpenAiProvider(${JSON.stringify(config)}, "synthetic-key", async () => new Response(stream));
+          console.log(JSON.stringify(await provider.embed(["Synthetic"])));
+        `,
+      ],
+      { encoding: "utf8", timeout: 20000, maxBuffer: 1024 * 1024 },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual([[1, 2]]);
+  });
+
+  it.each(["complete", "embed"] as const)(
+    "cancels oversized chunked %s bodies before consuming the tail",
+    async (operation) => {
+      const { ai } = await fixture();
+      const config = {
+        ...(await ai.settings()),
+        embeddingDimensions: 2,
+      } as ConstructorParameters<typeof OpenAiProvider>[0];
+      let pulled = 0,
+        cancelled = false;
+      const stream = new ReadableStream<Uint8Array>({
+        pull(controller) {
+          if (pulled++ < 20)
+            controller.enqueue(new Uint8Array(1024 * 1024).fill(32));
+          else controller.close();
+        },
+        cancel() {
+          cancelled = true;
+        },
+      });
+      const provider = new OpenAiProvider(
+        config,
+        "synthetic-key",
+        (async () => new Response(stream)) as typeof fetch,
+      );
+      await expect(
+        operation === "embed"
+          ? provider.embed(["Synthetic"])
+          : provider.complete("Synthetic", {}),
+      ).rejects.toMatchObject({
+        code: "AI_UNAVAILABLE",
+        message: "AI response exceeds the limit.",
+      });
+      expect(cancelled).toBe(true);
+      expect(pulled).toBeLessThan(20);
+    },
+  );
+  it.each([0, 1])(
+    "measures the exact 8 MiB boundary in UTF-8 bytes with %s excess bytes",
+    async (excess) => {
+      const { ai } = await fixture();
+      const config = {
+        ...(await ai.settings()),
+        embeddingDimensions: 2,
+      } as ConstructorParameters<typeof OpenAiProvider>[0];
+      const prefix = '{"data":[{"index":0,"embedding":[1,2]}],"padding":"';
+      const suffix = '"}';
+      const paddingBytes =
+        8 * 1024 * 1024 + excess - Buffer.byteLength(prefix + suffix);
+      const padding =
+        "é".repeat(Math.floor(paddingBytes / 2)) +
+        (paddingBytes % 2 ? " " : "");
+      const payload = Buffer.from(prefix + padding + suffix);
+      const provider = new OpenAiProvider(
+        config,
+        "",
+        (async () =>
+          new Response(
+            new ReadableStream({
+              start(controller) {
+                for (let offset = 0; offset < payload.length; offset += 65535)
+                  controller.enqueue(payload.subarray(offset, offset + 65535));
+                controller.close();
+              },
+            }),
+          )) as typeof fetch,
+      );
+      if (excess)
+        await expect(provider.embed(["Synthetic"])).rejects.toMatchObject({
+          code: "AI_UNAVAILABLE",
+          message: "AI response exceeds the limit.",
+        });
+      else
+        await expect(provider.embed(["Synthetic"])).resolves.toEqual([[1, 2]]);
+    },
+  );
+  it("bounds decompressed gzip bytes rather than the compressed Content-Length", async () => {
+    const compressed = gzipSync(
+      Buffer.from(
+        JSON.stringify({
+          data: [{ index: 0, embedding: [1, 2] }],
+          padding: " ".repeat(9 * 1024 * 1024),
+        }),
+      ),
+    );
+    expect(compressed.byteLength).toBeLessThan(8 * 1024 * 1024);
+    const server = createServer((_request, response) => {
+      response.writeHead(200, {
+        "Content-Type": "application/json",
+        "Content-Encoding": "gzip",
+        "Content-Length": compressed.byteLength,
+      });
+      response.end(compressed);
+    });
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
+    const address = server.address();
+    if (!address || typeof address === "string")
+      throw new Error("Missing test server address");
+    const { ai } = await fixture();
+    const config = {
+      ...(await ai.settings()),
+      baseUrl: `http://127.0.0.1:${address.port}/v1`,
+      embeddingDimensions: 2,
+    } as ConstructorParameters<typeof OpenAiProvider>[0];
+    try {
+      await expect(
+        new OpenAiProvider(config).embed(["Synthetic"]),
+      ).rejects.toMatchObject({
+        code: "AI_UNAVAILABLE",
+        message: "AI response exceeds the limit.",
+      });
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error ? reject(error) : resolve())),
+      );
+    }
+  });
+  it("uses the bound for semantic search and connectivity while core storage stays ready", async () => {
+    let oversized = false;
+    const normal = mockProvider();
+    const fetcher = (async (...args: Parameters<typeof fetch>) =>
+      oversized
+        ? new Response(new Uint8Array(8 * 1024 * 1024 + 1))
+        : normal(...args)) as typeof fetch;
+    const { ai, store } = await fixture(fetcher);
+    await ai.enqueue({ type: "embed", projectId: "p1" }, actor);
+    await ai.tick();
+    oversized = true;
+    await expect(
+      ai.semanticSearch({ projectId: "p1", query: "Synthetic query" }),
+    ).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI response exceeds the limit.",
+    });
+    await expect(ai.testProvider()).rejects.toMatchObject({
+      code: "AI_UNAVAILABLE",
+      message: "AI response exceeds the limit.",
+    });
+    await expect(store.assertReady()).resolves.toBeUndefined();
+    expect((await store.get("record", "r1"))?.title).toBe("Use local storage");
+    await expect(
+      store.insert("record", {
+        id: "r2",
+        projectId: "p1",
+        title: "Core capture remains available",
+      }),
+    ).resolves.toMatchObject({ id: "r2" });
+  });
   it("uses the configured transport deadline for delayed model headers and aborts at the overall deadline", async () => {
     const server = createServer((_request, response) => {
       const timer = setTimeout(() => {

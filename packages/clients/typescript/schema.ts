@@ -1223,10 +1223,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        challengeId?: string;
-                        nonce?: string;
-                        namespace?: string;
-                        expiresAt?: string;
+                        challengeId: string;
+                        nonce: string;
+                        /** @enum {string} */
+                        namespace: "scratchpad-auth-v2";
+                        /** Format: date-time */
+                        expiresAt: string;
+                        /** @enum {integer} */
+                        version: 2;
+                        /**
+                         * Format: uri
+                         * @description Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+                         */
+                        recipient: string;
+                        /** @enum {string} */
+                        purpose: "ssh_login";
                     };
                 };
             };
@@ -1289,10 +1300,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        challengeId?: string;
-                        nonce?: string;
-                        namespace?: string;
-                        expiresAt?: string;
+                        challengeId: string;
+                        nonce: string;
+                        /** @enum {string} */
+                        namespace: "scratchpad-auth-v2";
+                        /** Format: date-time */
+                        expiresAt: string;
+                        /** @enum {integer} */
+                        version: 2;
+                        /**
+                         * Format: uri
+                         * @description Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+                         */
+                        recipient: string;
+                        /** @enum {string} */
+                        purpose: "ssh_enroll";
                     };
                 };
             };

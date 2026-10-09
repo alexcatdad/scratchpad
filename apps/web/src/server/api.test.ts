@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import { createApi } from "./api";
 import { normalizeRemote } from "./domain";
 
@@ -450,14 +451,17 @@ describe("owner authentication", () => {
     });
     const challenge = await api.auth.sshChallenge({ publicKey }),
       message = join(directory, "message");
-    writeFileSync(message, String(challenge.nonce));
+    writeFileSync(
+      message,
+      sshProof(challenge, publicKey, "http://localhost:3000", "ssh_login"),
+    );
     const sign = spawnSync("ssh-keygen", [
       "-Y",
       "sign",
       "-f",
       keyPath,
       "-n",
-      "scratchpad-auth",
+      sshNamespace,
       message,
     ]);
     expect(sign.status).toBe(0);
