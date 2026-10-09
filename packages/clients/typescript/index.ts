@@ -12,8 +12,31 @@ export function createScratchpadClient(options: {
   credentials?: RequestCredentials;
   origin?: string;
 }) {
+  const invalidOrigin = () =>
+    new Error(
+      "Use an HTTPS instance origin or supported loopback HTTP origin.",
+    );
+  let url: URL;
+  try {
+    url = new URL(options.baseUrl);
+  } catch {
+    throw invalidOrigin();
+  }
+  if (
+    !["http:", "https:"].includes(url.protocol) ||
+    !url.hostname ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    url.pathname !== "/" ||
+    (url.protocol === "http:" &&
+      !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
+  )
+    throw invalidOrigin();
   return createClient<paths>({
-    baseUrl: options.baseUrl.replace(/\/$/, ""),
+    baseUrl: url.origin,
+    redirect: "error",
     fetch: options.fetch,
     credentials: options.credentials,
     headers: {

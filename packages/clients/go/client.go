@@ -2,8 +2,11 @@ package scratchpad
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"strings"
 )
 
@@ -17,6 +20,19 @@ type Auth struct {
 
 // NewAuthenticatedClient expects an instance origin URL (paths include /api/v1).
 func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
+	}
+	if u.Scheme == "http" {
+		host := strings.ToLower(u.Hostname())
+		if address, err := netip.ParseAddr(host); err == nil {
+			host = address.String()
+		}
+		if host != "localhost" && host != "127.0.0.1" && host != "::1" {
+			return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
+		}
+	}
 	options := []ClientOption{WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
 		if auth.Token != "" {
 			request.Header.Set("Authorization", "Bearer "+auth.Token)
@@ -26,9 +42,16 @@ func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, er
 		}
 		return nil
 	})}
-	if auth.HTTPClient != nil {
-		options = append(options, WithHTTPClient(auth.HTTPClient))
+	transport := auth.HTTPClient
+	if transport == nil {
+		transport = &http.Client{}
 	}
+	if client, ok := transport.(*http.Client); ok {
+		copy := *client
+		copy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+		transport = &copy
+	}
+	options = append(options, WithHTTPClient(transport))
 	return NewClientWithResponses(strings.TrimRight(baseURL, "/"), options...)
 }
 
