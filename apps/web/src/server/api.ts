@@ -405,7 +405,10 @@ export function createApi(config: {
           : null,
     };
   }
-  async function handleRequest(request: Request): Promise<Response> {
+  async function handleRequest(
+    request: Request,
+    clientAddress?: string,
+  ): Promise<Response> {
     try {
       const url = new URL(request.url),
         path = url.pathname.replace(/\/$/, "") || "/",
@@ -462,8 +465,44 @@ export function createApi(config: {
           authenticated,
         });
       }
-      if (route.startsWith("/auth/") && method === "POST")
-        await auth.throttle();
+      if (route.startsWith("/auth/") && method === "POST") {
+        const publicRoutes = [
+          "/auth/github/options",
+          "/auth/mcp/challenge",
+          "/auth/mcp/verify",
+          "/auth/register/options",
+          "/auth/register/verify",
+          "/auth/login/options",
+          "/auth/login/verify",
+        ];
+        const managementRoutes = [
+          "/auth/github/sync",
+          "/auth/github/block",
+          "/auth/logout",
+          "/auth/credentials/challenge",
+          "/auth/credentials/verify",
+        ];
+        requireValue(
+          publicRoutes.includes(route) || managementRoutes.includes(route),
+          "NOT_FOUND",
+          "Endpoint not found.",
+          404,
+        );
+        if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
+          auth.checkOrigin(request);
+        let allowance = `client:${clientAddress ?? "unknown"}`;
+        if (
+          managementRoutes.includes(route) ||
+          (route.startsWith("/auth/register/") && !body.setupToken)
+        ) {
+          const identity = await auth.identify(request);
+          allowance = `credential:${identity.credential.id}`;
+        } else if (route.startsWith("/auth/register/") && body.setupToken) {
+          const token = await auth.setup(body.setupToken);
+          allowance = `setup:${token.id}`;
+        }
+        auth.throttle(allowance);
+      }
       if (route === "/auth/github/options" && method === "POST") {
         const result = await github.options(body, request);
         return response({ authorizationUrl: result.authorizationUrl }, 200, {
@@ -472,7 +511,8 @@ export function createApi(config: {
       }
       if (route === "/auth/github/callback" && method === "GET") {
         try {
-          const result = await github.callback(request);
+          auth.throttle(`client:${clientAddress ?? "unknown"}`);
+          const result = await auth.verify(() => github.callback(request));
           const headers = new Headers({
             Location: "/",
             "Cache-Control": "no-store",
@@ -507,7 +547,7 @@ export function createApi(config: {
         if (method === "POST" && route === "/auth/mcp/challenge")
           return response(await auth.sshChallenge(body));
         if (method === "POST" && route === "/auth/mcp/verify")
-          return response(await auth.sshVerify(body));
+          return response(await auth.verify(() => auth.sshVerify(body)));
         if (
           method === "POST" &&
           [
@@ -527,8 +567,8 @@ export function createApi(config: {
             return response(await auth.loginOptions());
           const session =
             route === "/auth/register/verify"
-              ? await auth.registrationVerify(body, identity)
-              : await auth.loginVerify(body);
+              ? await auth.verify(() => auth.registrationVerify(body, identity))
+              : await auth.verify(() => auth.loginVerify(body));
           return response(
             { authenticated: true, expiresAt: session.expiresAt },
             200,
@@ -761,7 +801,9 @@ export function createApi(config: {
         if (method === "POST" && route === "/auth/credentials/challenge")
           return response(await auth.sshChallenge(body, identity));
         if (method === "POST" && route === "/auth/credentials/verify")
-          return response(await auth.sshVerify(body, identity));
+          return response(
+            await auth.verify(() => auth.sshVerify(body, identity)),
+          );
         if (method === "DELETE") {
           await auth.revoke(route.split("/")[3] ?? "", identity);
           return response({ revoked: true });
@@ -1362,7 +1404,9 @@ export function getApi(): ReturnType<typeof createApi> {
   singleton.ai.start();
   return singleton;
 }
-export const handleApiRequest = (request: Request): Promise<Response> =>
-  getApi().handleRequest(request);
+export const handleApiRequest = (
+  request: Request,
+  clientAddress?: string,
+): Promise<Response> => getApi().handleRequest(request, clientAddress);
 export const createSetupToken = async (recovery = false): Promise<string> =>
   await getApi().auth.createSetupToken(recovery);

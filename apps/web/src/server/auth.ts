@@ -47,6 +47,11 @@ export type Identity = {
 };
 
 export class Auth {
+  private readonly allowances = new Map<
+    string,
+    { bucket: number; count: number }
+  >();
+  private activeVerifications = 0;
   readonly origin: string;
   readonly rpID: string;
   github?: {
@@ -76,25 +81,36 @@ export class Auth {
       "Public URL must use HTTPS, except localhost.",
     );
   }
-  async throttle(): Promise<void> {
-    await this.store.atomic(async () => {
-      const bucket = Math.floor(this.clock() / 60000);
-      const current = await this.store.get("rate", "auth");
-      const count = current?.bucket === bucket ? Number(current.count) : 0;
-      requireValue(
-        count < 120,
-        "RATE_LIMITED",
-        "Too many authentication attempts. Try again in a minute.",
-        429,
-      );
-      if (current)
-        await this.store.update("rate", {
-          ...current,
-          bucket,
-          count: count + 1,
-        });
-      else await this.store.insert("rate", { id: "auth", bucket, count: 1 });
-    });
+  throttle(client: string): void {
+    const bucket = Math.floor(this.clock() / 60000);
+    const current = this.allowances.get(client);
+    const count = current?.bucket === bucket ? Number(current.count) : 0;
+    requireValue(
+      count < 120,
+      "RATE_LIMITED",
+      "Too many authentication attempts. Try again in a minute.",
+      429,
+    );
+    // Bound retained client state without letting one caller reserve a global budget.
+    if (!current && this.allowances.size >= 4096) {
+      const oldest = this.allowances.keys().next().value;
+      if (oldest !== undefined) this.allowances.delete(oldest);
+    }
+    this.allowances.set(client, { bucket, count: count + 1 });
+  }
+  async verify<T>(operation: () => Promise<T>): Promise<T> {
+    requireValue(
+      this.activeVerifications < 8,
+      "RATE_LIMITED",
+      "Authentication verification is busy. Try again shortly.",
+      429,
+    );
+    this.activeVerifications++;
+    try {
+      return await operation();
+    } finally {
+      this.activeVerifications--;
+    }
   }
   async initialized(): Promise<boolean> {
     return (await this.store.list("owner")).length > 0;
