@@ -161,6 +161,7 @@ export async function importNative(
           z.enum(authorityTypes).nullable().parse(value.authority);
           z.iso.datetime().parse(value.recordedAt);
         }
+        if (kind === "audit") identifier.parse(value.entityId);
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);
           z.string().min(1).max(500).parse(value.identity);

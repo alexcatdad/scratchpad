@@ -249,6 +249,15 @@ describe("persistent API domain", () => {
       ).toBe(400);
       expect(await destination.api.store.list("project")).toHaveLength(0);
       expect(await destination.api.store.list("record")).toHaveLength(0);
+      const auditDestination = await fixture();
+      const badAudit = structuredClone(exported);
+      badAudit.data.audit[0].entityId = id;
+      expect(
+        (await auditDestination.call("/api/v1/import", "POST", badAudit))
+          .status,
+      ).toBe(400);
+      expect(await auditDestination.api.store.list("project")).toHaveLength(0);
+      expect(await auditDestination.api.store.list("record")).toHaveLength(0);
     }
     const destination = await fixture();
     const legacy = await destination.call("/api/v1/import", "POST", {
