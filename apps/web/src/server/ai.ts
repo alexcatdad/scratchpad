@@ -3,6 +3,11 @@ import { Agent, fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import { assertRelationshipSafe } from "./context";
 import {
+  assertDerivedArtifact,
+  artifactKinds as kinds,
+  validDerivedArtifact,
+} from "./derived-artifact";
+import {
   type Actor,
   ApiError,
   canonical,
@@ -13,17 +18,6 @@ import {
 } from "./domain";
 import type { Store } from "./store";
 
-const kinds = [
-  "summary",
-  "classification",
-  "duplicate_candidate",
-  "relationship_candidate",
-  "contradiction",
-  "cluster",
-  "pattern",
-  "recommendation",
-  "export",
-] as const;
 export const exportFormats = [
   "handoff",
   "architecture",
@@ -632,12 +626,17 @@ export class AiService {
         const sources = artifact.sourceRecordIds as string[];
         const projectIds = artifact.projectIds as string[];
         return (
+          validDerivedArtifact(artifact) &&
           Array.isArray(sources) &&
           Array.isArray(projectIds) &&
+          projectIds.length > 0 &&
           sources.every((key) => records.has(key)) &&
+          sources.every((key) =>
+            projectIds.includes(String(records.get(key)?.projectId)),
+          ) &&
           projectIds.every((key) => allowed.has(key)) &&
           (!requested || projectIds.every((key) => requested.includes(key))) &&
-          (!artifact.crossProject ||
+          (!(artifact.crossProject || projectIds.length > 1) ||
             projectIds.every(
               (key) =>
                 settingsSchema.parse(allowed.get(key)?.settings)
@@ -657,6 +656,7 @@ export class AiService {
       const original = await this.store.get("ai_artifact", key);
       if (!original)
         throw new ApiError(404, "NOT_FOUND", "Suggestion not found.");
+      await assertDerivedArtifact(this.store, original);
       const scope = {
         projectIds: original.projectIds as string[],
         crossProject: Boolean(original.crossProject),
@@ -1105,6 +1105,8 @@ export class AiService {
         "All AI suggestions lacked sufficient independent supporting evidence.",
       );
     const artifacts = supported.map((artifact) => {
+      if (!validDerivedArtifact(artifact))
+        throw failure("AI completion failed per-kind artifact validation.");
       if (
         artifact.kind === "pattern" &&
         scope.crossProject &&

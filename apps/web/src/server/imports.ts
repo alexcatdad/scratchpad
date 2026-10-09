@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { assertRelationshipSafe } from "./context";
+import { artifactKinds, assertDerivedArtifact } from "./derived-artifact";
 import {
   type Actor,
   authorityTypes,
@@ -110,19 +111,10 @@ export async function importNative(
         }
         if (kind === "ai_artifact" || kind === "curated_artifact") {
           z.literal("derived").parse(value.authority);
-          z.enum([
-            "summary",
-            "classification",
-            "duplicate_candidate",
-            "relationship_candidate",
-            "contradiction",
-            "cluster",
-            "pattern",
-            "recommendation",
-            "export",
-          ]).parse(value.kind);
+          z.enum(artifactKinds).parse(value.kind);
           object.parse(value.content);
           object.parse(value.generator);
+          await assertDerivedArtifact(store, value);
           const sources = z
             .array(identifier)
             .min(1)
@@ -132,19 +124,6 @@ export async function importNative(
           const projects = z.array(identifier).min(1).parse(value.projectIds);
           for (const project of projects)
             await requireEntity(store, "project", project);
-          requireValue(
-            sources.every((source) =>
-              projects.includes(
-                String(
-                  ((data.record as JsonObject[]) ?? []).find(
-                    (record) => record.id === source,
-                  )?.projectId ?? "",
-                ),
-              ),
-            ),
-            "IMPORT_INVALID",
-            "Derived source projects do not match citations.",
-          );
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
           else await requireEntity(store, "ai_artifact", value.artifactId);

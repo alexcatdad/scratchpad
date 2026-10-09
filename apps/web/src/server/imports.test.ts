@@ -507,6 +507,151 @@ describe("current context and live policy", () => {
 });
 
 describe("native archive integrity", () => {
+  it("imports cited ordinary AI relationships, honors renewed consent and round trips curated evidence", async () => {
+    const source = await fixture();
+    for (const title of ["First", "Second"])
+      expect(
+        (
+          await source.call("/records", "POST", {
+            projectId: "project",
+            record: {
+              type: "decision",
+              title,
+              authority: "explicit",
+              payload: { decision: "Preserve" },
+            },
+          })
+        ).status,
+      ).toBe(201);
+    const archive = (await source.call("/export", "POST", {})).data;
+    archive.data.project = [];
+    const sources = archive.data.record.map(
+      (record: { id: string }) => record.id,
+    );
+    archive.data.ai_artifact = [
+      {
+        id: "ordinary-ai",
+        version: 1,
+        createdAt: new Date().toISOString(),
+        kind: "relationship_candidate",
+        title: "Synthetic ordinary edge",
+        content: {
+          text: "Source-bound refinement",
+          fromRecordId: sources[1],
+          toRecordId: sources[0],
+          relationshipType: "refines",
+        },
+        sourceRecordIds: sources,
+        projectIds: ["project"],
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      },
+    ];
+    const destination = await fixture();
+    expect((await destination.call("/import", "POST", archive)).status).toBe(
+      200,
+    );
+    await destination.ai.configure(
+      { enabled: true, expectedVersion: 0 },
+      { kind: "user" },
+    );
+    await expect(
+      destination.ai.review("ordinary-ai", "accepted", { kind: "user" }, 1),
+    ).rejects.toMatchObject({ code: "AI_NOT_ALLOWED" });
+    const project = await destination.store.get("project", "project");
+    if (!project) throw new Error("Synthetic project is missing.");
+    await destination.store.update(
+      "project",
+      { ...project, settings: { ...defaults("normal"), aiProcessing: true } },
+      project.version,
+    );
+    const raw = await destination.store.list("record");
+    await destination.ai.review("ordinary-ai", "accepted", { kind: "user" }, 1);
+    expect(await destination.store.list("record")).toEqual(raw);
+    expect(await destination.store.list("relationship")).toMatchObject([
+      { type: "refines", status: "accepted" },
+    ]);
+    const portable = (await destination.call("/export", "POST", {})).data;
+    const restored = createApi({
+      databasePath: ":memory:",
+      origin: "http://localhost:3000",
+    });
+    cleanup.push(() => restored.close());
+    await importNative(restored.store, portable, actor);
+    expect(await restored.store.list("ai_artifact")).toEqual(
+      await destination.store.list("ai_artifact"),
+    );
+    expect(await restored.store.list("curated_artifact")).toEqual(
+      await destination.store.list("curated_artifact"),
+    );
+    expect(await restored.store.list("relationship")).toEqual(
+      await destination.store.list("relationship"),
+    );
+  });
+  it("atomically rejects AI lifecycle edges and per-kind content mismatches", async () => {
+    const source = await fixture();
+    expect(
+      (
+        await source.call("/records", "POST", {
+          projectId: "project",
+          record: {
+            type: "decision",
+            title: "Synthetic",
+            content: "Preserve",
+            payload: { decision: "Preserve" },
+            authority: "explicit",
+          },
+        })
+      ).status,
+    ).toBe(201);
+    const archive = (await source.call("/export", "POST", {})).data;
+    const recordId = archive.data.record[0].id;
+    for (const content of [
+      {
+        text: "Supersede",
+        fromRecordId: recordId,
+        toRecordId: "uncited",
+        relationshipType: "replaces",
+      },
+      {
+        text: "Uncited",
+        fromRecordId: recordId,
+        toRecordId: "uncited",
+        relationshipType: "related_to",
+      },
+      { text: "Classification", tags: [123] },
+    ]) {
+      const invalid = structuredClone(archive);
+      invalid.data.project = [];
+      invalid.data.ai_artifact = [
+        {
+          id: "imported-ai",
+          version: 1,
+          createdAt: new Date().toISOString(),
+          kind:
+            "relationshipType" in content
+              ? "relationship_candidate"
+              : "classification",
+          title: "Synthetic",
+          content,
+          sourceRecordIds: [recordId],
+          projectIds: ["project"],
+          authority: "derived",
+          status: "pending",
+          generator: { model: "synthetic" },
+        },
+      ];
+      const destination = await fixture();
+      const before = await destination.store.list("record");
+      expect((await destination.call("/import", "POST", invalid)).status).toBe(
+        400,
+      );
+      expect(await destination.store.list("record")).toEqual(before);
+      expect(await destination.store.list("ai_artifact")).toHaveLength(0);
+      expect(await destination.store.list("relationship")).toHaveLength(0);
+    }
+  });
   it("round trips revisions, source identities, evidence, settings, audit, and rejects unreadable or cyclic archives atomically", async () => {
     const api = await fixture();
     await api.store.insert("source", {

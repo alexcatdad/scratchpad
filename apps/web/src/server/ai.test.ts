@@ -83,6 +83,104 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it("rejects generated content belonging to a different artifact kind", async () => {
+    const { ai, store } = await fixture(
+      mockProvider({
+        artifacts: [
+          {
+            kind: "summary",
+            title: "Synthetic",
+            content: {
+              text: "Unrelated fields",
+              fromRecordId: "r1",
+              toRecordId: "r1",
+              relationshipType: "related_to",
+            },
+            sourceRecordIds: ["r1"],
+          },
+        ],
+      }),
+    );
+    const job = await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    expect(await store.list("ai_artifact")).toHaveLength(0);
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "queued",
+      attempts: 1,
+    });
+  });
+  it("revalidates stored suggestions before review and keeps invalid evidence inert", async () => {
+    const { ai, store } = await fixture();
+    await store.insert("record", {
+      id: "r2",
+      projectId: "p1",
+      title: "Second",
+      content: "Synthetic",
+    });
+    await store.insert("project", {
+      id: "private",
+      settings: defaults("external"),
+    });
+    await store.insert("record", {
+      id: "uncited",
+      projectId: "private",
+      title: "Private",
+      content: "Synthetic",
+    });
+    const raw = await store.list("record");
+    for (const [index, content] of [
+      {
+        text: "Lifecycle edge",
+        fromRecordId: "r2",
+        toRecordId: "r1",
+        relationshipType: "replaces",
+      },
+      {
+        text: "Partial lifecycle edge",
+        fromRecordId: "r2",
+        toRecordId: "r1",
+        relationshipType: "partially_replaces",
+      },
+      {
+        text: "Uncited endpoint",
+        fromRecordId: "uncited",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+      {
+        text: "Missing endpoint",
+        fromRecordId: "missing",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+      {
+        text: "Self edge",
+        fromRecordId: "r1",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+    ].entries()) {
+      const artifact = await store.insert("ai_artifact", {
+        id: `unsafe-${index}`,
+        kind: "relationship_candidate",
+        title: "Synthetic imported suggestion",
+        content,
+        sourceRecordIds: ["r1", "r2"],
+        projectIds: ["p1"],
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      });
+      await expect(
+        ai.review(artifact.id, "accepted", actor, artifact.version),
+      ).rejects.toBeDefined();
+      expect(await store.get("ai_artifact", artifact.id)).toEqual(artifact);
+    }
+    expect(await ai.artifacts()).toHaveLength(0);
+    expect(await store.list("relationship")).toHaveLength(0);
+    expect(await store.list("curated_artifact")).toHaveLength(0);
+    expect(await store.list("record")).toEqual(raw);
+  });
   it("defaults disabled, keeps secrets out of settings and audits, and detects stale configuration", async () => {
     const store = new Store(":memory:");
     stores.push(store);
