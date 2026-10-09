@@ -147,6 +147,7 @@ export class GithubAccess {
   async options(
     body: JsonObject,
     request: Request,
+    admit?: (allowance: string | undefined) => void,
   ): Promise<{ authorizationUrl: string; cookie: string }> {
     requireValue(
       this.config,
@@ -186,6 +187,13 @@ export class GithubAccess {
         "No GitHub account is linked.",
         401,
       );
+    admit?.(
+      token
+        ? `setup:${token.id}`
+        : identity
+          ? `credential:${identity.credential.id}`
+          : undefined,
+    );
     for (const entry of await this.store.list("github_oauth"))
       if (String(entry.expiresAt) <= this.auth.now())
         await this.store.remove("github_oauth", entry.id);
@@ -215,8 +223,54 @@ export class GithubAccess {
     }).toString();
     return { authorizationUrl: url.href, cookie: this.cookie(browserNonce) };
   }
+  private async callbackAuthorization(
+    entry: Entity,
+  ): Promise<Entity | undefined> {
+    if (entry.credentialId) {
+      const credential = await this.store.get(
+        "credential",
+        String(entry.credentialId),
+      );
+      const session = await this.store.get("session", String(entry.sessionId));
+      requireValue(
+        credential &&
+          !credential.revokedAt &&
+          session &&
+          !session.revokedAt &&
+          String(session.expiresAt) > this.auth.now(),
+        "AUTH_INVALID",
+        "Sign-in authorization expired or was revoked.",
+        401,
+      );
+      await this.check(credential);
+      if (entry.intent === "replace")
+        this.fresh({
+          credential,
+          session,
+          browser: true,
+          actor: { kind: "user" },
+        });
+    }
+    if (entry.setupTokenId) {
+      const setup = await this.store.get(
+        "setup_token",
+        String(entry.setupTokenId),
+      );
+      requireValue(
+        setup &&
+          String(setup.expiresAt) > this.auth.now() &&
+          (setup.recovery || !(await this.auth.initialized())),
+        "AUTH_INVALID",
+        "Setup authorization expired or was consumed.",
+        401,
+      );
+      return setup;
+    }
+    return undefined;
+  }
   async callback(
     request: Request,
+    admit?: (allowance: string) => void,
   ): Promise<{ accessToken: string; clearState: string }> {
     requireValue(
       this.config,
@@ -233,18 +287,46 @@ export class GithubAccess {
       .map((v) => v.trim())
       .find((v) => v.startsWith("scratchpad_github_state="))
       ?.slice("scratchpad_github_state=".length);
-    const challenge = await this.store.atomic(async () => {
-      const entry = await this.store.get("github_oauth", hash(state));
-      requireValue(
+    const browserHash = cookie ? hash(cookie) : undefined;
+    const validState = (entry: Entity | undefined): entry is Entity =>
+      Boolean(
         entry &&
           !entry.consumedAt &&
           String(entry.expiresAt) > this.auth.now() &&
-          cookie &&
-          hash(cookie) === entry.browserHash,
+          browserHash &&
+          browserHash === entry.browserHash,
+      );
+    requireValue(
+      browserHash,
+      "AUTH_INVALID",
+      "Invalid, expired or used GitHub authorization state.",
+      401,
+    );
+    // Reject unknown/unbound states before entering the global write transaction.
+    const candidate = await this.store.get("github_oauth", hash(state));
+    requireValue(
+      validState(candidate),
+      "AUTH_INVALID",
+      "Invalid, expired or used GitHub authorization state.",
+      401,
+    );
+    await this.callbackAuthorization(candidate);
+    admit?.(
+      candidate.setupTokenId
+        ? `setup:${candidate.setupTokenId}`
+        : candidate.credentialId
+          ? `credential:${candidate.credentialId}`
+          : `oauth:${candidate.id}`,
+    );
+    const challenge = await this.store.atomic(async () => {
+      const entry = await this.store.get("github_oauth", hash(state));
+      requireValue(
+        validState(entry),
         "AUTH_INVALID",
         "Invalid, expired or used GitHub authorization state.",
         401,
       );
+      await this.callbackAuthorization(entry);
       await this.store.update("github_oauth", {
         ...entry,
         consumedAt: this.auth.now(),
@@ -302,47 +384,8 @@ export class GithubAccess {
         "GitHub binding changed during sign-in. Start again.",
         409,
       );
-      if (challenge.credentialId) {
-        const credential = await this.store.get(
-          "credential",
-          String(challenge.credentialId),
-        );
-        const session = await this.store.get(
-          "session",
-          String(challenge.sessionId),
-        );
-        requireValue(
-          credential &&
-            !credential.revokedAt &&
-            session &&
-            !session.revokedAt &&
-            String(session.expiresAt) > this.auth.now(),
-          "AUTH_INVALID",
-          "Sign-in authorization expired or was revoked.",
-          401,
-        );
-        await this.check(credential);
-        if (challenge.intent === "replace")
-          this.fresh({
-            credential,
-            session,
-            browser: true,
-            actor: { kind: "user" },
-          });
-      }
-      if (challenge.setupTokenId) {
-        const setup = await this.store.get(
-          "setup_token",
-          String(challenge.setupTokenId),
-        );
-        requireValue(
-          setup &&
-            String(setup.expiresAt) > this.auth.now() &&
-            (setup.recovery || !(await this.auth.initialized())),
-          "AUTH_INVALID",
-          "Setup authorization expired or was consumed.",
-          401,
-        );
+      const setup = await this.callbackAuthorization(challenge);
+      if (setup) {
         await this.store.remove("setup_token", setup.id);
         if (!(await this.auth.initialized()))
           await this.store.insert("owner", {
