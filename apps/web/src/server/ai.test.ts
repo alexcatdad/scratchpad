@@ -83,6 +83,150 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it("keeps compatible embeddings usable after a key-only change", async () => {
+    const { ai, store } = await fixture();
+    await ai.enqueue({ type: "embed", projectId: "p1" }, actor);
+    await ai.tick();
+    const before = await store.list("ai_embedding");
+    expect(before).toHaveLength(1);
+    const generation = (await store.get("ai_settings", "global"))
+      ?.dispatchGeneration;
+    await ai.configure(
+      { expectedVersion: 1, apiKey: "synthetic-replacement" },
+      actor,
+    );
+    expect((await store.get("ai_settings", "global"))?.dispatchGeneration).toBe(
+      Number(generation) + 1,
+    );
+    expect(await store.list("ai_embedding")).toEqual(before);
+    expect(
+      await ai.semanticSearch({ projectId: "p1", query: "Synthetic" }),
+    ).toMatchObject({
+      results: [
+        expect.objectContaining({
+          record: expect.objectContaining({ id: "r1" }),
+        }),
+      ],
+    });
+  });
+  it("never pairs an old endpoint with a replacement credential during snapshot acquisition", async () => {
+    const fetcher = mockProvider();
+    const { ai, store } = await fixture(fetcher);
+    await ai.configure({ apiKey: "synthetic-old", expectedVersion: 1 }, actor);
+    const original = store.get.bind(store);
+    let changed = false;
+    const read = vi
+      .spyOn(store, "get")
+      .mockImplementation(async (kind, key) => {
+        const value = await original(kind, key);
+        if (kind === "ai_settings" && !changed) {
+          changed = true;
+          await ai.configure(
+            {
+              baseUrl: "https://replacement.example.test/v1",
+              apiKey: "synthetic-new",
+              expectedVersion: 2,
+            },
+            actor,
+          );
+        }
+        return value;
+      });
+    await ai.testProvider().catch(() => {});
+    read.mockRestore();
+    for (const [url, options] of vi.mocked(fetcher).mock.calls) {
+      if (!String(url).startsWith("https://replacement.example.test"))
+        expect(new Headers(options?.headers).get("Authorization")).not.toBe(
+          "Bearer synthetic-new",
+        );
+    }
+  });
+  for (const type of ["embed", "analyze", "export", "connectivity"] as const)
+    for (const change of ["endpoint", "remove", "replace"] as const)
+      it(`fences later ${type} dispatch after ${change} while the first request is paused`, async () => {
+        let started!: () => void;
+        let resume!: () => void;
+        const firstStarted = new Promise<void>((resolve) => {
+          started = resolve;
+        });
+        const paused = new Promise<void>((resolve) => {
+          resume = resolve;
+        });
+        let calls = 0;
+        const respond = mockProvider(
+          type === "connectivity"
+            ? { ok: true }
+            : type === "export"
+              ? {
+                  artifacts: [
+                    {
+                      kind: "export",
+                      title: "Synthetic export",
+                      content: {
+                        text: "Synthetic",
+                        markdown: "Synthetic document",
+                      },
+                      sourceRecordIds: ["r1"],
+                    },
+                  ],
+                }
+              : undefined,
+        );
+        const fetcher: typeof fetch = async (url, options) => {
+          calls++;
+          if (calls === 1) {
+            started();
+            await paused;
+          }
+          return respond(url, options);
+        };
+        const { ai, store } = await fixture(fetcher);
+        await ai.configure(
+          { apiKey: "synthetic-old", expectedVersion: 1 },
+          actor,
+        );
+        const record = await store.get("record", "r1");
+        await store.update("record", {
+          ...record,
+          content: "Synthetic long record. ".repeat(2000),
+        } as Entity);
+        const job =
+          type === "connectivity"
+            ? undefined
+            : await ai.enqueue(
+                {
+                  type,
+                  projectId: "p1",
+                  ...(type === "export" ? { format: "handoff" } : {}),
+                },
+                actor,
+              );
+        const running =
+          type === "connectivity"
+            ? ai.testProvider().catch((error: unknown) => error)
+            : ai.tick();
+        await firstStarted;
+        await ai.configure(
+          {
+            expectedVersion: 2,
+            ...(change === "endpoint"
+              ? { baseUrl: "https://replacement.example.test/v1" }
+              : { apiKey: change === "remove" ? "" : "synthetic-new" }),
+          },
+          actor,
+        );
+        resume();
+        const result = await running;
+        expect(calls).toBe(1);
+        expect(await store.list("ai_embedding")).toHaveLength(0);
+        expect(await store.list("ai_artifact")).toHaveLength(0);
+        if (job)
+          expect(await store.get("ai_job", String(job.id))).toMatchObject({
+            status: "failed",
+            lastError: expect.stringContaining("future dispatch stopped"),
+          });
+        else expect(result).toMatchObject({ code: "AI_CONFIGURATION_CHANGED" });
+      });
   it("defaults disabled, keeps secrets out of settings and audits, and detects stale configuration", async () => {
     const store = new Store(":memory:");
     stores.push(store);

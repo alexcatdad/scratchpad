@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
+import { AiService } from "./ai";
 import { createApi } from "./api";
 import { exportKinds } from "./imports";
 import { Store } from "./store";
@@ -63,6 +64,57 @@ async function fixture(url?: string) {
   return { api, call };
 }
 describe.skipIf(!connection)("PostgreSQL persistence", () => {
+  it("persists dispatch generations and fences replaced credentials across service instances", async () => {
+    const url = await database();
+    const { api } = await fixture(url);
+    let started!: () => void;
+    let resume!: () => void;
+    const firstStarted = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const paused = new Promise<void>((resolve) => {
+      resume = resolve;
+    });
+    let calls = 0;
+    const ai = new AiService(api.store, async () => {
+      calls++;
+      started();
+      await paused;
+      return Response.json({ data: [{ index: 0, embedding: [1, 0.2] }] });
+    });
+    const actor = { kind: "user" as const };
+    await ai.configure(
+      {
+        enabled: true,
+        embeddingDimensions: 2,
+        apiKey: "synthetic-old",
+        expectedVersion: 0,
+      },
+      actor,
+    );
+    const running = ai.testProvider().catch((error: unknown) => error);
+    await firstStarted;
+    const otherStore = new Store(":memory:", url);
+    cleanup.push(() => otherStore.close());
+    const other = new AiService(otherStore);
+    await other.configure(
+      { apiKey: "synthetic-new", expectedVersion: 1 },
+      actor,
+    );
+    resume();
+    expect(await running).toMatchObject({ code: "AI_CONFIGURATION_CHANGED" });
+    expect(calls).toBe(1);
+    expect(await api.store.get("ai_settings", "global")).toMatchObject({
+      version: 2,
+      dispatchGeneration: 2,
+    });
+    expect(JSON.stringify(await other.settings())).not.toContain(
+      "synthetic-new",
+    );
+    await expect(
+      ai.configure({ expectedVersion: 1, apiKey: "synthetic-stale" }, actor),
+    ).rejects.toMatchObject({ code: "CONFLICT" });
+  });
   it("persists captures, native full-text search, idempotency, authentication and export across restart", async () => {
     const url = await database();
     const { api, call } = await fixture(url);
