@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { assertPrivacyReferences } from "./ai-privacy";
 import { assertRelationshipSafe } from "./context";
 import {
   type Actor,
@@ -123,6 +124,7 @@ export async function importNative(
           ]).parse(value.kind);
           object.parse(value.content);
           object.parse(value.generator);
+          await assertPrivacyReferences(store, value);
           const sources = z
             .array(identifier)
             .min(1)

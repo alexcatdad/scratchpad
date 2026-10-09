@@ -422,6 +422,12 @@ describe("current context and live policy", () => {
       content: { text: "Synthetic derived memory" },
       sourceRecordIds: [before.data.record.id],
       projectIds: ["project"],
+      privacyDependencies: {
+        version: 1,
+        recordIds: [before.data.record.id],
+        projectIds: ["project"],
+        crossProject: false,
+      },
       authority: "derived",
       status: "pending",
       private: true,

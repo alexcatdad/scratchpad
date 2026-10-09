@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiService, OpenAiProvider } from "./ai";
 import { defaults, type Entity } from "./domain";
+import { exportKinds, importNative } from "./imports";
 import { Store } from "./store";
 
 const stores: Store[] = [];
@@ -83,6 +84,215 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it("keeps accepted cross-project interpretations out of project-local metadata and relationships", async () => {
+    const { ai, store } = await fixture(
+      mockProvider({
+        artifacts: [
+          {
+            kind: "classification",
+            title: "Classification",
+            content: {
+              text: "Influenced by project metadata",
+              tags: ["private-derived"],
+              classification: "private-derived",
+            },
+            sourceRecordIds: ["r1"],
+          },
+          {
+            kind: "relationship_candidate",
+            title: "Refinement",
+            content: {
+              text: "Influenced by project metadata",
+              fromRecordId: "r2",
+              toRecordId: "r1",
+              relationshipType: "refines",
+            },
+            sourceRecordIds: ["r1", "r2"],
+          },
+        ],
+      }),
+    );
+    await store.insert("record", {
+      id: "r2",
+      projectId: "p1",
+      title: "Second",
+      content: "Synthetic",
+    });
+    await store.insert("metadata", { id: "r1", tags: [], archived: false });
+    const metadata = await store.get("metadata", "r1");
+    const project = await store.insert("project", {
+      id: "p2",
+      name: "Uncited metadata",
+      settings: { ...defaults("normal"), aiProcessing: true },
+    });
+    await ai.enqueue(
+      { type: "analyze", projectIds: ["p1", "p2"], crossProject: true },
+      actor,
+    );
+    await ai.tick();
+    for (const artifact of await ai.artifacts())
+      await ai.review(artifact.id, "accepted", actor, artifact.version);
+    expect(await store.list("curated_artifact")).toHaveLength(2);
+    expect(await store.get("metadata", "r1")).toEqual(metadata);
+    expect(await store.list("relationship")).toHaveLength(0);
+    await store.update(
+      "project",
+      { ...project, settings: defaults("external") },
+      project.version,
+    );
+    expect(await ai.artifacts()).toHaveLength(0);
+  });
+  it.each([false, true])(
+    "keeps uncited record and project metadata privacy dependencies (second record: %s)",
+    async (withRecord) => {
+      for (const revoked of ["aiProcessing", "crossProjectAnalysis"] as const) {
+        const fetcher = mockProvider({
+          artifacts: [
+            {
+              kind: "summary",
+              title: "Synthetic",
+              content: { text: "Cites only A" },
+              sourceRecordIds: ["r1"],
+              privacyDependencies: {
+                version: 1,
+                recordIds: ["r1"],
+                projectIds: ["p1"],
+                crossProject: false,
+              },
+            },
+          ],
+        });
+        const { ai, store } = await fixture(fetcher);
+        const project = await store.insert("project", {
+          id: "p2",
+          name: "Synthetic uncited input",
+          settings: { ...defaults("normal"), aiProcessing: true },
+        });
+        if (withRecord)
+          await store.insert("record", {
+            id: "r2",
+            projectId: "p2",
+            title: "Uncited synthetic record",
+            content: "Private input",
+          });
+        await ai.enqueue(
+          { type: "analyze", projectIds: ["p1", "p2"], crossProject: true },
+          actor,
+        );
+        await ai.tick();
+        const artifact = (await store.list("ai_artifact"))[0] as Entity;
+        expect(artifact.sourceRecordIds).toEqual(["r1"]);
+        const input = JSON.parse(
+          JSON.parse(String(vi.mocked(fetcher).mock.calls[0]?.[1]?.body))
+            .messages[1].content,
+        );
+        expect(input.projects.map((p: { id: string }) => p.id)).toEqual([
+          "p1",
+          "p2",
+        ]);
+        expect(await ai.artifacts({ projectId: "p1" })).toHaveLength(0);
+        expect(artifact.privacyDependencies).toEqual({
+          version: 1,
+          recordIds: withRecord ? ["r1", "r2"] : ["r1"],
+          projectIds: ["p1", "p2"],
+          crossProject: true,
+        });
+        expect(
+          await ai.artifacts({ projectIds: ["p1", "p2"], crossProject: true }),
+        ).toHaveLength(1);
+        await store.update(
+          "project",
+          {
+            ...project,
+            settings: {
+              ...defaults("normal"),
+              aiProcessing: true,
+              [revoked]: false,
+            },
+          },
+          project.version,
+        );
+        expect(await ai.artifacts()).toHaveLength(0);
+        await expect(
+          ai.review(artifact.id, "accepted", actor, artifact.version),
+        ).rejects.toMatchObject({ code: "AI_NOT_ALLOWED" });
+        expect(await store.list("curated_artifact")).toHaveLength(0);
+      }
+    },
+  );
+  it("preserves dependencies in curated portable derivatives and fails closed for unknown legacy provenance", async () => {
+    const { ai, store } = await fixture();
+    const project = await store.get("project", "p1");
+    if (!project) throw new Error("Missing synthetic project.");
+    await store.update(
+      "project",
+      { ...project, kind: "normal" },
+      project.version,
+    );
+    await store.insert("metadata", { id: "r1", recordId: "r1", tags: [] });
+    await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    const artifact = (await ai.artifacts())[0] as Entity;
+    await ai.review(artifact.id, "accepted", actor, artifact.version);
+    expect(
+      (await store.list("curated_artifact"))[0]?.privacyDependencies,
+    ).toEqual(artifact.privacyDependencies);
+    const legacy = await store.insert("ai_artifact", {
+      ...artifact,
+      id: "legacy",
+      status: "pending",
+      privacyDependencies: undefined,
+    });
+    expect((await ai.artifacts()).map((a) => a.id)).not.toContain(legacy.id);
+    await expect(
+      ai.review(legacy.id, "accepted", actor, legacy.version),
+    ).rejects.toMatchObject({ code: "AI_NOT_ALLOWED" });
+    const archive = {
+      version: 1,
+      data: Object.fromEntries(
+        await Promise.all(
+          exportKinds.map(async (kind) => [kind, await store.list(kind)]),
+        ),
+      ),
+    };
+    const restored = new Store(":memory:");
+    stores.push(restored);
+    for (const dependency of [
+      { version: 1, recordIds: [], projectIds: ["p1"], crossProject: false },
+      {
+        version: 1,
+        recordIds: ["r1", "missing"],
+        projectIds: ["p1"],
+        crossProject: false,
+      },
+      {
+        version: 2,
+        recordIds: ["r1"],
+        projectIds: ["p1"],
+        crossProject: false,
+      },
+    ]) {
+      const invalid = structuredClone(archive);
+      invalid.data.ai_artifact[0].privacyDependencies = dependency;
+      await expect(
+        importNative(restored, invalid, actor),
+      ).rejects.toMatchObject({ code: "AI_PRIVACY_INVALID" });
+      expect(await restored.list("record")).toHaveLength(0);
+      expect(await restored.list("project")).toHaveLength(0);
+    }
+    await importNative(restored, archive, actor);
+    expect(await restored.list("ai_artifact")).toEqual(
+      await store.list("ai_artifact"),
+    );
+    expect(await restored.list("curated_artifact")).toEqual(
+      await store.list("curated_artifact"),
+    );
+    const restoredAi = new AiService(restored);
+    await restoredAi.configure({ enabled: true, expectedVersion: 0 }, actor);
+    expect((await restoredAi.artifacts()).map((a) => a.id)).toEqual([
+      artifact.id,
+    ]);
+  });
   it("defaults disabled, keeps secrets out of settings and audits, and detects stale configuration", async () => {
     const store = new Store(":memory:");
     stores.push(store);
