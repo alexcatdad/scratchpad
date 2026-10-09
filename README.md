@@ -51,7 +51,7 @@ For a source checkout, the repository's `docker compose up --build -d` builds th
 
 ## Develop
 
-Use the Node 24 version in `.node-version`, npm, Go 1.27.1, Git and OpenSSH.
+Use the Node 24 version in `.node-version`, npm, Go 1.27.2, Git and OpenSSH.
 
 ```sh
 npm ci
@@ -59,6 +59,11 @@ export SCRATCHPAD_PUBLIC_URL=http://localhost:3000
 export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
+
+Development listens on loopback by default. Private data directories, SQLite
+files and the configured database path remain denied by Vite even with an
+explicit wider `--host` override. Keep private runtime state outside served
+workspaces where practical.
 
 In another terminal, use the same absolute database path and public URL for the server and administrator command (see `.env.example`):
 
