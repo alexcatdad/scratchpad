@@ -4,7 +4,7 @@ The central API saves the immutable capture first. Optional mirroring still requ
 
 Mirror targets must be regular files before and after opening. Root-scoped opens use nonblocking and no-follow flags so replacing a previously inspected file with a FIFO or symlink cannot trap the opener. Opened identity is compared with the current target before scanning.
 
-The capture's existing five-second mirror context governs lock acquisition, bounded 32 KiB scan reads, JSONL processing and append boundaries. Cancellation releases owned locks; no detached scanner continues after return. The 16 MiB maximum line length remains unchanged. Filesystem metadata calls, individual kernel I/O and sync require a healthy local filesystem; context checks cannot preempt an unresponsive filesystem syscall.
+The capture's existing five-second mirror context governs lock acquisition, bounded 32 KiB scan reads, JSONL processing and append boundaries. Cancellation before append releases owned locks; a successfully synced append reports success even if the deadline expires during that final I/O. No detached scanner continues after return. The 16 MiB maximum line length remains unchanged. Filesystem metadata calls, individual kernel I/O and sync require a healthy local filesystem; context checks cannot preempt an unresponsive filesystem syscall.
 
 1. Keep mirroring disabled for untrusted or unapproved repositories. Inspect the configured target before enabling it; never point it at a device, FIFO or symlink.
 2. If a capture reports mirror failure, retain its central record identity. Repair only the selected mirror path. A crashed writer's stale lock still requires explicit operator inspection/recovery; cancellation of a live writer releases its own lock automatically.

@@ -132,10 +132,8 @@ func Mirror(ctx context.Context, root, path string, record map[string]any) error
 	if _, err = f.Write(append(data, '\n')); err != nil {
 		return err
 	}
-	if err = f.Sync(); err != nil {
-		return err
-	}
-	return ctx.Err()
+	// Once the append is durably synced, report its actual successful outcome.
+	return f.Sync()
 }
 
 // Check cancellation at each bounded read, including within a long JSONL line.
