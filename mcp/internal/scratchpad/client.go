@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -127,7 +128,7 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid local recipient configuration")
 	}
-	hostname := strings.ToLower(configured.Hostname())
+	hostname := configured.Hostname()
 	if address, err := netip.ParseAddr(hostname); err == nil {
 		hostname = address.String()
 	} else {
@@ -137,6 +138,13 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 		}
 	}
 	port := configured.Port()
+	if port != "" {
+		value, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return "", errors.New("invalid local recipient port")
+		}
+		port = strconv.FormatUint(value, 10)
+	}
 	if (configured.Scheme == "https" && port == "443") || (configured.Scheme == "http" && port == "80") {
 		port = ""
 	}

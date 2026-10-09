@@ -197,22 +197,32 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 	if err != nil || token != "session" {
 		t.Fatalf("%q %v", token, err)
 	}
-	trustedRecipient = "https://xn--mmory-bsa.example"
-	c, err = NewClient(Config{URL: "https://mémory.example:443", PublicKeyPath: key + ".pub", SigningKeyPath: key})
-	if err != nil {
-		t.Fatal(err)
+
+	for _, entry := range []struct{ configured, recipient string }{
+		{"https://mémory.example:443", "https://xn--mmory-bsa.example"},
+		{"https://memory.example.com:0443", "https://memory.example.com"},
+		{"https://memory.example.com:08443", "https://memory.example.com:8443"},
+		{"https://İ.example", "https://xn--i-9bb.example"},
+		{"https://MÉMORY.example:0443", "https://xn--mmory-bsa.example"},
+	} {
+		t.Run(entry.configured, func(t *testing.T) {
+			trustedRecipient = entry.recipient
+			c, err = NewClient(Config{URL: entry.configured, PublicKeyPath: key + ".pub", SigningKeyPath: key})
+			if err != nil {
+				t.Fatal(err)
+			}
+			target, _ := url.Parse(api.URL)
+			c.HTTP.Transport = sshFixtureTransport(func(r *http.Request) (*http.Response, error) {
+				local := r.Clone(r.Context())
+				local.URL.Scheme, local.URL.Host = target.Scheme, target.Host
+				return http.DefaultTransport.RoundTrip(local)
+			})
+			if token, err = c.authenticate(context.Background()); err != nil || token != "session" {
+				t.Fatalf("recipient challenge/signature: %q %v", token, err)
+			}
+		})
 	}
-	// Deliver synthetic IDN requests to the local fixture, retaining the locally
-	// configured recipient in the real OpenSSH signature.
-	target, _ := url.Parse(api.URL)
-	c.HTTP.Transport = sshFixtureTransport(func(r *http.Request) (*http.Response, error) {
-		local := r.Clone(r.Context())
-		local.URL.Scheme, local.URL.Host = target.Scheme, target.Host
-		return http.DefaultTransport.RoundTrip(local)
-	})
-	if token, err = c.authenticate(context.Background()); err != nil || token != "session" {
-		t.Fatalf("IDN: %q %v", token, err)
-	}
+
 }
 
 func TestSSHChallengeRejectsUntrustedContextBeforeSigning(t *testing.T) {
