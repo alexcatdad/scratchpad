@@ -3,6 +3,7 @@ package scratchpad
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
 	"os/exec"
 	"path/filepath"
@@ -54,11 +55,19 @@ func NormalizeRemote(remote string) (string, error) {
 	return strings.ToLower(host) + "/" + path, nil
 }
 func git(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, "git", append([]string{"--no-optional-locks", "-C", dir}, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append([]string{"--no-optional-locks", "-c", "core.fsmonitor=false", "-c", "submodule.recurse=false", "-c", "status.submoduleSummary=false", "-C", dir}, args...)...)
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }
 func Discover(ctx context.Context, dir string) (*GitContext, error) {
+	version, err := exec.CommandContext(ctx, "git", "--version").Output()
+	if err != nil {
+		return nil, err
+	}
+	var major, minor int
+	if _, err := fmt.Sscanf(string(version), "git version %d.%d", &major, &minor); err != nil || major < 2 || (major == 2 && minor < 36) {
+		return nil, errors.New("checkout discovery requires Git 2.36 or later to safely disable filesystem monitors")
+	}
 	root, err := git(ctx, dir, "rev-parse", "--show-toplevel")
 	if err != nil {
 		return nil, nil
@@ -68,7 +77,7 @@ func Discover(ctx context.Context, dir string) (*GitContext, error) {
 	g := &GitContext{RootPathHint: root}
 	g.Branch, _ = git(ctx, root, "symbolic-ref", "--short", "-q", "HEAD")
 	g.Commit, _ = git(ctx, root, "rev-parse", "HEAD")
-	status, _ := git(ctx, root, "status", "--porcelain")
+	status, _ := git(ctx, root, "status", "--porcelain", "--ignore-submodules=all")
 	g.Dirty = status != ""
 	common, _ := git(ctx, root, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	actual, _ := git(ctx, root, "rev-parse", "--absolute-git-dir")

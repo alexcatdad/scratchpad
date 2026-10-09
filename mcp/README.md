@@ -1,6 +1,6 @@
 # Scratchpad MCP
 
-Local stdio MCP for the central Scratchpad API. Requires Go 1.27.1 to build and Git plus OpenSSH `ssh-keygen` at runtime. Dependencies are pinned in `go.mod` / `go.sum`. The official Go MCP SDK v1.8.0 was verified against the official Go module proxy on 2026-09-29.
+Local stdio MCP for the central Scratchpad API. Requires Go 1.27.2 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime. Dependencies are pinned in `go.mod` / `go.sum`. The official Go MCP SDK v1.8.0 was verified against the official Go module proxy on 2026-09-29.
 
 ## Development runbook
 
