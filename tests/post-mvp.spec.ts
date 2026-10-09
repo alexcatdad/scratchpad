@@ -268,14 +268,7 @@ async function startApplication() {
   } else
     application = spawn(
       process.execPath,
-      [
-        resolve(root, "node_modules/srvx/bin/srvx.mjs"),
-        "--prod",
-        "--entry",
-        "dist/server/server.js",
-        "--static",
-        "../client",
-      ],
+      [resolve(root, "apps/web/server.mjs")],
       {
         cwd: resolve(root, "apps/web"),
         env: environment,

@@ -1,4 +1,5 @@
 import { execFileSync, spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { readFileSync, rmSync } from "node:fs";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
@@ -13,6 +14,7 @@ const {
   dockerMode,
   environment,
   origin,
+  readLogs,
   postgresMode,
   restartOrRestore,
   start,
@@ -64,6 +66,44 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   await expect(
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
+  const markerId = randomUUID();
+  const marker = `synthetic private search ${markerId} + /`;
+  await page.goto(
+    `${origin}/?q=${encodeURIComponent(marker)}&tag=${encodeURIComponent(marker)}`,
+  );
+  await expect(
+    page.getByRole("heading", { name: "Project memory", exact: true }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Memory", exact: true }).click();
+  await page.getByLabel("Search your memory", { exact: true }).fill(marker);
+  const searched = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/records" &&
+      new URL(response.url()).searchParams.get("q") === marker,
+  );
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  expect((await searched).status()).toBe(200);
+  const statuses = await page.evaluate(
+    async ({ marker, markerId }) => {
+      const response = await fetch(
+        `/api/v1/records?q=${encodeURIComponent(marker)}&branch=${encodeURIComponent(marker)}`,
+      );
+      const denied = await fetch(
+        `/api/v1/records?q=${encodeURIComponent(marker)}`,
+        { headers: { authorization: `Bearer synthetic-header-${markerId}` } },
+      );
+      return [response.status, denied.status];
+    },
+    { marker, markerId },
+  );
+  expect(statuses).toEqual([200, 401]);
+  await expect.poll(readLogs).not.toContain(markerId);
+  await expect
+    .poll(readLogs)
+    .toMatch(/GET \/api\/v1\/records 200 \d+\.\d{2}ms/);
+  expect(readLogs()).not.toContain(marker);
+  expect(readLogs()).not.toContain(encodeURIComponent(marker));
+  await page.reload();
   await page.getByRole("button", { name: "Projects", exact: true }).click();
   await page.getByLabel("Project name", { exact: true }).fill("Scratchpad");
   await page

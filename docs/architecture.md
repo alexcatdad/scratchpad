@@ -1004,3 +1004,7 @@ Synchronization runs every five minutes; public-key discovery does not require p
 GitHub outages leave complete cached keys usable for at most 24 hours since last success, independently of the machine session's lifetime. Browser sign-in requires GitHub; independent passkeys and administrator recovery remain available. Unlinking requires fresh independent authentication; replacement requires fresh existing authentication. Both invalidate GitHub-derived sessions and permissions and preserve data and independent credentials. Do not silently convert credential provenance.
 
 Machine onboarding is an instruction-only skill using existing client configuration and SSH tooling. It verifies a real authenticated MCP read with explicit project scope. The HTTP API remains authoritative; no dedicated setup command, client OAuth secret or new machine authentication mechanism is introduced.
+
+### Accepted clarification: production request log privacy (2026-10-09)
+
+The production server entry point logs request method, pathname, response status and elapsed milliseconds without query strings, headers or bodies. Dashboard search terms and filters remain private input. Unhandled request errors produce fixed diagnostics rather than arbitrary exception text. Use the package start command and the same entry point in container/browser verification; the generic development/runtime CLI's full-URL logger does not provide this contract.
