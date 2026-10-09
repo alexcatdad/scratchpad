@@ -114,7 +114,6 @@ export async function importNative(
           z.enum(artifactKinds).parse(value.kind);
           object.parse(value.content);
           object.parse(value.generator);
-          await assertDerivedArtifact(store, value);
           const sources = z
             .array(identifier)
             .min(1)
@@ -124,6 +123,7 @@ export async function importNative(
           const projects = z.array(identifier).min(1).parse(value.projectIds);
           for (const project of projects)
             await requireEntity(store, "project", project);
+          await assertDerivedArtifact(store, value);
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
           else await requireEntity(store, "ai_artifact", value.artifactId);

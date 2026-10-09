@@ -59,7 +59,7 @@ const contentSchemas = {
 const shape = z.object({
   kind: z.enum(artifactKinds),
   title: z.string().trim().min(1).max(500).optional(),
-  sourceRecordIds: z.array(reference).min(1).max(10000),
+  sourceRecordIds: z.array(reference).min(1),
   content: z.record(z.string(), z.unknown()),
 });
 
@@ -71,6 +71,7 @@ export function validDerivedArtifact(value: unknown): boolean {
   if (!contentSchemas[artifact.kind].safeParse(artifact.content).success)
     return false;
   const sources = new Set(artifact.sourceRecordIds);
+  if (sources.size !== artifact.sourceRecordIds.length) return false;
   if (
     [
       "duplicate_candidate",

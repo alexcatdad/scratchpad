@@ -607,6 +607,26 @@ describe("native archive integrity", () => {
     ).toBe(201);
     const archive = (await source.call("/export", "POST", {})).data;
     const recordId = archive.data.record[0].id;
+    const missing = structuredClone(archive);
+    missing.data.project = [];
+    missing.data.ai_artifact = [
+      {
+        id: "missing-citation",
+        version: 1,
+        createdAt: new Date().toISOString(),
+        kind: "summary",
+        title: "Synthetic",
+        content: { text: "Missing source" },
+        sourceRecordIds: ["missing-source"],
+        projectIds: ["project"],
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      },
+    ];
+    const clean = await fixture();
+    expect((await clean.call("/import", "POST", missing)).status).toBe(404);
+    expect(await clean.store.list("record")).toHaveLength(0);
     for (const content of [
       {
         text: "Supersede",
@@ -621,6 +641,7 @@ describe("native archive integrity", () => {
         relationshipType: "related_to",
       },
       { text: "Classification", tags: [123] },
+      { text: "Repeated classification citation", tags: ["valid"] },
     ]) {
       const invalid = structuredClone(archive);
       invalid.data.project = [];
@@ -635,7 +656,9 @@ describe("native archive integrity", () => {
               : "classification",
           title: "Synthetic",
           content,
-          sourceRecordIds: [recordId],
+          sourceRecordIds: Array.isArray(content.tags)
+            ? [recordId, recordId]
+            : [recordId],
           projectIds: ["project"],
           authority: "derived",
           status: "pending",

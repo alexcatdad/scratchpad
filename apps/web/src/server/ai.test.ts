@@ -83,6 +83,55 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it("exports more than ten thousand source records without a post-processing ceiling", async () => {
+    const fetcher: typeof fetch = async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      const input = JSON.parse(body.messages[1].content);
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                artifacts: [
+                  {
+                    kind: "export",
+                    title: "Synthetic full history",
+                    content: {
+                      text: "Complete synthetic history",
+                      markdown: "Synthetic batch",
+                    },
+                    sourceRecordIds: [input.records[0].id],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+    };
+    const { ai, store } = await fixture(fetcher);
+    await store.atomic(async () => {
+      for (let index = 0; index < 10000; index++)
+        await store.insert("record", {
+          id: `large-${index}`,
+          projectId: "p1",
+          title: "Synthetic",
+          content: "Synthetic history",
+        });
+    });
+    const job = await ai.enqueue(
+      { type: "export", projectId: "p1", format: "handoff" },
+      actor,
+    );
+    await ai.tick();
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "completed",
+      attempts: 1,
+    });
+    const artifacts = await ai.artifacts({ projectId: "p1" });
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]?.sourceRecordIds).toHaveLength(10001);
+  }, 20000);
   it("rejects generated content belonging to a different artifact kind", async () => {
     const { ai, store } = await fixture(
       mockProvider({
