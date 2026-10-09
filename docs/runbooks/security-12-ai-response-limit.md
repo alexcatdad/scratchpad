@@ -19,6 +19,8 @@ previous toolchain's canonical vulnerability-check failures.
    core storage remains ready after optional provider failure; they do not
    establish deployed acceptance.
 
-The limit bounds retained body chunks, not an individual network or decompressor
-chunk allocated by the underlying transport. It does not change request-size
+One fixed 8 MiB buffer bounds retained body bytes and chunk metadata. A synthetic
+one-byte-chunk response also completes under a 96 MiB Node heap; the former
+chunk array exhausted that heap. The bound excludes an individual network or
+decompressor chunk allocated by the underlying transport. It does not change request-size
 limits, provider consent, retry policy or the configured overall deadline.

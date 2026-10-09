@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AiService, OpenAiProvider } from "./ai";
@@ -657,6 +658,43 @@ describe("optional AI boundary", () => {
 });
 
 describe("OpenAI-compatible response validation", () => {
+  it("consumes many one-byte chunks within a constrained heap", async () => {
+    const { ai } = await fixture();
+    const config = { ...(await ai.settings()), embeddingDimensions: 2 };
+    const result = spawnSync(
+      process.execPath,
+      [
+        "--max-old-space-size=96",
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        `
+          import { OpenAiProvider } from ${JSON.stringify(new URL("./ai.ts", import.meta.url).href)};
+          const prefix = Buffer.from('{"data":[{"index":0,"embedding":[1,2]}],"padding":"');
+          const padding = 1024 * 1024;
+          let offset = 0;
+          const stream = new ReadableStream({
+            pull(controller) {
+              if (offset < prefix.length) controller.enqueue(new Uint8Array([prefix[offset]]));
+              else if (offset < prefix.length + padding) controller.enqueue(new Uint8Array([32]));
+              else if (offset === prefix.length + padding) controller.enqueue(new Uint8Array([34]));
+              else if (offset === prefix.length + padding + 1) controller.enqueue(new Uint8Array([125]));
+              else { controller.close(); return; }
+              offset++;
+            },
+          });
+          const provider = new OpenAiProvider(${JSON.stringify(config)}, "synthetic-key", async () => new Response(stream));
+          console.log(JSON.stringify(await provider.embed(["Synthetic"])));
+        `,
+      ],
+      { encoding: "utf8", timeout: 20000, maxBuffer: 1024 * 1024 },
+    );
+    expect(result.error).toBeUndefined();
+    expect(result.status, result.stderr).toBe(0);
+    expect(JSON.parse(result.stdout.trim())).toEqual([[1, 2]]);
+  });
+
   it.each(["complete", "embed"] as const)(
     "cancels oversized chunked %s bodies before consuming the tail",
     async (operation) => {

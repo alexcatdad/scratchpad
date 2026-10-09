@@ -291,18 +291,19 @@ export class OpenAiProvider {
       // Fetch exposes decompressed bytes. Bound them before decoding or parsing.
       const reader = response.body?.getReader();
       if (!reader) throw failure("AI provider returned an empty body.");
-      const parts: Uint8Array[] = [];
+      // One buffer also bounds retained metadata when a provider sends tiny chunks.
+      const bytes = Buffer.alloc(8 * 1024 * 1024);
       let size = 0;
       try {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          size += value.byteLength;
-          if (size > 8 * 1024 * 1024)
+          if (value.byteLength > bytes.byteLength - size)
             throw failure("AI response exceeds the limit.");
-          parts.push(value);
+          bytes.set(value, size);
+          size += value.byteLength;
         }
-        return JSON.parse(Buffer.concat(parts, size).toString("utf8"));
+        return JSON.parse(bytes.subarray(0, size).toString("utf8"));
       } catch (error) {
         await reader.cancel().catch(() => {});
         throw error;
