@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ApiError, type Entity } from "./domain";
+import { ApiError, type Entity, relationshipTypes } from "./domain";
 import type { Store } from "./store";
 
 export const artifactKinds = [
@@ -22,14 +22,10 @@ const endpoints = {
   fromRecordId: reference,
   toRecordId: reference,
 };
-const ordinaryRelationships = z.enum([
-  "related_to",
-  "supports",
-  "contradicts",
-  "refines",
-  "depends_on",
-  "answers",
-]);
+export const aiRelationshipTypes = relationshipTypes.filter(
+  (type) => type !== "replaces" && type !== "partially_replaces",
+);
+const ordinaryRelationships = z.enum(aiRelationshipTypes);
 const contentSchemas = {
   summary: z.strictObject(prose),
   classification: z.strictObject({
@@ -113,6 +109,7 @@ export async function assertDerivedArtifact(
         "AI_ARTIFACT_INVALID",
         "Derived artifact references a missing project.",
       );
+  const citedProjects = new Set<string>();
   for (const recordId of artifact.sourceRecordIds as string[]) {
     const record = await store.get("record", recordId);
     if (!record || !projects.data.includes(String(record.projectId)))
@@ -121,5 +118,15 @@ export async function assertDerivedArtifact(
         "AI_ARTIFACT_INVALID",
         "Derived artifact references an uncited or missing source project.",
       );
+    citedProjects.add(String(record.projectId));
   }
+  if (
+    citedProjects.size !== projects.data.length ||
+    !projects.data.every((project) => citedProjects.has(project))
+  )
+    throw new ApiError(
+      400,
+      "AI_ARTIFACT_INVALID",
+      "Derived project IDs must uniquely match cited source projects.",
+    );
 }

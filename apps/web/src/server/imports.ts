@@ -93,8 +93,10 @@ export async function importNative(
             `Import conflicts with existing ${kind} ${key}.`,
             409,
           );
-          skipped++;
-          continue;
+          if (kind !== "ai_artifact" && kind !== "curated_artifact") {
+            skipped++;
+            continue;
+          }
         }
         if (kind === "project") {
           settingsSchema.parse(value.settings);
@@ -127,6 +129,10 @@ export async function importNative(
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
           else await requireEntity(store, "ai_artifact", value.artifactId);
+          if (previous) {
+            skipped++;
+            continue;
+          }
         }
         if (kind === "record") {
           await requireEntity(store, "project", value.projectId);

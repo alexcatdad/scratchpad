@@ -83,6 +83,36 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it.each([
+    ["p1", "p2"],
+    ["p1", "p1"],
+  ])(
+    "rejects false participating-project provenance: %j",
+    async (...projectIds) => {
+      const { ai, store } = await fixture();
+      await store.insert("project", {
+        id: "p2",
+        settings: { ...defaults("normal"), aiProcessing: true },
+      });
+      const artifact = await store.insert("ai_artifact", {
+        id: "false-projects",
+        kind: "summary",
+        title: "Synthetic",
+        content: { text: "Only one source project" },
+        sourceRecordIds: ["r1"],
+        projectIds,
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      });
+      expect(await ai.artifacts()).toHaveLength(0);
+      await expect(
+        ai.review(artifact.id, "accepted", actor, artifact.version),
+      ).rejects.toMatchObject({ code: "AI_ARTIFACT_INVALID" });
+      expect(await store.get("ai_artifact", artifact.id)).toEqual(artifact);
+      expect(await store.list("curated_artifact")).toHaveLength(0);
+    },
+  );
   it("exports more than ten thousand source records without a post-processing ceiling", async () => {
     const fetcher: typeof fetch = async (_url, options) => {
       const body = JSON.parse(String(options?.body));

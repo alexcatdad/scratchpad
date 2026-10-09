@@ -3,6 +3,7 @@ import { Agent, fetch as undiciFetch } from "undici";
 import { z } from "zod";
 import { assertRelationshipSafe } from "./context";
 import {
+  aiRelationshipTypes,
   assertDerivedArtifact,
   artifactKinds as kinds,
   validDerivedArtifact,
@@ -72,16 +73,7 @@ const generatedSchema = z.object({
           markdown: z.string().max(50000).optional(),
           fromRecordId: z.string().optional(),
           toRecordId: z.string().optional(),
-          relationshipType: z
-            .enum([
-              "related_to",
-              "supports",
-              "contradicts",
-              "refines",
-              "depends_on",
-              "answers",
-            ])
-            .optional(),
+          relationshipType: z.enum(aiRelationshipTypes).optional(),
           tags: z.array(z.string().min(1).max(100)).max(20).optional(),
           classification: z.string().max(200).optional(),
         }),
@@ -630,6 +622,10 @@ export class AiService {
           Array.isArray(sources) &&
           Array.isArray(projectIds) &&
           projectIds.length > 0 &&
+          new Set(projectIds).size === projectIds.length &&
+          projectIds.every((projectId) =>
+            sources.some((key) => records.get(key)?.projectId === projectId),
+          ) &&
           sources.every((key) => records.has(key)) &&
           sources.every((key) =>
             projectIds.includes(String(records.get(key)?.projectId)),
