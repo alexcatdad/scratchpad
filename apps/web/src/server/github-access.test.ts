@@ -358,9 +358,11 @@ it("initializes one owner through token-authorized GitHub OAuth and rejects wron
         await f.call(
           "/auth/github/callback?code=synthetic&state=unknown-synthetic-state",
           "GET",
+          undefined,
+          "scratchpad_github_state=synthetic-unknown-browser",
         )
       ).response.status,
-    ).toBe(303);
+    ).toBe(attempt < 120 ? 303 : 429);
   const token = await f.api.auth.createSetupToken();
   const login = await f.oauth("setup", token);
   expect(login.response.status).toBe(302);
@@ -371,6 +373,7 @@ it("initializes one owner through token-authorized GitHub OAuth and rejects wron
       .authenticated,
   ).toBe(true);
   f.provider.id = 99;
+  f.advance(60000);
   for (let attempt = 0; attempt < 125; attempt++)
     expect(
       (await f.call("/auth/github/options", "POST", { intent: "login" }))

@@ -548,6 +548,11 @@ export function createApi(config: {
           headers.append("Set-Cookie", result.clearState);
           return new Response(null, { status: 302, headers });
         } catch (error) {
+          if (
+            !release &&
+            !(error instanceof ApiError && error.code === "RATE_LIMITED")
+          )
+            auth.throttle(`client:${client}`);
           if (error instanceof ApiError && error.code === "RATE_LIMITED")
             return response(
               { error: { code: error.code, message: error.message } },

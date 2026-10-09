@@ -32,4 +32,6 @@ test data only.
 The Go 1.27.2 pin is included independently because the previous toolchain fails
 canonical vulnerability checks on known standard-library vulnerabilities.
 
-Anonymous OAuth callbacks use a separate four-slot pool, preserving the eight cryptographic proof slots for setup, recovery, passkey and MCP verification, including token/session-authorized OAuth callbacks. Slot selection occurs only after validating the stored OAuth state and browser binding. A pre-consumption `RATE_LIMITED` callback returns HTTP 429 without clearing its browser state cookie, so it can be retried. Failed setup/session proofs consume the anonymous client allowance; a proved token or credential retains its independent allowance.
+Anonymous OAuth callbacks use a separate four-slot pool, preserving the eight cryptographic proof slots for setup, recovery, passkey and MCP verification, including token/session-authorized OAuth callbacks. Slot selection occurs only after validating the stored OAuth state and browser binding. A pre-consumption `RATE_LIMITED` callback returns HTTP 429 without clearing its browser state cookie, so it can be retried. Failed setup/session proofs and invalid OAuth callbacks consume the anonymous client allowance; a proved token or credential retains its independent allowance.
+
+Unknown or unbound OAuth state is rejected before acquiring the serialized write transaction. Valid state is rechecked atomically before consumption, preserving replay protection.

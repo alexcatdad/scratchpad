@@ -242,24 +242,43 @@ export class GithubAccess {
       .map((v) => v.trim())
       .find((v) => v.startsWith("scratchpad_github_state="))
       ?.slice("scratchpad_github_state=".length);
-    const challenge = await this.store.atomic(async () => {
-      const entry = await this.store.get("github_oauth", hash(state));
-      requireValue(
+    const browserHash = cookie ? hash(cookie) : undefined;
+    const validState = (entry: Entity | undefined): entry is Entity =>
+      Boolean(
         entry &&
           !entry.consumedAt &&
           String(entry.expiresAt) > this.auth.now() &&
-          cookie &&
-          hash(cookie) === entry.browserHash,
+          browserHash &&
+          browserHash === entry.browserHash,
+      );
+    requireValue(
+      browserHash,
+      "AUTH_INVALID",
+      "Invalid, expired or used GitHub authorization state.",
+      401,
+    );
+    // Reject unknown/unbound states before entering the global write transaction.
+    const candidate = await this.store.get("github_oauth", hash(state));
+    requireValue(
+      validState(candidate),
+      "AUTH_INVALID",
+      "Invalid, expired or used GitHub authorization state.",
+      401,
+    );
+    admit?.(
+      candidate.setupTokenId
+        ? `setup:${candidate.setupTokenId}`
+        : candidate.credentialId
+          ? `credential:${candidate.credentialId}`
+          : `oauth:${candidate.id}`,
+    );
+    const challenge = await this.store.atomic(async () => {
+      const entry = await this.store.get("github_oauth", hash(state));
+      requireValue(
+        validState(entry),
         "AUTH_INVALID",
         "Invalid, expired or used GitHub authorization state.",
         401,
-      );
-      admit?.(
-        entry.setupTokenId
-          ? `setup:${entry.setupTokenId}`
-          : entry.credentialId
-            ? `credential:${entry.credentialId}`
-            : `oauth:${entry.id}`,
       );
       await this.store.update("github_oauth", {
         ...entry,
