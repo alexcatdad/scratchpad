@@ -8,13 +8,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/idna"
 )
 
 type Config struct {
@@ -123,9 +127,24 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid local recipient configuration")
 	}
-	host := strings.ToLower(configured.Host)
-	if (configured.Scheme == "https" && configured.Port() == "443") || (configured.Scheme == "http" && configured.Port() == "80") {
-		host = strings.TrimSuffix(host, ":"+configured.Port())
+	hostname := strings.ToLower(configured.Hostname())
+	if address, err := netip.ParseAddr(hostname); err == nil {
+		hostname = address.String()
+	} else {
+		hostname, err = idna.Lookup.ToASCII(hostname)
+		if err != nil {
+			return "", errors.New("invalid local recipient hostname")
+		}
+	}
+	port := configured.Port()
+	if (configured.Scheme == "https" && port == "443") || (configured.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	host := hostname
+	if port != "" {
+		host = net.JoinHostPort(hostname, port)
+	} else if strings.Contains(hostname, ":") {
+		host = "[" + hostname + "]"
 	}
 	recipient := strings.ToLower(configured.Scheme) + "://" + host
 	expiry, expiryErr := time.Parse(time.RFC3339Nano, challenge.ExpiresAt)

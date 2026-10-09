@@ -137,7 +137,8 @@
                     },
                     "expiresAt": {
                       "type": "string",
-                      "format": "date-time"
+                      "format": "date-time",
+                      "x-go-type": "string"
                     },
                     "version": {
                       "type": "integer",
@@ -269,7 +270,8 @@
                     },
                     "expiresAt": {
                       "type": "string",
-                      "format": "date-time"
+                      "format": "date-time",
+                      "x-go-type": "string"
                     },
                     "version": {
                       "type": "integer",

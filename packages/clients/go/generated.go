@@ -8387,7 +8387,7 @@ type PostAuthCredentialsChallengeResponse struct {
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
 		ChallengeId string                                                   `json:"challengeId"`
-		ExpiresAt   time.Time                                                `json:"expiresAt"`
+		ExpiresAt   string                                                   `json:"expiresAt"`
 		Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
 		Nonce       string                                                   `json:"nonce"`
 		Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
@@ -8403,7 +8403,7 @@ type PostAuthCredentialsChallengeResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostAuthCredentialsChallengeResponse) GetJSON200() *struct {
 	ChallengeId string                                                   `json:"challengeId"`
-	ExpiresAt   time.Time                                                `json:"expiresAt"`
+	ExpiresAt   string                                                   `json:"expiresAt"`
 	Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
 	Nonce       string                                                   `json:"nonce"`
 	Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
@@ -9127,7 +9127,7 @@ type PostAuthMcpChallengeResponse struct {
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
 		ChallengeId string                                           `json:"challengeId"`
-		ExpiresAt   time.Time                                        `json:"expiresAt"`
+		ExpiresAt   string                                           `json:"expiresAt"`
 		Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
 		Nonce       string                                           `json:"nonce"`
 		Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`
@@ -9143,7 +9143,7 @@ type PostAuthMcpChallengeResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostAuthMcpChallengeResponse) GetJSON200() *struct {
 	ChallengeId string                                           `json:"challengeId"`
-	ExpiresAt   time.Time                                        `json:"expiresAt"`
+	ExpiresAt   string                                           `json:"expiresAt"`
 	Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
 	Nonce       string                                           `json:"nonce"`
 	Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`
@@ -12788,7 +12788,7 @@ func ParsePostAuthCredentialsChallengeResponse(rsp *http.Response) (*PostAuthCre
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			ChallengeId string                                                   `json:"challengeId"`
-			ExpiresAt   time.Time                                                `json:"expiresAt"`
+			ExpiresAt   string                                                   `json:"expiresAt"`
 			Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
 			Nonce       string                                                   `json:"nonce"`
 			Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
@@ -13291,7 +13291,7 @@ func ParsePostAuthMcpChallengeResponse(rsp *http.Response) (*PostAuthMcpChalleng
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
 			ChallengeId string                                           `json:"challengeId"`
-			ExpiresAt   time.Time                                        `json:"expiresAt"`
+			ExpiresAt   string                                           `json:"expiresAt"`
 			Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
 			Nonce       string                                           `json:"nonce"`
 			Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`

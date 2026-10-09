@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -138,6 +139,11 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 		t.Fatalf("requests %d", requests)
 	}
 }
+
+type sshFixtureTransport func(*http.Request) (*http.Response, error)
+
+func (f sshFixtureTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
 func TestSSHChallengeAuthentication(t *testing.T) {
 	dir := t.TempDir()
 	key := filepath.Join(dir, "id_ed25519")
@@ -146,6 +152,13 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 	}
 	pub, _ := os.ReadFile(key + ".pub")
 	expiresAt := time.Now().Add(2 * time.Minute).UTC().Format(time.RFC3339Nano)
+	trustedRecipient := ""
+	recipient := func(r *http.Request) string {
+		if trustedRecipient != "" {
+			return trustedRecipient
+		}
+		return "http://" + r.Host
+	}
 	allowed := filepath.Join(dir, "allowed")
 	if err := os.WriteFile(allowed, append([]byte("owner "), pub...), 0600); err != nil {
 		t.Fatal(err)
@@ -154,7 +167,7 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v1/auth/mcp/challenge":
-			json.NewEncoder(w).Encode(map[string]any{"challengeId": "challenge", "nonce": "random-nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": "http://" + r.Host, "expiresAt": expiresAt})
+			json.NewEncoder(w).Encode(map[string]any{"challengeId": "challenge", "nonce": "random-nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": recipient(r), "expiresAt": expiresAt})
 		case "/api/v1/auth/mcp/verify":
 			var body map[string]string
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -164,7 +177,7 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 			if err := os.WriteFile(sig, []byte(body["signature"]), 0600); err != nil {
 				t.Error(err)
 			}
-			proof, _ := json.Marshal([]any{"scratchpad-ssh-proof", 2, "http://" + r.Host, "ssh_login", "challenge", "random-nonce", strings.Join(strings.Fields(string(pub))[:2], " "), expiresAt})
+			proof, _ := json.Marshal([]any{"scratchpad-ssh-proof", 2, recipient(r), "ssh_login", "challenge", "random-nonce", strings.Join(strings.Fields(string(pub))[:2], " "), expiresAt})
 			cmd := exec.Command("ssh-keygen", "-Y", "verify", "-f", allowed, "-I", "owner", "-n", "scratchpad-auth-v2", "-s", sig)
 			cmd.Stdin = strings.NewReader(string(proof))
 			if out, err := cmd.CombinedOutput(); err != nil {
@@ -183,6 +196,22 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 	token, err := c.authenticate(context.Background())
 	if err != nil || token != "session" {
 		t.Fatalf("%q %v", token, err)
+	}
+	trustedRecipient = "https://xn--mmory-bsa.example"
+	c, err = NewClient(Config{URL: "https://mémory.example:443", PublicKeyPath: key + ".pub", SigningKeyPath: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Deliver synthetic IDN requests to the local fixture, retaining the locally
+	// configured recipient in the real OpenSSH signature.
+	target, _ := url.Parse(api.URL)
+	c.HTTP.Transport = sshFixtureTransport(func(r *http.Request) (*http.Response, error) {
+		local := r.Clone(r.Context())
+		local.URL.Scheme, local.URL.Host = target.Scheme, target.Host
+		return http.DefaultTransport.RoundTrip(local)
+	})
+	if token, err = c.authenticate(context.Background()); err != nil || token != "session" {
+		t.Fatalf("IDN: %q %v", token, err)
 	}
 }
 
