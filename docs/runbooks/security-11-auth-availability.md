@@ -36,6 +36,11 @@ Anonymous OAuth callbacks use a separate four-slot pool, preserving the eight cr
 
 Unknown or unbound OAuth state is rejected before acquiring the serialized write transaction. Valid state is rechecked atomically before consumption, preserving replay protection.
 
+Token/session-authorized callbacks revalidate the initiating credential before
+reserving a protected slot, again before consuming state, and before committing
+the resulting sign-in. Consumed setup tokens and revoked sessions cannot use
+stale OAuth states to contact GitHub or occupy recovery capacity.
+
 Setup and session proof resolution has a separate 120-per-minute client admission lane checked before hashing or database access. Anonymous login traffic cannot consume this lane. Clients sharing a transport address also share proof lookup capacity; another client retains enrollment and management access when this lane is exhausted. IPv6 peers, allowlist entries and forwarded hops use canonical address forms, including IPv4-mapped IPv6.
 
 Anonymous GitHub login starts charge client admission before reading the binding; successful starts are charged once.
