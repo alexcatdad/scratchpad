@@ -301,3 +301,38 @@ it("rejects invalid browser management origins before proof lookup admission", a
     await api.close();
   }
 });
+
+it("preserves active budgets at allowance capacity and admits clients after expiry", async () => {
+  let time = Date.now();
+  const api = createApi({
+    databasePath: ":memory:",
+    origin: "http://localhost:3000",
+    clock: () => time,
+  });
+  try {
+    await api.store.insert("owner", { id: "owner" });
+    const call = (peer: string) =>
+      api.handleRequest(
+        new Request("http://localhost:3000/api/v1/auth/login/verify", {
+          method: "POST",
+          headers: { origin: "http://localhost:3000" },
+          body: JSON.stringify({ challengeId: "synthetic-missing" }),
+        }),
+        peer,
+      );
+    for (let n = 0; n < 119; n++)
+      expect((await call("192.0.2.1")).status).toBe(401);
+    for (let n = 0; n < 4095; n++)
+      expect(
+        (await call(`198.18.${Math.floor(n / 256)}.${n % 256}`)).status,
+      ).toBe(401);
+    expect((await call("192.0.2.1")).status).toBe(401);
+    expect((await call("192.0.2.2")).status).toBe(429);
+    expect((await call("192.0.2.1")).status).toBe(429);
+    time += 60000;
+    expect((await call("192.0.2.2")).status).toBe(401);
+    expect((await call("192.0.2.1")).status).toBe(401);
+  } finally {
+    await api.close();
+  }
+});

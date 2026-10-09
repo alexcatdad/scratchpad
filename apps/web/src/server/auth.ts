@@ -92,10 +92,16 @@ export class Auth {
       "Too many authentication attempts. Try again in a minute.",
       429,
     );
-    // Bound retained client state without letting one caller reserve a global budget.
+    // Expire old counters; overflow must never reset an active allowance.
     if (!current && this.allowances.size >= 4096) {
-      const oldest = this.allowances.keys().next().value;
-      if (oldest !== undefined) this.allowances.delete(oldest);
+      for (const [key, entry] of this.allowances)
+        if (entry.bucket !== bucket) this.allowances.delete(key);
+      requireValue(
+        this.allowances.size < 4096,
+        "RATE_LIMITED",
+        "Authentication admission is busy. Try again in a minute.",
+        429,
+      );
     }
     this.allowances.set(client, { bucket, count: count + 1 });
   }

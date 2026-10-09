@@ -39,3 +39,5 @@ Unknown or unbound OAuth state is rejected before acquiring the serialized write
 Setup and session proof resolution has a separate 120-per-minute client admission lane checked before hashing or database access. Anonymous login traffic cannot consume this lane. Clients sharing a transport address also share proof lookup capacity; another client retains enrollment and management access when this lane is exhausted. IPv6 peers, allowlist entries and forwarded hops use canonical address forms, including IPv4-mapped IPv6.
 
 Anonymous GitHub login starts charge client admission before reading the binding; successful starts are charged once.
+
+At allowance-map capacity, admission removes expired counters and refuses new keys with HTTP 429 while current-minute counters remain intact. Existing clients keep their remaining allowance. New clients can retry after the minute expires; rotating source addresses cannot reset live limits.
