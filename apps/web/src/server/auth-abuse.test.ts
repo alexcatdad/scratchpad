@@ -10,6 +10,7 @@ import { createApi } from "./api";
 
 it("uses actual srvx socket metadata for configured proxy clients", async () => {
   const api = createApi({
+    clock: () => Date.parse("2026-10-09T12:00:00Z"),
     databasePath: ":memory:",
     origin: "http://localhost:3000",
     trustedProxies: ["127.0.0.1"],
@@ -50,6 +51,7 @@ it("uses actual srvx socket metadata for configured proxy clients", async () => 
 
 it("resolves independent proxy clients from the nearest untrusted hop and ignores forged direct headers", async () => {
   const api = createApi({
+    clock: () => Date.parse("2026-10-09T12:00:00Z"),
     databasePath: ":memory:",
     origin: "http://localhost:3000",
     trustedProxies: ["127.0.0.1"],
@@ -85,6 +87,7 @@ it("resolves independent proxy clients from the nearest untrusted hop and ignore
 it("keeps MCP proof available to another client after an anonymous budget is exhausted", async () => {
   const directory = mkdtempSync(join(tmpdir(), "scratchpad-abuse-"));
   const api = createApi({
+    clock: () => Date.parse("2026-10-09T12:00:00Z"),
     databasePath: ":memory:",
     origin: "http://localhost:3000",
   });
@@ -221,6 +224,7 @@ it.each([
   "0:0:0:0:0:ffff:7f00:1",
 ])("canonicalizes IPv6 proxy peer %s before admission", async (peer) => {
   const api = createApi({
+    clock: () => Date.parse("2026-10-09T12:00:00Z"),
     databasePath: ":memory:",
     origin: "http://localhost:3000",
     trustedProxies: ["::1", "127.0.0.1"],
@@ -251,6 +255,7 @@ it.each([
 
 it("rejects invalid browser management origins before proof lookup admission", async () => {
   const api = createApi({
+    clock: () => Date.parse("2026-10-09T12:00:00Z"),
     databasePath: ":memory:",
     origin: "http://localhost:3000",
   });
