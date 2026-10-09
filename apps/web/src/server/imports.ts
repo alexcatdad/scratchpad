@@ -161,7 +161,17 @@ export async function importNative(
           z.enum(authorityTypes).nullable().parse(value.authority);
           z.iso.datetime().parse(value.recordedAt);
         }
-        if (kind === "audit") identifier.parse(value.entityId);
+        if (kind === "audit") {
+          // Historical key-block references are fingerprints, never route IDs.
+          const keyFingerprint =
+            value.entityType === "credential" &&
+            ["github.key_blocked", "github.key_unblocked"].includes(
+              String(value.action),
+            ) &&
+            typeof value.entityId === "string" &&
+            /^SHA256:[A-Za-z0-9+/]{43}$/.test(value.entityId);
+          if (!keyFingerprint) identifier.parse(value.entityId);
+        }
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);
           z.string().min(1).max(500).parse(value.identity);
