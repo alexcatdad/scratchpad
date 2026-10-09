@@ -169,3 +169,42 @@ it.skipIf(process.platform !== "darwin")(
     }
   },
 );
+
+it("preserves live private state through an administrator-process online backup", async () => {
+  const root = mkdtempSync(join(tmpdir(), "scratchpad-online-backup-"));
+  const path = join(root, "db.sqlite");
+  const backup = join(root, "copy.sqlite");
+  const store = new Store(path);
+  let restored: Store | undefined;
+  try {
+    await store.insert("ai_settings", {
+      id: "global",
+      apiKey: "synthetic-retained-secret",
+    });
+    execFileSync(
+      process.execPath,
+      [
+        "--import",
+        "tsx",
+        "--input-type=module",
+        "-e",
+        "const {Store}=await import(process.argv[1]);const store=new Store(process.argv[2]);await store.backup(process.argv[3]);await store.close();",
+        new URL("./store.ts", import.meta.url).href,
+        path,
+        backup,
+      ],
+      { stdio: "pipe" },
+    );
+    restored = new Store(backup);
+    expect((await restored.get("ai_settings", "global"))?.apiKey).toBe(
+      "synthetic-retained-secret",
+    );
+    expect((await store.get("ai_settings", "global"))?.apiKey).toBe(
+      "synthetic-retained-secret",
+    );
+  } finally {
+    await restored?.close();
+    await store.close();
+    rmSync(root, { recursive: true, force: true });
+  }
+});

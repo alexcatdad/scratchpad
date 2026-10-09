@@ -4,7 +4,6 @@ import {
   chmodSync,
   closeSync,
   constants,
-  fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -92,29 +91,30 @@ function privateDirectory(path: string) {
   assertPrivateStorage(path, lstatSync(path), true);
 }
 function privateSqliteFile(path: string, create: boolean) {
-  let fd: number;
-  try {
-    fd = openSync(
-      path,
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    );
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    if (!create) return;
-    fd = openSync(
-      path,
-      constants.O_RDWR |
-        constants.O_CREAT |
-        constants.O_EXCL |
-        constants.O_NOFOLLOW |
-        constants.O_NONBLOCK,
-      0o600,
-    );
+  // POSIX close() releases this process's SQLite locks on the same inode.
+  // Only create/open a brand-new file; inspect existing paths without a descriptor.
+  if (create) {
+    try {
+      closeSync(
+        openSync(
+          path,
+          constants.O_WRONLY |
+            constants.O_CREAT |
+            constants.O_EXCL |
+            constants.O_NOFOLLOW |
+            constants.O_NONBLOCK,
+          0o600,
+        ),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
   }
   try {
-    assertPrivateStorage(path, fstatSync(fd), false);
-  } finally {
-    closeSync(fd);
+    assertPrivateStorage(path, lstatSync(path), false);
+  } catch (error) {
+    if (create || (error as NodeJS.ErrnoException).code !== "ENOENT")
+      throw error;
   }
 }
 /** Async persistence boundary shared by SQLite and PostgreSQL. */
