@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, label, type MemoryRecord, type Project, post } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
 
 type Job = {
   id: string;
@@ -335,7 +336,7 @@ export function Insights({
                     onClick={() =>
                       void perform(async () => {
                         await api(
-                          `/suggestions/${suggestion.id}/${action}`,
+                          `/suggestions/${encodedId(suggestion.id)}/${action}`,
                           post({ expectedVersion: suggestion.version }),
                         );
                         await refresh();
@@ -386,7 +387,7 @@ export function Insights({
                   onClick={() =>
                     void perform(async () => {
                       await api(
-                        `/ai/jobs/${job.id}/retry`,
+                        `/ai/jobs/${encodedId(job.id)}/retry`,
                         post({ expectedVersion: job.version }),
                       );
                       await refresh();

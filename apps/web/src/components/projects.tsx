@@ -7,6 +7,7 @@ import {
   post,
   types,
 } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
 export function Projects({
   projects,
   onChanged,
@@ -142,7 +143,7 @@ function ProjectCard({
           onSubmit={(e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            void save(`/projects/${project.id}/settings`, {
+            void save(`/projects/${encodedId(project.id)}/settings`, {
               ...project.settings,
               repoMirroring: {
                 enabled: form.get("mirroring") === "on",
@@ -226,7 +227,10 @@ function ProjectCard({
           onSubmit={(e) => {
             e.preventDefault();
             const form = new FormData(e.currentTarget);
-            void save(`/projects/${project.id}`, Object.fromEntries(form));
+            void save(
+              `/projects/${encodedId(project.id)}`,
+              Object.fromEntries(form),
+            );
           }}
         >
           <label>
@@ -257,7 +261,7 @@ function ProjectCard({
         type="button"
         onClick={() => {
           setError("");
-          void api<typeof context>(`/projects/${project.id}/context`)
+          void api<typeof context>(`/projects/${encodedId(project.id)}/context`)
             .then(setContext)
             .catch((reason: Error) => setError(reason.message));
         }}

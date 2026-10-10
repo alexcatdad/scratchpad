@@ -5,6 +5,7 @@ import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import { sshProof } from "../apps/web/src/lib/ssh-proof";
 import { createApi } from "../apps/web/src/server/api";
 import { createWorkflowHarness, root } from "./workflow-harness";
 
@@ -135,7 +136,10 @@ async function machineSession() {
   const signature = execFileSync(
     "ssh-keygen",
     ["-Y", "sign", "-f", key, "-n", challenge.namespace],
-    { input: challenge.nonce, encoding: "utf8" },
+    {
+      input: sshProof(challenge, publicKey, origin, "ssh_login"),
+      encoding: "utf8",
+    },
   );
   const verified = await fetch(`${origin}/api/v1/auth/mcp/verify`, {
     method: "POST",

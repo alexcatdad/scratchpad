@@ -871,7 +871,10 @@ Response:
 {
   "challengeId": "...",
   "nonce": "...",
-  "namespace": "scratchpad-auth",
+  "namespace": "scratchpad-auth-v2",
+  "version": 2,
+  "recipient": "https://scratchpad.example.com",
+  "purpose": "ssh_login",
   "expiresAt": "..."
 }
 ```
@@ -1654,7 +1657,7 @@ The OpenAPI contract drives deterministic TypeScript and Go client generation. F
 
 The accepted [GitHub owner-access ADR](adr/0001-github-owner-access.md) expands authentication beyond the historical presentation-only profile interface in §67. Public `/profile/github` snapshots remain descriptive; verified owner binding is separate and cannot be created by submitting a username.
 
-The existing `POST /auth/mcp/challenge` and `/auth/mcp/verify` wire contract accepts either an independent locally enrolled SSH credential or an eligible synchronized GitHub-managed public key. Challenge signatures remain OpenSSH SSHSIG over the exact nonce with namespace `scratchpad-auth`; private material stays local. Proof of possession is mandatory. Machine sessions last up to 24 hours, with eligibility rechecked on every request and renewal: persistent local blocks, successful-sync removals, account unlink/replacement and cache expiry invalidate GitHub-derived access immediately.
+The existing `POST /auth/mcp/challenge` and `/auth/mcp/verify` wire contract accepts either an independent locally enrolled SSH credential or an eligible synchronized GitHub-managed public key. Challenge signatures use the version 2 recipient-bound OpenSSH SSHSIG transcript described below; private material stays local. Proof of possession is mandatory. Machine sessions last up to 24 hours, with eligibility rechecked on every request and renewal: persistent local blocks, successful-sync removals, account unlink/replacement and cache expiry invalidate GitHub-derived access immediately.
 
 GitHub synchronization collects both SSH authentication and SSH signing keys completely before applying changes. Its persisted last successful refresh defines the 24-hour authorization deadline; a failed or incomplete refresh and a server restart do not extend it. Independent local credentials are exempt from GitHub cache freshness. GPG keys are unsupported.
 
@@ -1668,6 +1671,50 @@ Authenticated browser `GET /auth/github` reports `configured`, nullable `binding
 
 `DELETE /auth/github` requires a fresh independent local browser authentication and returns `{unlinked: true}`. Replace requires fresh existing browser authentication. Freshness is at most five minutes from actual proof, not a renewed session timestamp. Recovery uses the administrator's distinct recovery capability. Configure the optional paired `SCRATCHPAD_GITHUB_CLIENT_ID` and `SCRATCHPAD_GITHUB_CLIENT_SECRET`; callback origin comes from `SCRATCHPAD_PUBLIC_URL` with `/api/v1/auth/github/callback`.
 
+## Accepted clarification: recipient-bound SSH proof (2026-10-09)
+
+Both SSH challenge endpoints return version `2`, namespace `scratchpad-auth-v2`, recipient (the configured server origin), purpose (`ssh_login` for MCP login or `ssh_enroll` for browser enrollment), challengeId, nonce and expiresAt. Sign the UTF-8 encoding of this compact JSON array, without a trailing newline:
+
+`["scratchpad-ssh-proof",2,recipient,purpose,challengeId,nonce,publicKey,expiresAt]`
+
+Use JSON string escaping and no whitespace between elements. Normalize publicKey to its first two whitespace-separated OpenSSH fields, joined by one space; omit the comment. Preserve the exact returned expiry string. The signer derives recipient from its locally configured Scratchpad URL origin (or the dashboard's local browser origin), requires the returned recipient to match, and requires the expected purpose, version, namespace and unexpired challenge before signing. The challenger cannot select the signer's trusted recipient. The server independently reconstructs the transcript from stored challenge context and its configured origin. Challenges retain their two-minute expiry and single-use consumption; credential eligibility and revocation remain authoritative.
+
+Upgrade the server, MCP binary and manual/SDK signing integrations together. Version 1 nonce-only signatures and pending version 1 challenges are rejected; request a fresh version 2 challenge. There is no legacy fallback. Existing issued sessions retain their existing expiry and revocation policy; their next renewal requires version 2.
+
+## Accepted clarification: AI dispatch configuration snapshots (2026-10-09)
+
+Each provider request uses endpoint, models, API key and dispatch generation from one stored AI settings snapshot. Configuration updates, including key-only replacement or removal, increment a persisted dispatch generation under the existing optimistic version check. The generation lives in the existing entity JSON for both SQLite and PostgreSQL; legacy settings start at generation zero without a destructive migration. Credentials and generation do not enter public settings or audits.
+
+Before each outbound request, admission checks the generation against current settings in the same short store transaction used to serialize configuration updates. The transaction ends after initiating the request, without waiting for the provider response. A request already admitted/transmitted cannot be recalled. A changed configuration stops future batches, discards job outputs and exposes a failed job with a safe configuration-change message. The owner may retry using current settings. Connectivity tests and semantic search use the same boundary; global/project consent checks remain required. Key-only changes do not alter the embedding compatibility fingerprint or invalidate compatible stored embeddings.
+
+## Accepted clarification: opaque entity route identifiers (2026-10-09)
+
+Native imports accept stable entity IDs of 1–500 ASCII letters, digits, underscore, dot, colon, tilde or hyphen, excluding the complete dot segments `.` and `..`. IDs cannot contain URL delimiters, percent escapes, backslashes, whitespace or control characters. The same constraint applies to imported entity references; source repository identity strings retain their separate format. Invalid native IDs reject the entire transaction. Legacy JSONL continues preserving supported historical IDs or mapping unsuitable source IDs to deterministic opaque record IDs while retaining original provenance.
+
+Dashboard entity URLs encode IDs, and its request boundary rejects malformed stored route IDs before sending a request. Server entity routes decode one segment exactly once and validate it before lookup. Safe colon-containing record IDs therefore retain record detail and mutation reachability, native import/export round trips and optimistic versions. Existing malformed native IDs can still be exported for recovery; dashboard action and detail requests for them fail safely instead of selecting another entity or endpoint.
+
+For compatibility, `credential` audit references for exactly `github.key_blocked` and `github.key_unblocked` also accept historical SHA-256 fingerprints (`SHA256:` followed by 43 standard Base64 characters). These generated references are audit metadata, never routable entity identifiers. This exception preserves unmodified native exports from GitHub key blocking; other audit references retain the opaque-ID constraint.
+
+## Accepted clarification: authenticated SDK transport (2026-10-09)
+
+The TypeScript and Go authenticated client factories reject remote plaintext HTTP before creating a credential-bearing request. Supported development HTTP hosts are exactly localhost (case-insensitive), 127.0.0.1 and IPv6 ::1; misleading suffixes and mapped IPv6 forms are not accepted as substitutes. HTTPS remains supported. Both factories require an instance origin without user information, a path prefix, query or fragment; API paths already include /api/v1. Errors use fixed safe descriptions, never supplied bearer tokens or embedded credentials.
+
+Default transports do not follow redirects. TypeScript uses Request redirect:error, and Go configures its default or a cloned supplied *http.Client to return the redirect response without following it. Custom fetch/HttpRequestDoer implementations must honor the same credential-forwarding boundary. Authentication enrollment and renewal remain explicit caller/server responsibilities.
+
+Authenticated SDK origins require literal canonical IPv4 loopback spelling `127.0.0.1`; shorthand, integer, hexadecimal, escaped and trailing-dot spellings are rejected before WHATWG normalization can change their meaning. IPv6 loopback textual forms still canonicalize to `::1`. Explicit ports must be numeric and in 1–65535; empty ports are rejected.
+
+The TypeScript authenticated client binds per-request URLs to its configured instance origin before fetch. Typed baseUrl overrides cannot redirect owner headers to a different HTTP or HTTPS origin; same-origin overrides remain valid. Its request boundary also fixes redirect:error even when per-request options request following redirects. Caller-installed middleware and arbitrary custom transports remain trusted extensions responsible for preserving this boundary. Bare query/fragment delimiters are invalid origins in both SDKs.
+
+The Go authenticated factory also guards the final Do boundary after generated per-call request editors. The effective request origin and HTTP Host override must match the configured scheme, normalized hostname and effective port before the underlying transport is called. Request editors cannot forward factory bearer headers to another origin. TypeScript rejects literal user-information delimiters even when parsed username/password are empty.
+
+### Accepted clarification: source-bound derived artifact review (2026-10-09)
+
+Generation, native import and suggestion acceptance enforce per-kind content and source-reference invariants. AI relationship candidates and contradictions require distinct cited endpoints and cannot create `replaces` or `partially_replaces` edges. Acceptance independently revalidates stored content and current project consent before any writes. Classification binds one source and validates string tags and classification; export artifacts require Markdown. Invalid preexisting derived content remains immutable historical evidence, is hidden from suggestions and cannot be accepted. Invalid imported content rejects the transaction without modifying original captures. Valid ordinary relationships and curated artifacts remain portable, including restoration while AI is disabled; review requires renewed current consent.
+
+Native curated artifacts must match the kind, content, citations, participating projects and generator of their referenced accepted suggestion. Import rejects mismatches atomically, including otherwise identical existing rows. Source validation during review loads records and projects in batches so large historical exports do not issue one database query per citation.
+
 ### Accepted clarification: complete AI privacy inputs (2026-10-09)
 
 AI artifacts carry server-owned `privacyDependencies` with `{version: 1, recordIds, projectIds, crossProject}` for every record and project metadata input supplied to the completion. Display citations are separate and cannot reduce this dependency set. Persistence, retrieval and review enforce all dependencies and current consent; project-scoped views cannot expose output influenced by outside projects. Curated derivatives retain dependencies. Cross-project acceptance creates a gated curated interpretation without copying it into project-local metadata or relationships; single-project review behavior remains available. Native archives preserve and validate known dependencies. Legacy artifacts with unknown input provenance remain immutable historical evidence, fail closed for suggestion access/review and require regeneration.
+
+Curated native privacy dependencies must exactly match their referenced accepted suggestion. Missing dependency provenance is preserved as historical evidence and cannot become readable or reviewable AI output through import. Privacy references share the source snapshots used for derived validation; dependency identifiers obey the opaque-ID contract.

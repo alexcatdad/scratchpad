@@ -16,6 +16,7 @@ import {
   post,
   types,
 } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
 export const Route = createFileRoute("/")({
   component: Dashboard,
   validateSearch: (search: Record<string, unknown>) => ({
@@ -90,9 +91,7 @@ function Dashboard() {
   const select = useCallback(async (record: MemoryRecord) => {
     const request = ++detailRequest.current;
     try {
-      const data = await api<Detail>(
-        `/records/${encodeURIComponent(record.id)}`,
-      );
+      const data = await api<Detail>(`/records/${encodedId(record.id)}`);
       if (request === detailRequest.current) setDetail(data);
     } catch (reason) {
       if (request === detailRequest.current)
