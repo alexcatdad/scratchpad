@@ -163,6 +163,13 @@ describe("optional AI boundary", () => {
     const artifacts = await ai.artifacts({ projectId: "p1" });
     expect(artifacts).toHaveLength(1);
     expect(artifacts[0]?.sourceRecordIds).toHaveLength(10001);
+    const artifact = artifacts[0];
+    if (!artifact) throw new Error("Synthetic export is missing.");
+    await ai.review(artifact.id, "accepted", actor, artifact.version);
+    expect(await store.list("curated_artifact")).toMatchObject([
+      { sourceRecordIds: artifact.sourceRecordIds, content: artifact.content },
+    ]);
+    expect(await store.list("record")).toHaveLength(10001);
   }, 20000);
   it("rejects generated content belonging to a different artifact kind", async () => {
     const { ai, store } = await fixture(

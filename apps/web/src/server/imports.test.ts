@@ -623,6 +623,28 @@ describe("native archive integrity", () => {
         { type: relationshipType, status: "accepted" },
       ]);
       const portable = (await destination.call("/export", "POST", {})).data;
+      for (const mutation of ["content", "generator", "sources", "pending"]) {
+        const invalid = structuredClone(portable);
+        const curated = invalid.data.curated_artifact[0];
+        if (mutation === "content") curated.content.text = "Unrelated evidence";
+        if (mutation === "generator") curated.generator.model = "Other model";
+        if (mutation === "sources") curated.sourceRecordIds.reverse();
+        if (mutation === "pending")
+          invalid.data.ai_artifact[0].status = "pending";
+        const rejected = createApi({
+          databasePath: ":memory:",
+          origin: "http://localhost:3000",
+        });
+        cleanup.push(() => rejected.close());
+        await expect(
+          importNative(rejected.store, invalid, actor),
+        ).rejects.toMatchObject({
+          code: "IMPORT_INVALID",
+        });
+        expect(await rejected.store.list("record")).toHaveLength(0);
+        expect(await rejected.store.list("ai_artifact")).toHaveLength(0);
+        expect(await rejected.store.list("curated_artifact")).toHaveLength(0);
+      }
       const restored = createApi({
         databasePath: ":memory:",
         origin: "http://localhost:3000",

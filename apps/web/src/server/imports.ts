@@ -156,7 +156,28 @@ export async function importNative(
           await assertDerivedArtifact(store, value);
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
-          else await requireEntity(store, "ai_artifact", value.artifactId);
+          else {
+            const suggestion = await requireEntity(
+              store,
+              "ai_artifact",
+              value.artifactId,
+            );
+            requireValue(
+              suggestion.status === "accepted" &&
+                [
+                  "kind",
+                  "content",
+                  "sourceRecordIds",
+                  "projectIds",
+                  "generator",
+                ].every(
+                  (field) =>
+                    canonical(value[field]) === canonical(suggestion[field]),
+                ),
+              "IMPORT_INVALID",
+              "Curated evidence must match its accepted AI suggestion.",
+            );
+          }
           if (previous) {
             skipped++;
             continue;

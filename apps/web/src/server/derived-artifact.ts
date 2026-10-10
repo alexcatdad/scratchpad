@@ -102,17 +102,24 @@ export async function assertDerivedArtifact(
       "AI_ARTIFACT_INVALID",
       "Derived artifact content or references are invalid.",
     );
+  const knownProjects = new Set(
+    (await store.list("project")).map((project) => project.id),
+  );
   for (const projectId of projects.data)
-    if (!(await store.get("project", projectId)))
+    if (!knownProjects.has(projectId))
       throw new ApiError(
         400,
         "AI_ARTIFACT_INVALID",
         "Derived artifact references a missing project.",
       );
+  const records = new Map(
+    (await store.list("record")).map((record) => [record.id, record]),
+  );
+  const sourceProjects = new Set(projects.data);
   const citedProjects = new Set<string>();
   for (const recordId of artifact.sourceRecordIds as string[]) {
-    const record = await store.get("record", recordId);
-    if (!record || !projects.data.includes(String(record.projectId)))
+    const record = records.get(recordId);
+    if (!record || !sourceProjects.has(String(record.projectId)))
       throw new ApiError(
         400,
         "AI_ARTIFACT_INVALID",
