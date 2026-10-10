@@ -30,6 +30,7 @@ export function createScratchpadClient(options: {
     : suppliedAuthority?.split(":")[0].toLowerCase();
   if (
     !suppliedAuthority ||
+    suppliedAuthority.includes("@") ||
     suppliedAuthority.endsWith(":") ||
     url.port === "0" ||
     !["http:", "https:"].includes(url.protocol) ||

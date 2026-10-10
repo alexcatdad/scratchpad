@@ -12,6 +12,8 @@ for (const baseUrl of [
   "http://%6cocalhost",
   "https://example.test?",
   "https://example.test#",
+  "https://@example.test",
+  "https://:@example.test",
   "http://remote.example.test",
   "http://localhost.example.test",
   "http://127.0.0.1.example.test",

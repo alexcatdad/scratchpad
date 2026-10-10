@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -17,6 +18,47 @@ type Auth struct {
 	Token      string
 	Origin     string
 	HTTPClient HttpRequestDoer
+}
+
+func requestOrigin(u *url.URL) string {
+	if u == nil || u.User != nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String()
+	}
+	port := u.Port()
+	if number, err := strconv.Atoi(port); err == nil {
+		port = strconv.Itoa(number)
+	}
+	if port == "" {
+		if u.Scheme == "https" {
+			port = "443"
+		} else if u.Scheme == "http" {
+			port = "80"
+		}
+	}
+	return u.Scheme + "://" + net.JoinHostPort(host, port)
+}
+
+type authenticatedTransport struct {
+	client HttpRequestDoer
+	origin string
+}
+
+func (t authenticatedTransport) Do(request *http.Request) (*http.Response, error) {
+	if request == nil || requestOrigin(request.URL) != t.origin {
+		return nil, errors.New("use the configured instance origin")
+	}
+	if request.Host != "" {
+		hostURL := *request.URL
+		hostURL.Host = request.Host
+		if requestOrigin(&hostURL) != t.origin {
+			return nil, errors.New("use the configured instance origin")
+		}
+	}
+	return t.client.Do(request)
 }
 
 // NewAuthenticatedClient expects an instance origin URL (paths include /api/v1).
@@ -60,7 +102,7 @@ func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, er
 		copy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
 		transport = &copy
 	}
-	options = append(options, WithHTTPClient(transport))
+	options = append(options, WithHTTPClient(authenticatedTransport{client: transport, origin: requestOrigin(u)}))
 	return NewClientWithResponses(strings.TrimRight(baseURL, "/"), options...)
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -148,5 +149,54 @@ func TestAuthenticatedHTTP(t *testing.T) {
 	}
 	if denied.StatusCode() != 401 || denied.JSONDefault == nil || denied.JSONDefault.Error.Code != "AUTH_REQUIRED" {
 		t.Fatalf("unauthorized: %s", denied.Body)
+	}
+}
+
+func TestAuthenticatedRequestEditorsCannotChangeOrigin(t *testing.T) {
+	for _, target := range []string{"http://remote.example.test/api/v1/projects", "https://other.example.test/api/v1/projects"} {
+		t.Run(target, func(t *testing.T) {
+			calls := 0
+			transport := syntheticSDKTransport(func(r *http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"projects":[]}`))}, nil
+			})
+			client, err := NewAuthenticatedClient("https://memory.example.test", Auth{Token: "synthetic-owner-token", HTTPClient: transport})
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = client.GetProjectsWithResponse(context.Background(), func(_ context.Context, r *http.Request) error { r.URL, _ = url.Parse(target); return nil })
+			if err == nil || calls != 0 {
+				t.Fatalf("editor bypass: calls=%d error=%v", calls, err)
+			}
+			if strings.Contains(err.Error(), "synthetic-owner-token") || strings.Contains(err.Error(), target) {
+				t.Fatal("unsafe origin error")
+			}
+		})
+	}
+}
+
+func TestAuthenticatedRequestHostGuardAndEquivalentOrigin(t *testing.T) {
+	calls := 0
+	transport := syntheticSDKTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.Header.Get("Authorization") != "Bearer synthetic-owner-token" {
+			t.Fatal("missing auth")
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{"Content-Type": {"application/json"}}, Body: io.NopCloser(strings.NewReader(`{"projects":[]}`))}, nil
+	})
+	client, err := NewAuthenticatedClient("https://memory.example.test", Auth{Token: "synthetic-owner-token", HTTPClient: transport})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = client.GetProjectsWithResponse(context.Background(), func(_ context.Context, r *http.Request) error { r.Host = "remote.example.test"; return nil })
+	if err == nil || calls != 0 {
+		t.Fatalf("Host bypass: calls=%d err=%v", calls, err)
+	}
+	_, err = client.GetProjectsWithResponse(context.Background(), func(_ context.Context, r *http.Request) error {
+		r.URL, _ = url.Parse("https://MEMORY.example.test:00443/api/v1/projects?synthetic=1")
+		return nil
+	})
+	if err != nil || calls != 1 {
+		t.Fatalf("same origin rejected: calls=%d err=%v", calls, err)
 	}
 }
