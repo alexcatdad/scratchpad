@@ -85,6 +85,190 @@ function mockProvider(completion?: unknown): typeof fetch {
   }) as typeof fetch;
 }
 describe("optional AI boundary", () => {
+  it.each([
+    ["p1", "p2"],
+    ["p1", "p1"],
+  ])(
+    "rejects false participating-project provenance: %j",
+    async (...projectIds) => {
+      const { ai, store } = await fixture();
+      await store.insert("project", {
+        id: "p2",
+        settings: { ...defaults("normal"), aiProcessing: true },
+      });
+      const artifact = await store.insert("ai_artifact", {
+        id: "false-projects",
+        kind: "summary",
+        title: "Synthetic",
+        content: { text: "Only one source project" },
+        sourceRecordIds: ["r1"],
+        projectIds,
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      });
+      expect(await ai.artifacts()).toHaveLength(0);
+      await expect(
+        ai.review(artifact.id, "accepted", actor, artifact.version),
+      ).rejects.toMatchObject({ code: "AI_ARTIFACT_INVALID" });
+      expect(await store.get("ai_artifact", artifact.id)).toEqual(artifact);
+      expect(await store.list("curated_artifact")).toHaveLength(0);
+    },
+  );
+  it("exports more than ten thousand source records without a post-processing ceiling", async () => {
+    const fetcher: typeof fetch = async (_url, options) => {
+      const body = JSON.parse(String(options?.body));
+      const input = JSON.parse(body.messages[1].content);
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                artifacts: [
+                  {
+                    kind: "export",
+                    title: "Synthetic full history",
+                    content: {
+                      text: "Complete synthetic history",
+                      markdown: "Synthetic batch",
+                    },
+                    sourceRecordIds: [input.records[0].id],
+                  },
+                ],
+              }),
+            },
+          },
+        ],
+      });
+    };
+    const { ai, store } = await fixture(fetcher);
+    await store.atomic(async () => {
+      for (let index = 0; index < 10000; index++)
+        await store.insert("record", {
+          id: `large-${index}`,
+          projectId: "p1",
+          title: "Synthetic",
+          content: "Synthetic history",
+        });
+    });
+    const job = await ai.enqueue(
+      { type: "export", projectId: "p1", format: "handoff" },
+      actor,
+    );
+    await ai.tick();
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "completed",
+      attempts: 1,
+    });
+    const artifacts = await ai.artifacts({ projectId: "p1" });
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0]?.sourceRecordIds).toHaveLength(10001);
+    const artifact = artifacts[0];
+    if (!artifact) throw new Error("Synthetic export is missing.");
+    await ai.review(artifact.id, "accepted", actor, artifact.version);
+    expect(await store.list("curated_artifact")).toMatchObject([
+      { sourceRecordIds: artifact.sourceRecordIds, content: artifact.content },
+    ]);
+    expect(await store.list("record")).toHaveLength(10001);
+  }, 20000);
+  it("rejects generated content belonging to a different artifact kind", async () => {
+    const { ai, store } = await fixture(
+      mockProvider({
+        artifacts: [
+          {
+            kind: "summary",
+            title: "Synthetic",
+            content: {
+              text: "Unrelated fields",
+              fromRecordId: "r1",
+              toRecordId: "r1",
+              relationshipType: "related_to",
+            },
+            sourceRecordIds: ["r1"],
+          },
+        ],
+      }),
+    );
+    const job = await ai.enqueue({ type: "analyze", projectId: "p1" }, actor);
+    await ai.tick();
+    expect(await store.list("ai_artifact")).toHaveLength(0);
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "queued",
+      attempts: 1,
+    });
+  });
+  it("revalidates stored suggestions before review and keeps invalid evidence inert", async () => {
+    const { ai, store } = await fixture();
+    await store.insert("record", {
+      id: "r2",
+      projectId: "p1",
+      title: "Second",
+      content: "Synthetic",
+    });
+    await store.insert("project", {
+      id: "private",
+      settings: defaults("external"),
+    });
+    await store.insert("record", {
+      id: "uncited",
+      projectId: "private",
+      title: "Private",
+      content: "Synthetic",
+    });
+    const raw = await store.list("record");
+    for (const [index, content] of [
+      {
+        text: "Lifecycle edge",
+        fromRecordId: "r2",
+        toRecordId: "r1",
+        relationshipType: "replaces",
+      },
+      {
+        text: "Partial lifecycle edge",
+        fromRecordId: "r2",
+        toRecordId: "r1",
+        relationshipType: "partially_replaces",
+      },
+      {
+        text: "Uncited endpoint",
+        fromRecordId: "uncited",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+      {
+        text: "Missing endpoint",
+        fromRecordId: "missing",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+      {
+        text: "Self edge",
+        fromRecordId: "r1",
+        toRecordId: "r1",
+        relationshipType: "related_to",
+      },
+    ].entries()) {
+      const artifact = await store.insert("ai_artifact", {
+        id: `unsafe-${index}`,
+        kind: "relationship_candidate",
+        title: "Synthetic imported suggestion",
+        content,
+        sourceRecordIds: ["r1", "r2"],
+        projectIds: ["p1"],
+        authority: "derived",
+        status: "pending",
+        generator: { model: "synthetic" },
+      });
+      await expect(
+        ai.review(artifact.id, "accepted", actor, artifact.version),
+      ).rejects.toBeDefined();
+      expect(await store.get("ai_artifact", artifact.id)).toEqual(artifact);
+    }
+    expect(await ai.artifacts()).toHaveLength(0);
+    expect(await store.list("relationship")).toHaveLength(0);
+    expect(await store.list("curated_artifact")).toHaveLength(0);
+    expect(await store.list("record")).toEqual(raw);
+  });
   it("keeps compatible embeddings usable after a key-only change", async () => {
     const { ai, store } = await fixture();
     await ai.enqueue({ type: "embed", projectId: "p1" }, actor);
