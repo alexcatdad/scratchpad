@@ -1720,3 +1720,7 @@ AI artifacts carry server-owned `privacyDependencies` with `{version: 1, recordI
 Curated native privacy dependencies must exactly match their referenced accepted suggestion. Missing dependency provenance is preserved as historical evidence and cannot become readable or reviewable AI output through import. Privacy references share the source snapshots used for derived validation; dependency identifiers obey the opaque-ID contract.
 
 Single-project classification and relationship acceptance effects remain available when the dashboard requests cross-project mode but only one actual dependency project participates. Cross-project consent is still required for that requested mode. Typed API artifacts expose optional versioned privacyDependencies; absence represents unknown historical provenance.
+
+## Accepted clarification: bounded optional mirroring
+
+Issue #22 retains central-first immutable capture and stable retry identities. Optional repository mirroring rejects nonregular targets before and after a nonblocking, no-follow root-scoped open. Its existing five-second context also bounds scan reads and processing; cancellation releases owned locks and returns explicit mirror failure with the saved central record identity. See [the mirror runbook](runbooks/security-22-bounded-mirroring.md) for recovery and filesystem limits.
