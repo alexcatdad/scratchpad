@@ -22,7 +22,7 @@ type Auth struct {
 // NewAuthenticatedClient expects an instance origin URL (paths include /api/v1).
 func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, error) {
 	u, err := url.Parse(baseURL)
-	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || strings.ContainsAny(baseURL, "?#") || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
 		return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
 	}
 	if port := u.Port(); port != "" {

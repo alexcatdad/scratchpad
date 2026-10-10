@@ -46,7 +46,7 @@ export function createScratchpadClient(options: {
       !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
   )
     throw invalidOrigin();
-  return createClient<paths>({
+  const client = createClient<paths>({
     baseUrl: url.origin,
     redirect: "error",
     fetch: options.fetch,
@@ -56,4 +56,11 @@ export function createScratchpadClient(options: {
       ...(options.origin ? { Origin: options.origin } : {}),
     },
   });
+  client.use({
+    onRequest({ request }) {
+      if (new URL(request.url).origin !== url.origin) throw invalidOrigin();
+      return new Request(request, { redirect: "error" });
+    },
+  });
+  return client;
 }

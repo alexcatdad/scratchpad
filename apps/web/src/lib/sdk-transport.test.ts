@@ -10,6 +10,8 @@ for (const baseUrl of [
   "https://example.test:0",
   "https://example.test:",
   "http://%6cocalhost",
+  "https://example.test?",
+  "https://example.test#",
   "http://remote.example.test",
   "http://localhost.example.test",
   "http://127.0.0.1.example.test",
@@ -67,3 +69,41 @@ for (const baseUrl of [
     expect(fetcher).toHaveBeenCalledOnce();
   });
 }
+
+for (const baseUrl of [
+  "http://remote.example.test",
+  "https://other.example.test",
+])
+  it(`rejects per-request origin override ${baseUrl} before credential forwarding`, async () => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({ projects: [] }),
+    );
+    const client = createScratchpadClient({
+      baseUrl: "https://memory.example.test",
+      token: "synthetic-owner-token",
+      fetch: fetcher,
+    });
+    await expect(client.GET("/api/v1/projects", { baseUrl })).rejects.toThrow(
+      "instance origin",
+    );
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
+it("retains the configured origin and redirect guard on per-request options", async () => {
+  const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+    const request = input instanceof Request ? input : new Request(input, init);
+    expect(request.url).toBe("https://memory.example.test/api/v1/projects");
+    expect(request.redirect).toBe("error");
+    return Response.json({ projects: [] });
+  });
+  const client = createScratchpadClient({
+    baseUrl: "https://memory.example.test",
+    token: "synthetic-owner-token",
+    fetch: fetcher,
+  });
+  await client.GET("/api/v1/projects", {
+    baseUrl: "https://memory.example.test",
+    redirect: "follow",
+  });
+  expect(fetcher).toHaveBeenCalledOnce();
+});
