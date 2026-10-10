@@ -2,7 +2,11 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { isOpaqueId } from "../lib/opaque-id";
 import { assertRelationshipSafe } from "./context";
-import { artifactKinds, assertDerivedArtifact } from "./derived-artifact";
+import {
+  artifactKinds,
+  assertDerivedArtifact,
+  derivedArtifactSources,
+} from "./derived-artifact";
 import {
   type Actor,
   authorityTypes,
@@ -83,6 +87,9 @@ export async function importNative(
   return await store.atomic(async () => {
     let imported = 0,
       skipped = 0;
+    let artifactSources:
+      | Awaited<ReturnType<typeof derivedArtifactSources>>
+      | undefined;
     for (const kind of exportKinds)
       for (const value of z.array(object).parse(data[kind] ?? [])) {
         const key = identifier.parse(value.id);
@@ -148,12 +155,23 @@ export async function importNative(
             .array(identifier)
             .min(1)
             .parse(value.sourceRecordIds);
+          artifactSources ??= await derivedArtifactSources(store);
           for (const source of sources)
-            await requireEntity(store, "record", source);
+            requireValue(
+              artifactSources.records.has(source),
+              "IMPORT_INVALID",
+              `Import references missing record.`,
+              404,
+            );
           const projects = z.array(identifier).min(1).parse(value.projectIds);
           for (const project of projects)
-            await requireEntity(store, "project", project);
-          await assertDerivedArtifact(store, value);
+            requireValue(
+              artifactSources.projects.has(project),
+              "PROJECT_NOT_FOUND",
+              `Import references missing project.`,
+              404,
+            );
+          await assertDerivedArtifact(store, value, artifactSources);
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
           else {

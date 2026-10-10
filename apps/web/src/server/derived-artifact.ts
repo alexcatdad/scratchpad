@@ -91,9 +91,21 @@ export function validDerivedArtifact(value: unknown): boolean {
   return true;
 }
 
+export async function derivedArtifactSources(store: Store) {
+  return {
+    projects: new Set(
+      (await store.list("project")).map((project) => project.id),
+    ),
+    records: new Map(
+      (await store.list("record")).map((record) => [record.id, record]),
+    ),
+  };
+}
+
 export async function assertDerivedArtifact(
   store: Store,
   artifact: Entity | Record<string, unknown>,
+  sources?: Awaited<ReturnType<typeof derivedArtifactSources>>,
 ): Promise<void> {
   const projects = z.array(reference).min(1).safeParse(artifact.projectIds);
   if (!validDerivedArtifact(artifact) || !projects.success)
@@ -102,23 +114,18 @@ export async function assertDerivedArtifact(
       "AI_ARTIFACT_INVALID",
       "Derived artifact content or references are invalid.",
     );
-  const knownProjects = new Set(
-    (await store.list("project")).map((project) => project.id),
-  );
+  const snapshot = sources ?? (await derivedArtifactSources(store));
   for (const projectId of projects.data)
-    if (!knownProjects.has(projectId))
+    if (!snapshot.projects.has(projectId))
       throw new ApiError(
         400,
         "AI_ARTIFACT_INVALID",
         "Derived artifact references a missing project.",
       );
-  const records = new Map(
-    (await store.list("record")).map((record) => [record.id, record]),
-  );
   const sourceProjects = new Set(projects.data);
   const citedProjects = new Set<string>();
   for (const recordId of artifact.sourceRecordIds as string[]) {
-    const record = records.get(recordId);
+    const record = snapshot.records.get(recordId);
     if (!record || !sourceProjects.has(String(record.projectId)))
       throw new ApiError(
         400,

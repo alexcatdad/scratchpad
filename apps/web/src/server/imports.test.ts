@@ -660,6 +660,20 @@ describe("native archive integrity", () => {
       expect(await restored.store.list("relationship")).toEqual(
         await destination.store.list("relationship"),
       );
+      const many = structuredClone(portable);
+      for (let index = 0; index < 100; index++) {
+        const suggestion = structuredClone(portable.data.ai_artifact[0]);
+        suggestion.id = `portable-ai-${index}`;
+        const curated = structuredClone(portable.data.curated_artifact[0]);
+        curated.id = `portable-curated-${index}`;
+        curated.artifactId = suggestion.id;
+        many.data.ai_artifact.push(suggestion);
+        many.data.curated_artifact.push(curated);
+      }
+      await importNative(restored.store, many, actor);
+      expect(await restored.store.list("ai_artifact")).toHaveLength(101);
+      expect(await restored.store.list("curated_artifact")).toHaveLength(101);
+      expect(await restored.store.list("record")).toEqual(raw);
     },
   );
   it("atomically rejects AI lifecycle edges and per-kind content mismatches", async () => {
