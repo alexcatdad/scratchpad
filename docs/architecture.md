@@ -1012,3 +1012,7 @@ MCP checkout discovery requires a trusted installed Git 2.36 or later, disables 
 ### Accepted clarification: production request log privacy (2026-10-09)
 
 The production server entry point logs request method, pathname, response status and elapsed milliseconds without query strings, headers or bodies. Dashboard search terms and filters remain private input. Unhandled request errors produce fixed diagnostics rather than arbitrary exception text. Use the package start command and the same entry point in container/browser verification; the generic development/runtime CLI's full-URL logger does not provide this contract.
+
+## Accepted clarification: private SQLite storage
+
+Issue #21 requires owner-only live SQLite storage before opening the database. Startup creates private new storage and refuses unsafe existing directory/file ownership, mode, links or macOS ACLs with repair guidance. Backup directories follow the same boundary; unrelated parent directories are not modified. Runtime UID peers and administrators remain trusted. See [the storage runbook](runbooks/security-21-private-sqlite.md); PostgreSQL selection remains independent.

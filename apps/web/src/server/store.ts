@@ -1,5 +1,15 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { chmodSync, closeSync, mkdirSync, openSync, unlinkSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import {
+  chmodSync,
+  closeSync,
+  constants,
+  lstatSync,
+  mkdirSync,
+  openSync,
+  type Stats,
+  unlinkSync,
+} from "node:fs";
 import { dirname, isAbsolute, resolve } from "node:path";
 import Database from "better-sqlite3";
 import { and, eq, type SQL, sql } from "drizzle-orm";
@@ -53,6 +63,60 @@ const pgEntities = pgTable(
 type Sql = ReturnType<typeof postgres>;
 type PgDb = ReturnType<typeof postgresDrizzle>;
 type PgTx = Parameters<Parameters<PgDb["transaction"]>[0]>[0];
+
+function assertPrivateStorage(path: string, info: Stats, directory: boolean) {
+  const uid = process.getuid?.();
+  if (
+    uid === undefined ||
+    info.uid !== uid ||
+    (info.mode & 0o077) !== 0 ||
+    (directory ? !info.isDirectory() : !info.isFile() || info.nlink !== 1)
+  )
+    throw new Error(
+      "SQLite storage must be owner-only: use an owned dedicated directory (0700) and regular database/WAL/SHM files (0600), without symlinks or hard links. Stop the service and repair permissions before restarting.",
+    );
+  // macOS ACLs can grant access independently of POSIX group/other mode bits.
+  if (
+    process.platform === "darwin" &&
+    /^\s*\d+: /m.test(
+      execFileSync("/bin/ls", ["-lde", "--", path], { encoding: "utf8" }),
+    )
+  )
+    throw new Error(
+      "SQLite storage must be owner-only: remove extended ACLs from the selected storage directory and database/WAL/SHM files before restarting.",
+    );
+}
+function privateDirectory(path: string) {
+  mkdirSync(path, { recursive: true, mode: 0o700 });
+  assertPrivateStorage(path, lstatSync(path), true);
+}
+function privateSqliteFile(path: string, create: boolean) {
+  // POSIX close() releases this process's SQLite locks on the same inode.
+  // Only create/open a brand-new file; inspect existing paths without a descriptor.
+  if (create) {
+    try {
+      closeSync(
+        openSync(
+          path,
+          constants.O_WRONLY |
+            constants.O_CREAT |
+            constants.O_EXCL |
+            constants.O_NOFOLLOW |
+            constants.O_NONBLOCK,
+          0o600,
+        ),
+      );
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  try {
+    assertPrivateStorage(path, lstatSync(path), false);
+  } catch (error) {
+    if (create || (error as NodeJS.ErrnoException).code !== "ENOENT")
+      throw error;
+  }
+}
 /** Async persistence boundary shared by SQLite and PostgreSQL. */
 export class Store {
   readonly backend: "sqlite" | "postgres";
@@ -86,8 +150,12 @@ export class Store {
       // Keep startup failure observable through readiness without an unhandled rejection.
       void this.ready.catch(() => {});
     } else {
-      if (path !== ":memory:")
-        mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
+      if (path !== ":memory:") {
+        privateDirectory(dirname(path));
+        privateSqliteFile(path, true);
+        for (const suffix of ["-wal", "-shm", "-journal"])
+          privateSqliteFile(path + suffix, false);
+      }
       this.sqlite = new Database(path);
       try {
         if (
@@ -108,6 +176,10 @@ export class Store {
         CREATE VIRTUAL TABLE IF NOT EXISTS record_search USING fts5(record_id UNINDEXED,title,content);
         INSERT OR IGNORE INTO schema_migrations VALUES(1,strftime('%Y-%m-%dT%H:%M:%fZ','now'));`);
         this.checkSqlite();
+        if (path !== ":memory:") {
+          for (const suffix of ["", "-wal", "-shm", "-journal"])
+            privateSqliteFile(path + suffix, false);
+        }
         this.ready = Promise.resolve();
       } catch (error) {
         this.sqlite.close();
@@ -591,7 +663,7 @@ export class Store {
         "CONFLICT",
         "Backup destination must differ from the live database.",
       );
-    mkdirSync(dirname(destination), { recursive: true, mode: 0o700 });
+    privateDirectory(dirname(destination));
     closeSync(openSync(destination, "wx", 0o600));
     try {
       await this.run(() => this.sqlite.backup(destination));
