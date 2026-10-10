@@ -744,6 +744,7 @@ export class AiService {
         { ...original, status, reviewedBy: actor, reviewedAt: now() },
         expectedVersion,
       );
+      const localInterpretation = new Set(dependencies.projectIds).size === 1;
       // Curated interpretation remains separate from immutable raw captures and lifecycle decisions.
       if (status === "accepted") {
         await this.store.insert("curated_artifact", {
@@ -761,7 +762,7 @@ export class AiService {
         });
         const content = original.content as Record<string, unknown>;
         if (
-          !dependencies.crossProject &&
+          localInterpretation &&
           ["relationship_candidate", "contradiction"].includes(
             String(original.kind),
           ) &&
@@ -804,7 +805,7 @@ export class AiService {
           );
         }
         if (
-          !dependencies.crossProject &&
+          localInterpretation &&
           original.kind === "classification" &&
           (original.sourceRecordIds as string[]).length === 1
         ) {
@@ -1356,8 +1357,11 @@ export class AiService {
               "Provider configuration changed while the job ran; retry with current settings.",
             );
           const saved: string[] = [];
-          const artifactSources = await derivedArtifactSources(this.store);
+          let artifactSources:
+            | Awaited<ReturnType<typeof derivedArtifactSources>>
+            | undefined;
           for (const item of result.artifacts as Record<string, unknown>[]) {
+            artifactSources ??= await derivedArtifactSources(this.store);
             await assertPrivacyReferences(this.store, item, artifactSources);
             const dependencies = privacyDependencies(item);
             if (!dependencies)

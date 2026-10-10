@@ -524,6 +524,21 @@ func (e NativeArchiveVersion) Valid() bool {
 	}
 }
 
+// Defines values for PrivacyDependenciesVersion.
+const (
+	PrivacyVersion1 PrivacyDependenciesVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the PrivacyDependenciesVersion enum.
+func (e PrivacyDependenciesVersion) Valid() bool {
+	switch e {
+	case PrivacyVersion1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectKind.
 const (
 	ProjectKindExternal ProjectKind = "external"
@@ -1166,18 +1181,21 @@ type Artifact struct {
 		Text             *string   `json:"text,omitempty"`
 		ToRecordId       *string   `json:"toRecordId,omitempty"`
 	} `json:"content,omitempty"`
-	CreatedAt       time.Time               `json:"createdAt"`
-	CrossProject    *bool                   `json:"crossProject,omitempty"`
-	Format          *ArtifactFormat         `json:"format,omitempty"`
-	GeneratedAt     *string                 `json:"generatedAt,omitempty"`
-	Generator       *map[string]interface{} `json:"generator,omitempty"`
-	Id              string                  `json:"id"`
-	Kind            *ArtifactKind           `json:"kind,omitempty"`
-	ProjectIds      *[]string               `json:"projectIds,omitempty"`
-	SourceRecordIds *[]string               `json:"sourceRecordIds,omitempty"`
-	Status          *ArtifactStatus         `json:"status,omitempty"`
-	Title           *string                 `json:"title,omitempty"`
-	Version         int                     `json:"version"`
+	CreatedAt    time.Time               `json:"createdAt"`
+	CrossProject *bool                   `json:"crossProject,omitempty"`
+	Format       *ArtifactFormat         `json:"format,omitempty"`
+	GeneratedAt  *string                 `json:"generatedAt,omitempty"`
+	Generator    *map[string]interface{} `json:"generator,omitempty"`
+	Id           string                  `json:"id"`
+	Kind         *ArtifactKind           `json:"kind,omitempty"`
+
+	// PrivacyDependencies Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions.
+	PrivacyDependencies *PrivacyDependencies `json:"privacyDependencies,omitempty"`
+	ProjectIds          *[]string            `json:"projectIds,omitempty"`
+	SourceRecordIds     *[]string            `json:"sourceRecordIds,omitempty"`
+	Status              *ArtifactStatus      `json:"status,omitempty"`
+	Title               *string              `json:"title,omitempty"`
+	Version             int                  `json:"version"`
 }
 
 // ArtifactAuthority defines model for Artifact.Authority.
@@ -1334,6 +1352,17 @@ type OwnerProfile struct {
 	Version              int                    `json:"version"`
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
+
+// PrivacyDependencies Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions.
+type PrivacyDependencies struct {
+	CrossProject bool                       `json:"crossProject"`
+	ProjectIds   []string                   `json:"projectIds"`
+	RecordIds    []string                   `json:"recordIds"`
+	Version      PrivacyDependenciesVersion `json:"version"`
+}
+
+// PrivacyDependenciesVersion defines model for PrivacyDependencies.Version.
+type PrivacyDependenciesVersion int
 
 // Project defines model for Project.
 type Project struct {

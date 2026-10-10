@@ -414,63 +414,146 @@ describe("optional AI boundary", () => {
           });
         else expect(result).toMatchObject({ code: "AI_CONFIGURATION_CHANGED" });
       });
-  it("keeps accepted cross-project interpretations out of project-local metadata and relationships", async () => {
-    const { ai, store } = await fixture(
-      mockProvider({
-        artifacts: [
-          {
-            kind: "classification",
-            title: "Classification",
-            content: {
-              text: "Influenced by project metadata",
-              tags: ["private-derived"],
-              classification: "private-derived",
+  it.each([false, true])(
+    "preserves local acceptance effects only without outside inputs (outside: %s)",
+    async (outside) => {
+      const { ai, store } = await fixture(
+        mockProvider({
+          artifacts: [
+            {
+              kind: "classification",
+              title: "Classification",
+              content: {
+                text: "Influenced by project metadata",
+                tags: ["private-derived"],
+                classification: "private-derived",
+              },
+              sourceRecordIds: ["r1"],
             },
-            sourceRecordIds: ["r1"],
-          },
-          {
-            kind: "relationship_candidate",
-            title: "Refinement",
-            content: {
-              text: "Influenced by project metadata",
-              fromRecordId: "r2",
-              toRecordId: "r1",
-              relationshipType: "refines",
+            {
+              kind: "relationship_candidate",
+              title: "Refinement",
+              content: {
+                text: "Influenced by project metadata",
+                fromRecordId: "r2",
+                toRecordId: "r1",
+                relationshipType: "refines",
+              },
+              sourceRecordIds: ["r1", "r2"],
             },
-            sourceRecordIds: ["r1", "r2"],
+          ],
+        }),
+      );
+      await store.insert("record", {
+        id: "r2",
+        projectId: "p1",
+        title: "Second",
+        content: "Synthetic",
+      });
+      await store.insert("metadata", { id: "r1", tags: [], archived: false });
+      const metadata = await store.get("metadata", "r1");
+      const project = outside
+        ? await store.insert("project", {
+            id: "p2",
+            name: "Uncited metadata",
+            settings: { ...defaults("normal"), aiProcessing: true },
+          })
+        : undefined;
+      await ai.enqueue({ type: "analyze", crossProject: true }, actor);
+      await ai.tick();
+      for (const artifact of await ai.artifacts())
+        await ai.review(artifact.id, "accepted", actor, artifact.version);
+      expect(await store.list("curated_artifact")).toHaveLength(2);
+      if (!outside) {
+        expect(await store.get("metadata", "r1")).toMatchObject({
+          tags: ["private-derived"],
+        });
+        expect(await store.list("relationship")).toMatchObject([
+          { type: "refines", status: "accepted" },
+        ]);
+        return;
+      }
+      expect(await store.get("metadata", "r1")).toEqual(metadata);
+      expect(await store.list("relationship")).toHaveLength(0);
+      if (!project) throw new Error("Synthetic project missing.");
+      await store.update(
+        "project",
+        { ...project, settings: defaults("external") },
+        project.version,
+      );
+      expect(await ai.artifacts()).toHaveLength(0);
+    },
+  );
+  it("does not send retained records after an unscoped participant revokes consent between batches", async () => {
+    const sent: string[][] = [];
+    let store!: Store;
+    const fetcher: typeof fetch = async (_url, options) => {
+      const input = JSON.parse(
+        JSON.parse(String(options?.body)).messages[1].content,
+      );
+      sent.push(
+        input.records.map((record: { projectId: string }) => record.projectId),
+      );
+      if (sent.length === 1) {
+        const project = await store.get("project", "p2");
+        if (!project) throw new Error("Synthetic project missing.");
+        await store.update(
+          "project",
+          { ...project, settings: defaults("external") },
+          project.version,
+        );
+      }
+      return Response.json({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                artifacts: [
+                  {
+                    kind: "summary",
+                    title: "Synthetic",
+                    content: { text: "Synthetic batch" },
+                    sourceRecordIds: [input.records[0].id],
+                  },
+                ],
+              }),
+            },
           },
         ],
-      }),
+      });
+    };
+    const fixtureResult = await fixture(fetcher);
+    store = fixtureResult.store;
+    const { ai } = fixtureResult;
+    const record = await store.get("record", "r1");
+    if (!record) throw new Error("Synthetic source missing.");
+    await store.update(
+      "record",
+      { ...record, content: "Synthetic. ".repeat(3000) },
+      record.version,
     );
-    await store.insert("record", {
-      id: "r2",
-      projectId: "p1",
-      title: "Second",
-      content: "Synthetic",
-    });
-    await store.insert("metadata", { id: "r1", tags: [], archived: false });
-    const metadata = await store.get("metadata", "r1");
-    const project = await store.insert("project", {
+    await store.insert("project", {
       id: "p2",
-      name: "Uncited metadata",
+      name: "Synthetic B",
       settings: { ...defaults("normal"), aiProcessing: true },
     });
-    await ai.enqueue(
-      { type: "analyze", projectIds: ["p1", "p2"], crossProject: true },
+    await store.insert("record", {
+      id: "r2",
+      projectId: "p2",
+      title: "Synthetic private B",
+      content: "Private B",
+    });
+    const job = await ai.enqueue(
+      { type: "analyze", crossProject: true },
       actor,
     );
     await ai.tick();
-    for (const artifact of await ai.artifacts())
-      await ai.review(artifact.id, "accepted", actor, artifact.version);
-    expect(await store.list("curated_artifact")).toHaveLength(2);
-    expect(await store.get("metadata", "r1")).toEqual(metadata);
-    expect(await store.list("relationship")).toHaveLength(0);
-    await store.update(
-      "project",
-      { ...project, settings: defaults("external") },
-      project.version,
-    );
-    expect(await ai.artifacts()).toHaveLength(0);
+    expect(sent.length).toBeGreaterThan(0);
+    expect(sent.slice(1).flat()).not.toContain("p2");
+    expect(await store.get("ai_job", job.id)).toMatchObject({
+      status: "failed",
+    });
+    expect(await store.list("ai_artifact")).toHaveLength(0);
   });
   it.each([false, true])(
     "keeps uncited record and project metadata privacy dependencies (second record: %s)",
