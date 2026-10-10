@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { decodedId } from "../lib/opaque-id";
 import { AiService } from "./ai";
 import { Auth, type Identity } from "./auth";
 import { assertRelationshipSafe, projectContext } from "./context";
@@ -26,12 +27,20 @@ import {
   presentGithubProfile,
 } from "./github-profile";
 import { exportKinds, importLegacy, importNative } from "./imports";
+import { requestClient } from "./request-client";
 import { Store } from "./store";
 import { compareTimestamps } from "./timestamps";
 
 const object = z.record(z.string(), z.unknown());
 const nonempty = z.string().trim().min(1).max(500);
 const bodyLimit = 8 * 1024 * 1024;
+function routeId(value: string): string {
+  try {
+    return decodedId(value);
+  } catch {
+    throw new ApiError(400, "VALIDATION_FAILED", "Invalid entity identifier.");
+  }
+}
 function response(
   value: unknown,
   status = 200,
@@ -110,6 +119,7 @@ export function createApi(config: {
   githubOAuth?: GithubOAuth;
   githubAuthFetch?: typeof fetch;
   clock?: () => number;
+  trustedProxies?: string[];
   pgvector?: boolean;
 }) {
   const store = new Store(config.databasePath, config.databaseUrl, {
@@ -405,7 +415,11 @@ export function createApi(config: {
           : null,
     };
   }
-  async function handleRequest(request: Request): Promise<Response> {
+  async function handleRequest(
+    request: Request,
+    clientAddress?: string,
+  ): Promise<Response> {
+    const client = requestClient(request, clientAddress, config.trustedProxies);
     try {
       const url = new URL(request.url),
         path = url.pathname.replace(/\/$/, "") || "/",
@@ -462,17 +476,94 @@ export function createApi(config: {
           authenticated,
         });
       }
-      if (route.startsWith("/auth/") && method === "POST")
-        await auth.throttle();
+      if (route.startsWith("/auth/") && method === "POST") {
+        const publicRoutes = [
+          "/auth/github/options",
+          "/auth/mcp/challenge",
+          "/auth/mcp/verify",
+          "/auth/register/options",
+          "/auth/register/verify",
+          "/auth/login/options",
+          "/auth/login/verify",
+        ];
+        const managementRoutes = [
+          "/auth/github/sync",
+          "/auth/github/block",
+          "/auth/logout",
+          "/auth/credentials/challenge",
+          "/auth/credentials/verify",
+        ];
+        requireValue(
+          publicRoutes.includes(route) || managementRoutes.includes(route),
+          "NOT_FOUND",
+          "Endpoint not found.",
+          404,
+        );
+        if (publicRoutes.includes(route) && !route.startsWith("/auth/mcp/"))
+          auth.checkOrigin(request);
+        if (
+          managementRoutes.includes(route) &&
+          !request.headers
+            .get("authorization")
+            ?.match(/^Bearer ([A-Za-z0-9_-]+)$/)
+        )
+          auth.checkOrigin(request);
+        // Proof lookup has its own bounded client lane before any hashing or SQL.
+        // Anonymous login traffic cannot spend this protected lookup allowance.
+        const resolvesProof =
+          managementRoutes.includes(route) ||
+          route.startsWith("/auth/register/") ||
+          (route === "/auth/github/options" && body.intent !== "login");
+        if (resolvesProof) auth.throttle(`proof-client:${client}`);
+        let allowance = `client:${client}`;
+        try {
+          if (
+            managementRoutes.includes(route) ||
+            (route.startsWith("/auth/register/") && !body.setupToken)
+          ) {
+            const identity = await auth.identify(request);
+            allowance = `credential:${identity.credential.id}`;
+          } else if (route.startsWith("/auth/register/") && body.setupToken) {
+            const token = await auth.setup(body.setupToken);
+            allowance = `setup:${token.id}`;
+          }
+        } catch (error) {
+          auth.throttle(allowance);
+          throw error;
+        }
+        if (route !== "/auth/github/options" || body.intent === "login")
+          auth.throttle(allowance);
+      }
       if (route === "/auth/github/options" && method === "POST") {
-        const result = await github.options(body, request);
+        let admitted = body.intent === "login";
+        let result: Awaited<ReturnType<typeof github.options>>;
+        try {
+          result = await github.options(body, request, (allowance) => {
+            if (body.intent !== "login")
+              auth.throttle(allowance ?? `client:${client}`);
+            admitted = true;
+          });
+        } catch (error) {
+          if (
+            !admitted &&
+            !(error instanceof ApiError && error.code === "RATE_LIMITED")
+          )
+            auth.throttle(`client:${client}`);
+          throw error;
+        }
         return response({ authorizationUrl: result.authorizationUrl }, 200, {
           "Set-Cookie": result.cookie,
         });
       }
       if (route === "/auth/github/callback" && method === "GET") {
+        let release: (() => void) | undefined;
         try {
-          const result = await github.callback(request);
+          const result = await github.callback(request, (allowance) => {
+            auth.throttle(allowance);
+            release = auth.reserveVerification(
+              allowance.startsWith("oauth:") ? "oauth" : "proof",
+            );
+          });
           const headers = new Headers({
             Location: "/",
             "Cache-Control": "no-store",
@@ -481,6 +572,17 @@ export function createApi(config: {
           headers.append("Set-Cookie", result.clearState);
           return new Response(null, { status: 302, headers });
         } catch (error) {
+          if (
+            !release &&
+            !(error instanceof ApiError && error.code === "RATE_LIMITED")
+          )
+            auth.throttle(`client:${client}`);
+          if (error instanceof ApiError && error.code === "RATE_LIMITED")
+            return response(
+              { error: { code: error.code, message: error.message } },
+              429,
+              { "Cache-Control": "no-store" },
+            );
           const allowed = [
             "AUTH_INVALID",
             "AUTH_FRESH_REQUIRED",
@@ -501,13 +603,17 @@ export function createApi(config: {
               "Set-Cookie": github.clearStateCookie(),
             },
           });
+        } finally {
+          release?.();
         }
       }
       if (route.startsWith("/auth/")) {
         if (method === "POST" && route === "/auth/mcp/challenge")
           return response(await auth.sshChallenge(body));
         if (method === "POST" && route === "/auth/mcp/verify")
-          return response(await auth.sshVerify(body));
+          return response(
+            await auth.verify(() => auth.sshVerify(body), client),
+          );
         if (
           method === "POST" &&
           [
@@ -527,8 +633,8 @@ export function createApi(config: {
             return response(await auth.loginOptions());
           const session =
             route === "/auth/register/verify"
-              ? await auth.registrationVerify(body, identity)
-              : await auth.loginVerify(body);
+              ? await auth.verify(() => auth.registrationVerify(body, identity))
+              : await auth.verify(() => auth.loginVerify(body), client);
           return response(
             { authenticated: true, expiresAt: session.expiresAt },
             200,
@@ -707,7 +813,7 @@ export function createApi(config: {
         return response(
           {
             job: await ai.retry(
-              route.split("/")[3] ?? "",
+              routeId(route.split("/")[3] ?? ""),
               actor,
               expected(body, request),
             ),
@@ -730,7 +836,7 @@ export function createApi(config: {
       )
         return response({
           suggestion: await ai.review(
-            route.split("/")[2] ?? "",
+            routeId(route.split("/")[2] ?? ""),
             route.endsWith("/accept") ? "accepted" : "rejected",
             actor,
             expected(body, request),
@@ -761,9 +867,11 @@ export function createApi(config: {
         if (method === "POST" && route === "/auth/credentials/challenge")
           return response(await auth.sshChallenge(body, identity));
         if (method === "POST" && route === "/auth/credentials/verify")
-          return response(await auth.sshVerify(body, identity));
+          return response(
+            await auth.verify(() => auth.sshVerify(body, identity)),
+          );
         if (method === "DELETE") {
-          await auth.revoke(route.split("/")[3] ?? "", identity);
+          await auth.revoke(routeId(route.split("/")[3] ?? ""), identity);
           return response({ revoked: true });
         }
       }
@@ -853,7 +961,7 @@ export function createApi(config: {
       const projectRoute =
         /^\/projects\/([^/]+)(?:\/(settings|context))?$/.exec(route);
       if (projectRoute) {
-        const project = await entity("project", projectRoute[1] ?? "");
+        const project = await entity("project", routeId(projectRoute[1] ?? ""));
         if (method === "GET" && projectRoute[2] === "context") {
           return response(
             await projectContext(store, {
@@ -1012,7 +1120,7 @@ export function createApi(config: {
           route,
         );
       if (recordRoute) {
-        const record = await entity("record", recordRoute[1] ?? ""),
+        const record = await entity("record", routeId(recordRoute[1] ?? "")),
           operation = recordRoute[2];
         if (method === "GET" && !operation)
           return response(await recordDetail(record.id));
@@ -1203,7 +1311,10 @@ export function createApi(config: {
         route,
       );
       if (relRoute && method === "POST") {
-        const previous = await entity("relationship", relRoute[1] ?? "");
+        const previous = await entity(
+          "relationship",
+          routeId(relRoute[1] ?? ""),
+        );
         return response(
           await store.atomic(async () => {
             if (relRoute[2] === "accept")
@@ -1354,6 +1465,9 @@ export function getApi(): ReturnType<typeof createApi> {
         : undefined,
     databaseUrl: process.env.SCRATCHPAD_DATABASE_URL,
     pgvector: process.env.SCRATCHPAD_PGVECTOR === "true",
+    trustedProxies: process.env.SCRATCHPAD_TRUSTED_PROXIES?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean),
     databasePath:
       process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite",
     origin: process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
@@ -1362,7 +1476,9 @@ export function getApi(): ReturnType<typeof createApi> {
   singleton.ai.start();
   return singleton;
 }
-export const handleApiRequest = (request: Request): Promise<Response> =>
-  getApi().handleRequest(request);
+export const handleApiRequest = (
+  request: Request,
+  clientAddress?: string,
+): Promise<Response> => getApi().handleRequest(request, clientAddress);
 export const createSetupToken = async (recovery = false): Promise<string> =>
   await getApi().auth.createSetupToken(recovery);

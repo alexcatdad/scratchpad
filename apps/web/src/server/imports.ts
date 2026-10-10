@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isOpaqueId } from "../lib/opaque-id";
 import { assertRelationshipSafe } from "./context";
 import { artifactKinds, assertDerivedArtifact } from "./derived-artifact";
 import {
@@ -18,7 +19,9 @@ import {
 import type { Store } from "./store";
 
 const object = z.record(z.string(), z.unknown());
-const identifier = z.string().min(1).max(500);
+const identifier = z
+  .string()
+  .refine(isOpaqueId, "Use a safe opaque identifier.");
 export const exportKinds = [
   "project",
   "source",
@@ -85,6 +88,31 @@ export async function importNative(
         const key = identifier.parse(value.id);
         z.iso.datetime().parse(value.createdAt);
         z.number().int().positive().parse(value.version);
+        // Route references must be safe even when an identical row is skipped.
+        if (kind === "record" || kind === "source")
+          identifier.parse(value.projectId);
+        if (["metadata", "revision", "evidence", "mirror"].includes(kind))
+          identifier.parse(value.recordId);
+        if (kind === "relationship") {
+          identifier.parse(value.fromRecordId);
+          identifier.parse(value.toRecordId);
+        }
+        if (kind === "ai_artifact" || kind === "curated_artifact") {
+          z.array(identifier).min(1).parse(value.sourceRecordIds);
+          z.array(identifier).min(1).parse(value.projectIds);
+          if (kind === "curated_artifact") identifier.parse(value.artifactId);
+        }
+        if (kind === "audit") {
+          // Historical key-block references are fingerprints, never route IDs.
+          const keyFingerprint =
+            value.entityType === "credential" &&
+            ["github.key_blocked", "github.key_unblocked"].includes(
+              String(value.action),
+            ) &&
+            typeof value.entityId === "string" &&
+            /^SHA256:[A-Za-z0-9+/]{43}$/.test(value.entityId);
+          if (!keyFingerprint) identifier.parse(value.entityId);
+        }
         const previous = await store.get(kind, key);
         if (previous) {
           requireValue(
@@ -145,7 +173,7 @@ export async function importNative(
         }
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);
-          identifier.parse(value.identity);
+          z.string().min(1).max(500).parse(value.identity);
           const existing = await store.resolveIdentity(String(value.identity));
           requireValue(
             !existing || existing === value.projectId,
