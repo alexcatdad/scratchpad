@@ -3,11 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
+    "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "start": "srvx --prod --static ../client --entry dist/server/server.js"
+    "start": "node server.mjs"
   },
   "dependencies": {
     "@simplewebauthn/browser": "14.0.0",

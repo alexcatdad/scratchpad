@@ -59,22 +59,11 @@ export function createWorkflowHarness() {
         dockerImage,
       ]);
     } else {
-      server = spawn(
-        process.execPath,
-        [
-          resolve(root, "node_modules/srvx/bin/srvx.mjs"),
-          "--prod",
-          "--entry",
-          "dist/server/server.js",
-          "--static",
-          "../client",
-        ],
-        {
-          cwd: resolve(root, "apps/web"),
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
+      server = spawn(process.execPath, [resolve(root, "apps/web/server.mjs")], {
+        cwd: resolve(root, "apps/web"),
+        env: environment,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       server.stdout?.on("data", (data) => {
         logs += data;
       });
@@ -171,7 +160,7 @@ export function createWorkflowHarness() {
       `${restoredVolume}:/data`,
       dockerImage,
       "-e",
-      "const fs=require('node:fs');if(fs.readdirSync('/data').length)throw new Error('Restore target must be empty');fs.copyFileSync('/source/backup.sqlite','/data/scratchpad.sqlite',fs.constants.COPYFILE_EXCL);fs.chownSync('/data/scratchpad.sqlite',1000,1000);fs.chownSync('/data',1000,1000);fs.chmodSync('/data/scratchpad.sqlite',0o600)",
+      "const fs=require('node:fs');if(fs.readdirSync('/data').length)throw new Error('Restore target must be empty');fs.copyFileSync('/source/backup.sqlite','/data/scratchpad.sqlite',fs.constants.COPYFILE_EXCL);fs.chownSync('/data/scratchpad.sqlite',1000,1000);fs.chownSync('/data',1000,1000);fs.chmodSync('/data',0o700);fs.chmodSync('/data/scratchpad.sqlite',0o600)",
     ]);
     activeVolume = restoredVolume;
     await start();
@@ -210,5 +199,9 @@ export function createWorkflowHarness() {
     restartOrRestore,
     command,
     cleanupDocker,
+    readLogs: () =>
+      dockerMode && activeContainer
+        ? command("docker", ["logs", activeContainer])
+        : logs,
   };
 }

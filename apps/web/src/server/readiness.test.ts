@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import Database from "better-sqlite3";
@@ -97,6 +97,7 @@ describe("SQLite readiness", () => {
       "CREATE TABLE unrelated(value TEXT); INSERT INTO unrelated VALUES('preserve existing data')",
     );
     await original.close();
+    chmodSync(path, 0o600);
     const before = readFileSync(path);
     expect(() => new Store(path)).toThrow(
       "SQLite persistence or schema migrations are unavailable or unsupported.",

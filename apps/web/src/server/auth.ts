@@ -12,6 +12,7 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { z } from "zod";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import {
   type Actor,
   ApiError,
@@ -47,6 +48,12 @@ export type Identity = {
 };
 
 export class Auth {
+  private readonly allowances = new Map<
+    string,
+    { bucket: number; count: number }
+  >();
+  private activeVerifications = { proof: 0, oauth: 0, anonymous: 0 };
+  private readonly anonymousVerifications = new Map<string, number>();
   readonly origin: string;
   readonly rpID: string;
   github?: {
@@ -76,25 +83,69 @@ export class Auth {
       "Public URL must use HTTPS, except localhost.",
     );
   }
-  async throttle(): Promise<void> {
-    await this.store.atomic(async () => {
-      const bucket = Math.floor(this.clock() / 60000);
-      const current = await this.store.get("rate", "auth");
-      const count = current?.bucket === bucket ? Number(current.count) : 0;
+  throttle(client: string): void {
+    const bucket = Math.floor(this.clock() / 60000);
+    const current = this.allowances.get(client);
+    const count = current?.bucket === bucket ? Number(current.count) : 0;
+    requireValue(
+      count < 120,
+      "RATE_LIMITED",
+      "Too many authentication attempts. Try again in a minute.",
+      429,
+    );
+    // Expire old counters; overflow must never reset an active allowance.
+    if (!current && this.allowances.size >= 4096) {
+      for (const [key, entry] of this.allowances)
+        if (entry.bucket !== bucket) this.allowances.delete(key);
       requireValue(
-        count < 120,
+        this.allowances.size < 4096,
         "RATE_LIMITED",
-        "Too many authentication attempts. Try again in a minute.",
+        "Authentication admission is busy. Try again in a minute.",
         429,
       );
-      if (current)
-        await this.store.update("rate", {
-          ...current,
-          bucket,
-          count: count + 1,
-        });
-      else await this.store.insert("rate", { id: "auth", bucket, count: 1 });
-    });
+    }
+    this.allowances.set(client, { bucket, count: count + 1 });
+  }
+  reserveVerification(
+    kind: "proof" | "oauth" | "anonymous" = "proof",
+    client = "unknown",
+  ): () => void {
+    const count = this.anonymousVerifications.get(client) ?? 0;
+    if (kind === "anonymous")
+      requireValue(
+        count < 2,
+        "RATE_LIMITED",
+        "Authentication verification is busy. Try again shortly.",
+        429,
+      );
+    requireValue(
+      this.activeVerifications[kind] < (kind === "oauth" ? 4 : 8),
+      "RATE_LIMITED",
+      "Authentication verification is busy. Try again shortly.",
+      429,
+    );
+    this.activeVerifications[kind]++;
+    if (kind === "anonymous")
+      this.anonymousVerifications.set(client, count + 1);
+    return () => {
+      this.activeVerifications[kind]--;
+      if (kind === "anonymous") {
+        const remaining = (this.anonymousVerifications.get(client) ?? 1) - 1;
+        if (remaining) this.anonymousVerifications.set(client, remaining);
+        else this.anonymousVerifications.delete(client);
+      }
+    };
+  }
+  async verify<T>(operation: () => Promise<T>, client?: string): Promise<T> {
+    const release = this.reserveVerification(
+      client === undefined ? "proof" : "anonymous",
+      client,
+    );
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
   }
   async initialized(): Promise<boolean> {
     return (await this.store.list("owner")).length > 0;
@@ -538,6 +589,8 @@ export class Auth {
     if (existing && !enrollment) await this.github?.check(existing);
     const binding = await this.store.get("github_binding", "owner");
     const challenge = await this.challenge(enrollment ? "ssh_enroll" : "ssh", {
+      proofVersion: 2,
+      recipient: this.origin,
       bindingGeneration: binding?.generation,
 
       publicKey,
@@ -547,8 +600,11 @@ export class Auth {
     });
     return {
       challengeId: challenge.id,
+      version: 2,
+      recipient: this.origin,
+      purpose: enrollment ? "ssh_enroll" : "ssh_login",
       nonce: challenge.nonce,
-      namespace: "scratchpad-auth",
+      namespace: sshNamespace,
       expiresAt: challenge.expiresAt,
     };
   }
@@ -565,6 +621,27 @@ export class Auth {
       .split(/\s+/)
       .slice(0, 2)
       .join(" ");
+    requireValue(
+      challenge.proofVersion === 2 && challenge.recipient === this.origin,
+      "AUTH_INVALID",
+      "Request a new SSH challenge after the protocol upgrade.",
+      401,
+    );
+    const proof = sshProof(
+      {
+        version: 2,
+        namespace: sshNamespace,
+        recipient: this.origin,
+        purpose: enrollment ? "ssh_enroll" : "ssh_login",
+        challengeId: challenge.id,
+        nonce: challenge.nonce,
+        expiresAt: challenge.expiresAt,
+      },
+      publicKey,
+      this.origin,
+      enrollment ? "ssh_enroll" : "ssh_login",
+      this.clock(),
+    );
     requireValue(
       publicKey === challenge.publicKey &&
         (!enrollment || enrollment.credential.id === challenge.enrolledBy),
@@ -589,11 +666,11 @@ export class Auth {
           "-I",
           "owner",
           "-n",
-          "scratchpad-auth",
+          sshNamespace,
           "-s",
           join(directory, "signature"),
         ],
-        { input: String(challenge.nonce), timeout: 5000, maxBuffer: 65536 },
+        { input: proof, timeout: 5000, maxBuffer: 65536 },
       );
       requireValue(
         result.status === 0,
