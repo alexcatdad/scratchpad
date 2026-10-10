@@ -24,3 +24,5 @@ Run `npm run sdk:generate`, `npm run sdk:check`, `npm run sdk:test`, and
 `npm pack --workspace @scratchpad/api-client --pack-destination /tmp`, then install
 the resulting tarball in a consuming project. See the repository
 `docs/runbooks/api-clients.md` for Go usage and integration verification.
+
+Authenticated factories require an HTTPS instance origin, or HTTP on exactly localhost, 127.0.0.1 or [::1] for local development. Origin URLs cannot contain credentials, paths other than /, query strings or fragments. Errors do not echo supplied credentials. The TypeScript client sets redirect:error; custom fetch implementations must honor the Request redirect policy. The Go factory also stops redirects for its default or supplied *http.Client, preserving that client's transport and timeout without modifying the original. Custom Go HttpRequestDoer implementations remain caller-owned and must not forward credentials through redirects.

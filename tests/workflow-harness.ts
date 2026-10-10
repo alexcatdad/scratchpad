@@ -59,22 +59,11 @@ export function createWorkflowHarness() {
         dockerImage,
       ]);
     } else {
-      server = spawn(
-        process.execPath,
-        [
-          resolve(root, "node_modules/srvx/bin/srvx.mjs"),
-          "--prod",
-          "--entry",
-          "dist/server/server.js",
-          "--static",
-          "../client",
-        ],
-        {
-          cwd: resolve(root, "apps/web"),
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
+      server = spawn(process.execPath, [resolve(root, "apps/web/server.mjs")], {
+        cwd: resolve(root, "apps/web"),
+        env: environment,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       server.stdout?.on("data", (data) => {
         logs += data;
       });
@@ -210,5 +199,9 @@ export function createWorkflowHarness() {
     restartOrRestore,
     command,
     cleanupDocker,
+    readLogs: () =>
+      dockerMode && activeContainer
+        ? command("docker", ["logs", activeContainer])
+        : logs,
   };
 }

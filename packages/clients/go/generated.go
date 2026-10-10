@@ -524,6 +524,21 @@ func (e NativeArchiveVersion) Valid() bool {
 	}
 }
 
+// Defines values for PrivacyDependenciesVersion.
+const (
+	PrivacyVersion1 PrivacyDependenciesVersion = 1
+)
+
+// Valid indicates whether the value is a known member of the PrivacyDependenciesVersion enum.
+func (e PrivacyDependenciesVersion) Valid() bool {
+	switch e {
+	case PrivacyVersion1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for ProjectKind.
 const (
 	ProjectKindExternal ProjectKind = "external"
@@ -689,6 +704,51 @@ func (e GetAuthCredentials200JSONResponseBodyCredentialsSource) Valid() bool {
 	}
 }
 
+// Defines values for PostAuthCredentialsChallenge200JSONResponseBodyNamespace.
+const (
+	PostAuthCredentialsChallenge200JSONResponseBodyNamespaceScratchpadAuthV2 PostAuthCredentialsChallenge200JSONResponseBodyNamespace = "scratchpad-auth-v2"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthCredentialsChallenge200JSONResponseBodyNamespace enum.
+func (e PostAuthCredentialsChallenge200JSONResponseBodyNamespace) Valid() bool {
+	switch e {
+	case PostAuthCredentialsChallenge200JSONResponseBodyNamespaceScratchpadAuthV2:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthCredentialsChallenge200JSONResponseBodyPurpose.
+const (
+	SshEnroll PostAuthCredentialsChallenge200JSONResponseBodyPurpose = "ssh_enroll"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthCredentialsChallenge200JSONResponseBodyPurpose enum.
+func (e PostAuthCredentialsChallenge200JSONResponseBodyPurpose) Valid() bool {
+	switch e {
+	case SshEnroll:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthCredentialsChallenge200JSONResponseBodyVersion.
+const (
+	PostAuthCredentialsChallenge200JSONResponseBodyVersionN2 PostAuthCredentialsChallenge200JSONResponseBodyVersion = 2
+)
+
+// Valid indicates whether the value is a known member of the PostAuthCredentialsChallenge200JSONResponseBodyVersion enum.
+func (e PostAuthCredentialsChallenge200JSONResponseBodyVersion) Valid() bool {
+	switch e {
+	case PostAuthCredentialsChallenge200JSONResponseBodyVersionN2:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DeleteAuthGithub200JSONResponseBodyUnlinked.
 const (
 	True DeleteAuthGithub200JSONResponseBodyUnlinked = true
@@ -779,6 +839,51 @@ func (e PostAuthGithubSync200JSONResponseBodyKeysCategories) Valid() bool {
 	case PostAuthGithubSync200JSONResponseBodyKeysCategoriesAuthentication:
 		return true
 	case PostAuthGithubSync200JSONResponseBodyKeysCategoriesSigning:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthMcpChallenge200JSONResponseBodyNamespace.
+const (
+	PostAuthMcpChallenge200JSONResponseBodyNamespaceScratchpadAuthV2 PostAuthMcpChallenge200JSONResponseBodyNamespace = "scratchpad-auth-v2"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthMcpChallenge200JSONResponseBodyNamespace enum.
+func (e PostAuthMcpChallenge200JSONResponseBodyNamespace) Valid() bool {
+	switch e {
+	case PostAuthMcpChallenge200JSONResponseBodyNamespaceScratchpadAuthV2:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthMcpChallenge200JSONResponseBodyPurpose.
+const (
+	SshLogin PostAuthMcpChallenge200JSONResponseBodyPurpose = "ssh_login"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthMcpChallenge200JSONResponseBodyPurpose enum.
+func (e PostAuthMcpChallenge200JSONResponseBodyPurpose) Valid() bool {
+	switch e {
+	case SshLogin:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostAuthMcpChallenge200JSONResponseBodyVersion.
+const (
+	PostAuthMcpChallenge200JSONResponseBodyVersionN2 PostAuthMcpChallenge200JSONResponseBodyVersion = 2
+)
+
+// Valid indicates whether the value is a known member of the PostAuthMcpChallenge200JSONResponseBodyVersion enum.
+func (e PostAuthMcpChallenge200JSONResponseBodyVersion) Valid() bool {
+	switch e {
+	case PostAuthMcpChallenge200JSONResponseBodyVersionN2:
 		return true
 	default:
 		return false
@@ -1076,18 +1181,21 @@ type Artifact struct {
 		Text             *string   `json:"text,omitempty"`
 		ToRecordId       *string   `json:"toRecordId,omitempty"`
 	} `json:"content,omitempty"`
-	CreatedAt       time.Time               `json:"createdAt"`
-	CrossProject    *bool                   `json:"crossProject,omitempty"`
-	Format          *ArtifactFormat         `json:"format,omitempty"`
-	GeneratedAt     *string                 `json:"generatedAt,omitempty"`
-	Generator       *map[string]interface{} `json:"generator,omitempty"`
-	Id              string                  `json:"id"`
-	Kind            *ArtifactKind           `json:"kind,omitempty"`
-	ProjectIds      *[]string               `json:"projectIds,omitempty"`
-	SourceRecordIds *[]string               `json:"sourceRecordIds,omitempty"`
-	Status          *ArtifactStatus         `json:"status,omitempty"`
-	Title           *string                 `json:"title,omitempty"`
-	Version         int                     `json:"version"`
+	CreatedAt    time.Time               `json:"createdAt"`
+	CrossProject *bool                   `json:"crossProject,omitempty"`
+	Format       *ArtifactFormat         `json:"format,omitempty"`
+	GeneratedAt  *string                 `json:"generatedAt,omitempty"`
+	Generator    *map[string]interface{} `json:"generator,omitempty"`
+	Id           string                  `json:"id"`
+	Kind         *ArtifactKind           `json:"kind,omitempty"`
+
+	// PrivacyDependencies Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions.
+	PrivacyDependencies *PrivacyDependencies `json:"privacyDependencies,omitempty"`
+	ProjectIds          *[]string            `json:"projectIds,omitempty"`
+	SourceRecordIds     *[]string            `json:"sourceRecordIds,omitempty"`
+	Status              *ArtifactStatus      `json:"status,omitempty"`
+	Title               *string              `json:"title,omitempty"`
+	Version             int                  `json:"version"`
 }
 
 // ArtifactAuthority defines model for Artifact.Authority.
@@ -1245,6 +1353,17 @@ type OwnerProfile struct {
 	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
+// PrivacyDependencies Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions.
+type PrivacyDependencies struct {
+	CrossProject bool                       `json:"crossProject"`
+	ProjectIds   []string                   `json:"projectIds"`
+	RecordIds    []string                   `json:"recordIds"`
+	Version      PrivacyDependenciesVersion `json:"version"`
+}
+
+// PrivacyDependenciesVersion defines model for PrivacyDependencies.Version.
+type PrivacyDependenciesVersion int
+
 // Project defines model for Project.
 type Project struct {
 	CreatedAt time.Time                 `json:"createdAt"`
@@ -1352,6 +1471,15 @@ type PostAuthCredentialsChallengeJSONBody struct {
 	PublicKey string  `json:"publicKey"`
 }
 
+// PostAuthCredentialsChallenge200JSONResponseBodyNamespace defines parameters for PostAuthCredentialsChallenge.
+type PostAuthCredentialsChallenge200JSONResponseBodyNamespace string
+
+// PostAuthCredentialsChallenge200JSONResponseBodyPurpose defines parameters for PostAuthCredentialsChallenge.
+type PostAuthCredentialsChallenge200JSONResponseBodyPurpose string
+
+// PostAuthCredentialsChallenge200JSONResponseBodyVersion defines parameters for PostAuthCredentialsChallenge.
+type PostAuthCredentialsChallenge200JSONResponseBodyVersion int
+
 // PostAuthCredentialsVerifyJSONBody defines parameters for PostAuthCredentialsVerify.
 type PostAuthCredentialsVerifyJSONBody struct {
 	ChallengeId string `json:"challengeId"`
@@ -1409,6 +1537,15 @@ type PostAuthMcpChallengeJSONBody struct {
 	Label     *string `json:"label,omitempty"`
 	PublicKey string  `json:"publicKey"`
 }
+
+// PostAuthMcpChallenge200JSONResponseBodyNamespace defines parameters for PostAuthMcpChallenge.
+type PostAuthMcpChallenge200JSONResponseBodyNamespace string
+
+// PostAuthMcpChallenge200JSONResponseBodyPurpose defines parameters for PostAuthMcpChallenge.
+type PostAuthMcpChallenge200JSONResponseBodyPurpose string
+
+// PostAuthMcpChallenge200JSONResponseBodyVersion defines parameters for PostAuthMcpChallenge.
+type PostAuthMcpChallenge200JSONResponseBodyVersion int
 
 // PostAuthMcpVerifyJSONBody defines parameters for PostAuthMcpVerify.
 type PostAuthMcpVerifyJSONBody struct {
@@ -8278,10 +8415,15 @@ type PostAuthCredentialsChallengeResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		ChallengeId *string `json:"challengeId,omitempty"`
-		ExpiresAt   *string `json:"expiresAt,omitempty"`
-		Namespace   *string `json:"namespace,omitempty"`
-		Nonce       *string `json:"nonce,omitempty"`
+		ChallengeId string                                                   `json:"challengeId"`
+		ExpiresAt   string                                                   `json:"expiresAt"`
+		Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
+		Nonce       string                                                   `json:"nonce"`
+		Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+		// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+		Recipient string                                                 `json:"recipient"`
+		Version   PostAuthCredentialsChallenge200JSONResponseBodyVersion `json:"version"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -8289,10 +8431,15 @@ type PostAuthCredentialsChallengeResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostAuthCredentialsChallengeResponse) GetJSON200() *struct {
-	ChallengeId *string `json:"challengeId,omitempty"`
-	ExpiresAt   *string `json:"expiresAt,omitempty"`
-	Namespace   *string `json:"namespace,omitempty"`
-	Nonce       *string `json:"nonce,omitempty"`
+	ChallengeId string                                                   `json:"challengeId"`
+	ExpiresAt   string                                                   `json:"expiresAt"`
+	Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
+	Nonce       string                                                   `json:"nonce"`
+	Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+	// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+	Recipient string                                                 `json:"recipient"`
+	Version   PostAuthCredentialsChallenge200JSONResponseBodyVersion `json:"version"`
 } {
 	return r.JSON200
 }
@@ -9008,10 +9155,15 @@ type PostAuthMcpChallengeResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		ChallengeId *string `json:"challengeId,omitempty"`
-		ExpiresAt   *string `json:"expiresAt,omitempty"`
-		Namespace   *string `json:"namespace,omitempty"`
-		Nonce       *string `json:"nonce,omitempty"`
+		ChallengeId string                                           `json:"challengeId"`
+		ExpiresAt   string                                           `json:"expiresAt"`
+		Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
+		Nonce       string                                           `json:"nonce"`
+		Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+		// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+		Recipient string                                         `json:"recipient"`
+		Version   PostAuthMcpChallenge200JSONResponseBodyVersion `json:"version"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -9019,10 +9171,15 @@ type PostAuthMcpChallengeResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostAuthMcpChallengeResponse) GetJSON200() *struct {
-	ChallengeId *string `json:"challengeId,omitempty"`
-	ExpiresAt   *string `json:"expiresAt,omitempty"`
-	Namespace   *string `json:"namespace,omitempty"`
-	Nonce       *string `json:"nonce,omitempty"`
+	ChallengeId string                                           `json:"challengeId"`
+	ExpiresAt   string                                           `json:"expiresAt"`
+	Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
+	Nonce       string                                           `json:"nonce"`
+	Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+	// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+	Recipient string                                         `json:"recipient"`
+	Version   PostAuthMcpChallenge200JSONResponseBodyVersion `json:"version"`
 } {
 	return r.JSON200
 }
@@ -12659,10 +12816,15 @@ func ParsePostAuthCredentialsChallengeResponse(rsp *http.Response) (*PostAuthCre
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			ChallengeId *string `json:"challengeId,omitempty"`
-			ExpiresAt   *string `json:"expiresAt,omitempty"`
-			Namespace   *string `json:"namespace,omitempty"`
-			Nonce       *string `json:"nonce,omitempty"`
+			ChallengeId string                                                   `json:"challengeId"`
+			ExpiresAt   string                                                   `json:"expiresAt"`
+			Namespace   PostAuthCredentialsChallenge200JSONResponseBodyNamespace `json:"namespace"`
+			Nonce       string                                                   `json:"nonce"`
+			Purpose     PostAuthCredentialsChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+			// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+			Recipient string                                                 `json:"recipient"`
+			Version   PostAuthCredentialsChallenge200JSONResponseBodyVersion `json:"version"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -13157,10 +13319,15 @@ func ParsePostAuthMcpChallengeResponse(rsp *http.Response) (*PostAuthMcpChalleng
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			ChallengeId *string `json:"challengeId,omitempty"`
-			ExpiresAt   *string `json:"expiresAt,omitempty"`
-			Namespace   *string `json:"namespace,omitempty"`
-			Nonce       *string `json:"nonce,omitempty"`
+			ChallengeId string                                           `json:"challengeId"`
+			ExpiresAt   string                                           `json:"expiresAt"`
+			Namespace   PostAuthMcpChallenge200JSONResponseBodyNamespace `json:"namespace"`
+			Nonce       string                                           `json:"nonce"`
+			Purpose     PostAuthMcpChallenge200JSONResponseBodyPurpose   `json:"purpose"`
+
+			// Recipient Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+			Recipient string                                         `json:"recipient"`
+			Version   PostAuthMcpChallenge200JSONResponseBodyVersion `json:"version"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

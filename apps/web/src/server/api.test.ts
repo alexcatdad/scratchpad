@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import { createApi } from "./api";
 import { normalizeRemote } from "./domain";
 
@@ -221,6 +222,102 @@ describe("persistent API domain", () => {
         .imported,
     ).toBe(0);
   });
+  it("rejects unroutable native IDs atomically and preserves routable colon IDs", async () => {
+    const source = await fixture();
+    const p = await project(source.call);
+    await source.call("/api/v1/records", "POST", {
+      projectId: p.id,
+      record: capture,
+    });
+    const exported = (await source.call("/api/v1/export", "POST", {})).data;
+    for (const id of [
+      ".",
+      "..",
+      "victim/accept?",
+      "../../auth/logout#",
+      "victim#",
+      "victim?",
+      "victim%2faccept",
+      "victim\\accept",
+    ]) {
+      const destination = await fixture();
+      const bad = structuredClone(exported);
+      bad.data.record[0].id = id;
+      bad.data.metadata[0].id = id;
+      bad.data.metadata[0].recordId = id;
+      expect(
+        (await destination.call("/api/v1/import", "POST", bad)).status,
+      ).toBe(400);
+      expect(await destination.api.store.list("project")).toHaveLength(0);
+      expect(await destination.api.store.list("record")).toHaveLength(0);
+      const auditDestination = await fixture();
+      const badAudit = structuredClone(exported);
+      badAudit.data.audit[0].entityId = id;
+      expect(
+        (await auditDestination.call("/api/v1/import", "POST", badAudit))
+          .status,
+      ).toBe(400);
+      expect(await auditDestination.api.store.list("project")).toHaveLength(0);
+      expect(await auditDestination.api.store.list("record")).toHaveLength(0);
+      const historical = await fixture();
+      await historical.api.store.insert("audit", badAudit.data.audit[0]);
+      expect(
+        (await historical.call("/api/v1/import", "POST", badAudit)).status,
+      ).toBe(400);
+      expect(await historical.api.store.list("project")).toHaveLength(0);
+      expect(await historical.api.store.list("record")).toHaveLength(0);
+      for (const [kind, reference] of [
+        ["record", "projectId"],
+        ["metadata", "recordId"],
+      ]) {
+        const duplicate = await fixture();
+        const invalid = structuredClone(exported);
+        invalid.data[kind][0][reference] = id;
+        await duplicate.api.store.insert(kind, invalid.data[kind][0]);
+        expect(
+          (await duplicate.call("/api/v1/import", "POST", invalid)).status,
+        ).toBe(400);
+        expect(await duplicate.api.store.list("project")).toHaveLength(0);
+      }
+    }
+    const destination = await fixture();
+    const legacy = await destination.call("/api/v1/import", "POST", {
+      format: "jsonl",
+      projectId: (await project(destination.call)).id,
+      jsonl: JSON.stringify({
+        id: "stable:decision-1",
+        decision: "Synthetic decision",
+      }),
+    });
+    expect(legacy.status).toBe(200);
+    // The old record detail route treated %3A as a literal stored ID and returned 404.
+    const path = "/api/v1/records/stable%3Adecision-1";
+    expect((await destination.call(path)).data.record.id).toBe(
+      "stable:decision-1",
+    );
+    const detail = (await destination.call(path)).data;
+    const edited = await destination.call(`${path}/metadata`, "PATCH", {
+      expectedVersion: detail.metadata.version,
+      displayTitle: "Synthetic edited title",
+    });
+    expect(edited.status).toBe(200);
+    expect(
+      (
+        await destination.call(`${path}/metadata`, "PATCH", {
+          expectedVersion: detail.metadata.version,
+          displayTitle: "Stale",
+        })
+      ).status,
+    ).toBe(409);
+    const archive = (await destination.call("/api/v1/export", "POST", {})).data;
+    const restored = await fixture();
+    expect(
+      (await restored.call("/api/v1/import", "POST", archive)).status,
+    ).toBe(200);
+    expect((await restored.call(path)).data.record.id).toBe(
+      "stable:decision-1",
+    );
+  });
   it("rolls back invalid native imports and reports malformed legacy lines", async () => {
     const { call } = await fixture(),
       p = await project(call);
@@ -374,14 +471,17 @@ describe("owner authentication", () => {
     });
     const challenge = await api.auth.sshChallenge({ publicKey }),
       message = join(directory, "message");
-    writeFileSync(message, String(challenge.nonce));
+    writeFileSync(
+      message,
+      sshProof(challenge, publicKey, "http://localhost:3000", "ssh_login"),
+    );
     const sign = spawnSync("ssh-keygen", [
       "-Y",
       "sign",
       "-f",
       keyPath,
       "-n",
-      "scratchpad-auth",
+      sshNamespace,
       message,
     ]);
     expect(sign.status).toBe(0);

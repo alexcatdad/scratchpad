@@ -1060,6 +1060,7 @@ export interface components {
             generatedAt?: string;
             /** @enum {string} */
             format?: "handoff" | "architecture" | "decisions" | "client_history" | "adr";
+            privacyDependencies?: components["schemas"]["PrivacyDependencies"];
         };
         SemanticQuery: components["schemas"]["Scope"] & {
             query: string;
@@ -1105,6 +1106,14 @@ export interface components {
             github?: components["schemas"]["GithubProfile"] | null;
         } & {
             [key: string]: unknown;
+        };
+        /** @description Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions. */
+        PrivacyDependencies: {
+            /** @enum {integer} */
+            version: 1;
+            recordIds: string[];
+            projectIds: string[];
+            crossProject: boolean;
         };
     };
     responses: {
@@ -1223,10 +1232,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        challengeId?: string;
-                        nonce?: string;
-                        namespace?: string;
-                        expiresAt?: string;
+                        challengeId: string;
+                        nonce: string;
+                        /** @enum {string} */
+                        namespace: "scratchpad-auth-v2";
+                        /** Format: date-time */
+                        expiresAt: string;
+                        /** @enum {integer} */
+                        version: 2;
+                        /**
+                         * Format: uri
+                         * @description Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+                         */
+                        recipient: string;
+                        /** @enum {string} */
+                        purpose: "ssh_login";
                     };
                 };
             };
@@ -1289,10 +1309,21 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        challengeId?: string;
-                        nonce?: string;
-                        namespace?: string;
-                        expiresAt?: string;
+                        challengeId: string;
+                        nonce: string;
+                        /** @enum {string} */
+                        namespace: "scratchpad-auth-v2";
+                        /** Format: date-time */
+                        expiresAt: string;
+                        /** @enum {integer} */
+                        version: 2;
+                        /**
+                         * Format: uri
+                         * @description Configured instance origin. Clients must compare with and use their own locally trusted recipient.
+                         */
+                        recipient: string;
+                        /** @enum {string} */
+                        purpose: "ssh_enroll";
                     };
                 };
             };
