@@ -2,6 +2,14 @@ import { expect, it, vi } from "vitest";
 import { createScratchpadClient } from "../../../../packages/clients/typescript/index";
 
 for (const baseUrl of [
+  "http://127.1",
+  "http://2130706433",
+  "http://0x7f000001",
+  "http://127.0.0.1.",
+  "https://example.test:65536",
+  "https://example.test:0",
+  "https://example.test:",
+  "http://%6cocalhost",
   "http://remote.example.test",
   "http://localhost.example.test",
   "http://127.0.0.1.example.test",

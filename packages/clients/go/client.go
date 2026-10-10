@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -22,6 +23,14 @@ type Auth struct {
 func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, error) {
 	u, err := url.Parse(baseURL)
 	if err != nil || u.Hostname() == "" || (u.Scheme != "https" && u.Scheme != "http") || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
+	}
+	if port := u.Port(); port != "" {
+		number, err := strconv.Atoi(port)
+		if err != nil || number < 1 || number > 65535 {
+			return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
+		}
+	} else if strings.HasSuffix(u.Host, ":") {
 		return nil, errors.New("use an HTTPS instance origin or supported loopback HTTP origin")
 	}
 	if u.Scheme == "http" {

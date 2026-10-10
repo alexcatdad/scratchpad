@@ -22,7 +22,16 @@ export function createScratchpadClient(options: {
   } catch {
     throw invalidOrigin();
   }
+  const suppliedAuthority = options.baseUrl.match(
+    /^https?:\/\/([^/?#\\\s]+)\/?$/i,
+  )?.[1];
+  const suppliedHost = suppliedAuthority?.startsWith("[")
+    ? suppliedAuthority.slice(0, suppliedAuthority.indexOf("]") + 1)
+    : suppliedAuthority?.split(":")[0].toLowerCase();
   if (
+    !suppliedAuthority ||
+    suppliedAuthority.endsWith(":") ||
+    url.port === "0" ||
     !["http:", "https:"].includes(url.protocol) ||
     !url.hostname ||
     url.username ||
@@ -30,6 +39,9 @@ export function createScratchpadClient(options: {
     url.search ||
     url.hash ||
     url.pathname !== "/" ||
+    (url.protocol === "http:" &&
+      url.hostname !== "[::1]" &&
+      !["localhost", "127.0.0.1"].includes(suppliedHost ?? "")) ||
     (url.protocol === "http:" &&
       !["localhost", "127.0.0.1", "[::1]"].includes(url.hostname))
   )
