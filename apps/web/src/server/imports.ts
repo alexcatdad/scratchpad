@@ -1,6 +1,13 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { isOpaqueId } from "../lib/opaque-id";
+import { assertPrivacyReferences } from "./ai-privacy";
 import { assertRelationshipSafe } from "./context";
+import {
+  artifactKinds,
+  assertDerivedArtifact,
+  derivedArtifactSources,
+} from "./derived-artifact";
 import {
   type Actor,
   authorityTypes,
@@ -17,7 +24,9 @@ import {
 import type { Store } from "./store";
 
 const object = z.record(z.string(), z.unknown());
-const identifier = z.string().min(1).max(500);
+const identifier = z
+  .string()
+  .refine(isOpaqueId, "Use a safe opaque identifier.");
 export const exportKinds = [
   "project",
   "source",
@@ -79,11 +88,39 @@ export async function importNative(
   return await store.atomic(async () => {
     let imported = 0,
       skipped = 0;
+    let artifactSources:
+      | Awaited<ReturnType<typeof derivedArtifactSources>>
+      | undefined;
     for (const kind of exportKinds)
       for (const value of z.array(object).parse(data[kind] ?? [])) {
         const key = identifier.parse(value.id);
         z.iso.datetime().parse(value.createdAt);
         z.number().int().positive().parse(value.version);
+        // Route references must be safe even when an identical row is skipped.
+        if (kind === "record" || kind === "source")
+          identifier.parse(value.projectId);
+        if (["metadata", "revision", "evidence", "mirror"].includes(kind))
+          identifier.parse(value.recordId);
+        if (kind === "relationship") {
+          identifier.parse(value.fromRecordId);
+          identifier.parse(value.toRecordId);
+        }
+        if (kind === "ai_artifact" || kind === "curated_artifact") {
+          z.array(identifier).min(1).parse(value.sourceRecordIds);
+          z.array(identifier).min(1).parse(value.projectIds);
+          if (kind === "curated_artifact") identifier.parse(value.artifactId);
+        }
+        if (kind === "audit") {
+          // Historical key-block references are fingerprints, never route IDs.
+          const keyFingerprint =
+            value.entityType === "credential" &&
+            ["github.key_blocked", "github.key_unblocked"].includes(
+              String(value.action),
+            ) &&
+            typeof value.entityId === "string" &&
+            /^SHA256:[A-Za-z0-9+/]{43}$/.test(value.entityId);
+          if (!keyFingerprint) identifier.parse(value.entityId);
+        }
         const previous = await store.get(kind, key);
         if (previous) {
           requireValue(
@@ -92,8 +129,10 @@ export async function importNative(
             `Import conflicts with existing ${kind} ${key}.`,
             409,
           );
-          skipped++;
-          continue;
+          if (kind !== "ai_artifact" && kind !== "curated_artifact") {
+            skipped++;
+            continue;
+          }
         }
         if (kind === "project") {
           settingsSchema.parse(value.settings);
@@ -110,44 +149,60 @@ export async function importNative(
         }
         if (kind === "ai_artifact" || kind === "curated_artifact") {
           z.literal("derived").parse(value.authority);
-          z.enum([
-            "summary",
-            "classification",
-            "duplicate_candidate",
-            "relationship_candidate",
-            "contradiction",
-            "cluster",
-            "pattern",
-            "recommendation",
-            "export",
-          ]).parse(value.kind);
+          z.enum(artifactKinds).parse(value.kind);
           object.parse(value.content);
           object.parse(value.generator);
           const sources = z
             .array(identifier)
             .min(1)
             .parse(value.sourceRecordIds);
+          artifactSources ??= await derivedArtifactSources(store);
+          await assertPrivacyReferences(store, value, artifactSources);
           for (const source of sources)
-            await requireEntity(store, "record", source);
+            requireValue(
+              artifactSources.records.has(source),
+              "IMPORT_INVALID",
+              `Import references missing record.`,
+              404,
+            );
           const projects = z.array(identifier).min(1).parse(value.projectIds);
           for (const project of projects)
-            await requireEntity(store, "project", project);
-          requireValue(
-            sources.every((source) =>
-              projects.includes(
-                String(
-                  ((data.record as JsonObject[]) ?? []).find(
-                    (record) => record.id === source,
-                  )?.projectId ?? "",
-                ),
-              ),
-            ),
-            "IMPORT_INVALID",
-            "Derived source projects do not match citations.",
-          );
+            requireValue(
+              artifactSources.projects.has(project),
+              "PROJECT_NOT_FOUND",
+              `Import references missing project.`,
+              404,
+            );
+          await assertDerivedArtifact(store, value, artifactSources);
           if (kind === "ai_artifact")
             z.enum(["pending", "accepted", "rejected"]).parse(value.status);
-          else await requireEntity(store, "ai_artifact", value.artifactId);
+          else {
+            const suggestion = await requireEntity(
+              store,
+              "ai_artifact",
+              value.artifactId,
+            );
+            requireValue(
+              suggestion.status === "accepted" &&
+                [
+                  "kind",
+                  "content",
+                  "sourceRecordIds",
+                  "projectIds",
+                  "generator",
+                  "privacyDependencies",
+                ].every(
+                  (field) =>
+                    canonical(value[field]) === canonical(suggestion[field]),
+                ),
+              "IMPORT_INVALID",
+              "Curated evidence must match its accepted AI suggestion.",
+            );
+          }
+          if (previous) {
+            skipped++;
+            continue;
+          }
         }
         if (kind === "record") {
           await requireEntity(store, "project", value.projectId);
@@ -160,7 +215,7 @@ export async function importNative(
         }
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);
-          identifier.parse(value.identity);
+          z.string().min(1).max(500).parse(value.identity);
           const existing = await store.resolveIdentity(String(value.identity));
           requireValue(
             !existing || existing === value.projectId,

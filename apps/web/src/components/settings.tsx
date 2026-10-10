@@ -2,6 +2,8 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Project, post } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
+import { sshProof } from "../lib/ssh-proof";
 import { AiSettings, OwnerSettings } from "./ai-settings";
 import { GithubAccess } from "./github-access";
 import { ProjectDefaults } from "./project-defaults";
@@ -41,7 +43,7 @@ export function Settings({
   const [publicKey, setPublicKey] = useState("");
   const [challenge, setChallenge] = useState<{
     challengeId: string;
-    nonce: string;
+    message: string;
     namespace: string;
   } | null>(null);
   const [signature, setSignature] = useState("");
@@ -127,7 +129,7 @@ export function Settings({
                   type="button"
                   onClick={() =>
                     void perform(async () => {
-                      await api(`/auth/credentials/${c.id}`, {
+                      await api(`/auth/credentials/${encodedId(c.id)}`, {
                         method: "DELETE",
                       });
                       await refresh();
@@ -151,12 +153,22 @@ export function Settings({
           onSubmit={(e) => {
             e.preventDefault();
             void perform(async () => {
-              setChallenge(
-                await api(
-                  "/auth/credentials/challenge",
-                  post({ publicKey, label: "MCP key" }),
-                ),
+              const incoming = await api<{
+                challengeId: string;
+                namespace: string;
+              }>(
+                "/auth/credentials/challenge",
+                post({ publicKey, label: "MCP key" }),
               );
+              setChallenge({
+                ...incoming,
+                message: sshProof(
+                  incoming,
+                  publicKey,
+                  window.location.origin,
+                  "ssh_enroll",
+                ),
+              });
             });
           }}
         >
@@ -196,7 +208,7 @@ export function Settings({
               Sign this exact challenge using your key with namespace{" "}
               <code>{challenge.namespace}</code>.
             </p>
-            <pre>{challenge.nonce}</pre>
+            <pre>{challenge.message}</pre>
             <label>
               Armored SSH signature
               <textarea

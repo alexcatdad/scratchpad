@@ -309,7 +309,7 @@ Preferred mechanism:
 
 ```text
 MCP → request challenge
-API → nonce
+API → versioned challenge with recipient, purpose and expiry
 MCP → signs canonical challenge using developer key
 API → verifies enrolled public key
 API → issues short-lived bearer token
@@ -1004,6 +1004,10 @@ Synchronization runs every five minutes; public-key discovery does not require p
 GitHub outages leave complete cached keys usable for at most 24 hours since last success, independently of the machine session's lifetime. Browser sign-in requires GitHub; independent passkeys and administrator recovery remain available. Unlinking requires fresh independent authentication; replacement requires fresh existing authentication. Both invalidate GitHub-derived sessions and permissions and preserve data and independent credentials. Do not silently convert credential provenance.
 
 Machine onboarding is an instruction-only skill using existing client configuration and SSH tooling. It verifies a real authenticated MCP read with explicit project scope. The HTTP API remains authoritative; no dedicated setup command, client OAuth secret or new machine authentication mechanism is introduced.
+
+## Accepted clarification: non-executing checkout discovery (2026-10-09)
+
+MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers.
 
 ### Accepted clarification: production request log privacy (2026-10-09)
 

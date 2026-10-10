@@ -102,16 +102,24 @@ describe("WebAuthn enrollment and recovery", () => {
       origin: "http://localhost:3000",
     });
     try {
-      const call = async (path: string, body: unknown, cookie?: string) => {
+      const call = async (
+        path: string,
+        body: unknown,
+        cookie?: string,
+        clientAddress = "192.0.2.1",
+        origin = "http://localhost:3000",
+      ) => {
         const result = await api.handleRequest(
           new Request(`http://localhost:3000/api/v1${path}`, {
             method: "POST",
             headers: {
-              origin: "http://localhost:3000",
+              origin,
+              "x-forwarded-for": randomBytes(8).toString("hex"),
               ...(cookie ? { cookie } : {}),
             },
             body: JSON.stringify(body),
           }),
+          clientAddress,
         );
         return {
           status: result.status,
@@ -140,6 +148,29 @@ describe("WebAuthn enrollment and recovery", () => {
       expect(enrolled.status).toBe(200);
       expect(enrolled.cookie).toBeTruthy();
       expect(await api.auth.initialized()).toBe(true);
+      for (let attempt = 0; attempt < 125; attempt++) {
+        expect((await call("/auth/unsupported", {}, undefined)).status).toBe(
+          404,
+        );
+        expect(
+          (
+            await call(
+              "/auth/login/options",
+              {},
+              undefined,
+              "192.0.2.1",
+              "https://evil.example",
+            )
+          ).status,
+        ).toBe(403);
+        const abuse = await call(
+          "/auth/login/options",
+          {},
+          undefined,
+          "192.0.2.2",
+        );
+        expect(abuse.status).toBe(attempt < 120 ? 200 : 429);
+      }
       expect(
         (await call("/auth/register/options", { setupToken })).status,
       ).toBe(401);
@@ -150,6 +181,16 @@ describe("WebAuthn enrollment and recovery", () => {
       };
       const loggedIn = await call("/auth/login/verify", loginBody);
       expect(loggedIn.status).toBe(200);
+      expect(
+        (
+          await call(
+            "/auth/register/options",
+            { label: "Another passkey" },
+            loggedIn.cookie,
+            "192.0.2.2",
+          )
+        ).status,
+      ).toBe(200);
       expect(
         (await call("/auth/login/verify", loginBody)).data.error.code,
       ).toBe("AUTH_CHALLENGE_USED");
