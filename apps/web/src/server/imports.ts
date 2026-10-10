@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { isOpaqueId } from "../lib/opaque-id";
+import { assertPrivacyReferences } from "./ai-privacy";
 import { assertRelationshipSafe } from "./context";
 import {
   artifactKinds,
@@ -156,6 +157,7 @@ export async function importNative(
             .min(1)
             .parse(value.sourceRecordIds);
           artifactSources ??= await derivedArtifactSources(store);
+          await assertPrivacyReferences(store, value, artifactSources);
           for (const source of sources)
             requireValue(
               artifactSources.records.has(source),
@@ -188,6 +190,7 @@ export async function importNative(
                   "sourceRecordIds",
                   "projectIds",
                   "generator",
+                  "privacyDependencies",
                 ].every(
                   (field) =>
                     canonical(value[field]) === canonical(suggestion[field]),

@@ -422,6 +422,12 @@ describe("current context and live policy", () => {
       content: { text: "Synthetic derived memory" },
       sourceRecordIds: [before.data.record.id],
       projectIds: ["project"],
+      privacyDependencies: {
+        version: 1,
+        recordIds: [before.data.record.id],
+        projectIds: ["project"],
+        crossProject: false,
+      },
       authority: "derived",
       status: "pending",
       private: true,
@@ -587,6 +593,12 @@ describe("native archive integrity", () => {
             relationshipType,
           },
           sourceRecordIds: sources,
+          privacyDependencies: {
+            version: 1,
+            recordIds: sources,
+            projectIds: ["project"],
+            crossProject: false,
+          },
           projectIds: ["project"],
           authority: "derived",
           status: "pending",
@@ -623,7 +635,13 @@ describe("native archive integrity", () => {
         { type: relationshipType, status: "accepted" },
       ]);
       const portable = (await destination.call("/export", "POST", {})).data;
-      for (const mutation of ["content", "generator", "sources", "pending"]) {
+      for (const mutation of [
+        "content",
+        "generator",
+        "sources",
+        "pending",
+        "privacy",
+      ]) {
         const invalid = structuredClone(portable);
         const curated = invalid.data.curated_artifact[0];
         if (mutation === "content") curated.content.text = "Unrelated evidence";
@@ -631,6 +649,8 @@ describe("native archive integrity", () => {
         if (mutation === "sources") curated.sourceRecordIds.reverse();
         if (mutation === "pending")
           invalid.data.ai_artifact[0].status = "pending";
+        if (mutation === "privacy")
+          curated.privacyDependencies.crossProject = true;
         const rejected = createApi({
           databasePath: ":memory:",
           origin: "http://localhost:3000",

@@ -1060,6 +1060,7 @@ export interface components {
             generatedAt?: string;
             /** @enum {string} */
             format?: "handoff" | "architecture" | "decisions" | "client_history" | "adr";
+            privacyDependencies?: components["schemas"]["PrivacyDependencies"];
         };
         SemanticQuery: components["schemas"]["Scope"] & {
             query: string;
@@ -1105,6 +1106,14 @@ export interface components {
             github?: components["schemas"]["GithubProfile"] | null;
         } & {
             [key: string]: unknown;
+        };
+        /** @description Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions. */
+        PrivacyDependencies: {
+            /** @enum {integer} */
+            version: 1;
+            recordIds: string[];
+            projectIds: string[];
+            crossProject: boolean;
         };
     };
     responses: {

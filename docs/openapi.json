@@ -3888,6 +3888,9 @@
                   "client_history",
                   "adr"
                 ]
+              },
+              "privacyDependencies": {
+                "$ref": "#/components/schemas/PrivacyDependencies"
               }
             }
           }
@@ -4023,6 +4026,40 @@
         },
         "required": ["id", "displayName", "version"],
         "additionalProperties": true
+      },
+      "PrivacyDependencies": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "recordIds", "projectIds", "crossProject"],
+        "properties": {
+          "version": {
+            "type": "integer",
+            "enum": [1],
+            "x-enum-varnames": ["PrivacyVersion1"]
+          },
+          "recordIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "projectIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "crossProject": {
+            "type": "boolean"
+          }
+        },
+        "description": "Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions."
       }
     },
     "responses": {
