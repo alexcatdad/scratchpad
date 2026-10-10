@@ -1,3 +1,5 @@
+import { decodedId } from "./opaque-id";
+
 export type Project = {
   id: string;
   name: string;
@@ -52,6 +54,20 @@ export const label = (value: string | null | undefined): string =>
         ? "ADR"
         : value.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const segments = path.split("?")[0]?.split("/") ?? [];
+  const index = [
+    "projects",
+    "records",
+    "relationships",
+    "suggestions",
+  ].includes(segments[1] ?? "")
+    ? 2
+    : segments[1] === "auth" && segments[2] === "credentials"
+      ? 3
+      : segments[1] === "ai" && segments[2] === "jobs"
+        ? 3
+        : undefined;
+  if (index !== undefined && segments[index]) decodedId(segments[index]);
   const response = await fetch(`/api/v1${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init.headers },

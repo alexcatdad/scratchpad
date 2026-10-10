@@ -132,12 +132,37 @@
                       "type": "string"
                     },
                     "namespace": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": ["scratchpad-auth-v2"]
                     },
                     "expiresAt": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "date-time",
+                      "x-go-type": "string"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "enum": [2]
+                    },
+                    "recipient": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Configured instance origin. Clients must compare with and use their own locally trusted recipient."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": ["ssh_login"]
                     }
-                  }
+                  },
+                  "required": [
+                    "challengeId",
+                    "nonce",
+                    "namespace",
+                    "expiresAt",
+                    "version",
+                    "recipient",
+                    "purpose"
+                  ]
                 }
               }
             }
@@ -240,12 +265,37 @@
                       "type": "string"
                     },
                     "namespace": {
-                      "type": "string"
+                      "type": "string",
+                      "enum": ["scratchpad-auth-v2"]
                     },
                     "expiresAt": {
-                      "type": "string"
+                      "type": "string",
+                      "format": "date-time",
+                      "x-go-type": "string"
+                    },
+                    "version": {
+                      "type": "integer",
+                      "enum": [2]
+                    },
+                    "recipient": {
+                      "type": "string",
+                      "format": "uri",
+                      "description": "Configured instance origin. Clients must compare with and use their own locally trusted recipient."
+                    },
+                    "purpose": {
+                      "type": "string",
+                      "enum": ["ssh_enroll"]
                     }
-                  }
+                  },
+                  "required": [
+                    "challengeId",
+                    "nonce",
+                    "namespace",
+                    "expiresAt",
+                    "version",
+                    "recipient",
+                    "purpose"
+                  ]
                 }
               }
             }
