@@ -2,6 +2,7 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Project, post } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
 import { sshProof } from "../lib/ssh-proof";
 import { AiSettings, OwnerSettings } from "./ai-settings";
 import { GithubAccess } from "./github-access";
@@ -128,7 +129,7 @@ export function Settings({
                   type="button"
                   onClick={() =>
                     void perform(async () => {
-                      await api(`/auth/credentials/${c.id}`, {
+                      await api(`/auth/credentials/${encodedId(c.id)}`, {
                         method: "DELETE",
                       });
                       await refresh();

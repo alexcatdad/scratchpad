@@ -13,6 +13,7 @@ import postgres from "postgres";
 import { afterEach, expect, it } from "vitest";
 import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import { createApi } from "./api";
+import { fingerprint } from "./auth";
 
 /** A software authenticator signs actual WebAuthn bytes; no verification mocks. */
 function authenticator() {
@@ -326,6 +327,76 @@ async function fixture(
     },
   };
 }
+it("restores exported GitHub key-block audits with Base64 fingerprint references", async () => {
+  let source = await fixture();
+  for (
+    let attempt = 0;
+    attempt < 32 && !/[+/]/.test(fingerprint(source.publicKey));
+    attempt++
+  )
+    source = await fixture();
+  const keyId = fingerprint(source.publicKey);
+  expect(keyId).toMatch(/[+/]/);
+  const browser = await source.oauth(
+    "setup",
+    await source.api.auth.createSetupToken(),
+  );
+  for (const blocked of [true, false])
+    expect(
+      (
+        await source.call(
+          "/auth/github/block",
+          "POST",
+          { publicKey: source.publicKey, blocked },
+          browser.cookie,
+        )
+      ).response.status,
+    ).toBe(200);
+  const archive = (await source.call("/export", "POST", {}, browser.cookie))
+    .data;
+  const expected = archive.data.audit.filter(
+    (event: { entityId: string }) => event.entityId === keyId,
+  );
+  expect(expected).toHaveLength(2);
+  const destination = await fixture();
+  const owner = await destination.oauth(
+    "setup",
+    await destination.api.auth.createSetupToken(),
+  );
+  expect(
+    (await destination.call("/import", "POST", archive, owner.cookie)).response
+      .status,
+  ).toBe(200);
+  const restored = (await destination.call("/export", "POST", {}, owner.cookie))
+    .data;
+  expect(
+    restored.data.audit.filter(
+      (event: { entityId: string }) => event.entityId === keyId,
+    ),
+  ).toEqual(expected);
+  for (const changes of [
+    { entityType: "record" },
+    { action: "record.updated" },
+    { entityId: "victim/accept?" },
+  ]) {
+    const bad = structuredClone(archive);
+    Object.assign(
+      bad.data.audit.find(
+        (event: { entityId: string }) => event.entityId === keyId,
+      ),
+      changes,
+    );
+    const rejected = await fixture();
+    const authenticated = await rejected.oauth(
+      "setup",
+      await rejected.api.auth.createSetupToken(),
+    );
+    expect(
+      (await rejected.call("/import", "POST", bad, authenticated.cookie))
+        .response.status,
+    ).toBe(400);
+  }
+});
 it("refreshes public GitHub keys using OAuth app authentication while browser identity uses its bearer token", async () => {
   const f = await fixture();
   f.provider.keys = [{ key: f.publicKey }];
