@@ -1008,3 +1008,7 @@ Machine onboarding is an instruction-only skill using existing client configurat
 ## Accepted clarification: non-executing checkout discovery (2026-10-09)
 
 MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers.
+
+### Accepted clarification: production request log privacy (2026-10-09)
+
+The production server entry point logs request method, pathname, response status and elapsed milliseconds without query strings, headers or bodies. Dashboard search terms and filters remain private input. Unhandled request errors produce fixed diagnostics rather than arbitrary exception text. Use the package start command and the same entry point in container/browser verification; the generic development/runtime CLI's full-URL logger does not provide this contract.
