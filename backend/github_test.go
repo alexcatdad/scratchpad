@@ -199,9 +199,10 @@ func TestGithubCompleteKeySyncAndSSHLogin(t *testing.T) {
 		case "/users/owner-example/ssh_signing_keys":
 			signingPages.Add(1)
 			if r.URL.Query().Get("page") == "1" {
-				w.Header().Set("Link", `<https://api.github.com/users/owner-example/ssh_signing_keys?per_page=100&page=2>; rel="next"`)
+				w.Header().Set("Link", `<https://api.github.com/users/owner-example/ssh_signing_keys?per_page=100&page=2>; rel="next last"`)
 				io.WriteString(w, `[]`)
 			} else {
+				w.Header().Set("Link", `<https://api.github.com/users/owner-example/ssh_signing_keys?per_page=100&page=2>; rel="last"`)
 				json.NewEncoder(w).Encode([]any{map[string]any{"key": key}})
 			}
 		default:
@@ -272,6 +273,18 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/users/"+login+"/keys" || r.URL.Path == "/users/"+login+"/ssh_signing_keys" {
 		if f.mode == "unsafe" {
 			w.Header().Set("Link", `<https://attacker.invalid/keys?per_page=100&page=2>; rel="next"`)
+		}
+		if f.mode == "incomplete" {
+			w.Header().Set("Link", `<https://api.github.com/users/`+login+`/keys?per_page=100&page=2>; rel="last"`)
+			io.WriteString(w, `[]`)
+			return
+		}
+		if f.mode == "truncated" {
+			if r.URL.Query().Get("page") == "1" {
+				w.Header().Set("Link", `<https://api.github.com`+r.URL.Path+`?per_page=100&page=2>; rel="next", <https://api.github.com`+r.URL.Path+`?per_page=100&page=3>; rel="last"`)
+			}
+			io.WriteString(w, `[]`)
+			return
 		}
 		if f.mode == "removed" || f.mode == "failure" {
 			io.WriteString(w, `[]`)
@@ -349,6 +362,24 @@ func TestGithubFailedSyncPreservesCompleteCache(t *testing.T) {
 			}
 			if githubStatus(t, origin, session)["lastSuccessfulSyncAt"] != before["lastSuccessfulSyncAt"] {
 				t.Fatal("unsafe pagination advanced freshness")
+			}
+			fixture.set("incomplete")
+			res = githubRequest(t, origin, "POST", "/sync", map[string]any{}, session)
+			if res.StatusCode != 503 {
+				t.Fatalf("pagination advertising unfetched pages was accepted: %d", res.StatusCode)
+			}
+			after = githubStatus(t, origin, session)
+			if after["lastSuccessfulSyncAt"] != before["lastSuccessfulSyncAt"] || !reflect.DeepEqual(after["keys"], before["keys"]) {
+				t.Fatal("incomplete pagination replaced the complete cache")
+			}
+			fixture.set("truncated")
+			res = githubRequest(t, origin, "POST", "/sync", map[string]any{}, session)
+			if res.StatusCode != 503 {
+				t.Fatalf("pagination stopped before its advertised last page: %d", res.StatusCode)
+			}
+			after = githubStatus(t, origin, session)
+			if after["lastSuccessfulSyncAt"] != before["lastSuccessfulSyncAt"] || !reflect.DeepEqual(after["keys"], before["keys"]) {
+				t.Fatal("truncated pagination replaced the complete cache")
 			}
 			fixture.set("removed")
 			res = githubRequest(t, origin, "POST", "/sync", map[string]any{}, session)

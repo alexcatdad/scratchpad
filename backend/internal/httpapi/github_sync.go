@@ -69,6 +69,7 @@ func (g *Github) fetchKeys(ctx context.Context, bound map[string]any) ([]githubK
 	for _, category := range []string{"keys", "ssh_signing_keys"} {
 		path := "/users/" + account.Login + "/" + category
 		next := "https://api.github.com" + path + "?per_page=100&page=1"
+		lastPage := 1
 		for page := 1; next != ""; page++ {
 			if page > 100 {
 				return nil, "", githubUnavailable()
@@ -125,7 +126,19 @@ func (g *Github) fetchKeys(ctx context.Context, bound map[string]any) ([]githubK
 					}
 					for _, relation := range strings.Split(rel, " ") {
 						switch relation {
-						case "prev", "first", "last":
+						case "prev", "first":
+						case "last":
+							target, err := url.Parse(match[1])
+							if err != nil || target.Scheme != "https" || target.Host != "api.github.com" || target.Path != path || target.User != nil || target.Fragment != "" || target.Query().Get("per_page") != "100" {
+								return nil, "", githubUnavailable()
+							}
+							last, err := strconv.Atoi(target.Query().Get("page"))
+							if err != nil || last < page || last > 100 {
+								return nil, "", githubUnavailable()
+							}
+							if last > lastPage {
+								lastPage = last
+							}
 						case "next":
 							if next != "" {
 								return nil, "", githubUnavailable()
@@ -136,6 +149,9 @@ func (g *Github) fetchKeys(ctx context.Context, bound map[string]any) ([]githubK
 						}
 					}
 				}
+			}
+			if next == "" && lastPage > page {
+				return nil, "", githubUnavailable()
 			}
 			if next != "" {
 				target, err := url.Parse(next)
