@@ -86,6 +86,13 @@ func run() error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/records", auth.Capture())
+	mux.HandleFunc("PATCH /api/v1/records/{id}/metadata", auth.Curation("metadata"))
+	mux.HandleFunc("POST /api/v1/records/{id}/revisions", auth.Curation("revisions"))
+	mux.HandleFunc("POST /api/v1/records/{id}/evidence", auth.Curation("evidence"))
+	mux.HandleFunc("POST /api/v1/records/{id}/mirror", auth.Curation("mirror"))
+	mux.HandleFunc("POST /api/v1/relationships", auth.Curation("relationship-create"))
+	mux.HandleFunc("POST /api/v1/relationships/{id}/accept", auth.Curation("relationship-accept"))
+	mux.HandleFunc("POST /api/v1/relationships/{id}/reject", auth.Curation("relationship-reject"))
 	mux.HandleFunc("GET /api/v1/records", auth.Search(false))
 	mux.HandleFunc("POST /api/v1/search", auth.Search(true))
 	mux.HandleFunc("GET /api/v1/projects", auth.Projects("list"))

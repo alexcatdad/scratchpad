@@ -169,14 +169,24 @@ func TestRealStdioFullResumptionSurvivesGoRestart(t *testing.T) {
 					if origin == "" {
 						origin = startServer(t, path, databaseURL)
 						enrollLocalSSH(t, origin, private, key, local)
+						_, project := projectRequest(t, origin, "POST", "/resolve", map[string]any{"context": map[string]any{"git": map[string]any{"remote": "https://github.com/synthetic/resume.git"}}}, restoredToken)
+						settings := map[string]any{"repoMirroring": map[string]any{"enabled": true, "recordTypes": []string{"decision", "adr", "business_decision"}}, "crossProjectAnalysis": true, "aiProcessing": false}
+						status, _ := projectRequest(t, origin, "PATCH", "/"+project["project"].(map[string]any)["id"].(string)+"/settings", map[string]any{"settings": settings, "expectedVersion": 1}, restoredToken)
+						if status != 200 {
+							t.Fatal("mirror fixture configuration failed")
+						}
 					} else {
 						origin = startServer(t, path, databaseURL, strings.TrimPrefix(origin, "http://"))
 					}
-					cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", phase, "-state", state)
-					cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+					cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", phase, "-state", state, "-mirror")
+					cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "SCRATCHPAD_MIRROR_PATH=scratchpad/decisions.jsonl")
 					out, err := cmd.CombinedOutput()
 					if err != nil || !strings.Contains(string(out), "PASS "+phase) {
 						t.Fatalf("full stdio resumption failed: %v %s", err, out)
+					}
+					mirrored, err := os.ReadFile(filepath.Join(workspace, "scratchpad", "decisions.jsonl"))
+					if err != nil || len(strings.Split(strings.TrimSpace(string(mirrored)), "\n")) != 3 {
+						t.Fatal("local mirror failed or duplicated records across retry/restart")
 					}
 				})
 			}
