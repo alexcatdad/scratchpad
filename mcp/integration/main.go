@@ -45,7 +45,7 @@ func run() error {
 	workspace := flag.String("workspace", "", "Existing disposable Git repository with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
 	statePath := flag.String("state", "", "Capture-state file retained across server restart")
-	phase := flag.String("phase", "capture", "capture, projects, read-only context, detail, or verify after server restart")
+	phase := flag.String("phase", "capture", "capture, records-only, projects, read-only context, detail, or verify after server restart")
 	recordID := flag.String("record-id", "", "Existing disposable record ID for detail phase")
 	restrictedProject := flag.String("restricted-project", "", "Disposable external project ID for projects phase")
 	mirror := flag.Bool("mirror", false, "Require successful central and local mirroring for decisions (enable server project setting first)")
@@ -53,8 +53,8 @@ func run() error {
 	if *publicKey == "" || *workspace == "" || *binary == "" || (*statePath == "" && *phase != "detail") {
 		return errors.New("public-key, workspace, binary, and state flags are required")
 	}
-	if *phase != "capture" && *phase != "projects" && *phase != "verify" && *phase != "read" && *phase != "detail" {
-		return errors.New("phase must be capture, projects, read, detail, or verify")
+	if *phase != "capture" && *phase != "records" && *phase != "projects" && *phase != "verify" && *phase != "read" && *phase != "detail" {
+		return errors.New("phase must be capture, records, projects, read, detail, or verify")
 	}
 	absWorkspace, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -98,7 +98,7 @@ func run() error {
 		return nil
 	}
 	var saved state
-	if *phase == "capture" {
+	if *phase == "capture" || *phase == "records" {
 		nonce := make([]byte, 12)
 		if _, err = rand.Read(nonce); err != nil {
 			return err
@@ -221,7 +221,7 @@ func run() error {
 		if content, ok := record["content"].(string); !ok || content == "" {
 			return errors.New("deterministic content missing")
 		}
-		if *phase == "verify" {
+		if *phase == "verify" || *phase == "records" {
 			retried, err := call(ctx, session, item.Tool, item.Arguments)
 			if err != nil {
 				return fmt.Errorf("replay %s: %w", item.Tool, err)
@@ -231,6 +231,10 @@ func run() error {
 				return errors.New("retry created a duplicate")
 			}
 		}
+	}
+	if *phase == "records" {
+		fmt.Println("PASS records: all eight captures, immutable details and stable retries through real stdio and authenticated HTTP")
+		return nil
 	}
 	projectID := saved.Captures[0].ProjectID
 	resumeContext, err := call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace})
