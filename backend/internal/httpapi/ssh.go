@@ -183,6 +183,11 @@ func (s *SSH) Handler(verify bool) http.HandlerFunc {
 	}
 }
 func (s *SSH) fail(w http.ResponseWriter, err error) {
+	var conflict *versionConflict
+	if errors.As(err, &conflict) {
+		JSON(w, 409, map[string]any{"error": map[string]any{"code": "CONFLICT", "message": "This item changed since it was read.", "details": map[string]any{"currentVersion": conflict.current}}})
+		return
+	}
 	var e *protocolError
 	if errors.As(err, &e) {
 		Error(w, e.status, e.code, e.message)

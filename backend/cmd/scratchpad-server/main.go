@@ -85,6 +85,13 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/projects", auth.Projects("list"))
+	mux.HandleFunc("POST /api/v1/projects/resolve-explicit", auth.Projects("explicit"))
+	mux.HandleFunc("POST /api/v1/projects/resolve", auth.Projects("remote"))
+	mux.HandleFunc("GET /api/v1/projects/{id}", auth.Projects("detail"))
+	mux.HandleFunc("PATCH /api/v1/projects/{id}", auth.Projects("update"))
+	mux.HandleFunc("GET /api/v1/projects/{id}/settings", auth.Projects("settings"))
+	mux.HandleFunc("PATCH /api/v1/projects/{id}/settings", auth.Projects("settings-update"))
 	mux.HandleFunc("POST /api/v1/auth/github/options", github.Options())
 	mux.HandleFunc("GET /api/v1/auth/github/callback", github.Callback())
 	mux.HandleFunc("GET /api/v1/auth/github", github.Status())
