@@ -85,6 +85,10 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/profile", auth.Profile("get"))
+	mux.HandleFunc("PATCH /api/v1/profile", auth.Profile("name"))
+	mux.HandleFunc("POST /api/v1/profile/github", auth.Profile("github"))
+	mux.HandleFunc("DELETE /api/v1/profile/github", auth.Profile("unlink"))
 	mux.HandleFunc("POST /api/v1/records", auth.Capture())
 	mux.HandleFunc("PATCH /api/v1/records/{id}/metadata", auth.Curation("metadata"))
 	mux.HandleFunc("POST /api/v1/records/{id}/revisions", auth.Curation("revisions"))
