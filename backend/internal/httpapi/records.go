@@ -53,7 +53,11 @@ type detail struct {
 	Audit         []json.RawMessage `json:"audit"`
 }
 
-func get(ctx context.Context, tx *sql.Tx, kind, id string) (json.RawMessage, error) {
+type entityReader interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func get(ctx context.Context, tx entityReader, kind, id string) (json.RawMessage, error) {
 	var data []byte
 	err := tx.QueryRowContext(ctx, `SELECT data FROM entities WHERE kind=$1 AND id=$2`, kind, id).Scan(&data)
 	if err != nil {
@@ -64,7 +68,7 @@ func get(ctx context.Context, tx *sql.Tx, kind, id string) (json.RawMessage, err
 	}
 	return data, nil
 }
-func optional(ctx context.Context, tx *sql.Tx, kind, id string) (json.RawMessage, error) {
+func optional(ctx context.Context, tx entityReader, kind, id string) (json.RawMessage, error) {
 	data, err := get(ctx, tx, kind, id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil

@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -203,5 +204,41 @@ func TestInterruptedPostgresStartupCanBeRetried(t *testing.T) {
 	tx.Rollback()
 	if out, err := postgresCommand(databaseURL).CombinedOutput(); err != nil {
 		t.Fatalf("restart after interruption failed: %v %s", err, out)
+	}
+}
+
+func TestPostgresSSHLoginThroughRealStdioMCP(t *testing.T) {
+	databaseURL := legacyPostgres(t)
+	private := filepath.Join(t.TempDir(), "identity")
+	if out, err := exec.Command("ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", private).CombinedOutput(); err != nil {
+		t.Fatalf("synthetic key generation failed: %v %s", err, out)
+	}
+	public, err := os.ReadFile(private + ".pub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	key := strings.Join(strings.Fields(string(public))[:2], " ")
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedRestoredHistory(t, db)
+	if _, err := db.Exec(`UPDATE entities SET data=jsonb_set(data,'{publicKey}',to_jsonb($1::text)) WHERE kind='credential'`, key); err != nil {
+		t.Fatal(err)
+	}
+	db.Close()
+	origin := startServer(t, "", databaseURL)
+	_, proof := signedChallenge(t, origin, private, key)
+	status, response := postJSON(t, origin, "/api/v1/auth/mcp/verify", proof)
+	if status != 200 {
+		t.Fatalf("PostgreSQL SSH proof failed: %d %+v", status, response)
+	}
+	status, _ = fetchRecord(t, origin, response["accessToken"].(string))
+	if status != 200 {
+		t.Fatal("PostgreSQL SSH session cannot read history")
+	}
+	cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-phase", "detail", "-record-id", "rec_restored")
+	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "PASS detail") {
+		t.Fatalf("PostgreSQL stdio MCP failed: %v %s", err, out)
 	}
 }

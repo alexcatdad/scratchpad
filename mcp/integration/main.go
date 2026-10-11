@@ -45,15 +45,16 @@ func run() error {
 	workspace := flag.String("workspace", "", "Existing disposable Git repository with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
 	statePath := flag.String("state", "", "Capture-state file retained across server restart")
-	phase := flag.String("phase", "capture", "capture, projects, read-only context, or verify after server restart")
+	phase := flag.String("phase", "capture", "capture, projects, read-only context, detail, or verify after server restart")
+	recordID := flag.String("record-id", "", "Existing disposable record ID for detail phase")
 	restrictedProject := flag.String("restricted-project", "", "Disposable external project ID for projects phase")
 	mirror := flag.Bool("mirror", false, "Require successful central and local mirroring for decisions (enable server project setting first)")
 	flag.Parse()
-	if *publicKey == "" || *workspace == "" || *binary == "" || *statePath == "" {
+	if *publicKey == "" || *workspace == "" || *binary == "" || (*statePath == "" && *phase != "detail") {
 		return errors.New("public-key, workspace, binary, and state flags are required")
 	}
-	if *phase != "capture" && *phase != "projects" && *phase != "verify" && *phase != "read" {
-		return errors.New("phase must be capture, projects, read, or verify")
+	if *phase != "capture" && *phase != "projects" && *phase != "verify" && *phase != "read" && *phase != "detail" {
+		return errors.New("phase must be capture, projects, read, detail, or verify")
 	}
 	absWorkspace, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -80,6 +81,21 @@ func run() error {
 	}
 	if len(listed.Tools) != 19 {
 		return fmt.Errorf("expected 19 tools, got %d", len(listed.Tools))
+	}
+	if *phase == "detail" {
+		if *recordID == "" {
+			return errors.New("record-id is required for detail phase")
+		}
+		result, err := call(ctx, session, "get_record", map[string]any{"id": *recordID})
+		if err != nil {
+			return err
+		}
+		record, ok := result["record"].(map[string]any)
+		if !ok || record["id"] != *recordID {
+			return errors.New("record identity was not preserved")
+		}
+		fmt.Println("PASS detail: real stdio → local SSH possession proof → authenticated record details")
+		return nil
 	}
 	var saved state
 	if *phase == "capture" {

@@ -290,3 +290,31 @@ func (s *Store) Ready(ctx context.Context) error {
 	_, err := validate(ctx, s.DB, s.Engine)
 	return err
 }
+
+// Write serializes the same short transactions on both engines. Provider calls
+// and possession-proof verification must complete before entering this boundary.
+func (s *Store) Write(ctx context.Context, work func(*sql.Conn) error) error {
+	conn, err := s.DB.Conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	begin := "BEGIN IMMEDIATE"
+	if s.Engine == "postgres" {
+		begin = "BEGIN"
+	}
+	if _, err := conn.ExecContext(ctx, begin); err != nil {
+		return err
+	}
+	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	if s.Engine == "postgres" {
+		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1397772880)`); err != nil {
+			return err
+		}
+	}
+	if err := work(conn); err != nil {
+		return err
+	}
+	_, err = conn.ExecContext(ctx, "COMMIT")
+	return err
+}

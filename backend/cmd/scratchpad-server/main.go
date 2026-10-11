@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -39,7 +41,33 @@ func run() error {
 		return errors.New("LISTEN_FAILED: could not bind application listener.")
 	}
 	defer listener.Close()
+	publicURL := os.Getenv("SCRATCHPAD_PUBLIC_URL")
+	if publicURL == "" {
+		publicURL = "http://localhost:3000"
+	}
+	public, err := url.Parse(publicURL)
+	if err != nil {
+		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
+	}
+	public.Scheme = strings.ToLower(public.Scheme)
+	hostname := strings.ToLower(public.Hostname())
+	if public.User != nil || public.RawQuery != "" || public.Fragment != "" || (public.Path != "" && public.Path != "/") || public.Host == "" || (public.Scheme != "https" && (public.Scheme != "http" || (hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1"))) {
+		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
+	}
+	port := public.Port()
+	if (public.Scheme == "https" && port == "443") || (public.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	public.Host = hostname
+	if port != "" {
+		public.Host = net.JoinHostPort(hostname, port)
+	} else if strings.Contains(hostname, ":") {
+		public.Host = "[" + hostname + "]"
+	}
+	auth := httpapi.NewSSH(store, public.Scheme+"://"+public.Host)
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/auth/mcp/challenge", auth.Handler(false))
+	mux.HandleFunc("POST /api/v1/auth/mcp/verify", auth.Handler(true))
 	mux.HandleFunc("GET /api/v1/records/{id}", httpapi.Records(store))
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, map[string]string{"status": "ok"}) })
 	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {

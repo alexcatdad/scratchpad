@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -20,7 +21,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var binary string
+var binary, mcpBinary, integrationBinary string
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "scratchpad-go-tests-")
@@ -33,6 +34,16 @@ func TestMain(m *testing.M) {
 	if err := build.Run(); err != nil {
 		os.RemoveAll(dir)
 		os.Exit(1)
+	}
+	mcpBinary, integrationBinary = filepath.Join(dir, "scratchpad-mcp"), filepath.Join(dir, "integration")
+	for _, target := range []struct{ output, pkg string }{{mcpBinary, "./cmd/scratchpad-mcp"}, {integrationBinary, "./integration"}} {
+		build := exec.Command("go", "build", "-race", "-o", target.output, target.pkg)
+		build.Dir = "../mcp"
+		build.Stdout, build.Stderr = os.Stdout, os.Stderr
+		if err := build.Run(); err != nil {
+			os.RemoveAll(dir)
+			os.Exit(1)
+		}
 	}
 	code := m.Run()
 	os.RemoveAll(dir)
@@ -169,10 +180,23 @@ func TestMalformedSchemaIsNotRepaired(t *testing.T) {
 	}
 }
 
-func startServer(t *testing.T, path, databaseURL string) string {
+func startServer(t *testing.T, path, databaseURL string, listenAddress ...string) string {
 	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := listener.Addr().String()
+	listener.Close()
+	if len(listenAddress) > 0 {
+		address = listenAddress[0]
+	}
+	publicOrigin := "http://" + address
+	if len(listenAddress) > 1 {
+		publicOrigin = listenAddress[1]
+	}
 	cmd := exec.Command(binary, "serve")
-	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_PATH="+path, "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_LISTEN_ADDR=127.0.0.1:0")
+	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_PATH="+path, "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_LISTEN_ADDR="+address, "SCRATCHPAD_PUBLIC_URL="+publicOrigin)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatal(err)
