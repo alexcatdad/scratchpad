@@ -1016,3 +1016,7 @@ The production server entry point logs request method, pathname, response status
 ## Accepted clarification: private SQLite storage
 
 Issue #21 requires owner-only live SQLite storage before opening the database. Startup creates private new storage and refuses unsafe existing directory/file ownership, mode, links or macOS ACLs with repair guidance. Backup directories follow the same boundary; unrelated parent directories are not modified. Runtime UID peers and administrators remain trusted. See [the storage runbook](runbooks/security-21-private-sqlite.md); PostgreSQL selection remains independent.
+
+## Go backend replacement in progress (issue 36)
+
+The accepted replacement direction is tracked in [issue 36](https://github.com/alexcatdad/scratchpad/issues/36). The separate `backend` Go executable currently implements migration/startup and restored-session record-detail reads. The existing TypeScript application remains the supported runtime until full behavioral parity is verified. Its schema-1 format is recognized by Go; Go migration 2 adds an entity ordering index without rewriting captures. The TypeScript executable refuses schema 2, so rollback requires the pre-upgrade schema-1 backup. See [the migration runbook](runbooks/go-backend-migrations.md) for implemented boundaries, verification and operational limits. Secret conversion, encryption and new PostgreSQL RAG are subsequent slices.
