@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/alexcatdad/scratchpad/backend/internal/persistence"
+	"github.com/google/uuid"
 )
 
 const sshNamespace = "scratchpad-auth-v2"
@@ -50,8 +51,8 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(value[:]), nil
 }
 func entityID(prefix string) (string, error) {
-	value, err := randomToken()
-	return prefix + "_" + value, err
+	value, err := uuid.NewRandom()
+	return prefix + "_" + value.String(), err
 }
 func timestamp(t time.Time) string { return t.UTC().Format("2006-01-02T15:04:05.000Z") }
 func insert(ctx context.Context, conn *sql.Conn, kind, id string, value map[string]any) error {

@@ -86,6 +86,8 @@ func run() error {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/records", auth.Capture())
+	mux.HandleFunc("GET /api/v1/records", auth.Search(false))
+	mux.HandleFunc("POST /api/v1/search", auth.Search(true))
 	mux.HandleFunc("GET /api/v1/projects", auth.Projects("list"))
 	mux.HandleFunc("POST /api/v1/projects/resolve-explicit", auth.Projects("explicit"))
 	mux.HandleFunc("POST /api/v1/projects/resolve", auth.Projects("remote"))

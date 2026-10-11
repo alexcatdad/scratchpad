@@ -233,7 +233,20 @@ func run() error {
 		}
 	}
 	if *phase == "records" {
-		fmt.Println("PASS records: all eight captures, immutable details and stable retries through real stdio and authenticated HTTP")
+		search, err := call(ctx, session, "search_memory", map[string]any{"projectId": saved.Captures[0].ProjectID, "query": "Integration", "limit": 100})
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(search)
+		if err != nil {
+			return err
+		}
+		for _, item := range saved.Captures {
+			if !strings.Contains(string(encoded), item.RecordID) {
+				return errors.New("lexical search omitted a captured record")
+			}
+		}
+		fmt.Println("PASS records: all eight captures, immutable details, stable retries and lexical search through real stdio and authenticated HTTP")
 		return nil
 	}
 	projectID := saved.Captures[0].ProjectID

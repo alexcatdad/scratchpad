@@ -279,7 +279,7 @@ func TestRealStdioCapturesAllRecordTypesThroughGo(t *testing.T) {
 			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", "records", "-state", filepath.Join(t.TempDir(), "capture-state.json"))
 			cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
 			out, err := cmd.CombinedOutput()
-			if err != nil || !strings.Contains(string(out), "PASS records") {
+			if err != nil || !strings.Contains(string(out), "PASS records") || !strings.Contains(string(out), "lexical search") {
 				t.Fatalf("real stdio capture workflow failed: %v %s", err, out)
 			}
 		})

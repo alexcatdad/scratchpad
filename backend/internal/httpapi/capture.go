@@ -76,7 +76,7 @@ func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error)
 	}
 	if value, exists := fields["happenedAt"]; exists {
 		at, ok := value.(string)
-		if !ok || !strings.HasSuffix(at, "Z") {
+		if !ok || !isoTimestampPattern.MatchString(at) {
 			return nil, nil, validationProject()
 		}
 		_, err := time.Parse(time.RFC3339Nano, at)
