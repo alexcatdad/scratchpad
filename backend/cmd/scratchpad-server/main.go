@@ -92,6 +92,9 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/auth/github/block", github.Management(false))
 	mux.HandleFunc("DELETE /api/v1/auth/github", github.Management(true))
 	mux.HandleFunc("GET /api/v1/auth/credentials", passkeys.Credentials())
+	mux.HandleFunc("POST /api/v1/auth/credentials/challenge", auth.Enrollment(false))
+	mux.HandleFunc("POST /api/v1/auth/credentials/verify", auth.Enrollment(true))
+	mux.HandleFunc("DELETE /api/v1/auth/credentials/{id}", auth.Revoke(github.Configured()))
 	mux.HandleFunc("POST /api/v1/auth/logout", passkeys.Logout())
 	for _, operation := range []string{"register/options", "register/verify", "login/options", "login/verify"} {
 		mux.HandleFunc("POST /api/v1/auth/"+operation, passkeys.Handler(operation))

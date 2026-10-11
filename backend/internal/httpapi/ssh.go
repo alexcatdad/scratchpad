@@ -290,6 +290,9 @@ func (s *SSH) challenge(ctx context.Context, key string) (map[string]any, error)
 	return result, err
 }
 func (s *SSH) loadChallenge(ctx context.Context, q entityReader, id, key string) (map[string]any, error) {
+	return s.loadSSHChallenge(ctx, q, id, key, "ssh")
+}
+func (s *SSH) loadSSHChallenge(ctx context.Context, q entityReader, id, key, kind string) (map[string]any, error) {
 	raw, err := get(ctx, q, "challenge", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, invalidProof("AUTH_INVALID", "Unknown challenge.")
@@ -301,7 +304,7 @@ func (s *SSH) loadChallenge(ctx context.Context, q entityReader, id, key string)
 	if err := json.Unmarshal(raw, &c); err != nil {
 		return nil, invalidProof("AUTH_INVALID", "Invalid challenge.")
 	}
-	if c["kind"] != "ssh" || c["proofVersion"] != float64(2) || c["recipient"] != s.Origin || c["publicKey"] != key {
+	if c["kind"] != kind || c["proofVersion"] != float64(2) || c["recipient"] != s.Origin || c["publicKey"] != key {
 		return nil, invalidProof("AUTH_INVALID", "Challenge context does not match.")
 	}
 	if consumed, _ := c["consumedAt"].(string); consumed != "" {
@@ -319,29 +322,8 @@ func (s *SSH) verify(ctx context.Context, id, key, signature string) (map[string
 	if err != nil {
 		return nil, err
 	}
-	proof, err := json.Marshal([]any{"scratchpad-ssh-proof", 2, s.Origin, "ssh_login", id, c["nonce"], key, c["expiresAt"]})
-	if err != nil {
+	if err := s.verifySignature(ctx, id, key, "ssh_login", signature, c); err != nil {
 		return nil, err
-	}
-	dir, err := os.MkdirTemp("", "scratchpad-go-verify-")
-	if err != nil {
-		return nil, err
-	}
-	defer os.RemoveAll(dir)
-	if err := os.WriteFile(filepath.Join(dir, "allowed"), []byte("owner "+key+"\n"), 0600); err != nil {
-		return nil, err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "signature"), []byte(signature), 0600); err != nil {
-		return nil, err
-	}
-	verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	verifier := exec.CommandContext(verifyCtx, "ssh-keygen", "-Y", "verify", "-f", filepath.Join(dir, "allowed"), "-I", "owner", "-n", sshNamespace, "-s", filepath.Join(dir, "signature"))
-	verifier.Stdin = bytes.NewReader(proof)
-	verifier.Stdout = io.Discard
-	verifier.Stderr = io.Discard
-	if err := verifier.Run(); err != nil {
-		return nil, invalidProof("AUTH_INVALID", "Signature verification failed.")
 	}
 	token, err := randomToken()
 	if err != nil {
@@ -419,6 +401,34 @@ func update(ctx context.Context, conn *sql.Conn, kind string, value map[string]a
 	}
 	if count != 1 {
 		return errors.New("entity conflict")
+	}
+	return nil
+}
+
+func (s *SSH) verifySignature(ctx context.Context, id, key, purpose, signature string, c map[string]any) error {
+	proof, err := json.Marshal([]any{"scratchpad-ssh-proof", 2, s.Origin, purpose, id, c["nonce"], key, c["expiresAt"]})
+	if err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp("", "scratchpad-go-verify-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	if err := os.WriteFile(filepath.Join(dir, "allowed"), []byte("owner "+key+"\n"), 0600); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "signature"), []byte(signature), 0600); err != nil {
+		return err
+	}
+	verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	verifier := exec.CommandContext(verifyCtx, "ssh-keygen", "-Y", "verify", "-f", filepath.Join(dir, "allowed"), "-I", "owner", "-n", sshNamespace, "-s", filepath.Join(dir, "signature"))
+	verifier.Stdin = bytes.NewReader(proof)
+	verifier.Stdout = io.Discard
+	verifier.Stderr = io.Discard
+	if err := verifier.Run(); err != nil {
+		return invalidProof("AUTH_INVALID", "Signature verification failed.")
 	}
 	return nil
 }
