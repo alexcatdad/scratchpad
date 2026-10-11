@@ -37,6 +37,13 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run test:e2e
+      - name: Retain concurrent-agent workload measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: concurrent-agents-sqlite
+          path: test-results/**/concurrent-agent-baseline.json
+          if-no-files-found: ignore
   go:
     runs-on: ubuntu-latest
     defaults:
@@ -86,9 +93,16 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build -w @scratchpad/web
       - name: Verify authenticated PostgreSQL browser and stdio MCP persistence
-        run: npx playwright test tests/workflow.spec.ts tests/github-workflow.spec.ts tests/workflow-harness.spec.ts
+        run: npx playwright test tests/workflow.spec.ts tests/github-workflow.spec.ts tests/workflow-harness.spec.ts tests/concurrent-agents.spec.ts
         env:
           SCRATCHPAD_E2E_DATABASE_URL: ${{ env.TEST_POSTGRES_URL }}
+      - name: Retain concurrent-agent PostgreSQL measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: concurrent-agents-postgres
+          path: test-results/**/concurrent-agent-baseline.json
+          if-no-files-found: ignore
       - name: Verify PostgreSQL AI workflow and consent boundaries
         run: npx playwright test tests/post-mvp.spec.ts
         env:
@@ -156,3 +170,10 @@ jobs:
         run: npm run test:e2e
         env:
           SCRATCHPAD_E2E_DOCKER: "1"
+      - name: Retain concurrent-agent container measurements
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: concurrent-agents-container
+          path: test-results/**/concurrent-agent-baseline.json
+          if-no-files-found: ignore
