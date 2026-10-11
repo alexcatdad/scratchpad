@@ -19,8 +19,8 @@ import (
 )
 
 func run() error {
-	if len(os.Args) != 2 || (os.Args[1] != "migrate" && os.Args[1] != "serve") {
-		return errors.New("Usage: scratchpad-server migrate|serve")
+	if len(os.Args) != 2 || (os.Args[1] != "migrate" && os.Args[1] != "serve" && os.Args[1] != "setup" && os.Args[1] != "recover") {
+		return errors.New("Usage: scratchpad-server migrate|serve|setup|recover")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	store, err := persistence.Open(ctx, os.Getenv("SCRATCHPAD_DATABASE_PATH"), os.Getenv("SCRATCHPAD_DATABASE_URL"))
@@ -29,6 +29,17 @@ func run() error {
 		return errors.New("DATABASE_NOT_READY: persistence is unavailable, unsafe, or its schema is unsupported.")
 	}
 	defer store.Close()
+	if os.Args[1] == "setup" || os.Args[1] == "recover" {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		token, err := httpapi.AuthorizeSetup(ctx, store, os.Args[1] == "recover")
+		if err != nil {
+			return fmt.Errorf("%s: owner authorization failed", err)
+		}
+		fmt.Fprintln(os.Stdout, "One-use owner setup or recovery token (expires in 15 minutes):")
+		fmt.Fprintln(os.Stdout, token)
+		return nil
+	}
 	if os.Args[1] == "migrate" {
 		return json.NewEncoder(os.Stdout).Encode(map[string]any{"database": store.Engine, "schemaVersion": store.Version})
 	}
@@ -65,7 +76,17 @@ func run() error {
 		public.Host = "[" + hostname + "]"
 	}
 	auth := httpapi.NewSSH(store, public.Scheme+"://"+public.Host)
+	passkeys, err := httpapi.NewPasskeys(auth, hostname)
+	if err != nil && net.ParseIP(hostname) == nil {
+		return errors.New("CONFIG_INVALID: passkey relying party configuration is invalid.")
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/auth/credentials", passkeys.Credentials())
+	mux.HandleFunc("POST /api/v1/auth/logout", passkeys.Logout())
+	for _, operation := range []string{"register/options", "register/verify", "login/options", "login/verify"} {
+		mux.HandleFunc("POST /api/v1/auth/"+operation, passkeys.Handler(operation))
+	}
+	mux.HandleFunc("GET /api/v1/auth/status", httpapi.AuthStatus(store))
 	mux.HandleFunc("POST /api/v1/auth/mcp/challenge", auth.Handler(false))
 	mux.HandleFunc("POST /api/v1/auth/mcp/verify", auth.Handler(true))
 	mux.HandleFunc("GET /api/v1/records/{id}", httpapi.Records(store))

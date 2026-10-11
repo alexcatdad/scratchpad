@@ -100,6 +100,20 @@ func TestSSHLoginAndSingleUseProof(t *testing.T) {
 	if strings.Contains(token, "PRIVATE KEY") {
 		t.Fatal("private key appeared in response")
 	}
+	request, _ := http.NewRequest("POST", origin+"/api/v1/auth/logout", strings.NewReader("{}"))
+	request.Header.Set("Authorization", "Bearer "+token)
+	loggedOut, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loggedOut.Body.Close()
+	if loggedOut.StatusCode != 200 {
+		t.Fatal("agent could not revoke its own session")
+	}
+	status, _ = fetchRecord(t, origin, token)
+	if status != 401 {
+		t.Fatal("logged-out agent session remained authorized")
+	}
 }
 
 func TestSSHSignatureIsBoundToThisInstance(t *testing.T) {

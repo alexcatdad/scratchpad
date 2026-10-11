@@ -215,7 +215,8 @@ func startServer(t *testing.T, path, databaseURL string, listenAddress ...string
 			if err != nil {
 				t.Errorf("server exited unsuccessfully: %v", err)
 			}
-		case <-time.After(5 * time.Second):
+		// Allow the server's five-second graceful deadline plus race-runtime exit.
+		case <-time.After(10 * time.Second):
 			cmd.Process.Kill()
 			<-done
 			t.Error("server did not shut down")

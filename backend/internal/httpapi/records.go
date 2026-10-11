@@ -75,7 +75,7 @@ func optional(ctx context.Context, tx entityReader, kind, id string) (json.RawMe
 	}
 	return data, err
 }
-func authorize(ctx context.Context, tx *sql.Tx, r *http.Request) error {
+func authorize(ctx context.Context, tx entityReader, r *http.Request) error {
 	token := ""
 	bearer := false
 	if matches := bearerPattern.FindStringSubmatch(r.Header.Get("Authorization")); len(matches) == 2 {
@@ -116,7 +116,7 @@ func authorize(ctx context.Context, tx *sql.Tx, r *http.Request) error {
 	if err := json.Unmarshal(data, &c); err != nil || c.ID != s.CredentialID || c.RevokedAt != "" {
 		return errUnauthorized
 	}
-	if c.PublicKey != "" {
+	if c.Kind != "webauthn" && c.PublicKey != "" {
 		fields := strings.Fields(c.PublicKey)
 		if len(fields) < 2 {
 			return errUnauthorized
