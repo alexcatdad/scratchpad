@@ -85,6 +85,8 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/export", auth.Export())
+	mux.HandleFunc("POST /api/v1/import", auth.Import())
 	mux.HandleFunc("GET /api/v1/profile", auth.Profile("get"))
 	mux.HandleFunc("PATCH /api/v1/profile", auth.Profile("name"))
 	mux.HandleFunc("POST /api/v1/profile/github", auth.Profile("github"))
