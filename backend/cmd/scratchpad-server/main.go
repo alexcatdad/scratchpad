@@ -80,13 +80,23 @@ func run() error {
 	if err != nil && net.ParseIP(hostname) == nil {
 		return errors.New("CONFIG_INVALID: passkey relying party configuration is invalid.")
 	}
+	github, err := httpapi.NewGithub(auth, passkeys, os.Getenv("SCRATCHPAD_GITHUB_CLIENT_ID"), os.Getenv("SCRATCHPAD_GITHUB_CLIENT_SECRET"))
+	if err != nil {
+		return err
+	}
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /api/v1/auth/github/options", github.Options())
+	mux.HandleFunc("GET /api/v1/auth/github/callback", github.Callback())
+	mux.HandleFunc("GET /api/v1/auth/github", github.Status())
+	mux.HandleFunc("POST /api/v1/auth/github/sync", github.ManualSync())
+	mux.HandleFunc("POST /api/v1/auth/github/block", github.Management(false))
+	mux.HandleFunc("DELETE /api/v1/auth/github", github.Management(true))
 	mux.HandleFunc("GET /api/v1/auth/credentials", passkeys.Credentials())
 	mux.HandleFunc("POST /api/v1/auth/logout", passkeys.Logout())
 	for _, operation := range []string{"register/options", "register/verify", "login/options", "login/verify"} {
 		mux.HandleFunc("POST /api/v1/auth/"+operation, passkeys.Handler(operation))
 	}
-	mux.HandleFunc("GET /api/v1/auth/status", httpapi.AuthStatus(store))
+	mux.HandleFunc("GET /api/v1/auth/status", httpapi.AuthStatus(store, github.Configured()))
 	mux.HandleFunc("POST /api/v1/auth/mcp/challenge", auth.Handler(false))
 	mux.HandleFunc("POST /api/v1/auth/mcp/verify", auth.Handler(true))
 	mux.HandleFunc("GET /api/v1/records/{id}", httpapi.Records(store))
@@ -103,6 +113,10 @@ func run() error {
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	stop, cleanup := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cleanup()
+	workerContext, cancelWorker := context.WithCancel(stop)
+	workerDone := make(chan struct{})
+	go func() { defer close(workerDone); github.Run(workerContext) }()
+	defer func() { cancelWorker(); <-workerDone }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "database": store.Engine, "schemaVersion": store.Version}); err != nil {

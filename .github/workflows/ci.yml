@@ -100,11 +100,11 @@ jobs:
         working-directory: .
       - run: npx playwright install --with-deps chromium
         working-directory: .
-      - name: Typecheck the Go passkey browser seam
-        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck tests/go-passkeys.spec.ts
+      - name: Typecheck the Go authentication browser seams
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck tests/go-passkeys.spec.ts tests/go-github.spec.ts
         working-directory: .
-      - name: Verify Go passkey enrollment, login and recovery on both engines
-        run: npx playwright test tests/go-passkeys.spec.ts
+      - name: Verify Go passkeys on both engines and GitHub browser OAuth
+        run: npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts
         working-directory: .
   postgres:
     runs-on: ubuntu-latest

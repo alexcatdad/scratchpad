@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -89,8 +88,10 @@ func authorize(ctx context.Context, tx entityReader, r *http.Request) error {
 	if token == "" {
 		return errAuthRequired
 	}
-	digest := sha256.Sum256([]byte(token))
-	data, err := get(ctx, tx, "session", hex.EncodeToString(digest[:]))
+	return authorizeSession(ctx, tx, tokenID(token), bearer)
+}
+func authorizeSession(ctx context.Context, tx entityReader, id string, bearer bool) error {
+	data, err := get(ctx, tx, "session", id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return errUnauthorized
 	}

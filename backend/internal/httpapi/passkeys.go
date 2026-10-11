@@ -67,7 +67,7 @@ func passkeyAudit(ctx context.Context, conn *sql.Conn, action, kind, id string, 
 	return insert(ctx, conn, "audit", auditID, map[string]any{"action": action, "entityType": kind, "entityId": id, "actor": actor})
 }
 
-func AuthStatus(store *persistence.Store) http.HandlerFunc {
+func AuthStatus(store *persistence.Store, githubConfigured bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
@@ -87,7 +87,7 @@ func AuthStatus(store *persistence.Store) http.HandlerFunc {
 			Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
 			return
 		}
-		JSON(w, 200, map[string]any{"initialized": owner != nil, "authenticated": authErr == nil, "githubConfigured": false})
+		JSON(w, 200, map[string]any{"initialized": owner != nil, "authenticated": authErr == nil, "githubConfigured": githubConfigured})
 	}
 }
 
