@@ -62,6 +62,10 @@ func Open(ctx context.Context, path, databaseURL string) (*Store, error) {
 			db.Close()
 			return nil, err
 		}
+		// WAL permits readers alongside the serialized BEGIN IMMEDIATE writer.
+		// Keep startup single-connection and memory databases on their one handle.
+		db.SetMaxOpenConns(4)
+		db.SetMaxIdleConns(4)
 	}
 	return s, nil
 }

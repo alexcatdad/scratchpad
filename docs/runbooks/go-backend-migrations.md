@@ -16,6 +16,15 @@ SQLite migration inspection and DDL run under `BEGIN IMMEDIATE`. PostgreSQL uses
 
 SQLite retains owner-only directories/files, regular files with one hard link, symlink refusal, sidecar checks and macOS ACL refusal. Existing files are never chmodded or opened/closed for permission inspection. An optional sidecar disappearing during inspection is allowed; an unsafe sidecar that remains present is refused. PostgreSQL connection pools are bounded to ten connections.
 
+File-backed SQLite opens at most four connections after migration and WAL
+activation complete. `BEGIN IMMEDIATE` still serializes writes; each connection
+uses the existing foreign-key and five-second busy-timeout pragmas. This permits
+independent captures while another connection reads context. Startup and
+`:memory:` databases retain one connection. The authenticated HTTP regression
+`TestSlowContextReaderDoesNotBlockIndependentCapture` pauses a large context
+response through a bounded socket receive window and requires a separate capture
+to complete within three seconds.
+
 ## Disposable verification
 
 Use the pinned Go toolchain and module dependencies:
