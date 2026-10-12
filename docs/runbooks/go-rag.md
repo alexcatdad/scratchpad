@@ -4,8 +4,8 @@ Issue #36 introduces passage RAG separately from the existing whole-record
 semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
-Partial-index raw-source merging, retrieval
-evaluation remain required for full acceptance. The stdio evidence tool is implemented.
+Healthy partial indexes also retain raw lexical evidence. Retrieval evaluation
+remains required for full acceptance. The stdio evidence tool is implemented.
 
 ## Configuration and availability
 
@@ -202,10 +202,20 @@ Fallback reports `semantic.available=false`, a fixed `reason` code and assessed
 coverage, or `indexCoverage=unavailable` when pgvector is absent. Index-unavailable
 lexical evidence can include sources that have never been embedded. A successful
 query with no results is not proof that incomplete or unavailable indexing has no
-evidence. Fallback now includes bounded accepted relationship previews; healthy partial-index
-retrieval does not yet merge unindexed raw lexical sources
-with nonempty semantic results. Those cases, broader dedup/recall evaluation and
-the real stdio RAG tool remain required before full acceptance.
+evidence. Fallback includes bounded accepted relationship previews.
+
+With nonempty indexed results and incomplete coverage, retrieval also selects up
+to 100 native raw-source lexical candidates in the same authorized transaction.
+It merges them with indexed lexical candidates, deduplicates passage IDs, ranks
+the lexical union and retains its best 100 before reciprocal-rank fusion with
+semantic candidates. Indexed sources retain cosine scores; raw lexical sources
+retain lexical scores and `retrieval: "lexical"`. Both carry fusion `rankScore`.
+The final 100 fused candidates share one result-count and byte-budget selection.
+Semantic availability stays true while index coverage stays incomplete.
+
+HTTP regression coverage includes a completed semantic source alongside a pending
+exact match, overlapping indexed/raw passage identities and a 4096-byte budget.
+Broader dedup/recall evaluation remains required before full acceptance.
 
 ## Relationships in lexical fallback
 

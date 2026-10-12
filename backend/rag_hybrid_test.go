@@ -143,3 +143,93 @@ func TestRAGMissingPgvectorReturnsLexicalEvidenceWithoutClaimingIndexCoverage(t 
 		t.Fatal("missing index was presented as indexed or absent evidence")
 	}
 }
+
+func TestRAGPartialIndexCombinesSemanticEvidenceWithPendingLexicalSources(t *testing.T) {
+	path, databaseURL := ragInstance(t)
+	release := make(chan struct{})
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			Input []string `json:"input"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Input) != 1 {
+			http.Error(w, "invalid input", 400)
+			return
+		}
+		if strings.Contains(body.Input[0], "PENDING_PARTIAL_INDEX") && strings.Contains(body.Input[0], "\n") {
+			select {
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+	}))
+	defer func() { close(release); provider.Close() }()
+	origin := startServer(t, path, databaseURL)
+	status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "embeddingDimensions": 2})
+	if status != 200 {
+		t.Fatal("configuration failed")
+	}
+	projectID := jobProject(t, origin, "Partial index evidence", true, false)
+	indexed := curationCapture(t, origin, projectID, "Established recovery rationale")
+	jobs := waitRAGJobs(t, origin, 1)
+	waitAIJob(t, origin, jobs[0].(map[string]any)["id"].(string), "completed")
+	status, captured := captureRequest(t, origin, projectID, "", map[string]any{"type": "decision", "title": "Pending recovery detail", "authority": "explicit", "payload": map[string]any{"decision": "Retain raw PENDING_PARTIAL_INDEX evidence for recovery."}})
+	if status != 201 {
+		t.Fatal("pending source capture failed")
+	}
+	pending := captured["record"].(map[string]any)
+	otherProject := jobProject(t, origin, "Outside partial retrieval scope", true, false)
+	curationCapture(t, origin, otherProject, "PENDING_PARTIAL_INDEX")
+	status, response := curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "PENDING_PARTIAL_INDEX", "maxChars": 4096})
+	if status != 200 {
+		t.Fatalf("partial retrieval failed: %d %v", status, response)
+	}
+	results := response["results"].([]any)
+	if len(results) != 2 {
+		t.Fatalf("healthy partial index hid raw or semantic evidence: %v", response)
+	}
+	seen := map[string]bool{}
+	for _, value := range results {
+		item := value.(map[string]any)
+		id := item["recordId"].(string)
+		if seen[id] {
+			t.Fatal("partial merge duplicated a source passage")
+		}
+		seen[id] = true
+		if item["sourceUrl"] != "/api/v1/records/"+id || item["rankScore"] == nil {
+			t.Fatal("partial merge lost citation or fused rank")
+		}
+		if item["projectId"] != projectID {
+			t.Fatal("raw merge leaked another project's evidence")
+		}
+		if id == pending["id"] && !strings.Contains(item["text"].(string), "PENDING_PARTIAL_INDEX") {
+			t.Fatal("pending exact match was absent from its cited excerpt")
+		}
+	}
+	if !seen[indexed["id"].(string)] || !seen[pending["id"].(string)] {
+		t.Fatal("partial merge omitted an eligible source")
+	}
+	semantic := response["semantic"].(map[string]any)
+	if semantic["available"] != true || semantic["indexCoverage"] != "incomplete" {
+		t.Fatal("healthy query provider or partial coverage misrepresented")
+	}
+	encoded, _ := json.Marshal(response)
+	if len(encoded)+1 > 4096 {
+		t.Fatal("partial merge exceeded byte budget")
+	}
+	// Both raw sources match this term, including the already indexed passage.
+	status, response = curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "raw"})
+	if status != 200 || len(response["results"].([]any)) != 2 {
+		t.Fatalf("overlapping lexical and semantic candidates were duplicated or lost: %d %v", status, response)
+	}
+	seen = map[string]bool{}
+	for _, value := range response["results"].([]any) {
+		item := value.(map[string]any)
+		id := item["id"].(string)
+		if seen[id] {
+			t.Fatal("raw lexical merge duplicated an indexed passage")
+		}
+		seen[id] = true
+	}
+}

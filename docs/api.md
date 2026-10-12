@@ -1811,8 +1811,14 @@ lexical source evidence when available, with `retrieval: "lexical"`,
 `semantic.available=false`, a fixed `reason`, and `indexCoverage` as assessed or
 `unavailable`. Authentication and consent failures remain errors. Fallback uses
 immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
-Partial-index raw-source merging, broader
-retrieval evaluation and actual stdio RAG remain required acceptance work.
+When a healthy query returns indexed candidates with incomplete coverage, native
+raw-source lexical candidates join the indexed lexical list before rank fusion.
+The lexical union is deduplicated and limited to 100 before fusion with the 100
+semantic candidates. Pending sources retain `retrieval: "lexical"` and a lexical
+`score`; indexed sources retain cosine `score` and `retrieval: "hybrid"`. Both
+carry the shared `rankScore`. Semantic availability remains true and coverage
+remains incomplete. Scope, lifecycle, citations and the final response budget
+apply to the combined result. Broader retrieval evaluation remains required.
 
 ## Go replacement addition: fallback relationship citations
 
