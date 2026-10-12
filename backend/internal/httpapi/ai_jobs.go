@@ -176,9 +176,11 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 			}
 			ordering := "CASE WHEN json_valid(data) THEN CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END ELSE '' END"
 			statusField := "CASE WHEN json_valid(data) THEN json_extract(data,'$.status') ELSE NULL END"
+			typeField := "CASE WHEN json_valid(data) THEN json_extract(data,'$.type') ELSE NULL END"
 			if a.auth.Store.Engine == "postgres" {
 				ordering = "(CASE WHEN jsonb_typeof(data->'createdAt')='string' THEN data->>'createdAt' ELSE '' END) COLLATE \"C\""
 				statusField = "data->>'status'"
+				typeField = "data->>'type'"
 			}
 			where := "kind='ai_job'"
 			args := []any{}
@@ -250,7 +252,39 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 				return
 			}
 			var hasActive bool
-			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE kind='ai_job' AND "+statusField+" IN ('queued','running'))").Scan(&hasActive); err != nil {
+			row, err := readSettings(ctx, tx, "ai_settings")
+			if err != nil {
+				a.auth.fail(w, err)
+				return
+			}
+			cfg, err := aiConfig(row)
+			if err != nil {
+				a.auth.fail(w, err)
+				return
+			}
+			queued := "FALSE"
+			activeArgs := []any{}
+			if cfg.Enabled {
+				queued = typeField + " IN ('embed','analyze','export')"
+				if a.rag && a.auth.Store.Engine == "postgres" {
+					if err = a.ragAvailable(ctx, tx); err == nil {
+						fingerprint, err := ragFingerprint(cfg)
+						if err != nil {
+							a.auth.fail(w, err)
+							return
+						}
+						queued += " OR (" + typeField + "='rag_index' AND data->>'fingerprint'=$1 AND data->>'processingVersion'=$2)"
+						activeArgs = append(activeArgs, fingerprint, ragProcessingVersion)
+					} else {
+						var protocol *protocolError
+						if !errors.As(err, &protocol) || protocol.code != "RAG_UNAVAILABLE" {
+							a.auth.fail(w, err)
+							return
+						}
+					}
+				}
+			}
+			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE kind='ai_job' AND ("+statusField+"='running' OR ("+statusField+"='queued' AND ("+queued+"))))", activeArgs...).Scan(&hasActive); err != nil {
 				a.auth.fail(w, err)
 				return
 			}

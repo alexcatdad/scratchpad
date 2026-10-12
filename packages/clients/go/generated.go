@@ -2486,7 +2486,7 @@ type ClientInterface interface {
 
 	// GetAiJobs Inspect a bounded page of persisted jobs
 	//
-	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
 	GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -3212,7 +3212,7 @@ type ClientInterface interface {
 
 // GetAiJobs Inspect a bounded page of persisted jobs
 //
-// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
 func (c *Client) GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -8009,7 +8009,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 	//
-	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8784,7 +8784,7 @@ type GetAiJobsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		// HasActive Any retained job is queued or running, including jobs outside this page.
+		// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
 		HasActive *bool  `json:"hasActive,omitempty"`
 		Jobs      *[]Job `json:"jobs,omitempty"`
 
@@ -8797,7 +8797,7 @@ type GetAiJobsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAiJobsResponse) GetJSON200() *struct {
-	// HasActive Any retained job is queued or running, including jobs outside this page.
+	// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
 	HasActive *bool  `json:"hasActive,omitempty"`
 	Jobs      *[]Job `json:"jobs,omitempty"`
 
@@ -12309,7 +12309,7 @@ func (r GetReadyResponse) ContentType() string {
 
 // GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 //
-// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -13712,7 +13712,7 @@ func ParseGetAiJobsResponse(rsp *http.Response) (*GetAiJobsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			// HasActive Any retained job is queued or running, including jobs outside this page.
+			// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
 			HasActive *bool  `json:"hasActive,omitempty"`
 			Jobs      *[]Job `json:"jobs,omitempty"`
 

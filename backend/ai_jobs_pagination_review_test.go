@@ -18,12 +18,15 @@ func TestSQLiteJobListingIgnoresMalformedOffPageBodiesAndFailsSelectedBodiesSafe
 		t.Fatal(err)
 	}
 	defer db.Close()
-	for id, raw := range map[string]string{"job_good": `{"id":"job_good","createdAt":"2026-10-01T00:00Z","status":"queued"}`, "job_corrupt": `synthetic-private-corrupt-body`, "job_null": `null`} {
+	for id, raw := range map[string]string{"job_good": `{"id":"job_good","createdAt":"2026-10-01T00:00Z","status":"queued","type":"embed","runAfter":"9999-01-01T00:00:00Z"}`, "job_corrupt": `synthetic-private-corrupt-body`, "job_null": `null`} {
 		if _, err = db.Exec(`INSERT INTO entities(kind,id,data,version,created_at) VALUES('ai_job',$1,$2,1,'2026-10-01T00:00Z')`, id, raw); err != nil {
 			t.Fatal(err)
 		}
 	}
 	origin := startServer(t, path, databaseURL)
+	if status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0}); status != 200 {
+		t.Fatal("future queue configuration failed")
+	}
 	for _, query := range []string{"limit=1", "jobId=job_good"} {
 		status, result := curationRequest(t, origin, "GET", "/ai/jobs?"+query, nil)
 		if status != 200 || len(result["jobs"].([]any)) != 1 || result["hasActive"] != true {
@@ -42,14 +45,17 @@ func TestSQLiteJobListingIgnoresMalformedOffPageBodiesAndFailsSelectedBodiesSafe
 func TestPostgresJobPageAndActiveFlagShareSnapshotDuringCompletion(t *testing.T) {
 	path, databaseURL := portableInstance(t, "postgres")
 	origin := startServer(t, path, databaseURL)
+	if status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0}); status != 200 {
+		t.Fatal("future queue configuration failed")
+	}
 	db, err := sql.Open("pgx", databaseURL)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer db.Close()
-	_, err = db.Exec(`INSERT INTO entities(kind,id,data,version,created_at) VALUES('ai_job','job_snapshot','{"id":"job_snapshot","createdAt":"2026-10-01T00:00Z","status":"queued"}',1,'2026-10-01T00:00Z');
+	_, err = db.Exec(`INSERT INTO entities(kind,id,data,version,created_at) VALUES('ai_job','job_snapshot','{"id":"job_snapshot","createdAt":"2026-10-01T00:00Z","status":"queued","type":"embed","runAfter":"9999-01-01T00:00:00Z"}',1,'2026-10-01T00:00Z');
 ALTER TABLE entities RENAME TO snapshot_entities;
-CREATE FUNCTION job_read_gate(kind TEXT,value JSONB) RETURNS JSONB LANGUAGE plpgsql VOLATILE AS $$ BEGIN IF kind='ai_job' THEN PERFORM pg_advisory_xact_lock(77494); END IF; RETURN value; END $$;
+CREATE FUNCTION job_read_gate(kind TEXT,value JSONB) RETURNS JSONB LANGUAGE plpgsql VOLATILE AS $$ BEGIN IF kind='ai_job' AND strpos(current_query(),'SELECT data,')>0 THEN PERFORM pg_advisory_xact_lock(77494); END IF; RETURN value; END $$;
 CREATE VIEW entities AS SELECT kind,id,job_read_gate(kind,data) AS data,version,created_at FROM snapshot_entities`)
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +127,7 @@ func TestAIJobListingBoundsHistoryAndKeepsOldActiveJobsReachable(t *testing.T) {
 				if i == 204 {
 					status = "queued"
 				}
-				job := map[string]any{"id": id, "version": 1, "createdAt": "2026-10-01T00:00Z", "status": status, "type": "analyze", "attempts": 0}
+				job := map[string]any{"id": id, "version": 1, "createdAt": "2026-10-01T00:00Z", "status": status, "type": "analyze", "attempts": 0, "runAfter": "9999-01-01T00:00:00Z"}
 				raw, _ := json.Marshal(job)
 				stored := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Second).Format(time.RFC3339)
 				if _, err = db.Exec(`INSERT INTO entities(kind,id,data,version,created_at) VALUES('ai_job',$1,$2,1,$3)`, id, string(raw), stored); err != nil {
@@ -131,6 +137,9 @@ func TestAIJobListingBoundsHistoryAndKeepsOldActiveJobsReachable(t *testing.T) {
 			}
 			db.Close()
 			origin := startServer(t, path, databaseURL)
+			if status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0}); status != 200 {
+				t.Fatal("future queue configuration failed")
+			}
 			status, result := curationRequest(t, origin, "GET", "/ai/jobs", nil)
 			if status != 200 || len(result["jobs"].([]any)) != 100 || result["hasActive"] != true {
 				t.Fatalf("default job listing did not bound history and retain active indicator: HTTP %d, jobs %d", status, len(result["jobs"].([]any)))

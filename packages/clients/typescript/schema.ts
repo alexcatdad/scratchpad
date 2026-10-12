@@ -611,7 +611,7 @@ export interface paths {
         };
         /**
          * Inspect a bounded page of persisted jobs
-         * @description Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+         * @description Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
          */
         get: operations["get_ai_jobs"];
         put?: never;
@@ -2584,7 +2584,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         jobs?: components["schemas"]["Job"][];
-                        /** @description Any retained job is queued or running, including jobs outside this page. */
+                        /** @description Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work. */
                         hasActive?: boolean;
                         /** @description Present only when another page exists. */
                         nextCursor?: string;
