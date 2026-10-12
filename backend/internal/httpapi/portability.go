@@ -35,9 +35,24 @@ func (s *SSH) Import() http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
+		cancel()
+		// Authenticated archives may arrive over constrained remote connections.
+		// Bound upload time separately from the ordinary request and transaction.
+		controller := http.NewResponseController(w)
+		uploadDeadline := time.Now().Add(5 * time.Minute)
+		if controller.SetReadDeadline(uploadDeadline) != nil || controller.SetWriteDeadline(uploadDeadline.Add(30*time.Second)) != nil {
+			s.fail(w, importInvalid())
+			return
+		}
 		// Bound the stream before parsing. JSON decoding must not postpone the
 		// byte-limit error while scanning a large string or whitespace suffix.
 		payload, readErr := io.ReadAll(io.LimitReader(r.Body, 64*1024*1024+1))
+		if controller.SetReadDeadline(time.Time{}) != nil || controller.SetWriteDeadline(time.Now().Add(30*time.Second)) != nil {
+			s.fail(w, importInvalid())
+			return
+		}
+		ctx, cancel = context.WithTimeout(r.Context(), 25*time.Second)
+		defer cancel()
 		if readErr != nil {
 			s.fail(w, importInvalid())
 			return

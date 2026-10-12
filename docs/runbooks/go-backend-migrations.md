@@ -45,6 +45,13 @@ to complete within three seconds.
 
 ## Disposable verification
 
+Entity routes validate the standard mux's once-decoded ID before lookup. Safe
+colon-containing IDs remain reachable; malformed historical IDs remain available
+through recovery export. Authenticated import bodies retain the 64 MiB cap and
+have a five-minute upload deadline, separate from the ordinary fifteen-second
+request read deadline. Parsing and transactional import then receive their own
+twenty-five-second deadline; authorization is rechecked in the write transaction.
+
 ### Domain and focused-query compatibility
 
 Internal typed snapshots drive capture assembly, project/profile settings,
@@ -202,7 +209,7 @@ Run `npm run test:backend`, supplying `TEST_POSTGRES_URL` for disposable Postgre
 
 The write transaction rechecks authorization and project settings, enforces enabled record types, and commits the immutable record, initial metadata, lexical index entry and creation audit together. No provider request is part of capture. Browser writes require the configured Origin. Request bodies are bounded to 3 MiB and the operation uses a ten-second deadline. No raw-record update route is introduced.
 
-Optional `Idempotency-Key` values are scoped to the credential ID and persisted with the normalized request and original response in the existing retries table. Comparisons ignore JSON object key order and preserve array order, including restored TypeScript-format retry rows. Reusing a key for a different capture returns `CONFLICT`. Concurrent retries and server restart return the original ID/timestamps and do not add creation audits. Retry identity intentionally excludes Git context, preserving the first capture's provenance. Replays recompute mirror eligibility from current project settings, and remain valid if the record type is subsequently disabled; new captures of that type are refused. Failed validation does not reserve a retry identity.
+Optional `Idempotency-Key` values are scoped to the credential ID and persisted with the normalized request and original response in the existing retries table. Comparisons ignore JSON object key order and preserve array order, including restored TypeScript-format retry rows. Reusing a key for a different capture returns `CONFLICT`. Concurrent retries and server restart return the original ID/timestamps and do not add creation audits. New retry requests use internal identity version 2, binding normalized Git-context presence and content. Pre-versioned requests retain their historical project/record comparison without rewriting retry history. Replays recompute mirror eligibility from current project settings, and remain valid if the record type is subsequently disabled; new captures of that type are refused. Failed validation does not reserve a retry identity.
 
 HTTP tests cover capture/detail, provenance overrides, payload rendering, validation/consent, concurrent retries, restart, historical retry rows, credential scope and current mirror consent on SQLite and disposable PostgreSQL. The real stdio integration runner adds `-phase records`: it exercises all eight capture tools, rereads immutable details, retries each capture and searches the persisted records through the real Go MCP SDK. This phase isolates the records boundary. The original capture/verify phases now also run against Go and verify complete project resumption across restart. Existing integration phases retain their full workflows. Run the complete regression suite with `npm run test:backend` and optional `TEST_POSTGRES_URL` as described above.
 
