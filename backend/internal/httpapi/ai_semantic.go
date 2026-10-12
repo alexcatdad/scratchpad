@@ -85,6 +85,29 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 			if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
 				return err
 			}
+			_, err := allowedJobs(ctx, conn, scope)
+			return err
+		})
+		if err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		// Corpus loading and hashing are read-only work. Keep a consistent
+		// snapshot without holding the serialized writer admission boundary.
+		err = func() error {
+			conn, err := a.auth.Store.DB.Conn(ctx)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			begin := "BEGIN"
+			if a.auth.Store.Engine == "postgres" {
+				begin = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+			}
+			if _, err := conn.ExecContext(ctx, begin); err != nil {
+				return err
+			}
+			defer conn.ExecContext(context.Background(), "ROLLBACK")
 			records, err := a.aiRecords(ctx, conn, scope)
 			if err != nil {
 				return err
@@ -110,6 +133,19 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 				}
 			}
 			return nil
+		}()
+		if err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		// The read snapshot has ended before rechecking current admission or
+		// making provider requests, including the empty-index response path.
+		err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+			if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
+				return err
+			}
+			_, err := allowedJobs(ctx, conn, scope)
+			return err
 		})
 		if err != nil {
 			a.auth.fail(w, err)
