@@ -25,6 +25,10 @@ application schema. The application checks the live extension catalog on each
 enabled status request. It does not install extensions or provision services.
 Missing pgvector or SQLite selection leaves ordinary memory available.
 
+After pgvector is installed on a running instance, coverage and retrieval prepare
+the optional passage projection before reading it. This works with AI disabled;
+an empty projection reports incomplete coverage and retains lexical fallback.
+
 Passage RAG supports up to 16,000 embedding dimensions. The legacy embedding and
 semantic-search configuration still accepts up to 16,384. An incompatible passage
 configuration leaves captures, retries, metadata, audits and lexical retrieval

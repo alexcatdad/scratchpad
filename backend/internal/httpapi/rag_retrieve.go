@@ -75,7 +75,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 				return
 			}
 		}
-		if err = a.ragAvailable(r.Context(), a.auth.Store.DB); err != nil {
+		if err = a.prepareRAG(r.Context()); err != nil {
 			if a.rag && a.auth.Store.Engine == "postgres" {
 				a.lexicalFallback(w, r, scope, query, intent, limit, budget, err)
 			} else {

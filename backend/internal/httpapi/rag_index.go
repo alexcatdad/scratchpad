@@ -49,6 +49,23 @@ func (a *AI) ragAvailable(ctx context.Context, q entityReader) error {
 	}
 	return nil
 }
+
+// Prepare optional projections before entering a read-only coverage snapshot.
+// A late extension installation must not depend on an enabled provider worker.
+func (a *AI) prepareRAG(ctx context.Context) error {
+	if err := a.ragAvailable(ctx, a.auth.Store.DB); err != nil {
+		return err
+	}
+	var ready bool
+	if err := a.auth.Store.DB.QueryRowContext(ctx, `SELECT to_regclass('rag_projection_migrations') IS NOT NULL AND to_regclass('rag_passages') IS NOT NULL`).Scan(&ready); err != nil {
+		return err
+	}
+	if ready {
+		return nil
+	}
+	return a.auth.Store.InitRAG(ctx)
+}
+
 func (a *AI) ragSource(ctx context.Context, conn *sql.Conn, scope jobScope, id string) (map[string]any, error) {
 	ids, err := allowedJobs(ctx, conn, scope)
 	if err != nil {

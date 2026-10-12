@@ -28,6 +28,18 @@ func (a *AI) RAGCoverage() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
+		if _, err := apiActor(ctx, a.auth.Store.DB, r, a.auth.Origin); err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		if r.URL.Query().Has("projectId") && r.URL.Query().Has("projectIds") {
+			a.auth.fail(w, aiInvalid())
+			return
+		}
+		if err := a.prepareRAG(ctx); err != nil {
+			a.auth.fail(w, err)
+			return
+		}
 		tx, err := a.auth.Store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
 		if err != nil {
 			a.auth.fail(w, err)
@@ -36,10 +48,6 @@ func (a *AI) RAGCoverage() http.HandlerFunc {
 		defer tx.Rollback()
 		if _, err = apiActor(ctx, tx, r, a.auth.Origin); err != nil {
 			a.auth.fail(w, err)
-			return
-		}
-		if r.URL.Query().Has("projectId") && r.URL.Query().Has("projectIds") {
-			a.auth.fail(w, aiInvalid())
 			return
 		}
 		if err = a.ragAvailable(ctx, tx); err != nil {
