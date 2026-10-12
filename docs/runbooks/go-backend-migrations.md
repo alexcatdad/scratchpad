@@ -84,6 +84,12 @@ Synchronization resolves the stable account ID, follows at most 100 pages per ca
 
 An advertised `last` page remains a completeness requirement throughout that category's fetch. A missing `next` link before reaching it fails synchronization, including when a later page omits its pagination header. Valid terminal `last` links and combined `next last` relations remain supported. Regression tests verify that incomplete pagination cannot replace keys or advance cache freshness on either database engine.
 
+Next and last links require one canonical `page` parameter and one `per_page=100`
+parameter. Duplicate parameters and malformed query encoding fail synchronization
+before installing a snapshot. HTTP tests verify that ambiguous pagination
+preserves the previous keys, successful synchronization timestamp and existing
+machine sessions on both engines.
+
 The Go GitHub client requires `200 OK` from its fixed OAuth and identity/key endpoints. A `206 Partial Content` response is a failed refresh even if its body parses as a valid key array. It cannot replace the complete key set, advance freshness or revoke existing machine sessions. HTTP regression tests verify preserved session access and renewal on SQLite and PostgreSQL.
 
 The worker checks due bindings immediately at startup and every 30 seconds, using persisted `lastAttemptAt` to refresh after five minutes. Previously linked bindings continue public-key refresh if OAuth is subsequently disabled. Shutdown cancels external work and waits for the worker; failure-state persistence is bounded to five seconds. Restart cannot extend complete-cache freshness.

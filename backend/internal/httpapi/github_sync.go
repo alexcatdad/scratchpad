@@ -27,6 +27,22 @@ type githubKey struct {
 
 var githubLinkPattern = regexp.MustCompile(`^\s*<([^<>]+)>\s*;\s*rel\s*=\s*(?:"([a-z]+(?: [a-z]+)*)"|([a-z]+))\s*$`)
 
+func githubPaginationPage(raw, path string) (int, error) {
+	target, err := url.Parse(raw)
+	if err != nil || target.Scheme != "https" || target.Host != "api.github.com" || target.Path != path || target.User != nil || target.Fragment != "" {
+		return 0, githubUnavailable()
+	}
+	query, err := url.ParseQuery(target.RawQuery)
+	if err != nil || len(query["per_page"]) != 1 || query.Get("per_page") != "100" || len(query["page"]) != 1 {
+		return 0, githubUnavailable()
+	}
+	page, err := strconv.Atoi(query.Get("page"))
+	if err != nil || page < 1 || page > 100 || query.Get("page") != strconv.Itoa(page) {
+		return 0, githubUnavailable()
+	}
+	return page, nil
+}
+
 func githubFingerprint(key string) string {
 	parts := strings.Fields(key)
 	if len(parts) < 2 {
@@ -128,12 +144,8 @@ func (g *Github) fetchKeys(ctx context.Context, bound map[string]any) ([]githubK
 						switch relation {
 						case "prev", "first":
 						case "last":
-							target, err := url.Parse(match[1])
-							if err != nil || target.Scheme != "https" || target.Host != "api.github.com" || target.Path != path || target.User != nil || target.Fragment != "" || target.Query().Get("per_page") != "100" {
-								return nil, "", githubUnavailable()
-							}
-							last, err := strconv.Atoi(target.Query().Get("page"))
-							if err != nil || last < page || last > 100 {
+							last, err := githubPaginationPage(match[1], path)
+							if err != nil || last < page {
 								return nil, "", githubUnavailable()
 							}
 							if last > lastPage {
@@ -154,8 +166,8 @@ func (g *Github) fetchKeys(ctx context.Context, bound map[string]any) ([]githubK
 				return nil, "", githubUnavailable()
 			}
 			if next != "" {
-				target, err := url.Parse(next)
-				if err != nil || target.Scheme != "https" || target.Host != "api.github.com" || target.Path != path || target.User != nil || target.Fragment != "" || target.Query().Get("per_page") != "100" || target.Query().Get("page") != strconv.Itoa(page+1) {
+				nextPage, err := githubPaginationPage(next, path)
+				if err != nil || nextPage != page+1 {
 					return nil, "", githubUnavailable()
 				}
 			}

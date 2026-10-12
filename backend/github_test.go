@@ -271,6 +271,13 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/users/"+login+"/keys" || r.URL.Path == "/users/"+login+"/ssh_signing_keys" {
+		if f.mode == "ambiguous" {
+			if r.URL.Query().Get("page") == "1" {
+				w.Header().Set("Link", `<https://api.github.com`+r.URL.Path+`?per_page=100&page=2&page=3>; rel="next"`)
+			}
+			io.WriteString(w, `[]`)
+			return
+		}
 		if f.mode == "partial" {
 			w.Header().Set("Content-Range", "bytes 0-1/100")
 			w.WriteHeader(http.StatusPartialContent)
@@ -444,6 +451,39 @@ func TestGithubPartialHTTPResponsePreservesCompleteCacheAndSessions(t *testing.T
 			_, proof = signedChallenge(t, origin, private, key)
 			if status, _ := postJSON(t, origin, "/api/v1/auth/mcp/verify", proof); status != 200 {
 				t.Fatal("partial response prevented renewal against the preserved cache")
+			}
+		})
+	}
+}
+
+func TestGithubAmbiguousPaginationPreservesCompleteCacheAndSessions(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			private, key := githubSyntheticKey(t)
+			fixture := &githubFixture{key: key}
+			githubService(t, fixture)
+			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
+			token := githubSetup(t, path, databaseURL)
+			origin := startServer(t, path, databaseURL)
+			session := githubLogin(t, origin, "setup", token)
+			before := githubStatus(t, origin, session)
+			_, proof := signedChallenge(t, origin, private, key)
+			status, body := postJSON(t, origin, "/api/v1/auth/mcp/verify", proof)
+			if status != 200 {
+				t.Fatal("complete published cache did not authorize the machine")
+			}
+			bearer := body["accessToken"].(string)
+			fixture.set("ambiguous")
+			res := githubRequest(t, origin, "POST", "/sync", map[string]any{}, session)
+			if res.StatusCode != 503 {
+				t.Fatalf("ambiguous pagination replaced the complete cache: %d", res.StatusCode)
+			}
+			after := githubStatus(t, origin, session)
+			if after["lastSuccessfulSyncAt"] != before["lastSuccessfulSyncAt"] || !reflect.DeepEqual(after["keys"], before["keys"]) || after["lastSyncError"] != "GITHUB_UNAVAILABLE" {
+				t.Fatal("ambiguous pagination changed complete keys or freshness")
+			}
+			if status, _ := fetchRecord(t, origin, bearer); status != 200 {
+				t.Fatal("ambiguous pagination revoked an existing machine session")
 			}
 		})
 	}
