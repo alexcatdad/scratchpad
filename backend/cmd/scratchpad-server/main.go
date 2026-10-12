@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -78,6 +79,16 @@ func run() error {
 		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
 	}
 	port := public.Port()
+	if strings.HasSuffix(public.Host, ":") {
+		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
+	}
+	if port != "" {
+		number, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || number == 0 {
+			return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
+		}
+		port = strconv.FormatUint(number, 10)
+	}
 	if (public.Scheme == "https" && port == "443") || (public.Scheme == "http" && port == "80") {
 		port = ""
 	}

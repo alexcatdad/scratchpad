@@ -122,13 +122,6 @@ func aiExpected(body map[string]any, r *http.Request) (float64, error) {
 				version, ok = parsed, true
 			}
 		}
-		if boolean, booleanOK := value.(bool); booleanOK {
-			version = 0
-			if boolean {
-				version = 1
-			}
-			ok = true
-		}
 	}
 	if !ok || version < 0 || math.Trunc(version) != version || math.IsInf(version, 0) || math.IsNaN(version) {
 		return 0, aiInvalid()
