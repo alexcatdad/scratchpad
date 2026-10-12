@@ -145,7 +145,17 @@ func (s *SSH) Import() http.HandlerFunc {
 							return importInvalid()
 						}
 						if !EqualJSONNumbers(stored, value) {
-							return &protocolError{"CONFLICT", "Import conflicts with existing knowledge.", 409}
+							// A native export projects operational configuration out of
+							// settings/audits. Compare that exact portable view without
+							// replacing the existing immutable private history.
+							portable, err := portableEntityJSON(kind, previous)
+							var projected map[string]any
+							if err != nil || DecodeJSONNumbers(portable, &projected) != nil {
+								return importInvalid()
+							}
+							if !EqualJSONNumbers(projected, value) {
+								return &protocolError{"CONFLICT", "Import conflicts with existing knowledge.", 409}
+							}
 						}
 						if kind != "ai_artifact" && kind != "curated_artifact" {
 							skipped++
@@ -525,66 +535,78 @@ func exportSection(ctx context.Context, tx *sql.Tx, kind string) ([]json.RawMess
 		if err := rows.Scan(&raw); err != nil {
 			return nil, err
 		}
-		if kind == "settings" {
-			// Legacy provider secrets may reside in the global settings row.
-			// Only the portable global policy fields cross this boundary.
-			var stored map[string]json.RawMessage
-			if err := json.Unmarshal(raw, &stored); err != nil {
-				return nil, err
-			}
-			public := map[string]json.RawMessage{}
-			for _, field := range []string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"} {
-				if value, ok := stored[field]; ok {
-					public[field] = value
-				}
-			}
-			raw, err = json.Marshal(public)
-			if err != nil {
-				return nil, err
-			}
-		}
-		if kind == "audit" {
-			var stored map[string]json.RawMessage
-			if err := json.Unmarshal(raw, &stored); err != nil {
-				return nil, err
-			}
-			var entityType, action string
-			_ = json.Unmarshal(stored["entityType"], &entityType)
-			_ = json.Unmarshal(stored["action"], &action)
-			if entityType == "ai_settings" || action == "ai.configured" || action == "secrets.converted" {
-				// Configuration snapshots are operational state, including legacy
-				// plaintext keys. Preserve the audit envelope without exporting them.
-				delete(stored, "previous")
-				delete(stored, "next")
-			} else if entityType == "settings" || action == "settings.updated" {
-				for _, snapshot := range []string{"previous", "next"} {
-					if value, exists := stored[snapshot]; exists {
-						var fields map[string]json.RawMessage
-						if err := json.Unmarshal(value, &fields); err != nil {
-							delete(stored, snapshot)
-							continue
-						}
-						public := map[string]json.RawMessage{}
-						for _, field := range []string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"} {
-							if v, ok := fields[field]; ok {
-								public[field] = v
-							}
-						}
-						stored[snapshot], err = json.Marshal(public)
-						if err != nil {
-							return nil, err
-						}
-					}
-				}
-			}
-			if entityType == "ai_settings" || entityType == "settings" || action == "ai.configured" || action == "secrets.converted" || action == "settings.updated" {
-				raw, err = json.Marshal(stored)
-				if err != nil {
-					return nil, err
-				}
-			}
+		raw, err = portableEntityJSON(kind, raw)
+		if err != nil {
+			return nil, err
 		}
 		values = append(values, raw)
 	}
 	return values, rows.Err()
+}
+
+// Export and replay share one lossless projection of portable entity fields.
+// Incoming entries are compared intact so changed portable or private fields
+// cannot be hidden by projecting both sides of an identity conflict.
+func portableEntityJSON(kind string, raw []byte) ([]byte, error) {
+	var err error
+	if kind == "settings" {
+		// Legacy provider secrets may reside in the global settings row.
+		// Only the portable global policy fields cross this boundary.
+		var stored map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &stored); err != nil {
+			return nil, err
+		}
+		public := map[string]json.RawMessage{}
+		for _, field := range []string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"} {
+			if value, ok := stored[field]; ok {
+				public[field] = value
+			}
+		}
+		raw, err = json.Marshal(public)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if kind == "audit" {
+		var stored map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &stored); err != nil {
+			return nil, err
+		}
+		var entityType, action string
+		_ = json.Unmarshal(stored["entityType"], &entityType)
+		_ = json.Unmarshal(stored["action"], &action)
+		if entityType == "ai_settings" || action == "ai.configured" || action == "secrets.converted" {
+			// Configuration snapshots are operational state, including legacy
+			// plaintext keys. Preserve the audit envelope without exporting them.
+			delete(stored, "previous")
+			delete(stored, "next")
+		} else if entityType == "settings" || action == "settings.updated" {
+			for _, snapshot := range []string{"previous", "next"} {
+				if value, exists := stored[snapshot]; exists {
+					var fields map[string]json.RawMessage
+					if err := json.Unmarshal(value, &fields); err != nil {
+						delete(stored, snapshot)
+						continue
+					}
+					public := map[string]json.RawMessage{}
+					for _, field := range []string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"} {
+						if v, ok := fields[field]; ok {
+							public[field] = v
+						}
+					}
+					stored[snapshot], err = json.Marshal(public)
+					if err != nil {
+						return nil, err
+					}
+				}
+			}
+		}
+		if entityType == "ai_settings" || entityType == "settings" || action == "ai.configured" || action == "secrets.converted" || action == "settings.updated" {
+			raw, err = json.Marshal(stored)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	return raw, nil
 }
