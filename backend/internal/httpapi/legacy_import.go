@@ -135,7 +135,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 			continue
 		}
 		var original map[string]any
-		if json.Unmarshal([]byte(rawLine), &original) != nil || original == nil {
+		if DecodeJSONNumbers([]byte(rawLine), &original) != nil || original == nil {
 			warn(line, "INVALID_JSON", nil)
 			results = append(results, map[string]any{"line": line, "status": "skipped"})
 			skipped++
@@ -173,7 +173,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 		}
 		var existing map[string]any
 		if previous != nil {
-			if json.Unmarshal(previous, &existing) != nil {
+			if DecodeJSONNumbers(previous, &existing) != nil {
 				return nil, importInvalid()
 			}
 		}
@@ -190,7 +190,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 			}
 			existing = nil
 			if previous != nil {
-				if json.Unmarshal(previous, &existing) != nil {
+				if DecodeJSONNumbers(previous, &existing) != nil {
 					return nil, importInvalid()
 				}
 			}
