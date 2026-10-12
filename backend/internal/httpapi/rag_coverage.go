@@ -38,6 +38,10 @@ func (a *AI) RAGCoverage() http.HandlerFunc {
 			a.auth.fail(w, err)
 			return
 		}
+		if r.URL.Query().Has("projectId") && r.URL.Query().Has("projectIds") {
+			a.auth.fail(w, aiInvalid())
+			return
+		}
 		if err = a.ragAvailable(ctx, tx); err != nil {
 			a.auth.fail(w, err)
 			return

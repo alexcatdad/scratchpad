@@ -15,6 +15,11 @@ type jobScope = domain.JobScope
 
 func parseJobScope(body map[string]any) (jobScope, error) {
 	scope := jobScope{}
+	_, single := body["projectId"]
+	_, multiple := body["projectIds"]
+	if single && multiple {
+		return scope, aiInvalid()
+	}
 	if value, exists := body["crossProject"]; exists {
 		flag, ok := value.(bool)
 		if !ok {
@@ -52,6 +57,9 @@ type scopeReader interface {
 }
 
 func allowedJobs(ctx context.Context, conn scopeReader, scope jobScope) ([]string, error) {
+	if scope.ProjectID != "" && scope.ProjectIDs != nil {
+		return nil, aiInvalid()
+	}
 	ids := scope.ProjectIDs
 	if ids == nil && scope.ProjectID != "" {
 		ids = []string{scope.ProjectID}
