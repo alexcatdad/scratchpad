@@ -3369,6 +3369,157 @@
           }
         }
       }
+    },
+    "/api/v1/rag/index": {
+      "post": {
+        "operationId": "post_rag_index",
+        "summary": "Go backend per-record durable passage indexing and versioned rebuild",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  {
+                    "type": "object",
+                    "required": ["recordId"],
+                    "properties": {
+                      "recordId": {
+                        "type": "string"
+                      },
+                      "rebuild": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "expectedVersion": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Required for explicit rebuild of a completed or failed job"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durable indexing job; repeated requests reuse the same source generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["job"],
+                  "properties": {
+                    "job": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/retrieve": {
+      "post": {
+        "operationId": "post_rag_retrieve",
+        "summary": "Go backend bounded cited passage evidence using exact native semantic ranking",
+        "description": "First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  {
+                    "type": "object",
+                    "required": ["query"],
+                    "properties": {
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "intent": {
+                        "type": "string",
+                        "enum": ["current", "history"],
+                        "default": "current"
+                      },
+                      "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 20
+                      },
+                      "maxChars": {
+                        "type": "integer",
+                        "minimum": 4096,
+                        "maximum": 64000,
+                        "default": 12000,
+                        "description": "Maximum serialized UTF-8 response bytes including newline"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; indexing coverage is explicitly not yet assessed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["results", "resultsOmitted", "semantic"],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true
+                      }
+                    },
+                    "resultsOmitted": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "semantic": {
+                      "type": "object",
+                      "required": ["available", "indexCoverage"],
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "indexCoverage": {
+                          "type": "string",
+                          "enum": ["not_assessed"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3844,7 +3995,7 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["analyze", "embed", "export"]
+                "enum": ["analyze", "embed", "export", "rag_index"]
               },
               "status": {
                 "type": "string",
@@ -3902,6 +4053,26 @@
                     }
                   }
                 }
+              },
+              "recordId": {
+                "type": "string"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "contentHash": {
+                "type": "string"
+              },
+              "processingVersion": {
+                "type": "string"
+              },
+              "passageCount": {
+                "type": ["integer", "null"],
+                "minimum": 0
+              },
+              "sourceCount": {
+                "type": ["integer", "null"],
+                "minimum": 0
               }
             }
           }

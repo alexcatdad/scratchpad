@@ -1740,6 +1740,34 @@ Authenticated `GET /rag/status` reports the separate new RAG prerequisite state:
 `SCRATCHPAD_RAG_ENABLED=true`; false or unset disables it. The live application
 schema must contain pgvector. The server does not install extensions, and missing
 RAG prerequisites do not disable ordinary memory or existing semantic search.
-This Go-only development addition does not yet report indexing coverage or serve
-passage evidence. See [the RAG runbook](runbooks/go-rag.md) for verification and
+This Go-only development addition is separate from the semantic passage routes
+below and does not itself report indexing coverage. See [the RAG runbook](runbooks/go-rag.md) for verification and
 the remaining implementation boundaries.
+
+## Go replacement addition: passage indexing and semantic evidence
+
+Authenticated `POST /rag/index` accepts project scope and `recordId`, and returns
+`202 {job}`. A repeated request reuses the source generation. `rebuild: true`
+requires the current `expectedVersion` and a completed or failed job; active jobs
+return a conflict. Indexing is asynchronous and per-record, reusing durable jobs,
+leases, retries and the existing job listing/retry interfaces. Completed jobs
+report `passageCount` and `sourceCount`. Derived generated records are excluded.
+
+Authenticated `POST /rag/retrieve` accepts project scope, `query`, `intent`
+(`current` by default or `history`), `limit` (1–100, default 20) and `maxChars`
+(4096–64000 UTF-8 response bytes including newline, default 12000). This initial
+slice uses bounded exact native semantic ranking and returns cited excerpts with
+source record/project IDs, UTF-16 source locations, content hash, processing
+version, authority, confidence, applicability and bounded accepted relationships.
+Semantic scores do not establish authority. Cross-project scope requires an
+explicit request and participation consent; referenced relationship endpoints
+must belong to selected eligible projects. Lifecycle changes are read live,
+without re-embedding unchanged source text.
+
+The response is `{results, resultsOmitted, semantic}`. `semantic.available` is
+true after successful semantic retrieval; `semantic.indexCoverage` is currently
+`not_assessed`, so missing results must not be interpreted as absent evidence.
+Automatic historical backfill/capture enqueue, hybrid rank fusion, lexical
+fallback, assessed coverage and RAG MCP integration remain required work.
+See [the RAG runbook](runbooks/go-rag.md) for projection migration, restart,
+rebuild and compatibility boundaries.

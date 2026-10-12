@@ -912,6 +912,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rag/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Go backend per-record durable passage indexing and versioned rebuild */
+        post: operations["post_rag_index"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Go backend bounded cited passage evidence using exact native semantic ranking
+         * @description First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+         */
+        post: operations["post_rag_retrieve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1049,7 +1086,7 @@ export interface components {
         };
         Job: components["schemas"]["Entity"] & {
             /** @enum {string} */
-            type?: "analyze" | "embed" | "export";
+            type?: "analyze" | "embed" | "export" | "rag_index";
             /** @enum {string} */
             status?: "queued" | "running" | "completed" | "failed";
             scope?: components["schemas"]["Scope"];
@@ -1067,6 +1104,12 @@ export interface components {
                 kind: string;
                 count: number;
             }[];
+            recordId?: string;
+            fingerprint?: string;
+            contentHash?: string;
+            processingVersion?: string;
+            passageCount?: number | null;
+            sourceCount?: number | null;
         };
         Artifact: components["schemas"]["Entity"] & {
             /** @enum {string} */
@@ -3128,6 +3171,88 @@ export interface operations {
                         reason: "disabled" | "postgres_required" | "pgvector_required" | "available";
                         /** @description Present when pgvector is installed in the application schema and RAG is enabled */
                         pgvectorVersion?: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_rag_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Scope"] & {
+                    recordId: string;
+                    /** @default false */
+                    rebuild?: boolean;
+                    /** @description Required for explicit rebuild of a completed or failed job */
+                    expectedVersion?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Durable indexing job; repeated requests reuse the same source generation */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job: components["schemas"]["Job"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_rag_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Scope"] & {
+                    query: string;
+                    /**
+                     * @default current
+                     * @enum {string}
+                     */
+                    intent?: "current" | "history";
+                    /** @default 20 */
+                    limit?: number;
+                    /**
+                     * @description Maximum serialized UTF-8 response bytes including newline
+                     * @default 12000
+                     */
+                    maxChars?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; indexing coverage is explicitly not yet assessed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: {
+                            [key: string]: unknown;
+                        }[];
+                        resultsOmitted: number;
+                        semantic: {
+                            available: boolean;
+                            /** @enum {string} */
+                            indexCoverage: "not_assessed";
+                        };
                     };
                 };
             };

@@ -16,6 +16,7 @@ type providerSnapshot struct {
 	config     AIConfig
 	key        string
 	generation float64
+	passage    bool
 }
 
 func aiUnavailable() error {
@@ -45,7 +46,7 @@ func (a *AI) provider(ctx context.Context) (providerSnapshot, error) {
 		return providerSnapshot{}, secretUnavailable()
 	}
 	generation, _ := row["dispatchGeneration"].(float64)
-	return providerSnapshot{cfg, key, generation}, nil
+	return providerSnapshot{config: cfg, key: key, generation: generation}, nil
 }
 func (a *AI) providerCurrent(ctx context.Context, conn *sql.Conn, r *http.Request, snapshot providerSnapshot) error {
 	if r != nil {
@@ -56,6 +57,31 @@ func (a *AI) providerCurrent(ctx context.Context, conn *sql.Conn, r *http.Reques
 	row, err := entityMap(ctx, conn, "ai_settings", "global")
 	if err != nil {
 		return err
+	}
+	if snapshot.passage {
+		cfg, err := aiConfig(row)
+		if err != nil {
+			return err
+		}
+		current, err := ragFingerprint(cfg)
+		if err != nil {
+			return err
+		}
+		original, err := ragFingerprint(snapshot.config)
+		if err != nil {
+			return err
+		}
+		if !cfg.Enabled || current != original {
+			return aiChanged()
+		}
+		key, err := a.box.Open(row["apiKey"], "ai_settings", "global", "apiKey")
+		if err != nil {
+			return secretUnavailable()
+		}
+		if key != snapshot.key {
+			return aiChanged()
+		}
+		return nil
 	}
 	generation, _ := row["dispatchGeneration"].(float64)
 	if generation != snapshot.generation || row["enabled"] != true {

@@ -19,6 +19,7 @@ import (
 type AI struct {
 	auth *SSH
 	box  *secrets.Box
+	rag  bool
 }
 type AIConfig struct {
 	Enabled               bool     `json:"enabled"`
@@ -34,7 +35,7 @@ type AIConfig struct {
 	ScheduleMinutes       int      `json:"scheduleMinutes"`
 }
 
-func NewAI(auth *SSH, box *secrets.Box) *AI { return &AI{auth, box} }
+func NewAI(auth *SSH, box *secrets.Box, rag bool) *AI { return &AI{auth: auth, box: box, rag: rag} }
 
 var aiFields = []string{"enabled", "baseUrl", "model", "embeddingModel", "embeddingDimensions", "similarityThreshold", "analysisModes", "maxOutputTokens", "requestTimeoutSeconds", "reasoningEffort", "scheduleMinutes"}
 

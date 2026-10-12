@@ -102,7 +102,17 @@ func run() error {
 		return errors.New("CONFIG_INVALID: SCRATCHPAD_RAG_ENABLED must be true or false.")
 	}
 	mux.HandleFunc("GET /api/v1/rag/status", auth.RAGStatus(ragSetting == "true"))
-	ai := httpapi.NewAI(auth, secrets.Load(os.Getenv("SCRATCHPAD_ENCRYPTION_KEY_FILE")))
+	ai := httpapi.NewAI(auth, secrets.Load(os.Getenv("SCRATCHPAD_ENCRYPTION_KEY_FILE")), ragSetting == "true")
+	if ragSetting == "true" {
+		ragContext, ragCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ragErr := store.InitRAG(ragContext)
+		ragCancel()
+		if ragErr != nil && !errors.Is(ragErr, persistence.ErrRAGUnavailable) {
+			return errors.New("DATABASE_NOT_READY: RAG projection schema is unavailable or unsupported.")
+		}
+	}
+	mux.HandleFunc("POST /api/v1/rag/index", ai.RAGIndex())
+	mux.HandleFunc("POST /api/v1/rag/retrieve", ai.RAGRetrieve())
 	conversionContext, conversionCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	conversionPending := ai.ConvertLegacy(conversionContext) != nil
 	conversionCancel()

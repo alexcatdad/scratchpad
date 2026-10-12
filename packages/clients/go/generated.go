@@ -397,9 +397,10 @@ func (e JobStatus) Valid() bool {
 
 // Defines values for JobType.
 const (
-	JobTypeAnalyze JobType = "analyze"
-	JobTypeEmbed   JobType = "embed"
-	JobTypeExport  JobType = "export"
+	JobTypeAnalyze  JobType = "analyze"
+	JobTypeEmbed    JobType = "embed"
+	JobTypeExport   JobType = "export"
+	JobTypeRagIndex JobType = "rag_index"
 )
 
 // Valid indicates whether the value is a known member of the JobType enum.
@@ -410,6 +411,8 @@ func (e JobType) Valid() bool {
 	case JobTypeEmbed:
 		return true
 	case JobTypeExport:
+		return true
+	case JobTypeRagIndex:
 		return true
 	default:
 		return false
@@ -944,6 +947,39 @@ func (e PatchProjectsIdJSONBodyKind) Valid() bool {
 	}
 }
 
+// Defines values for PostRagRetrieveJSONBodyIntent.
+const (
+	Current PostRagRetrieveJSONBodyIntent = "current"
+	History PostRagRetrieveJSONBodyIntent = "history"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieveJSONBodyIntent enum.
+func (e PostRagRetrieveJSONBodyIntent) Valid() bool {
+	switch e {
+	case Current:
+		return true
+	case History:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostRagRetrieve200JSONResponseBodySemanticIndexCoverage.
+const (
+	NotAssessed PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "not_assessed"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodySemanticIndexCoverage enum.
+func (e PostRagRetrieve200JSONResponseBodySemanticIndexCoverage) Valid() bool {
+	switch e {
+	case NotAssessed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetRagStatus200JSONResponseBodyDatabase.
 const (
 	GetRagStatus200JSONResponseBodyDatabasePostgres GetRagStatus200JSONResponseBodyDatabase = "postgres"
@@ -1300,18 +1336,24 @@ type GithubProfile struct {
 
 // Job defines model for Job.
 type Job struct {
-	ArtifactIds *[]string  `json:"artifactIds,omitempty"`
-	Attempts    *int       `json:"attempts,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	Format      *JobFormat `json:"format,omitempty"`
-	Id          string     `json:"id"`
-	LastError   *string    `json:"lastError,omitempty"`
-	LeaseUntil  *string    `json:"leaseUntil,omitempty"`
-	RunAfter    *string    `json:"runAfter,omitempty"`
-	Scope       *Scope     `json:"scope,omitempty"`
-	Status      *JobStatus `json:"status,omitempty"`
-	Type        *JobType   `json:"type,omitempty"`
-	Version     int        `json:"version"`
+	ArtifactIds       *[]string  `json:"artifactIds,omitempty"`
+	Attempts          *int       `json:"attempts,omitempty"`
+	ContentHash       *string    `json:"contentHash,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	Fingerprint       *string    `json:"fingerprint,omitempty"`
+	Format            *JobFormat `json:"format,omitempty"`
+	Id                string     `json:"id"`
+	LastError         *string    `json:"lastError,omitempty"`
+	LeaseUntil        *string    `json:"leaseUntil,omitempty"`
+	PassageCount      *int       `json:"passageCount,omitempty"`
+	ProcessingVersion *string    `json:"processingVersion,omitempty"`
+	RecordId          *string    `json:"recordId,omitempty"`
+	RunAfter          *string    `json:"runAfter,omitempty"`
+	Scope             *Scope     `json:"scope,omitempty"`
+	SourceCount       *int       `json:"sourceCount,omitempty"`
+	Status            *JobStatus `json:"status,omitempty"`
+	Type              *JobType   `json:"type,omitempty"`
+	Version           int        `json:"version"`
 
 	// Warnings Audited suggestions omitted for insufficient evidence; valid siblings remain available.
 	Warnings *[]struct {
@@ -1705,6 +1747,37 @@ type PatchProjectsIdSettingsParams struct {
 	IfMatch *string `json:"If-Match,omitempty"`
 }
 
+// PostRagIndexJSONBody defines parameters for PostRagIndex.
+type PostRagIndexJSONBody struct {
+	CrossProject *bool `json:"crossProject,omitempty"`
+
+	// ExpectedVersion Required for explicit rebuild of a completed or failed job
+	ExpectedVersion *int      `json:"expectedVersion,omitempty"`
+	ProjectId       *string   `json:"projectId,omitempty"`
+	ProjectIds      *[]string `json:"projectIds,omitempty"`
+	Rebuild         *bool     `json:"rebuild,omitempty"`
+	RecordId        string    `json:"recordId"`
+}
+
+// PostRagRetrieveJSONBody defines parameters for PostRagRetrieve.
+type PostRagRetrieveJSONBody struct {
+	CrossProject *bool                          `json:"crossProject,omitempty"`
+	Intent       *PostRagRetrieveJSONBodyIntent `json:"intent,omitempty"`
+	Limit        *int                           `json:"limit,omitempty"`
+
+	// MaxChars Maximum serialized UTF-8 response bytes including newline
+	MaxChars   *int      `json:"maxChars,omitempty"`
+	ProjectId  *string   `json:"projectId,omitempty"`
+	ProjectIds *[]string `json:"projectIds,omitempty"`
+	Query      string    `json:"query"`
+}
+
+// PostRagRetrieveJSONBodyIntent defines parameters for PostRagRetrieve.
+type PostRagRetrieveJSONBodyIntent string
+
+// PostRagRetrieve200JSONResponseBodySemanticIndexCoverage defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBodySemanticIndexCoverage string
+
 // GetRagStatus200JSONResponseBodyDatabase defines parameters for GetRagStatus.
 type GetRagStatus200JSONResponseBodyDatabase string
 
@@ -1988,6 +2061,12 @@ type PatchProjectsIdJSONRequestBody PatchProjectsIdJSONBody
 
 // PatchProjectsIdSettingsJSONRequestBody defines body for PatchProjectsIdSettings for application/json ContentType.
 type PatchProjectsIdSettingsJSONRequestBody PatchProjectsIdSettingsJSONBody
+
+// PostRagIndexJSONRequestBody defines body for PostRagIndex for application/json ContentType.
+type PostRagIndexJSONRequestBody PostRagIndexJSONBody
+
+// PostRagRetrieveJSONRequestBody defines body for PostRagRetrieve for application/json ContentType.
+type PostRagRetrieveJSONRequestBody PostRagRetrieveJSONBody
 
 // PostRecordsJSONRequestBody defines body for PostRecords for application/json ContentType.
 type PostRecordsJSONRequestBody PostRecordsJSONBody
@@ -2807,6 +2886,38 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagIndex Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
+	//
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
+	//
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieve(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRagStatus Go backend RAG prerequisite availability, separate from indexing coverage
 	//
@@ -4115,6 +4226,78 @@ func (c *Client) PatchProjectsIdSettingsWithBody(ctx context.Context, id string,
 // Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 func (c *Client) PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPatchProjectsIdSettingsRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *Client) PostRagIndexWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagIndexRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagIndex Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *Client) PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagIndexRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
+//
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *Client) PostRagRetrieveWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagRetrieveRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
+//
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *Client) PostRagRetrieve(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagRetrieveRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -6288,6 +6471,86 @@ func NewPatchProjectsIdSettingsRequestWithBody(server string, id string, params 
 	return req, nil
 }
 
+// NewPostRagIndexRequest calls the generic PostRagIndex builder with application/json body
+func NewPostRagIndexRequest(server string, body PostRagIndexJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostRagIndexRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostRagIndexRequestWithBody constructs an http.Request for the PostRagIndex method, with any body, and a specified content type
+func NewPostRagIndexRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/index")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostRagRetrieveRequest calls the generic PostRagRetrieve builder with application/json body
+func NewPostRagRetrieveRequest(server string, body PostRagRetrieveJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostRagRetrieveRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostRagRetrieveRequestWithBody constructs an http.Request for the PostRagRetrieve method, with any body, and a specified content type
+func NewPostRagRetrieveRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/retrieve")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetRagStatusRequest constructs an http.Request for the GetRagStatus method
 func NewGetRagStatusRequest(server string) (*http.Request, error) {
 	var err error
@@ -8023,6 +8286,38 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettingsWithResponse(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchProjectsIdSettingsResponse, error)
+
+	// PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error)
+
+	// PostRagIndexWithResponse Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithResponse(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error)
+
+	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+	//
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error)
+
+	// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+	//
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithResponse(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error)
 
 	// GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
 	//
@@ -10450,6 +10745,120 @@ func (r PatchProjectsIdSettingsResponse) ContentType() string {
 	return ""
 }
 
+type PostRagIndexResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *struct {
+		Job Job `json:"job"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostRagIndexResponse) GetJSON202() *struct {
+	Job Job `json:"job"`
+} {
+	return r.JSON202
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostRagIndexResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostRagIndexResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostRagIndexResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostRagIndexResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostRagIndexResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostRagRetrieveResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Results        []map[string]interface{} `json:"results"`
+		ResultsOmitted int                      `json:"resultsOmitted"`
+		Semantic       struct {
+			Available     bool                                                    `json:"available"`
+			IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+		} `json:"semantic"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostRagRetrieveResponse) GetJSON200() *struct {
+	Results        []map[string]interface{} `json:"results"`
+	ResultsOmitted int                      `json:"resultsOmitted"`
+	Semantic       struct {
+		Available     bool                                                    `json:"available"`
+		IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+	} `json:"semantic"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostRagRetrieveResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostRagRetrieveResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostRagRetrieveResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostRagRetrieveResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostRagRetrieveResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRagStatusResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12461,6 +12870,62 @@ func (c *ClientWithResponses) PatchProjectsIdSettingsWithResponse(ctx context.Co
 	return ParsePatchProjectsIdSettingsResponse(rsp)
 }
 
+// PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *ClientWithResponses) PostRagIndexWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error) {
+	rsp, err := c.PostRagIndexWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagIndexResponse(rsp)
+}
+
+// PostRagIndexWithResponse Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *ClientWithResponses) PostRagIndexWithResponse(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error) {
+	rsp, err := c.PostRagIndex(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagIndexResponse(rsp)
+}
+
+// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+//
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *ClientWithResponses) PostRagRetrieveWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error) {
+	rsp, err := c.PostRagRetrieveWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagRetrieveResponse(rsp)
+}
+
+// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+//
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *ClientWithResponses) PostRagRetrieveWithResponse(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error) {
+	rsp, err := c.PostRagRetrieve(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagRetrieveResponse(rsp)
+}
+
 // GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
 //
 // Returns a wrapper object for the known response body format(s).
@@ -14366,6 +14831,81 @@ func ParsePatchProjectsIdSettingsResponse(rsp *http.Response) (*PatchProjectsIdS
 		var dest struct {
 			Settings *ProjectSettings `json:"settings,omitempty"`
 			Version  *int             `json:"version,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostRagIndexResponse parses an HTTP response from a PostRagIndexWithResponse call
+func ParsePostRagIndexResponse(rsp *http.Response) (*PostRagIndexResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostRagIndexResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest struct {
+			Job Job `json:"job"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostRagRetrieveResponse parses an HTTP response from a PostRagRetrieveWithResponse call
+func ParsePostRagRetrieveResponse(rsp *http.Response) (*PostRagRetrieveResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostRagRetrieveResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Results        []map[string]interface{} `json:"results"`
+			ResultsOmitted int                      `json:"resultsOmitted"`
+			Semantic       struct {
+				Available     bool                                                    `json:"available"`
+				IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+			} `json:"semantic"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

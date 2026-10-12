@@ -93,7 +93,11 @@ func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[str
 			status, runAfter, leaseUntil, typ = "data->>'status'", "data->>'runAfter'", "data->>'leaseUntil'", "data->>'type'"
 		}
 		var raw []byte
-		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ('embed','analyze','export') AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
+		types := "'embed','analyze','export'"
+		if a.rag && a.auth.Store.Engine == "postgres" {
+			types += ",'rag_index'"
+		}
+		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ("+types+") AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -146,6 +150,18 @@ func (a *AI) workerCurrent(ctx context.Context, conn *sql.Conn, job map[string]a
 	}
 	if _, err = allowedJobs(ctx, conn, scope); err != nil {
 		return nil, err
+	}
+	if current["type"] == "rag_index" {
+		if err := a.ragAvailable(ctx, conn); err != nil {
+			return nil, err
+		}
+		fingerprint, err := ragFingerprint(snapshot.config)
+		if err != nil {
+			return nil, err
+		}
+		if current["fingerprint"] != fingerprint || current["processingVersion"] != ragProcessingVersion {
+			return nil, aiChanged()
+		}
 	}
 	if renew {
 		current["leaseUntil"] = timestamp(time.Now().Add(time.Duration(snapshot.config.RequestTimeoutSeconds+30) * time.Second))
@@ -350,7 +366,9 @@ func (a *AI) Run(ctx context.Context) {
 		if err != nil || job == nil {
 			return
 		}
-		if job["type"] == "embed" {
+		if job["type"] == "rag_index" {
+			err = a.executeRAGIndex(ctx, job, snapshot)
+		} else if job["type"] == "embed" {
 			err = a.executeEmbedding(ctx, job, snapshot)
 		} else {
 			err = a.executeCompletion(ctx, job, snapshot)
