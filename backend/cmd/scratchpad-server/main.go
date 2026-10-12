@@ -16,6 +16,7 @@ import (
 
 	"github.com/alexcatdad/scratchpad/backend/internal/httpapi"
 	"github.com/alexcatdad/scratchpad/backend/internal/persistence"
+	"github.com/alexcatdad/scratchpad/backend/internal/secrets"
 )
 
 func run() error {
@@ -96,6 +97,13 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	ai := httpapi.NewAI(auth, secrets.Load(os.Getenv("SCRATCHPAD_ENCRYPTION_KEY_FILE")))
+	conversionContext, conversionCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	conversionPending := ai.ConvertLegacy(conversionContext) != nil
+	conversionCancel()
+	mux.HandleFunc("GET /api/v1/ai/settings", ai.Settings(false))
+	mux.HandleFunc("PATCH /api/v1/ai/settings", ai.Settings(true))
+	mux.HandleFunc("POST /api/v1/ai/test", ai.TestProvider())
 	mux.HandleFunc("POST /api/v1/export", auth.Export())
 	mux.HandleFunc("POST /api/v1/import", auth.Import())
 	mux.HandleFunc("GET /api/v1/profile", auth.Profile("get"))
@@ -157,7 +165,7 @@ func run() error {
 	defer func() { cancelWorker(); <-workerDone }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
-	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "database": store.Engine, "schemaVersion": store.Version}); err != nil {
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "database": store.Engine, "schemaVersion": store.Version, "secretConversionFailed": conversionPending}); err != nil {
 		server.Close()
 		<-done
 		return errors.New("STARTUP_FAILED")
