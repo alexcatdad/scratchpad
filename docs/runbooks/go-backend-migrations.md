@@ -227,18 +227,22 @@ HTTP tests cover capture/detail, provenance overrides, payload rendering, valida
 
 `GET /api/v1/records` and `POST /api/v1/search` implement the existing lexical retrieval shapes with metadata and nullable `nextCursor`. SQLite uses FTS5 and PostgreSQL uses its generated simple-language tsvector. Queries extract at most thirty Unicode letter/number/underscore terms and combine them as literal AND conditions, without executing caller-supplied query operators. POST search retains its query, repeated project/type lists, limit and cursor contract; authenticated browser POST requires the configured Origin.
 
-For nonempty lexical queries, the database joins distinct full-text matches to
-immutable record data before Go decodes it. Duplicate SQLite lexical entries do
-not duplicate records. Unmatched source bodies are not loaded into the
-record selection. Metadata is then selected by candidate record IDs using one
-bound JSON-array parameter and each engine's native JSON set function. Unmatched
-and orphan metadata is not decoded, while corrupt relevant metadata still fails
-safely. This avoids a per-record query loop and parameter-count limits.
-A corruption fixture verifies targeted retrieval can succeed
-without decoding an unrelated source, while corrupt matching sources still fail
-safely. Blank-query record listing, relationship selection, filters, ordering
-and cursor behavior remain separate from this optimization; this change does not
-claim history-independent cost for the entire read path.
+Ordinary listing and lexical search apply metadata, lifecycle, relationship,
+provenance and full-text admission in SQL before selecting the page. Duplicate
+SQLite lexical entries do not duplicate records. Canonical UTC timestamps use
+native chronological ordering and keyset windows of at most 256 candidates.
+Go retains only the best `limit + 1` identities, consuming equal-time groups
+across windows to preserve English identifier ordering. Historical offsets and
+incomplete dates stream through the same bounded selection with their existing
+Go comparison behavior. Only selected headers, source bodies and metadata are
+decoded; metadata uses one bound JSON-array parameter, avoiding per-record
+queries. Selected corruption still fails safely.
+
+This bounds application selection memory and avoids collection-wide Go sorting.
+Database filtering and sorting still depend on the matching history, and the
+historical fallback or a large equal-time group can require more than one window.
+No migration or writer-specific function is required: capture, native import,
+operational restore and retained-runtime writes keep the existing header triggers.
 
 GET filters preserve exact project/type/authority/confidence, repeated project/type lists, tags, Git branch/path, import/client/display provenance, archived state, lifecycle status and relationship endpoints. Only accepted replacement relationships change lifecycle status; rejected links are omitted from relationship filtering. UTC date bounds compare arbitrary fractional-second precision without rounding it to Go nanoseconds or JavaScript milliseconds. Malformed ISO bounds, cursor tuple types and page limits are rejected.
 
