@@ -378,8 +378,11 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if err := portableEntity(ctx, conn, "project", value["projectId"]); err != nil {
 			return err
 		}
-		identity, err := curationText(value["identity"], 500)
-		if err != nil || identity == "" {
+		// Resolver-created identities have no 500-character field limit;
+		// escaping can expand their paths. The archive's existing byte bound
+		// contains this required nonblank string without truncating history.
+		identity, err := curationText(value["identity"], 64*1024*1024)
+		if err != nil || strings.TrimSpace(identity) == "" {
 			return importInvalid()
 		}
 		var previous string
