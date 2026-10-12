@@ -108,7 +108,11 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 			if err != nil {
 				return err
 			}
-			if previous == nil && body["expectedVersion"] != float64(0) {
+			expected, err := expectedVersionMinimum(body, r, 0)
+			if err != nil {
+				return err
+			}
+			if previous == nil && expected != 0 {
 				return &protocolError{"CONFLICT", "Initial settings require expectedVersion 0.", 409}
 			}
 			next := map[string]any{}
@@ -130,10 +134,6 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 			if previous != nil {
 				state := domain.GlobalSettingsFrom(previous)
 				before = publicSettings(previous, beforeConfig.Enabled)
-				expected, err := expectedVersion(body, r)
-				if err != nil {
-					return err
-				}
 				if !state.HasVersion || state.Version != expected {
 					return &versionConflict{previous["version"]}
 				}

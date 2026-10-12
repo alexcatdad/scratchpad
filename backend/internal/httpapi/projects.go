@@ -323,6 +323,9 @@ func normalizeRemote(raw string) (string, error) {
 		}
 	}
 	path := strings.TrimSuffix(strings.Trim(strings.Join(segments, "/"), "/"), ".git")
+	if path == "" || strings.HasSuffix(path, "/") {
+		return "", &protocolError{"PROJECT_IDENTITY_REQUIRED", "Use a Git remote with a repository path.", 400}
+	}
 	return host + "/" + path, nil
 }
 func apiAudit(ctx context.Context, conn *sql.Conn, action, kind, id string, actor, previous, next map[string]any) error {
@@ -384,6 +387,9 @@ type versionConflict struct{ current any }
 
 func (e *versionConflict) Error() string { return "CONFLICT" }
 func expectedVersion(body map[string]any, r *http.Request) (float64, error) {
+	return expectedVersionMinimum(body, r, 1)
+}
+func expectedVersionMinimum(body map[string]any, r *http.Request, minimum float64) (float64, error) {
 	raw := body["expectedVersion"]
 	if raw == nil {
 		if header := r.Header.Get("If-Match"); header != "" {
@@ -394,7 +400,7 @@ func expectedVersion(body map[string]any, r *http.Request) (float64, error) {
 		return 0, &protocolError{"PRECONDITION_REQUIRED", "Supply expectedVersion or If-Match.", 428}
 	}
 	value, err := strconv.ParseFloat(fmt.Sprint(raw), 64)
-	if err != nil || value <= 0 || math.IsNaN(value) || math.IsInf(value, 0) || value != math.Trunc(value) {
+	if err != nil || value < minimum || math.IsNaN(value) || math.IsInf(value, 0) || value != math.Trunc(value) {
 		return 0, validationProject()
 	}
 	return value, nil
