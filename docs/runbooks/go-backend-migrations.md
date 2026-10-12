@@ -45,6 +45,30 @@ to complete within three seconds.
 
 ## Disposable verification
 
+### Domain and focused-query compatibility
+
+Internal typed snapshots drive capture assembly, project/profile settings,
+curation, relationships, jobs and scheduling. Imported entity JSON stays intact:
+updates patch known fields instead of reconstructing persisted objects, and
+record payloads remain flexible. Capture verification includes precise timestamps,
+explicit empty Git context, provenance, durable retries and nested custom payloads.
+
+Search selects small context headers and requested filter fields, then hydrates
+only the returned page's immutable records and metadata. Relationship reads select
+edges touching candidates; cycle checks traverse accepted replacement edges in SQL.
+Worker source reads select admitted projects through the context projection.
+Scheduler overlap checks page through narrow active-job scope candidates while
+retaining historical case-insensitive scope-key admission. Job listing retains its
+existing complete-history response and extension fields. These changes add no
+schema migration or new pagination contract. Small-header ordering and requested
+JSON filters still depend on candidate history; this is not constant-cost search.
+
+Public compatibility gates are `TestCaptureRetainsFlexiblePayloadAndOptionalContext`
+and the authenticated HTTP cases in `backend/domain_contract_test.go`,
+`backend/query_scope_test.go` and `backend/worker_query_test.go`. Run them as part of
+the full SQLite/PostgreSQL race suite below. Real-model RAG quality evaluation is
+deferred until a model is available; lexical/privacy/restore checks still run.
+
 Use the pinned Go toolchain and module dependencies:
 
 ```sh

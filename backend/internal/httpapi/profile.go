@@ -9,6 +9,8 @@ import (
 	"math"
 	"net/http"
 	"time"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 func storedProfile(ctx context.Context, q entityReader) (map[string]any, error) {
@@ -34,7 +36,7 @@ func profileMatches(previous map[string]any, version float64) bool {
 	if previous == nil {
 		return version == 0
 	}
-	return previous["version"] == version
+	return domain.ProfileFrom(previous).MatchesVersion(version)
 }
 func (s *SSH) Profile(operation string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -75,7 +77,7 @@ func (s *SSH) Profile(operation string) http.HandlerFunc {
 				}
 				profile = map[string]any{"id": "owner-profile", "displayName": display, "version": 0}
 			}
-			profile["github"] = presentProfileGithub(profile["github"])
+			profile["github"] = presentProfileGithub(domain.ProfileFrom(profile).Github)
 			engine := s.Store.Engine
 			if engine == "postgres" {
 				engine = "postgresql"
@@ -191,7 +193,7 @@ func (s *SSH) Profile(operation string) http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
-		profile["github"] = presentProfileGithub(profile["github"])
+		profile["github"] = presentProfileGithub(domain.ProfileFrom(profile).Github)
 		JSON(w, 200, map[string]any{"profile": profile})
 	}
 }

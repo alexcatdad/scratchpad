@@ -17,6 +17,8 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
+
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 )
@@ -102,50 +104,9 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		}
 		limit = int(value)
 	}
-	records := []map[string]any{}
-	var err error
-	query := params.Get("q")
-	if query == "" {
-		records, err = entityList(ctx, tx, "record")
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		terms := lexicalTerms.FindAllString(query, 30)
-		if len(terms) > 0 {
-			statement := `SELECT DISTINCT r.data FROM record_search JOIN entities r ON r.kind='record' AND r.id=record_search.record_id WHERE record_search MATCH $1`
-			parts := []string{}
-			for _, term := range terms {
-				parts = append(parts, `"`+strings.ReplaceAll(term, `"`, `""`)+`"`)
-			}
-			argument := strings.Join(parts, " AND ")
-			if engine == "postgres" {
-				statement = `SELECT DISTINCT r.data FROM record_search JOIN entities r ON r.kind='record' AND r.id=record_search.record_id WHERE document @@ plainto_tsquery('simple',$1)`
-				argument = strings.Join(terms, " ")
-			}
-			rows, err := tx.QueryContext(ctx, statement, argument)
-			if err != nil {
-				return nil, err
-			}
-			for rows.Next() {
-				var raw []byte
-				if err = rows.Scan(&raw); err != nil {
-					rows.Close()
-					return nil, err
-				}
-				var record map[string]any
-				if err = json.Unmarshal(raw, &record); err != nil {
-					rows.Close()
-					return nil, err
-				}
-				records = append(records, record)
-			}
-			err = rows.Err()
-			rows.Close()
-			if err != nil {
-				return nil, err
-			}
-		}
+	records, err := searchCandidateHeaders(ctx, tx, engine, params)
+	if err != nil {
+		return nil, err
 	}
 	ids := make([]string, 0, len(records))
 	for _, record := range records {
@@ -155,36 +116,19 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 	if err != nil {
 		return nil, err
 	}
-	metadataStatement := `SELECT data FROM entities WHERE kind='metadata' AND id IN (SELECT value FROM json_each($1))`
-	if engine == "postgres" {
-		metadataStatement = `SELECT data FROM entities WHERE kind='metadata' AND id IN (SELECT jsonb_array_elements_text($1::jsonb))`
-	}
-	metadataRows, err := tx.QueryContext(ctx, metadataStatement, string(encodedIDs))
-	if err != nil {
-		return nil, err
-	}
 	byID := map[string]map[string]any{}
-	for metadataRows.Next() {
-		var raw []byte
-		if err = metadataRows.Scan(&raw); err != nil {
-			metadataRows.Close()
+	if params.Get("tag") != "" || params.Get("status") != "" || params.Get("archived") != "" {
+		byID, err = searchMetadata(ctx, tx, engine, string(encodedIDs), true)
+		if err != nil {
 			return nil, err
 		}
-		var item map[string]any
-		if err = json.Unmarshal(raw, &item); err != nil {
-			metadataRows.Close()
+	}
+	links := []map[string]any{}
+	if params.Get("status") != "" || params.Get("relationship") != "" || params.Get("relatedTo") != "" {
+		links, err = searchRelationships(ctx, tx, engine, string(encodedIDs))
+		if err != nil {
 			return nil, err
 		}
-		byID[stringValue(item, "id")] = item
-	}
-	err = metadataRows.Err()
-	metadataRows.Close()
-	if err != nil {
-		return nil, err
-	}
-	links, err := entityList(ctx, tx, "relationship")
-	if err != nil {
-		return nil, err
 	}
 	for _, field := range []string{"from", "to"} {
 		if value := params.Get(field); value != "" {
@@ -237,12 +181,201 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		next = base64.RawURLEncoding.EncodeToString(data)
 		filtered = filtered[:limit]
 	}
+	if err := hydrateContextRecords(ctx, tx, filtered); err != nil {
+		return nil, err
+	}
+	pageIDs := []string{}
+	for _, record := range filtered {
+		pageIDs = append(pageIDs, stringValue(record, "id"))
+	}
+	encodedPage, err := json.Marshal(pageIDs)
+	if err != nil {
+		return nil, err
+	}
+	byID, err = searchMetadata(ctx, tx, engine, string(encodedPage), false)
+	if err != nil {
+		return nil, err
+	}
 	for _, record := range filtered {
 		if item := byID[stringValue(record, "id")]; item != nil {
 			record["metadata"] = item
 		}
 	}
 	return map[string]any{"records": filtered, "nextCursor": next}, nil
+}
+
+func searchCandidateHeaders(ctx context.Context, tx *sql.Tx, engine string, params url.Values) ([]map[string]any, error) {
+	fields := []string{}
+	for _, field := range []string{"authority", "confidence"} {
+		if params.Get(field) != "" {
+			fields = append(fields, field)
+		}
+	}
+	if params.Get("branch") != "" || params.Get("gitPath") != "" {
+		fields = append(fields, "gitContext")
+	}
+	if params.Get("source") != "" {
+		fields = append(fields, "actor", "provenance")
+	}
+	projection, join := "'[]'", ""
+	if len(fields) > 0 {
+		parts := []string{}
+		for _, field := range fields {
+			expression := "json_extract(r.data,'$." + field + "')"
+			if engine == "postgres" {
+				expression = "r.data->'" + field + "'"
+			}
+			parts = append(parts, expression)
+		}
+		projection = "json_array(" + strings.Join(parts, ",") + ")"
+		if engine == "postgres" {
+			projection = "jsonb_build_array(" + strings.Join(parts, ",") + ")"
+		}
+		join = " JOIN entities r ON r.kind='record' AND r.id=h.record_id"
+	}
+	where, args := []string{}, []any{}
+	for _, filter := range []struct{ parameter, column string }{{"projectId", "h.project_id"}, {"projectIds", "h.project_id"}, {"type", "json_extract(h.data,'$.type')"}, {"types", "json_extract(h.data,'$.type')"}} {
+		column := filter.column
+		if engine == "postgres" && strings.HasPrefix(column, "json_extract") {
+			column = "h.data->>'type'"
+		}
+		values := params[filter.parameter]
+		if filter.parameter == "projectId" || filter.parameter == "type" {
+			values = nil
+			if value := params.Get(filter.parameter); value != "" {
+				values = []string{value}
+			}
+		}
+		if len(values) == 0 {
+			continue
+		}
+		placeholders := []string{}
+		for _, value := range values {
+			args = append(args, value)
+			placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+		}
+		where = append(where, column+" IN ("+strings.Join(placeholders, ",")+")")
+	}
+	if query := params.Get("q"); query != "" {
+		terms := lexicalTerms.FindAllString(query, 30)
+		if len(terms) == 0 {
+			return []map[string]any{}, nil
+		}
+		parts := []string{}
+		for _, term := range terms {
+			parts = append(parts, `"`+strings.ReplaceAll(term, `"`, `""`)+`"`)
+		}
+		argument := strings.Join(parts, " AND ")
+		join += " JOIN record_search ON record_search.record_id=h.record_id"
+		args = append(args, argument)
+		predicate := fmt.Sprintf("record_search MATCH $%d", len(args))
+		if engine == "postgres" {
+			args[len(args)-1] = strings.Join(terms, " ")
+			predicate = fmt.Sprintf("record_search.document @@ plainto_tsquery('simple',$%d)", len(args))
+		}
+		where = append(where, predicate)
+	}
+	statement := "SELECT DISTINCT h.record_id,h.data," + projection + " FROM context_headers h" + join
+	if len(where) > 0 {
+		statement += " WHERE " + strings.Join(where, " AND ")
+	}
+	rows, err := tx.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	records := []map[string]any{}
+	for rows.Next() {
+		var id string
+		var raw, extra []byte
+		if err := rows.Scan(&id, &raw, &extra); err != nil {
+			return nil, err
+		}
+		var record map[string]any
+		var values []any
+		if err := json.Unmarshal(raw, &record); err != nil {
+			return nil, err
+		}
+		if err := json.Unmarshal(extra, &values); err != nil {
+			return nil, err
+		}
+		// The table identity also lets page hydration surface corruption in a
+		// selected raw body instead of silently dropping its header.
+		record["id"] = id
+		for index, field := range fields {
+			record[field] = values[index]
+		}
+		records = append(records, record)
+	}
+	return records, rows.Err()
+}
+
+func searchRelationships(ctx context.Context, tx *sql.Tx, engine, encodedIDs string) ([]map[string]any, error) {
+	from, to := "json_extract(data,'$.fromRecordId')", "json_extract(data,'$.toRecordId')"
+	ids := "SELECT value FROM json_each($1)"
+	if engine == "postgres" {
+		from, to = "data->>'fromRecordId'", "data->>'toRecordId'"
+		ids = "SELECT jsonb_array_elements_text($1::jsonb)"
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT data FROM entities WHERE kind='relationship' AND ("+from+" IN ("+ids+") OR "+to+" IN ("+ids+"))", encodedIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	links := []map[string]any{}
+	for rows.Next() {
+		var raw []byte
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var link map[string]any
+		if err := json.Unmarshal(raw, &link); err != nil {
+			return nil, err
+		}
+		links = append(links, link)
+	}
+	return links, rows.Err()
+}
+
+func searchMetadata(ctx context.Context, tx *sql.Tx, engine, encodedIDs string, filterOnly bool) (map[string]map[string]any, error) {
+	projection := "data"
+	ids := "SELECT value FROM json_each($1)"
+	if engine == "postgres" {
+		ids = "SELECT jsonb_array_elements_text($1::jsonb)"
+	}
+	if filterOnly {
+		projection = "json_array(json_extract(data,'$.tags'),json_extract(data,'$.archived'),json_extract(data,'$.legacyStatus'))"
+		if engine == "postgres" {
+			projection = "jsonb_build_array(data->'tags',data->'archived',data->'legacyStatus')"
+		}
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT id,"+projection+" FROM entities WHERE kind='metadata' AND id IN ("+ids+")", encodedIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := map[string]map[string]any{}
+	for rows.Next() {
+		var id string
+		var raw []byte
+		if err := rows.Scan(&id, &raw); err != nil {
+			return nil, err
+		}
+		var item map[string]any
+		if filterOnly {
+			var fields []any
+			if err := json.Unmarshal(raw, &fields); err != nil {
+				return nil, err
+			}
+			item = map[string]any{"id": id, "tags": fields[0], "archived": fields[1], "legacyStatus": fields[2]}
+		} else {
+			if err := json.Unmarshal(raw, &item); err != nil {
+				return nil, err
+			}
+		}
+		byID[stringValue(item, "id")] = item
+	}
+	return byID, rows.Err()
 }
 
 func containsString(values any, target any) bool {
@@ -281,16 +414,18 @@ func truthy(value any) bool {
 	}
 }
 func lifecycle(record, metadata map[string]any, links []map[string]any) any {
-	if truthy(metadata["archived"]) {
+	curated := domain.MetadataFrom(metadata)
+	if curated.Archived {
 		return "archived"
 	}
 	partial := false
 	for _, link := range links {
-		if link["status"] == "accepted" && link["toRecordId"] == record["id"] {
-			if link["type"] == "replaces" {
+		edge := domain.RelationshipFrom(link)
+		if edge.Status == "accepted" && edge.ToRecordID == record["id"] {
+			if edge.Type == "replaces" {
 				return "superseded"
 			}
-			if link["type"] == "partially_replaces" {
+			if edge.Type == "partially_replaces" {
 				partial = true
 			}
 		}
@@ -298,8 +433,8 @@ func lifecycle(record, metadata map[string]any, links []map[string]any) any {
 	if partial {
 		return "partially_superseded"
 	}
-	if value, exists := metadata["legacyStatus"]; exists && value != nil {
-		return value
+	if curated.HasLegacyStatus && curated.LegacyStatus != nil {
+		return curated.LegacyStatus
 	}
 	return "active"
 }

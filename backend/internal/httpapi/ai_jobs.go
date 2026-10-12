@@ -4,17 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 	"io"
 	"net/http"
 	"sort"
 	"time"
 )
 
-type jobScope struct {
-	ProjectID    string   `json:"projectId,omitempty"`
-	ProjectIDs   []string `json:"projectIds,omitempty"`
-	CrossProject bool     `json:"crossProject"`
-}
+type jobScope = domain.JobScope
 
 func parseJobScope(body map[string]any) (jobScope, error) {
 	scope := jobScope{}
@@ -156,12 +153,33 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 			return
 		}
 		if operation == "list" {
-			jobs, err := entityList(ctx, a.auth.Store.DB, "ai_job")
+			ordering := "CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END"
+			if a.auth.Store.Engine == "postgres" {
+				ordering = "(CASE WHEN jsonb_typeof(data->'createdAt')='string' THEN data->>'createdAt' ELSE '' END) COLLATE \"C\""
+			}
+			rows, err := a.auth.Store.DB.QueryContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' ORDER BY "+ordering+" DESC,created_at,id")
+			jobs := []map[string]any{}
+			if err == nil {
+				for rows.Next() {
+					var raw []byte
+					if err = rows.Scan(&raw); err != nil {
+						break
+					}
+					var job map[string]any
+					if err = json.Unmarshal(raw, &job); err != nil {
+						break
+					}
+					jobs = append(jobs, job)
+				}
+				if err == nil {
+					err = rows.Err()
+				}
+				rows.Close()
+			}
 			if err != nil {
 				a.auth.fail(w, err)
 				return
 			}
-			sort.SliceStable(jobs, func(i, j int) bool { return stringValue(jobs[i], "createdAt") > stringValue(jobs[j], "createdAt") })
 			JSON(w, 200, map[string]any{"jobs": jobs})
 			return
 		}

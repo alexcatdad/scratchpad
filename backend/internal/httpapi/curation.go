@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"time"
 	"unicode/utf16"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 func curationEntity(ctx context.Context, q entityReader, kind, id string) (map[string]any, error) {
@@ -107,7 +109,8 @@ func amendMetadata(ctx context.Context, conn *sql.Conn, r *http.Request, body, a
 	if err != nil {
 		return nil, err
 	}
-	if metadata["version"] != expected {
+	current := domain.MetadataFrom(metadata)
+	if !current.HasVersion || current.Version != expected {
 		return nil, &versionConflict{metadata["version"]}
 	}
 	previous, err := copyEntity(metadata)

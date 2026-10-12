@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 func publicSettings(row map[string]any, enabled bool) map[string]any {
@@ -118,12 +120,13 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 			}
 			var before map[string]any
 			if previous != nil {
-				before = publicSettings(previous, previous["aiEnabled"] == true)
+				state := domain.GlobalSettingsFrom(previous)
+				before = publicSettings(previous, state.AIEnabled)
 				expected, err := expectedVersion(body, r)
 				if err != nil {
 					return err
 				}
-				if previous["version"] != expected {
+				if !state.HasVersion || state.Version != expected {
 					return &versionConflict{previous["version"]}
 				}
 				err = update(ctx, conn, "settings", next)
@@ -135,7 +138,7 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 					return err
 				}
 			}
-			if err = apiAudit(ctx, conn, "settings.updated", "settings", "global", actor, before, publicSettings(next, next["aiEnabled"] == true)); err != nil {
+			if err = apiAudit(ctx, conn, "settings.updated", "settings", "global", actor, before, publicSettings(next, domain.GlobalSettingsFrom(next).AIEnabled)); err != nil {
 				return err
 			}
 			provider, err := readSettings(ctx, conn, "ai_settings")

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"net/http"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 var relationshipTypes = []string{"related_to", "supports", "contradicts", "refines", "replaces", "partially_replaces", "depends_on", "implements", "caused_by", "answers"}
@@ -75,7 +77,8 @@ func relationshipMutation(ctx context.Context, conn *sql.Conn, r *http.Request, 
 	if err != nil {
 		return nil, err
 	}
-	if link["version"] != expected {
+	current := domain.RelationshipFrom(link)
+	if !current.HasVersion || current.Version != expected {
 		return nil, &versionConflict{link["version"]}
 	}
 	previous, err := copyEntity(link)
@@ -85,7 +88,7 @@ func relationshipMutation(ctx context.Context, conn *sql.Conn, r *http.Request, 
 	status := "rejected"
 	action := "reject"
 	if operation == "relationship-accept" {
-		if err = relationshipSafe(ctx, conn, stringValue(link, "fromRecordId"), stringValue(link, "toRecordId"), stringValue(link, "type"), stringValue(link, "id")); err != nil {
+		if err = relationshipSafe(ctx, conn, current.FromRecordID, current.ToRecordID, current.Type, current.ID); err != nil {
 			return nil, err
 		}
 		status = "accepted"
@@ -109,37 +112,29 @@ func relationshipSafe(ctx context.Context, conn *sql.Conn, from, to, kind, exclu
 	if kind != "replaces" && kind != "partially_replaces" && kind != "depends_on" {
 		return nil
 	}
-	links, err := entityList(ctx, conn, "relationship")
+	firstType, secondType := "replaces", "partially_replaces"
+	if kind == "depends_on" {
+		firstType, secondType = kind, kind
+	}
+	// Both supported engines implement ->> for JSON fields. UNION deduplicates
+	// visited vertices, including preexisting cyclic historical input. The graph
+	// intentionally spans projects: project scope cannot make a real cycle safe.
+	var cycle bool
+	err := conn.QueryRowContext(ctx, `WITH RECURSIVE reachable(record_id) AS (
+	 SELECT CAST($1 AS TEXT)
+	 UNION
+	 SELECT e.data->>'toRecordId' FROM entities e JOIN reachable r ON e.data->>'fromRecordId'=r.record_id
+	 WHERE e.kind='relationship' AND e.data->>'status'='accepted'
+	 AND e.data->>'type' IN ($3,$4)
+	 AND CAST(e.data->'fromRecordId' AS TEXT) LIKE '"%'
+	 AND CAST(e.data->'toRecordId' AS TEXT) LIKE '"%'
+	 AND (e.data->>'id' IS NULL OR CAST(e.data->'id' AS TEXT) NOT LIKE '"%' OR e.data->>'id'<>$5)
+	) SELECT EXISTS(SELECT 1 FROM reachable WHERE record_id=$2)`, to, from, firstType, secondType, excluded).Scan(&cycle)
 	if err != nil {
 		return err
 	}
-	edges := map[string][]string{}
-	for _, link := range links {
-		if link["status"] != "accepted" || link["id"] == excluded {
-			continue
-		}
-		same := link["type"] == "replaces" || link["type"] == "partially_replaces"
-		if kind == "depends_on" {
-			same = link["type"] == "depends_on"
-		}
-		if same {
-			source := stringValue(link, "fromRecordId")
-			edges[source] = append(edges[source], stringValue(link, "toRecordId"))
-		}
-	}
-	pending := []string{to}
-	seen := map[string]bool{}
-	for len(pending) > 0 {
-		next := pending[len(pending)-1]
-		pending = pending[:len(pending)-1]
-		if next == from {
-			return &protocolError{"RELATIONSHIP_CYCLE", "This relationship creates a cycle.", 409}
-		}
-		if seen[next] {
-			continue
-		}
-		seen[next] = true
-		pending = append(pending, edges[next]...)
+	if cycle {
+		return &protocolError{"RELATIONSHIP_CYCLE", "This relationship creates a cycle.", 409}
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 	"math"
 	"net/http"
 	"strings"
@@ -63,7 +64,15 @@ func (a *AI) aiScopedEntities(ctx context.Context, conn *sql.Conn, scope jobScop
 	if a.auth.Store.Engine == "postgres" {
 		project = "data->>'projectId'"
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT data FROM entities WHERE kind=$1 AND "+project+" IN ("+strings.Join(placeholders, ",")+") ORDER BY created_at,id", args...)
+	query := "SELECT data FROM entities WHERE kind=$1 AND " + project + " IN (" + strings.Join(placeholders, ",") + ") ORDER BY created_at,id"
+	if kind == "record" {
+		args = args[1:]
+		for i := range placeholders {
+			placeholders[i] = fmt.Sprintf("$%d", i+1)
+		}
+		query = "SELECT e.data FROM context_headers h JOIN entities e ON e.kind='record' AND e.id=h.record_id WHERE h.project_id IN (" + strings.Join(placeholders, ",") + ") ORDER BY e.created_at,e.id"
+	}
+	rows, err := conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +131,7 @@ func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[str
 		if err = json.Unmarshal(raw, &job); err != nil {
 			return err
 		}
-		attempts, _ := job["attempts"].(float64)
+		attempts := domain.JobFrom(job).Attempts
 		if attempts >= 3 {
 			job["status"], job["lastError"], job["completedAt"] = "failed", "Retry limit reached after an interrupted worker.", timestamp(time.Now())
 			job["leaseToken"], job["leaseUntil"] = nil, nil
@@ -155,8 +164,10 @@ func (a *AI) workerCurrent(ctx context.Context, conn *sql.Conn, job map[string]a
 	if err != nil {
 		return nil, err
 	}
-	expiry, err := time.Parse(time.RFC3339Nano, stringValue(current, "leaseUntil"))
-	if err != nil || current["status"] != "running" || current["leaseToken"] != job["leaseToken"] || !expiry.After(time.Now()) {
+	execution := domain.JobFrom(current)
+	admitted := domain.JobFrom(job)
+	expiry, err := time.Parse(time.RFC3339Nano, execution.LeaseUntil)
+	if err != nil || execution.Status != "running" || execution.LeaseToken != admitted.LeaseToken || !expiry.After(time.Now()) {
 		return nil, &protocolError{"AI_LEASE_EXPIRED", "AI worker lease expired.", 503}
 	}
 	scope, err := aiScope(current)
@@ -166,7 +177,7 @@ func (a *AI) workerCurrent(ctx context.Context, conn *sql.Conn, job map[string]a
 	if _, err = allowedJobs(ctx, conn, scope); err != nil {
 		return nil, err
 	}
-	if current["type"] == "rag_index" {
+	if execution.Type == "rag_index" {
 		if err := a.ragAvailable(ctx, conn); err != nil {
 			return nil, err
 		}
@@ -174,7 +185,7 @@ func (a *AI) workerCurrent(ctx context.Context, conn *sql.Conn, job map[string]a
 		if err != nil {
 			return nil, err
 		}
-		if current["fingerprint"] != fingerprint || current["processingVersion"] != ragProcessingVersion {
+		if execution.Fingerprint != fingerprint || execution.ProcessingVersion != ragProcessingVersion {
 			return nil, aiChanged()
 		}
 	}
@@ -340,10 +351,11 @@ func (a *AI) failAIJob(ctx context.Context, job map[string]any, cause error) err
 		if err != nil {
 			return err
 		}
-		if current["leaseToken"] != job["leaseToken"] || current["status"] != "running" {
+		execution := domain.JobFrom(current)
+		if execution.LeaseToken != domain.JobFrom(job).LeaseToken || execution.Status != "running" {
 			return nil
 		}
-		attempts, _ := current["attempts"].(float64)
+		attempts := execution.Attempts
 		terminal := attempts >= 3
 		message := "AI processing failed."
 		var protocol *protocolError

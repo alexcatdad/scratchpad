@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf16"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 func captureText(value any, max int) (string, error) {
@@ -36,7 +38,7 @@ func captureEnum(value any, allowed []string) (string, error) {
 	}
 	return "", validationProject()
 }
-func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error) {
+func captureRecord(raw json.RawMessage) (*domain.Record, json.RawMessage, error) {
 	var submitted map[string]json.RawMessage
 	if json.Unmarshal(raw, &submitted) != nil || submitted == nil {
 		return nil, nil, validationProject()
@@ -45,7 +47,7 @@ func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error)
 	if json.Unmarshal(raw, &fields) != nil {
 		return nil, nil, validationProject()
 	}
-	record := map[string]any{}
+	record := &domain.Record{}
 	for _, field := range []string{"type", "authority", "confidence"} {
 		allowed := recordTypes
 		if field == "authority" {
@@ -61,15 +63,22 @@ func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error)
 		if err != nil {
 			return nil, nil, err
 		}
-		record[field] = value
+		switch field {
+		case "type":
+			record.Type = value
+		case "authority":
+			record.Authority = value
+		case "confidence":
+			record.Confidence = value
+		}
 	}
 	title, err := captureText(fields["title"], 500)
 	if err != nil {
 		return nil, nil, err
 	}
-	record["title"] = title
+	record.Title = title
 	if value, exists := fields["confidenceReason"]; exists {
-		record["confidenceReason"], err = captureText(value, 100000)
+		record.ConfidenceReason, err = captureText(value, 100000)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -86,13 +95,13 @@ func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error)
 		if err != nil {
 			return nil, nil, validationProject()
 		}
-		record["happenedAt"] = at
+		record.HappenedAt = at
 	}
 	payload, ok := fields["payload"].(map[string]any)
 	if !ok || payload == nil {
 		return nil, nil, validationProject()
 	}
-	record["payload"] = payload
+	record.Payload = payload
 	if value, exists := fields["actor"]; exists {
 		source, ok := value.(map[string]any)
 		if !ok {
@@ -111,7 +120,7 @@ func captureRecord(raw json.RawMessage) (map[string]any, json.RawMessage, error)
 				}
 			}
 		}
-		record["actor"] = actor
+		record.Actor = actor
 	}
 	return record, submitted["payload"], nil
 }
@@ -204,13 +213,16 @@ func renderCapture(kind string, raw json.RawMessage) (string, error) {
 	return strings.Join(parts, "\n\n"), nil
 }
 func mirrorEligible(project, record map[string]any) bool {
+	return mirrorEligibleType(project, stringValue(record, "type"))
+}
+func mirrorEligibleType(project map[string]any, recordType string) bool {
 	settings := project["settings"].(map[string]any)
 	mirror := settings["repoMirroring"].(map[string]any)
 	if mirror["enabled"] != true {
 		return false
 	}
 	for _, kind := range mirror["recordTypes"].([]string) {
-		if kind == record["type"] {
+		if kind == recordType {
 			return true
 		}
 	}
@@ -245,7 +257,7 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
-		content, renderErr := renderCapture(stringValue(record, "type"), payload)
+		content, renderErr := renderCapture(record.Type, payload)
 		var result map[string]any
 		key := r.Header.Get("Idempotency-Key")
 		if _, exists := r.Header["Idempotency-Key"]; exists && (len(utf16.Encode([]rune(key))) < 1 || len(utf16.Encode([]rune(key))) > 200) {
@@ -294,7 +306,7 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 					if err = json.Unmarshal([]byte(previousResponse), &result); err != nil {
 						return err
 					}
-					result["mirror"] = map[string]any{"eligible": mirrorEligible(project, record)}
+					result["mirror"] = map[string]any{"eligible": mirrorEligibleType(project, record.Type)}
 					return nil
 				}
 				if !errors.Is(err, sql.ErrNoRows) {
@@ -303,7 +315,7 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 			}
 			enabled := false
 			for _, kind := range project["settings"].(map[string]any)["enabledRecordTypes"].([]string) {
-				if kind == record["type"] {
+				if kind == record.Type {
 					enabled = true
 				}
 			}
@@ -323,34 +335,38 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 			if err != nil {
 				return err
 			}
-			submittedActor, _ := record["actor"].(map[string]any)
+			submittedActor := record.Actor
 			if submittedActor == nil {
 				submittedActor = map[string]any{}
 			}
 			for key, value := range actor {
 				submittedActor[key] = value
 			}
-			record["actor"] = submittedActor
-			record["projectId"], record["content"], record["payloadVersion"], record["recordedAt"] = projectID, content, 1, timestamp(time.Now())
+			record.Actor = submittedActor
+			record.ProjectID, record.Content, record.PayloadVersion, record.RecordedAt = projectID, content, 1, timestamp(time.Now())
 			if git != nil {
-				record["gitContext"] = git
+				record.GitContext = &git
 			}
-			if err = insert(ctx, conn, "record", id, record); err != nil {
+			recordFields, err := record.Fields()
+			if err != nil {
+				return err
+			}
+			if err = insert(ctx, conn, "record", id, recordFields); err != nil {
 				return err
 			}
 			if err = insert(ctx, conn, "metadata", id, map[string]any{"recordId": id, "tags": []any{}, "archived": false, "updatedAt": timestamp(time.Now())}); err != nil {
 				return err
 			}
-			if _, err = conn.ExecContext(ctx, `INSERT INTO record_search(record_id,title,content) VALUES($1,$2,$3)`, id, record["title"], content); err != nil {
+			if _, err = conn.ExecContext(ctx, `INSERT INTO record_search(record_id,title,content) VALUES($1,$2,$3)`, id, record.Title, content); err != nil {
 				return err
 			}
-			if err = apiAudit(ctx, conn, "record.created", "record", id, actor, nil, record); err != nil {
+			if err = apiAudit(ctx, conn, "record.created", "record", id, actor, nil, recordFields); err != nil {
 				return err
 			}
-			if err = ai.queueCapturedRAG(ctx, conn, project, record, actor); err != nil {
+			if err = ai.queueCapturedRAG(ctx, conn, project, recordFields, actor); err != nil {
 				return err
 			}
-			result = map[string]any{"record": record, "mirror": map[string]any{"eligible": mirrorEligible(project, record)}}
+			result = map[string]any{"record": recordFields, "mirror": map[string]any{"eligible": mirrorEligibleType(project, record.Type)}}
 			if key != "" {
 				response, err := json.Marshal(result)
 				if err != nil {

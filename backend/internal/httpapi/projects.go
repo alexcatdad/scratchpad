@@ -16,13 +16,15 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
 var projectSlugPattern = regexp.MustCompile(`[^a-z0-9]+`)
-var recordTypes = []string{"decision", "adr", "business_decision", "finding", "qa", "failure", "constraint", "project_state"}
+var recordTypes = domain.RecordTypes()
 
 func projectDefaults(kind string) map[string]any {
-	return map[string]any{"enabledRecordTypes": recordTypes, "repoMirroring": map[string]any{"enabled": false, "recordTypes": []string{"decision", "adr", "business_decision"}}, "crossProjectAnalysis": kind != "external", "aiProcessing": false}
+	return domain.DefaultProjectSettings(kind).Fields()
 }
 func apiActor(ctx context.Context, q entityReader, r *http.Request, origin string) (map[string]any, error) {
 	if err := authorize(ctx, q, r); err != nil {
@@ -67,7 +69,11 @@ func projectEntity(ctx context.Context, q entityReader, id string) (map[string]a
 	if err != nil {
 		return nil, err
 	}
-	value["settings"], err = normalizeSettings(value["settings"])
+	project, err := domain.ProjectFrom(value)
+	if err != nil {
+		return nil, validationProject()
+	}
+	value["settings"] = project.Settings.Fields()
 	return value, err
 }
 func createProject(ctx context.Context, conn *sql.Conn, name, kind string) (map[string]any, error) {
@@ -82,11 +88,12 @@ func createProject(ctx context.Context, conn *sql.Conn, name, kind string) (map[
 			if err = json.Unmarshal(raw, &global); err != nil {
 				return nil, err
 			}
-			if inherited, ok := global["defaultProjectSettings"].(map[string]any); ok {
-				settings = inherited
-				if _, exists := settings["enabledRecordTypes"]; !exists {
-					settings["enabledRecordTypes"] = recordTypes
+			if _, ok := global["defaultProjectSettings"].(map[string]any); ok {
+				defaults := domain.GlobalSettingsFrom(global).DefaultProjectSettings
+				if defaults == nil {
+					return nil, validationProject()
 				}
+				settings = defaults.Fields()
 			}
 		}
 	}
@@ -393,68 +400,11 @@ func expectedVersion(body map[string]any, r *http.Request) (float64, error) {
 	return value, nil
 }
 func normalizeSettings(raw any) (map[string]any, error) {
-	settings, ok := raw.(map[string]any)
-	if !ok {
-		return nil, validationProject()
-	}
-	mirror, ok := settings["repoMirroring"].(map[string]any)
-	if !ok {
-		return nil, validationProject()
-	}
-	enabled, ok := mirror["enabled"].(bool)
-	if !ok {
-		return nil, validationProject()
-	}
-	cross, ok := settings["crossProjectAnalysis"].(bool)
-	if !ok {
-		return nil, validationProject()
-	}
-	ai, ok := settings["aiProcessing"].(bool)
-	if !ok {
-		return nil, validationProject()
-	}
-	parseTypes := func(raw any) ([]string, error) {
-		values := []string{}
-		switch array := raw.(type) {
-		case []string:
-			values = append(values, array...)
-		case []any:
-			for _, entry := range array {
-				value, ok := entry.(string)
-				if !ok {
-					return nil, validationProject()
-				}
-				values = append(values, value)
-			}
-		default:
-			return nil, validationProject()
-		}
-		for _, value := range values {
-			found := false
-			for _, known := range recordTypes {
-				if value == known {
-					found = true
-				}
-			}
-			if !found {
-				return nil, validationProject()
-			}
-		}
-		return values, nil
-	}
-	mirrorTypes, err := parseTypes(mirror["recordTypes"])
+	settings, err := domain.ParseProjectSettings(raw)
 	if err != nil {
-		return nil, err
+		return nil, validationProject()
 	}
-	enabledRaw, exists := settings["enabledRecordTypes"]
-	if !exists {
-		enabledRaw = recordTypes
-	}
-	enabledTypes, err := parseTypes(enabledRaw)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]any{"enabledRecordTypes": enabledTypes, "repoMirroring": map[string]any{"enabled": enabled, "recordTypes": mirrorTypes}, "crossProjectAnalysis": cross, "aiProcessing": ai}, nil
+	return settings.Fields(), nil
 }
 func updateProject(ctx context.Context, conn *sql.Conn, r *http.Request, body, actor map[string]any) (map[string]any, error) {
 	project, err := projectEntity(ctx, conn, r.PathValue("id"))
@@ -465,7 +415,11 @@ func updateProject(ctx context.Context, conn *sql.Conn, r *http.Request, body, a
 	if err != nil {
 		return nil, err
 	}
-	if project["version"] != expected {
+	state, err := domain.ProjectFrom(project)
+	if err != nil {
+		return nil, validationProject()
+	}
+	if !state.HasVersion || state.Version != expected {
 		return nil, &versionConflict{project["version"]}
 	}
 	encoded, err := json.Marshal(project)
@@ -512,14 +466,9 @@ func updateProject(ctx context.Context, conn *sql.Conn, r *http.Request, body, a
 		if !ok || (kind != "normal" && kind != "external") {
 			return nil, validationProject()
 		}
-		if kind == "external" && project["kind"] != "external" {
-			settings, err := normalizeSettings(project["settings"])
-			if err != nil {
-				return nil, err
-			}
-			settings["repoMirroring"].(map[string]any)["enabled"] = false
-			settings["crossProjectAnalysis"] = false
-			project["settings"] = settings
+		if kind == "external" && state.Kind != "external" {
+			state.MakeExternal()
+			project["settings"] = state.Settings.Fields()
 		}
 		project["kind"] = kind
 	}
