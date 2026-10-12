@@ -383,6 +383,56 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Insight project", { exact: false })
         .selectOption({ label: "Go dashboard project" });
+      providerUnavailable = true;
+      await page
+        .getByRole("button", { name: "Build embeddings", exact: true })
+        .click();
+      const embeddingJob = page
+        .locator("li")
+        .filter({ has: page.getByText("Embed", { exact: true }) });
+      await expect(
+        embeddingJob.getByText("Failed · Attempt 3", { exact: true }),
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        embeddingJob.getByText(
+          "AI provider is unavailable or returned invalid output.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      providerUnavailable = false;
+      await embeddingJob
+        .getByRole("button", { name: "Retry job", exact: true })
+        .click();
+      await expect(
+        page.getByText("Failed job queued for another attempt.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        embeddingJob.getByText("Completed · Attempt 1", { exact: true }),
+      ).toBeVisible({ timeout: 20_000 });
+      await page
+        .getByLabel("Meaning to search for", { exact: true })
+        .fill("Which finding preserves authoritative project memory?");
+      await page
+        .getByRole("button", { name: "Search by meaning", exact: true })
+        .click();
+      await expect(
+        page.getByText("Found 1 semantic matches.", { exact: true }),
+      ).toBeVisible();
+      const match = page.locator("article").filter({
+        has: page.getByRole("button", {
+          name: "Go dashboard evidence",
+          exact: true,
+        }),
+      });
+      await expect(
+        match.getByText(
+          "The retained dashboard uses the authoritative Go API.",
+          { exact: false },
+        ),
+      ).toBeVisible();
+      await expect(match.getByText(/Similarity 1\.000/)).toBeVisible();
       generateDocument = true;
       await page
         .getByRole("button", { name: "Generate document", exact: true })

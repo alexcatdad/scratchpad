@@ -81,6 +81,11 @@ Analysis queueing, source-linked suggestion acceptance and source inspection als
 use the actual UI and Go worker. The private handoff workflow downloads Markdown
 and verifies its server-added draft warning and source citations. These synthetic
 provider checks verify application wiring, not real model output quality.
+The embedding workflow queues work from Insights, observes a safe failure after
+the bounded provider retries, retries through the UI when the provider recovers,
+and renders the expected source-backed semantic match using fixed synthetic vectors. This verifies the
+existing SQLite/PostgreSQL semantic interface; it does not evaluate PostgreSQL
+passage RAG recall or real embedding quality.
 
 It runs against SQLite and optional disposable PostgreSQL. The database
 connection needs permission to create and drop the fixture's own
