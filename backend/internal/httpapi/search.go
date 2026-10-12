@@ -77,6 +77,9 @@ func (s *SSH) Search(post bool) http.HandlerFunc {
 				params.Set("cursor", text)
 			}
 		}
+		if !params.Has("relationshipType") && params.Get("relationship") != "" {
+			params.Set("relationshipType", params.Get("relationship"))
+		}
 		tx, err := s.Store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 		if err != nil {
 			s.fail(w, err)
@@ -124,7 +127,7 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		}
 	}
 	links := []map[string]any{}
-	if params.Get("status") != "" || params.Get("relationship") != "" || params.Get("relatedTo") != "" {
+	if params.Get("status") != "" || params.Get("relationshipType") != "" || params.Get("relatedTo") != "" {
 		links, err = searchRelationships(ctx, tx, engine, string(encodedIDs))
 		if err != nil {
 			return nil, err
@@ -517,7 +520,7 @@ func searchFilter(record, metadata map[string]any, links []map[string]any, param
 	if value := params.Get("status"); value != "" && lifecycle(record, metadata, links) != value {
 		return false
 	}
-	relation, related := params.Get("relationship"), params.Get("relatedTo")
+	relation, related := params.Get("relationshipType"), params.Get("relatedTo")
 	if relation != "" || related != "" {
 		found := false
 		for _, link := range links {
