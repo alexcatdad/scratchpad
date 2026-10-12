@@ -212,7 +212,7 @@ func (g *Github) request(ctx context.Context, target string, form url.Values, be
 	if res.StatusCode == 403 || res.StatusCode == 429 {
 		return nil, "", &protocolError{"GITHUB_RATE_LIMITED", "GitHub is limiting requests. Try again later.", 503}
 	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
+	if res.StatusCode != http.StatusOK {
 		return nil, "", githubUnavailable()
 	}
 	data, err := io.ReadAll(io.LimitReader(res.Body, 1024*1024+1))

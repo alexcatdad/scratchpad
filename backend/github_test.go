@@ -271,6 +271,12 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Path == "/users/"+login+"/keys" || r.URL.Path == "/users/"+login+"/ssh_signing_keys" {
+		if f.mode == "partial" {
+			w.Header().Set("Content-Range", "bytes 0-1/100")
+			w.WriteHeader(http.StatusPartialContent)
+			io.WriteString(w, `[]`)
+			return
+		}
 		if f.mode == "unsafe" {
 			w.Header().Set("Link", `<https://attacker.invalid/keys?per_page=100&page=2>; rel="next"`)
 		}
@@ -401,6 +407,43 @@ func TestGithubFailedSyncPreservesCompleteCache(t *testing.T) {
 			json.NewDecoder(check.Body).Decode(&auth)
 			if auth.Authenticated {
 				t.Fatal("removed key session remained valid")
+			}
+		})
+	}
+}
+
+func TestGithubPartialHTTPResponsePreservesCompleteCacheAndSessions(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			private, key := githubSyntheticKey(t)
+			fixture := &githubFixture{key: key}
+			githubService(t, fixture)
+			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
+			token := githubSetup(t, path, databaseURL)
+			origin := startServer(t, path, databaseURL)
+			session := githubLogin(t, origin, "setup", token)
+			before := githubStatus(t, origin, session)
+			_, proof := signedChallenge(t, origin, private, key)
+			status, body := postJSON(t, origin, "/api/v1/auth/mcp/verify", proof)
+			if status != 200 {
+				t.Fatal("complete published cache did not authorize the machine")
+			}
+			bearer := body["accessToken"].(string)
+			fixture.set("partial")
+			res := githubRequest(t, origin, "POST", "/sync", map[string]any{}, session)
+			if res.StatusCode != 503 {
+				t.Fatalf("partial HTTP response replaced the complete cache: %d", res.StatusCode)
+			}
+			after := githubStatus(t, origin, session)
+			if after["lastSuccessfulSyncAt"] != before["lastSuccessfulSyncAt"] || !reflect.DeepEqual(after["keys"], before["keys"]) || after["lastSyncError"] != "GITHUB_UNAVAILABLE" {
+				t.Fatal("partial response changed complete keys or freshness")
+			}
+			if status, _ := fetchRecord(t, origin, bearer); status != 200 {
+				t.Fatal("partial response revoked an existing machine session")
+			}
+			_, proof = signedChallenge(t, origin, private, key)
+			if status, _ := postJSON(t, origin, "/api/v1/auth/mcp/verify", proof); status != 200 {
+				t.Fatal("partial response prevented renewal against the preserved cache")
 			}
 		})
 	}
