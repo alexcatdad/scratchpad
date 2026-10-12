@@ -260,7 +260,11 @@ func Records(store *persistence.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		tx, err := store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		options := &sql.TxOptions{ReadOnly: true}
+		if store.Engine == "postgres" {
+			options.Isolation = sql.LevelRepeatableRead
+		}
+		tx, err := store.DB.BeginTx(ctx, options)
 		if err != nil {
 			Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
 			return
