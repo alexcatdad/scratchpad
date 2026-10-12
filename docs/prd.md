@@ -316,7 +316,9 @@ Example:
 
 ### 8.5 Question & Answer
 
-A question whose answer is expected to remain useful later.
+A question worth retaining, with an answer when available. The Go replacement
+also supports unanswered questions and separately captured applicable answers;
+see §46 for the transition contract.
 
 Example:
 
@@ -881,7 +883,9 @@ GitHub credentials and PATs must not be reused as Scratchpad authentication secr
 
 It must not be treated as an authenticated identity.
 
-GitHub integration is optional profile enrichment only.
+Public GitHub profile enrichment is optional presentation. Optional verified
+GitHub owner authentication and synchronized machine keys follow §45; a public
+profile snapshot alone grants no access.
 
 Where a GitHub username can be confidently discovered, Scratchpad may retrieve public information such as:
 
@@ -894,9 +898,9 @@ The dashboard may display a check mark indicating:
 
 > GitHub profile linked
 
-This must not imply that GitHub authenticated the user.
-
-GitHub is not part of Scratchpad's root of trust.
+This descriptive check mark must not imply verified GitHub owner authentication.
+The separate verified account binding authenticates the owner under §45, while
+independent passkeys and administrator recovery remain available.
 
 ---
 
@@ -971,7 +975,10 @@ The export format must preserve records, relationships, provenance, and audit hi
 
 ## 31. Technology Stack
 
-### Server and dashboard
+### Supported server and dashboard
+
+The following stack remains supported during replacement. The accepted central
+Go backend direction and its compatibility gates are consolidated in §46.
 
 - TypeScript
 - Node.js 24 LTS
@@ -1415,3 +1422,78 @@ Synchronize both complete key sets every five minutes. Failed, malformed or inco
 Passkey-only setup, optional passkeys, independent manual SSH enrollment and administrator recovery remain available. Unlinking requires fresh independent local authentication or recovery. Account replacement requires fresh existing authentication or recovery. Both preserve knowledge and independent local credentials while invalidating GitHub-derived access; neither converts synchronized keys into local credentials.
 
 A portable onboarding skill discovers a usable existing key through the agent's preferred Git/SSH tooling, configures the existing MCP connection and verifies a scoped authenticated read. It does not introduce a setup command, publish keys or copy private material. The operator configures one OAuth app per instance; client machines share that server configuration. Source implementation, release publication and live acceptance remain separate.
+
+## 46. Accepted direction — Go replacement, upgrades, secrets and RAG
+
+[Issue #36](https://github.com/alexcatdad/scratchpad/issues/36) defines the central
+backend replacement. Go owns business logic, authentication, persistence,
+scheduling, optional AI processing and HTTP. Retain the React/TypeScript dashboard
+initially for audit and configuration. Keep the local Go MCP on stdio and its
+central HTTP(S) connection, Git discovery, local SSH possession proof and optional
+central-first repository mirroring. Remote MCP transports are outside this work.
+
+Supported installations must retain authentication and recovery, credential
+provenance and revocation, GitHub cache freshness and local blocks, immutable
+captures, retries, optimistic edits, audit atomicity, imports/exports, optional AI
+behavior and source/privacy validation. Keep HTTP, generated-client and MCP
+contracts compatible through documented transitions. The TypeScript runtime
+remains supported until parity, operational recovery and delivery gates pass;
+an opt-in Go build or local passing test does not establish cutover or deployment.
+
+Recognize schema-version-one installations and apply ordered, serialized
+migrations on SQLite and PostgreSQL before serving or starting workers. Reject
+unsupported or malformed installations safely without automatic repair. Preserve
+history and identifiers; verify backups and restoration, document downgrade
+boundaries and operator preparation for exceptional changes. Use concrete internal
+entity types while retaining flexible immutable payloads and interface validation.
+Focus database queries for search, detail, context and workers on both engines;
+retain the shared PostgreSQL transaction lock until measured evidence and
+correctness checks justify narrowing it.
+
+Keep the legacy context response during transition and provide explicitly
+versioned compact context with distinct previews, source IDs, response limits and
+omission counts. Select current state before limiting history. The Go backend
+accepts question-only captures and separate answers connected through accepted
+`answers` relationships; unanswered status follows applicable current evidence.
+The TypeScript validator remains unchanged until cutover. See the
+[context contract](runbooks/go-context.md).
+
+Encrypt persisted reusable provider secrets with versioned standard authenticated
+encryption and a separately retained deployment key file. Native, Docker and
+Kubernetes use the same protected-file interface for unattended operation. Never
+silently generate replacement keys. Track legacy plaintext conversion separately
+from schema upgrades; missing, wrong or tampered keys block affected provider
+operations without plaintext fallback or loss of ordinary memory. Providers
+requiring no secret remain usable. Keep secret values out of logs, audits, public
+responses and knowledge exports. MCP capture guidance recommends references to
+secrets. Restoration requires the retained key, or re-entering lost provider tokens
+without losing history. Whole-record/database/index encryption is outside scope.
+
+New passage RAG is optional and PostgreSQL-only through pgvector. SQLite ordinary
+memory and existing semantic search remain supported. Immutable captures are the
+authority; indexed passages, lexical projections and embeddings are rebuildable
+derivatives with source locations, hashes, versions and compatibility metadata.
+Index eligible history and new captures asynchronously using durable leased jobs,
+transactional capture/enqueue, idempotent retries and consent rechecks. Completion
+model changes preserve compatible embeddings; lifecycle changes apply at retrieval
+without rewriting sources or re-embedding unchanged text.
+
+Question-focused HTTP and stdio retrieval combine bounded lexical and exact vector
+candidates through rank fusion, deduplicate passages and return cited evidence
+within a response budget. Default to the selected project; explicit cross-project
+requests require existing consent. Distinguish current and historical guidance,
+retain accepted replacement/contradiction relationships, report incomplete indexing
+and provide lexical fallback when semantic retrieval is unavailable. Retrieval
+scores do not establish authority. New ingestion corpora, generated summaries as
+first-release evidence, reranking, approximate indexes and separate queue/vector
+services remain outside scope. See the [RAG contract](runbooks/go-rag.md).
+
+Completion requires representative synthetic retrieval evaluation for exact IDs,
+paraphrases, long records, lifecycle history, contradictions, project boundaries
+and unanswerable requests, measuring recall, stale/forbidden evidence, duplication,
+response size and latency. Compare concurrent agents against the TypeScript
+baseline, including latency distributions, errors, bytes and observable resource
+or database waiting. Run relevant Go, frontend, docs, SDK, integration and container
+checks with GitHub Actions as the canonical runner. Local verification, canonical
+CI, release verification and deployed acceptance are separate evidence layers;
+merge, deployment and destructive live-data migration require separate approval.

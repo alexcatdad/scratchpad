@@ -10,6 +10,11 @@
 
 This document defines the initial technical architecture for Scratchpad.
 
+The supported TypeScript runtime below is being replaced under issue #36. The
+accepted Go direction is consolidated in PRD §46 and the implementation boundary
+in this document's “Go backend replacement in progress” section. Go builds remain
+opt-in until parity, recovery and delivery acceptance pass.
+
 Scratchpad is a private, self-hosted developer-memory system with:
 
 - a central stateful application;
@@ -84,7 +89,7 @@ The architecture prioritizes:
 
 ## 3. Technology Decisions
 
-### 3.1 Web application and API
+### 3.1 Supported web application and API during replacement
 
 Use:
 
@@ -103,7 +108,11 @@ TanStack Start owns:
 - configuration UI;
 - background-job integration.
 
-A separate HTTP framework is not required for V1.
+A separate HTTP framework is not required for the supported TypeScript runtime.
+The accepted replacement moves central API, authentication, persistence and jobs
+to Go, while retaining this React/TypeScript dashboard. Go owns the public API and
+the optional private Node process renders dashboard pages only; see the Go
+replacement section for implemented integration and outstanding acceptance.
 
 ---
 
@@ -352,11 +361,10 @@ Sessions use secure HTTP-only cookies.
 
 ### 6.3 GitHub
 
-This historical baseline is superseded for optional owner authentication by §32.
-
-GitHub is not an authentication provider.
-
-GitHub may enrich the owner profile with:
+GitHub optionally authenticates the owner through a verified stable account
+binding, as specified in §32. Independent passkeys and administrator recovery
+remain available. A public GitHub profile snapshot grants no authentication
+authority and may enrich presentation with:
 
 - username;
 - avatar;
@@ -965,7 +973,16 @@ The source implementation extends the SQLite MVP with optional PostgreSQL, datab
 
 ### Persistence
 
-A single asynchronous Store boundary uses Drizzle with SQLite or PostgreSQL. `SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default. Domain behavior, authentication, retries, auditing and optimistic edits stay in the central server. Database-native full-text facilities implement deterministic retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated application database and its own operational backup tooling. Native export/import provides knowledge portability, not transparent live migration or credential migration.
+The supported TypeScript runtime uses an asynchronous Drizzle Store boundary
+with SQLite or PostgreSQL. The Go replacement uses its own database boundary and
+ordered migrations while preserving existing source history and contracts.
+`SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default.
+Domain behavior, authentication, retries, auditing and optimistic edits stay in the
+central server. Database-native full-text facilities implement deterministic
+retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated
+application database and its own operational backup tooling. Native export/import
+provides knowledge portability, not transparent live migration or credential
+migration.
 
 ### Optional processing
 

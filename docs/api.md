@@ -413,6 +413,11 @@ type QAPayload = {
 };
 ```
 
+This is the supported TypeScript full-pair shape. The opt-in Go backend also
+accepts an omitted `answer` for unresolved questions; a supplied answer must be
+nonempty. Applicable accepted `answers` relationships resolve separately captured
+answers without editing the question. See the compact-context contract below.
+
 ---
 
 ## 18. Failure Payload
@@ -1507,15 +1512,17 @@ Everything else can build on this stable core.
 
 ## 58. Compatibility Rule
 
-The HTTP API is the contract between the Go MCP and TypeScript application.
+The HTTP API is the contract between the local Go MCP, generated clients and the
+central application, including the opt-in Go replacement.
 
 Neither implementation may rely on internal types from the other language/runtime.
 
-The contract should eventually be published as OpenAPI.
-
-Generated TypeScript and Go clients may be introduced if useful.
-
-OpenAPI becomes documentation and validation, not a requirement for the first scaffold commit.
+The implemented [OpenAPI 3.1 contract](openapi.json) drives deterministic
+TypeScript and Go clients. Preserve their wire behavior during backend replacement;
+new compact context is explicitly versioned and does not silently replace legacy
+context. See §67 and [the client runbook](runbooks/api-clients.md) for consumption
+and verification. Generated interfaces do not replace server-side runtime
+validation, authorization or consent checks.
 
 ## 59. Accepted clarification — enrollment contract requirements
 
@@ -1612,6 +1619,16 @@ type AiSettings = {
 ```
 
 `apiKey` is a write-only optional field: omitting it preserves a stored key; an empty string removes it. Responses and audit configuration snapshots expose only whether a key is configured. Provider URLs must be HTTP(S), without embedded credentials, a query, or a fragment. `enabled` defaults to false. A schedule of `0` means manual processing only. The API accepts similarity thresholds from `-1` to `1`; the dashboard presents the usual nonnegative range. Provider request timeouts are configurable from 5 to 3,600 seconds, default 600. Reasoning effort defaults to `none`; `default` omits the provider-specific override. Choose a supported effort for the configured model. `maxOutputTokens` limits generated output (256–32,768; default 4,096). Size the timeout to the model and hardware: a large local model may require more than 180 seconds.
+
+The opt-in Go backend encrypts persisted reusable provider tokens and adds safe
+`secretProtection.status` metadata: `protected`, `pending_conversion`,
+`unavailable`, or `not_required`. Secret-dependent calls with a missing/wrong key
+or invalid ciphertext return `SECRET_UNAVAILABLE` without provider dispatch or
+plaintext fallback. A separately supplied retained key file permits unattended
+restarts and legacy conversion, independently of ordinary schema upgrades.
+Ordinary memory and providers requiring no token remain available. Responses,
+audits and knowledge exports never include the token or ciphertext. See the
+[secret configuration and recovery contract](runbooks/go-secret-configuration.md).
 
 `GET /settings` and optimistic `PATCH /settings` additionally control `defaultProjectSettings` for new normal/internal projects. Existing projects retain their settings; external projects use conservative defaults regardless of normal-project defaults.
 
@@ -1768,8 +1785,9 @@ The response is `{results, resultsOmitted, semantic}`. `semantic.available` is
 true after successful semantic retrieval; `semantic.indexCoverage` is currently
 `complete` or `incomplete`, scoped to eligible immutable sources in the current
 embedding generation. Incomplete results must not be interpreted as absent evidence.
-Hybrid rank fusion, lexical fallback and RAG MCP integration
-remain required work.
+Hybrid rank fusion, lexical fallback and the stdio evidence tool are implemented
+as specified in the consolidated sections below. Representative retrieval
+evaluation and full delivery acceptance remain separate gates.
 See [the RAG runbook](runbooks/go-rag.md) for projection migration, restart,
 rebuild and compatibility boundaries.
 
@@ -1785,8 +1803,10 @@ A separate cancellable reconciliation loop discovers bounded batches of eligible
 history and newly consenting projects, including new embedding generations. It
 continues while embedding requests are blocked, rechecks consent/configuration
 under the shared writer lock and reuses durable source jobs through restart.
-Completion-only model changes preserve the generation. Full indexing coverage,
-hybrid fallback and the RAG MCP interface remain subsequent work.
+Completion-only model changes preserve the generation. Current-generation
+coverage, hybrid fallback and the stdio evidence interface follow the contracts
+below. Coverage remains explicit per request; implementing these interfaces does
+not establish representative retrieval quality or release acceptance.
 
 ## Go replacement addition: current-generation coverage
 
