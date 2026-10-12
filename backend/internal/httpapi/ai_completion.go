@@ -22,6 +22,12 @@ type generatedCompletion struct {
 	Artifacts []generatedArtifact `json:"artifacts"`
 }
 
+const completionMarkdownLimit = 50000
+
+func documentTooLarge() error {
+	return &protocolError{"AI_SCOPE_TOO_LARGE", "Generated document exceeds the 50000-character limit including source citations.", 409}
+}
+
 func completionSchema(export bool) map[string]any {
 	nullable := func(value any) any { return map[string]any{"anyOf": []any{value, map[string]any{"type": "null"}}} }
 	prose := func(limit int) map[string]any {
@@ -70,7 +76,11 @@ func completionParts(text string) []string {
 func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 	ordered := append([]map[string]any{}, records...)
 	sort.SliceStable(ordered, func(i, j int) bool {
-		return stringValue(ordered[i], "recordedAt") < stringValue(ordered[j], "recordedAt")
+		left, right := stringValue(ordered[i], "recordedAt"), stringValue(ordered[j], "recordedAt")
+		if order, err := compareInstants(left, right); err == nil {
+			return order < 0
+		}
+		return left < right
 	})
 	groups := map[string][]map[string]any{}
 	projects := []string{}
@@ -169,7 +179,7 @@ func (a *AI) completeBatch(ctx context.Context, job map[string]any, snapshot pro
 		}
 		if markdown, exists := artifact.Content["markdown"]; exists {
 			text, ok := markdown.(string)
-			if !ok || len(utf16.Encode([]rune(text))) > 50000 {
+			if !ok || len(utf16.Encode([]rune(text))) > completionMarkdownLimit {
 				return result, aiUnavailable()
 			}
 		}
@@ -259,6 +269,7 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 	artifacts := []map[string]any{}
 	warnings := []map[string]any{}
 	generatedCount := 0
+	exportMarkdownUnits := 0
 	export := job["type"] == "export"
 	if export || len(snapshot.config.AnalysisModes) > 0 {
 		for _, batch := range batches {
@@ -275,6 +286,16 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 				projectIDs = append(projectIDs, stringValue(project, "id"))
 			}
 			for _, generated := range response.Artifacts {
+				if export {
+					units := len(utf16.Encode([]rune(stringValue(generated.Content, "markdown"))))
+					if len(artifacts) > 0 {
+						units += len("\n\n---\n\n")
+					}
+					if units > completionMarkdownLimit-exportMarkdownUnits {
+						return documentTooLarge()
+					}
+					exportMarkdownUnits += units
+				}
 				for _, id := range generated.SourceRecordIDs {
 					if !contains(batchIDs, id) {
 						return aiUnavailable()
@@ -358,14 +379,26 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 		content := artifact["content"].(map[string]any)
 		markdown := stringValue(content, "markdown")
 		if markdown != "" {
+			if export {
+				markdown = "> AI-generated draft. Source records retain their original authority; review this document before sharing.\n\n" + markdown
+			}
+			units := len(utf16.Encode([]rune(markdown))) + len("\n\n## Source records\n\n") + 1
+			if export && units > completionMarkdownLimit {
+				return documentTooLarge()
+			}
 			citations := []string{}
 			sourceIDs, _ := portableIDs(artifact["sourceRecordIds"])
 			for _, id := range sourceIDs {
 				title := strings.NewReplacer("[", " ", "]", " ", "\n", " ").Replace(stringValue(known[id], "title"))
-				citations = append(citations, "- ["+title+"]("+a.auth.Origin+"/?recordId="+url.QueryEscape(id)+") — `"+id+"`")
-			}
-			if export {
-				markdown = "> AI-generated draft. Source records retain their original authority; review this document before sharing.\n\n" + markdown
+				citation := "- [" + title + "](" + a.auth.Origin + "/?recordId=" + url.QueryEscape(id) + ") — `" + id + "`"
+				units += len(utf16.Encode([]rune(citation)))
+				if len(citations) > 0 {
+					units++
+				}
+				if export && units > completionMarkdownLimit {
+					return documentTooLarge()
+				}
+				citations = append(citations, citation)
 			}
 			content["markdown"] = markdown + "\n\n## Source records\n\n" + strings.Join(citations, "\n") + "\n"
 		}
