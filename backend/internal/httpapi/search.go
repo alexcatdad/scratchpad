@@ -80,7 +80,11 @@ func (s *SSH) Search(post bool) http.HandlerFunc {
 		if !params.Has("relationshipType") && params.Get("relationship") != "" {
 			params.Set("relationshipType", params.Get("relationship"))
 		}
-		tx, err := s.Store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		options := &sql.TxOptions{ReadOnly: true}
+		if s.Store.Engine == "postgres" {
+			options.Isolation = sql.LevelRepeatableRead
+		}
+		tx, err := s.Store.DB.BeginTx(ctx, options)
 		if err != nil {
 			s.fail(w, err)
 			return
@@ -151,10 +155,27 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		filtered = append(filtered, record)
 	}
 	ordering := collate.New(language.English)
+	dateCompare := func(left, right string) int {
+		_, _, leftErr := timestampParts(left)
+		_, _, rightErr := timestampParts(right)
+		if leftErr == nil && rightErr != nil {
+			return 1
+		}
+		if leftErr != nil && rightErr == nil {
+			return -1
+		}
+		if order, err := compareInstants(left, right); err == nil {
+			return order
+		}
+		// Historical incomplete headers stay sortable until their page is
+		// selected; hydration remains responsible for selected-body corruption.
+		return ordering.CompareString(left, right)
+	}
 	sort.Slice(filtered, func(i, j int) bool {
 		left, right := filtered[i], filtered[j]
-		if left["createdAt"] != right["createdAt"] {
-			return ordering.CompareString(stringValue(left, "createdAt"), stringValue(right, "createdAt")) > 0
+		dateOrder := dateCompare(stringValue(left, "createdAt"), stringValue(right, "createdAt"))
+		if dateOrder != 0 {
+			return dateOrder > 0
 		}
 		return ordering.CompareString(stringValue(left, "id"), stringValue(right, "id")) > 0
 	})
@@ -168,10 +189,13 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		if json.Unmarshal(raw, &encoded) != nil || len(encoded) != 2 || len(bytes.TrimSpace(encoded[0])) == 0 || bytes.TrimSpace(encoded[0])[0] != '"' || len(bytes.TrimSpace(encoded[1])) == 0 || bytes.TrimSpace(encoded[1])[0] != '"' || json.Unmarshal(raw, &pair) != nil {
 			return nil, &protocolError{"VALIDATION_FAILED", "Invalid cursor.", 400}
 		}
+		if _, _, err := timestampParts(pair[0]); err != nil {
+			return nil, &protocolError{"VALIDATION_FAILED", "Invalid cursor.", 400}
+		}
 		selected := []map[string]any{}
 		for _, record := range filtered {
 			date, id := stringValue(record, "createdAt"), stringValue(record, "id")
-			dateOrder := ordering.CompareString(date, pair[0])
+			dateOrder := dateCompare(date, pair[0])
 			if dateOrder < 0 || (dateOrder == 0 && ordering.CompareString(id, pair[1]) < 0) {
 				selected = append(selected, record)
 			}
