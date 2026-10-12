@@ -614,9 +614,24 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Allow AI processing for this project", { exact: true })
         .uncheck();
+      const disabledSettings = page.waitForResponse(
+        (response) =>
+          response
+            .url()
+            .endsWith(
+              `/projects/${capturedRecord.record.projectId}/settings`,
+            ) && response.request().method() === "PATCH",
+      );
+      const disabledProjects = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith("/projects") &&
+          response.request().method() === "GET",
+      );
       await page
         .getByRole("button", { name: "Save project settings", exact: true })
         .click();
+      expect((await disabledSettings).status()).toBe(200);
+      await (await disabledProjects).finished();
       await page.getByRole("button", { name: "Insights", exact: true }).click();
       await page
         .getByLabel("Insight project", { exact: false })
@@ -624,6 +639,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(suggestion).toHaveCount(0);
       await expect(rejectedSuggestion).toHaveCount(0);
       await expect(document).toHaveCount(0);
+      await expect(
+        page.getByRole("button", { name: "Analyze memory", exact: true }),
+      ).toBeDisabled();
       await expect(
         page.getByText(
           "This project must allow AI processing in its project settings.",
@@ -635,13 +653,31 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Allow AI processing for this project", { exact: true })
         .check();
+      const enabledSettings = page.waitForResponse(
+        (response) =>
+          response
+            .url()
+            .endsWith(
+              `/projects/${capturedRecord.record.projectId}/settings`,
+            ) && response.request().method() === "PATCH",
+      );
+      const enabledProjects = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname.endsWith("/projects") &&
+          response.request().method() === "GET",
+      );
       await page
         .getByRole("button", { name: "Save project settings", exact: true })
         .click();
+      expect((await enabledSettings).status()).toBe(200);
+      await (await enabledProjects).finished();
       await page.getByRole("button", { name: "Insights", exact: true }).click();
       await page
         .getByLabel("Insight project", { exact: false })
         .selectOption({ label: "Go dashboard project" });
+      await expect(
+        page.getByRole("button", { name: "Analyze memory", exact: true }),
+      ).toBeEnabled();
       await expect(
         suggestion.getByText("Accepted", { exact: true }),
       ).toBeVisible();
