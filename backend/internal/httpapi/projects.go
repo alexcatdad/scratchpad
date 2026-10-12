@@ -312,7 +312,7 @@ func normalizeRemote(raw string) (string, error) {
 	segments := []string{}
 	for _, segment := range strings.Split(target.EscapedPath(), "/") {
 		decoded, err := url.PathUnescape(segment)
-		if err != nil {
+		if err != nil || strings.ContainsAny(decoded, "/\\") {
 			return "", validationProject()
 		}
 		switch decoded {
@@ -322,7 +322,7 @@ func normalizeRemote(raw string) (string, error) {
 				segments = segments[:len(segments)-1]
 			}
 		default:
-			segments = append(segments, segment)
+			segments = append(segments, url.PathEscape(decoded))
 		}
 	}
 	path := strings.TrimSuffix(strings.Trim(strings.Join(segments, "/"), "/"), ".git")
