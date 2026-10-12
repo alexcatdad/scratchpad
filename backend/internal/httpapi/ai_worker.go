@@ -364,7 +364,7 @@ func (a *AI) failAIJob(ctx context.Context, job map[string]any, cause error) err
 		var protocol *protocolError
 		if errors.As(cause, &protocol) {
 			message = protocol.message
-			terminal = terminal || contains([]string{"AI_NOT_ALLOWED", "AI_DISABLED", "AI_CONFIGURATION_CHANGED", "AI_SCOPE_TOO_LARGE"}, protocol.code)
+			terminal = terminal || contains([]string{"AI_NOT_ALLOWED", "AI_DISABLED", "AI_CONFIGURATION_CHANGED", "AI_SCOPE_TOO_LARGE", "AI_NO_SOURCES"}, protocol.code)
 		}
 		current["status"] = "queued"
 		action := "ai.job.retry_scheduled"

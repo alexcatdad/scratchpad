@@ -360,6 +360,26 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 			if job["version"] != expected {
 				return &versionConflict{job["version"]}
 			}
+			if job["type"] == "rag_index" {
+				if err = a.ragAvailable(ctx, conn); err != nil {
+					return err
+				}
+				settings, err := readSettings(ctx, conn, "ai_settings")
+				if err != nil {
+					return err
+				}
+				cfg, err := aiConfig(settings)
+				if err != nil {
+					return err
+				}
+				fingerprint, err := ragFingerprint(cfg)
+				if err != nil {
+					return err
+				}
+				if job["fingerprint"] != fingerprint || job["processingVersion"] != ragProcessingVersion {
+					return &protocolError{"CONFLICT", "Restore compatible embedding settings before retrying this passage job.", 409}
+				}
+			}
 			previous, err := copyEntity(job)
 			if err != nil {
 				return err

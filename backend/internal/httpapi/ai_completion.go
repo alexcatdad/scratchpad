@@ -241,6 +241,9 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 	if err != nil {
 		return err
 	}
+	if job["type"] == "export" && len(records) == 0 {
+		return &protocolError{"AI_NO_SOURCES", "No source records are available for this document.", 409}
+	}
 	signature, err := aiFingerprint(snapshot.config)
 	if err != nil {
 		return err
