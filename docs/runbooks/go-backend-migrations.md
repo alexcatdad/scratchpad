@@ -32,7 +32,7 @@ Without `TEST_POSTGRES_URL`, PostgreSQL cases explicitly skip. To run them, supp
 TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpad_test npm run test:backend
 ```
 
-Tests execute real race-instrumented server, MCP and integration-runner binaries and exercise CLI startup, HTTP and stdio. The backend test command disables Go result caching with `-count=1`: these external-process tests must rebuild and exercise the current executable after backend-only changes. Legacy fixture SQL constructs historical input; assertions do not query internal tables. Coverage includes fresh/repeated startup, supported schema-1 upgrade, competing startups, failed-DDL rollback/retry, unsupported and malformed schemas, unsafe SQLite paths, interrupted lock-wait startup, restored sessions and unchanged record details across restart. SSH tests use real local signing, prove successful authenticated record retrieval through stdio on both engines, reject transplanted and reused signatures, verify concurrent single-use proof consumption and preserve challenges across restart. GitHub fixtures cover freshness, removal, future timestamps, binding changes, local blocking and automatic admission from the published snapshot. A closed SQLite schema-1 snapshot is also restored into a separate file before authenticated retrieval. This closed-fixture copy is not a live SQLite backup procedure. PostgreSQL dump/restore, interruption during actual DDL execution, full dashboard workflows and full stdio capture/retrieval parity remain required before cutover.
+Tests execute real race-instrumented server, MCP and integration-runner binaries and exercise CLI startup, HTTP and stdio. The backend test command disables Go result caching with `-count=1`: these external-process tests must rebuild and exercise the current executable after backend-only changes. Legacy fixture SQL constructs historical input; assertions do not query internal tables. Coverage includes fresh/repeated startup, supported schema-1 upgrade, competing startups, failed-DDL rollback/retry, unsupported and malformed schemas, unsafe SQLite paths, interrupted lock-wait startup, restored sessions and unchanged record details across restart. SSH tests use real local signing, prove successful authenticated record retrieval through stdio on both engines, reject transplanted and reused signatures, verify concurrent single-use proof consumption and preserve challenges across restart. GitHub fixtures cover freshness, removal, future timestamps, binding changes, local blocking and automatic admission from the published snapshot. A closed SQLite schema-1 snapshot is also restored into a separate file before authenticated retrieval. This closed-fixture copy is not a live SQLite backup procedure. Native PostgreSQL dump/restore is verified separately below. Interruption during actual DDL execution, pre-upgrade PostgreSQL downgrade, full dashboard workflows and full delivery acceptance remain required before cutover.
 
 GitHub Actions adds a separate Go-backend lane with PostgreSQL 18.6, formatting, vet, race tests, build and vulnerability checking. Local PostgreSQL 17 verification does not establish PostgreSQL 18.6 CI acceptance.
 
@@ -196,6 +196,61 @@ SCRATCHPAD_DATABASE_URL='' SCRATCHPAD_DATABASE_PATH='/absolute/source/scratchpad
 ```
 
 The successful JSON report includes the source schema version and destination. The PostgreSQL branch returns `BACKUP_EXTERNAL` before connecting or touching SQLite files; use the operator-controlled `pg_dump`/`pg_restore` procedure for that engine. A SQLite backup command does not prove PostgreSQL operational restore.
+
+### PostgreSQL snapshot and fresh-database restoration
+
+Use clients matching the server major version. PostgreSQL documents consistent
+single-database snapshots in [pg_dump](https://www.postgresql.org/docs/18/app-pgdump.html)
+and direct database restoration in [pg_restore](https://www.postgresql.org/docs/18/app-pgrestore.html).
+Retain the existing runtime/configuration and the separately protected installation
+key. The following template uses an operator-managed password file and creates a
+new destination; substitute the private paths, connection and database names.
+
+```sh
+umask 077
+export PGPASSFILE='/absolute/private/postgresql.pgpass'
+export PGHOST='database.example.internal'
+export PGPORT='5432'
+export PGUSER='scratchpad_restore_operator'
+pg_dump --format=custom --no-owner --no-acl \
+  --dbname='scratchpad_source' \
+  --file='/absolute/private-backups/pre-upgrade.dump'
+createdb 'scratchpad_restore_candidate'
+pg_restore --exit-on-error --no-owner --no-acl \
+  --dbname='scratchpad_restore_candidate' \
+  '/absolute/private-backups/pre-upgrade.dump'
+```
+
+Select the destination explicitly with `--dbname`; an archive-to-SQL conversion
+is not a database restore. The restoring role owns restored objects and supplies
+its deployment grants separately. This is one application database, not a backup
+of cluster roles or server configuration. A RAG destination also needs the
+matching installed pgvector extension files and permission to restore extensions.
+Retain the original public origin/RP ID when validating browser credentials and
+mount the retained installation key for encrypted provider settings.
+
+Real-process tests dump a live fixture, restore into an empty database, then verify
+fresh SSH proof and authenticated reads, unchanged records, durable retry replay,
+native lexical indexes, exclusion of later writes, and retained-key provider
+dispatch. Wrong or missing keys deny provider dispatch while preserving memory.
+The pgvector case also verifies restored coverage, semantic citations and lexical
+fallback with unavailable keys. Uncompressed test archives must not contain the
+synthetic reusable provider token. All test material is disposable and synthetic.
+
+```sh
+TEST_POSTGRES_URL=postgres://postgres@127.0.0.1:5432/postgres \
+  go -C backend test -race -count=1 -run TestPostgresOperationalRestore ./...
+TEST_PGVECTOR_URL=postgres://postgres@127.0.0.1:5432/postgres \
+  go -C backend test -race -count=1 -run TestRAGPostgresOperationalRestore ./...
+```
+
+Configured PostgreSQL fixtures require `pg_dump` and `pg_restore`; missing clients
+fail rather than silently omit restore coverage. CI uses the matching clients
+inside its owned PostgreSQL service through `TEST_POSTGRES_CONTAINER_ID`. Local
+verification uses native clients. These checks do not establish deployed restore,
+browser-passkey recovery, pre-upgrade PostgreSQL downgrade, or full release parity.
+
+### Runtime replacement and SQLite restoration
 
 Stop application writers and workers before replacing a runtime. Retain the exact old executable/image and configuration. For the current SQLite application, use its existing online administrative backup command; do not copy only the main database while WAL writers are active. For PostgreSQL, use the existing administrative backup procedure or an operator-controlled `pg_dump`, and restore into a separate disposable database to verify the backup before upgrading.
 

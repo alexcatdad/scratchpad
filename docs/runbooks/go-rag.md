@@ -74,8 +74,10 @@ Unknown versions, malformed timestamps and missing required projection objects
 are refused without automatic repair. Disable the optional RAG feature to access
 ordinary memory while preparing an authorized projection recovery. Retain the
 database for operational restore; knowledge exports contain original knowledge,
-not vector projections or operational jobs. PostgreSQL operational restore and
-full cutover acceptance remain outstanding for issue #36.
+not vector projections or operational jobs. Native PostgreSQL dump/restore tests
+now verify passage coverage and retrieval after restoration, including unavailable
+installation keys. See the [restore procedure](go-backend-migrations.md#postgresql-snapshot-and-fresh-database-restoration).
+Deployed recovery and full cutover acceptance remain outstanding for issue #36.
 
 ## Retrieve semantic passage evidence
 

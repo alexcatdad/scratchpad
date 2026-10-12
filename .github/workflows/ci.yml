@@ -89,7 +89,10 @@ jobs:
             mcp/go.sum
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
-      - run: go test -race -count=1 ./...
+      - name: Verify Go backend and operational PostgreSQL restore
+        run: go test -race -count=1 -timeout 15m ./...
+        env:
+          TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
       - run: go build -o "$RUNNER_TEMP/scratchpad-server" ./cmd/scratchpad-server
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -189,6 +192,7 @@ jobs:
       - name: Verify Go RAG availability with native pgvector
         run: go -C backend test -race -count=1 -run TestRAG ./...
         env:
+          TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
           TEST_POSTGRES_URL: postgres://postgres:scratchpad-test@localhost:5432/postgres
   infrastructure:
     runs-on: ubuntu-latest
