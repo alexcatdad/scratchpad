@@ -8,7 +8,9 @@ import (
 	"io"
 	"math"
 	"net/http"
+	"net/http/httptrace"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -113,12 +115,26 @@ func (a *AI) postProviderGuarded(ctx context.Context, r *http.Request, snapshot 
 		err   error
 	}
 	done := make(chan response, 1)
-	dispatched := false
+	started := make(chan struct{})
+	var startedOnce sync.Once
+	req = req.WithContext(httptrace.WithClientTrace(req.Context(), &httptrace.ClientTrace{GetConn: func(string) { startedOnce.Do(func() { close(started) }) }}))
+	launched := false
+	var early *response
+	finish := func() response {
+		if early != nil {
+			return *early
+		}
+		return <-done
+	}
 	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		if r == nil && guard == nil {
 			return aiUnavailable()
 		}
-		if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
+		// New network work always uses the full dispatch generation. Passage
+		// compatibility remains a separate admission check for already returned output.
+		dispatchSnapshot := snapshot
+		dispatchSnapshot.passage = false
+		if err := a.providerCurrent(ctx, conn, r, dispatchSnapshot); err != nil {
 			return err
 		}
 		if guard != nil {
@@ -126,25 +142,31 @@ func (a *AI) postProviderGuarded(ctx context.Context, r *http.Request, snapshot 
 				return err
 			}
 		}
-		// Admit the request under the configuration lock, then release it
-		// without waiting for provider headers or body.
-		started := make(chan struct{})
-		go func() { close(started); value, err := client.Do(req); done <- response{value, err} }()
-		<-started
-		dispatched = true
-		return nil
+		// Transport initiation, rather than goroutine scheduling, is the
+		// dispatch boundary. Release before DNS, dial, TLS or response latency.
+		launched = true
+		go func() { value, err := client.Do(req); done <- response{value, err} }()
+		select {
+		case <-started:
+			return nil
+		case result := <-done:
+			early = &result
+			return nil // failure before GetConn
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	})
 	if err != nil {
 		cancel()
-		if dispatched {
-			result := <-done
+		if launched {
+			result := finish()
 			if result.value != nil {
 				result.value.Body.Close()
 			}
 		}
 		return nil, err
 	}
-	result := <-done
+	result := finish()
 	if result.err != nil {
 		return nil, aiUnavailable()
 	}
