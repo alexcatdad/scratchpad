@@ -120,7 +120,7 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 	}
 	defer cs.Close()
 	listed, err := cs.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 19 {
+	if err != nil || len(listed.Tools) != 20 {
 		t.Fatalf("tools %v %v", listed, err)
 	}
 	fields := map[string]map[string]any{"decision": {"decision": "Use SQLite"}, "adr": {"decision": "Use SQLite"}, "business_decision": {"decision": "Self hosted"}, "finding": {"finding": "Works"}, "qa": {"question": "Why?", "answer": "Because"}, "failure": {"observed": "Failed"}, "constraint": {"constraint": "English only"}, "project_state": {"state": "active"}}
@@ -358,7 +358,7 @@ func TestStdioProtocol(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 19 {
+	if err != nil || len(tools.Tools) != 20 {
 		t.Fatalf("%v %v", tools, err)
 	}
 	for _, tool := range tools.Tools {

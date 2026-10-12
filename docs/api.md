@@ -1821,3 +1821,12 @@ relationship references. Both endpoints must belong to the selected eligible
 projects. Excluded-project IDs and notes remain hidden. Lifecycle classification
 is independent of scoped preview limits, and the response budget reports preview
 omissions before shortening the first cited source excerpt.
+
+## Go replacement addition: stdio cited evidence tool
+
+The local stdio MCP registers `retrieve_evidence` and forwards authenticated
+`POST /rag/retrieve` through the existing HTTP client. It uses checkout discovery
+or explicit scope, requires explicit cross-project intent, and forwards query,
+current/history intent and bounded response limits. Invalid explicit limits are
+rejected rather than omitted. The tool returns server citations and uncertainty
+without promoting scores or historical records into accepted policy.

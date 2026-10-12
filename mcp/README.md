@@ -59,3 +59,20 @@ Capture responses always identify the resolved project and distinguish central s
 See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Explicit project selection retains checkout provenance even when remotes are ambiguous.
 
 Local builds identify as `dev`. Release builds inject the tag with `go build -ldflags '-X main.version=<version>'`; both `--version` and MCP initialization report that value.
+
+## Cited RAG evidence
+
+`retrieve_evidence` forwards a question or identifier to the Go PostgreSQL RAG
+backend over the existing authenticated HTTP connection. It defaults to checkout
+project discovery, or accepts an explicit project/working directory. Cross-project
+retrieval requires `crossProject: true` and optional `projectIds`; current server
+participation consent remains authoritative. SQLite semantic search remains the
+separate existing `semantic_search` tool.
+
+Inputs are `query`, optional `intent` (`current` or `history`), `limit` (1–100)
+and `maxChars` (4096–64000 serialized response bytes). Omitted limits use server
+defaults; explicit invalid values fail. Results retain source identifiers/links,
+quoted locations, authority, applicability, relationship previews and indexing
+uncertainty. Inspect sources with `get_record`; similarity does not establish
+accepted policy, and incomplete indexing is not absent evidence. Backend support
+is required; unsupported deployments return a tool error.

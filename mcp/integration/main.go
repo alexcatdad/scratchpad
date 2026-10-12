@@ -80,8 +80,8 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if len(listed.Tools) != 19 {
-		return fmt.Errorf("expected 19 tools, got %d", len(listed.Tools))
+	if len(listed.Tools) != 20 {
+		return fmt.Errorf("expected 20 tools, got %d", len(listed.Tools))
 	}
 	if *phase == "questions" {
 		if *questionProjectID == "" {

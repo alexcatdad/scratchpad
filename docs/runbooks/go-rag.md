@@ -5,7 +5,7 @@ semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
 Partial-index raw-source merging, retrieval
-evaluation and the RAG MCP tool remain required for the full feature.
+evaluation remain required for full acceptance. The stdio evidence tool is implemented.
 
 ## Configuration and availability
 
@@ -222,3 +222,24 @@ the byte budget. References are removed before shortening the first source
 excerpt, including when that excerpt is already short. Current-only retrieval
 continues to exclude accepted replacements; history retains the superseded source
 and its accessible citations.
+
+## Real stdio acceptance seam
+
+`retrieve_evidence` is the twentieth local MCP tool and uses the existing SSH
+proof/client HTTP connection. `mcp/rag-integration` drives the actual MCP executable
+from a synthetic Git checkout, verifies discovered local and explicitly scoped
+cross-project fallback evidence, source citations, response bytes and uncertainty,
+and rejects denied participation, implicit multi-project scope, invalid intent
+and explicit zero budgets/limits.
+
+Run the public workflow with disposable PostgreSQL/pgvector:
+
+```sh
+TEST_PGVECTOR_URL=postgres://postgres:scratchpad-test@127.0.0.1:5432/postgres go -C backend test -race -count=1 -run TestRAGRealStdio ./...
+go -C mcp test -race -count=1 ./...
+```
+
+It uses synthetic owner sessions, locally generated SSH keys, actual enrollment
+and signatures, and a real Git checkout. These fixtures do not copy private keys
+to the server, enable a live provider, or establish deployed/model-quality
+acceptance. Existing SQLite/Go legacy semantic and AI workflows remain separate.

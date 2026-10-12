@@ -34,6 +34,38 @@ func (c *Client) aiScope(ctx context.Context, scope AIScope) (map[string]any, er
 }
 
 func registerAI(server *mcp.Server, client *Client) {
+	type Evidence struct {
+		AIScope
+		Query    string `json:"query" jsonschema:"Question or identifier to retrieve cited project evidence for"`
+		Intent   string `json:"intent,omitempty" jsonschema:"current (default) or history; historical choices are not current policy"`
+		Limit    *int   `json:"limit,omitempty" jsonschema:"Maximum evidence passages, 1 to 100"`
+		MaxChars *int   `json:"maxChars,omitempty" jsonschema:"Serialized response byte budget, 4096 to 64000"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "retrieve_evidence", Description: "Retrieve bounded cited evidence on the Go PostgreSQL RAG backend. Defaults to the discovered project; cross-project retrieval requires explicit participation scope. Preserves authority, source links, lifecycle and indexing uncertainty; lexical fallback can work during model/index outages. Scores do not establish accepted policy. Follow source IDs with get_record, and never treat incomplete indexing as absent evidence."}, func(ctx context.Context, _ *mcp.CallToolRequest, input Evidence) (*mcp.CallToolResult, any, error) {
+		if input.Intent != "" && input.Intent != "current" && input.Intent != "history" {
+			return nil, nil, errors.New("intent must be current or history")
+		}
+		if (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 100)) || (input.MaxChars != nil && (*input.MaxChars < 4096 || *input.MaxChars > 64000)) {
+			return nil, nil, errors.New("invalid evidence response limits")
+		}
+		body, err := client.aiScope(ctx, input.AIScope)
+		if err != nil {
+			return nil, nil, err
+		}
+		body["query"] = input.Query
+		if input.Intent != "" {
+			body["intent"] = input.Intent
+		}
+		if input.Limit != nil {
+			body["limit"] = *input.Limit
+		}
+		if input.MaxChars != nil {
+			body["maxChars"] = *input.MaxChars
+		}
+		var result any
+		err = client.request(ctx, "POST", "/rag/retrieve", body, "", &result)
+		return nil, result, err
+	})
 	type SemanticSearch struct {
 		AIScope
 		Query string `json:"query" jsonschema:"Meaning to search for; requires compatible built embeddings and project consent"`
