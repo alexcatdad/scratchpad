@@ -143,6 +143,24 @@ func ragLexicalEvidenceFor(ctx context.Context, q scopeReader, ids []string, que
 			field, prefix = "title", "title_"
 		}
 		excerpt, offset := ragLexicalExcerpt(text, terms)
+		// Native FTS matches the entire immutable source. A bounded excerpt may
+		// cover only part of a multi-term match; do not claim passage-local recall.
+		matchScope := "record"
+		if field == "title" {
+			matchScope = "title"
+		} else {
+			words := map[string]bool{}
+			for _, word := range lexicalTerms.FindAllString(excerpt, -1) {
+				words[strings.ToLower(word)] = true
+			}
+			all := true
+			for _, term := range terms {
+				all = all && words[strings.ToLower(term)]
+			}
+			if all {
+				matchScope = "passage"
+			}
+		}
 		excerptStart := bestStart + offset
 		identityFields := map[string]any{"recordId": id, "contentHash": hash, "processingVersion": ragProcessingVersion, "start": bestStart, "end": bestEnd}
 		if field == "title" {
@@ -176,6 +194,7 @@ func ragLexicalEvidenceFor(ctx context.Context, q scopeReader, ids []string, que
 			citations = append(citations, citation)
 		}
 		item := map[string]any{"id": prefix + identity, "recordId": id, "projectId": record["projectId"], "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + id, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": ragProcessingVersion, "retrieval": "lexical", "relationships": citations, "relationshipsOmitted": 0, "relationshipPreviewLimitReached": len(links) == 10}
+		item["queryMatchScope"] = matchScope
 		results = append(results, item)
 	}
 	return results, rows.Err()

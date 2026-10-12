@@ -248,6 +248,15 @@ field rather than an unrelated content range. Matching body passages retain thei
 `content` citations. A title hit and a semantic content passage may both cite the
 same record, each with its own evidence identity and exact field range.
 
+Raw-source lexical evidence exposes `queryMatchScope`: `passage` means every
+lexical query token occurs in the returned content excerpt; `title` denotes
+title-only discovery; `record` means the native match belongs to the whole source
+and the excerpt may contain only some query terms. Terms split across chunks or
+distant within a chunk therefore remain record-level matches. Response-budget
+truncation conservatively changes this scope to `record`. This metadata describes
+lexical matching only, never whether a semantic result answers the query. Indexed
+content passage matching and exact immutable UTF-16 citations remain unchanged.
+
 HTTP regression coverage includes a completed semantic source alongside a pending
 exact match, overlapping indexed/raw passage identities and a 4096-byte budget.
 Broader dedup/recall evaluation remains required before full acceptance.

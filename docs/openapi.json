@@ -3532,7 +3532,14 @@
                       "type": "array",
                       "items": {
                         "type": "object",
-                        "additionalProperties": true
+                        "additionalProperties": true,
+                        "properties": {
+                          "queryMatchScope": {
+                            "type": "string",
+                            "enum": ["record", "passage", "title"],
+                            "description": "Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction."
+                          }
+                        }
                       }
                     },
                     "resultsOmitted": {

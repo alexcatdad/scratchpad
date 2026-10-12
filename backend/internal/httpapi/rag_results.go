@@ -102,6 +102,11 @@ func ragBoundEvidence(items []map[string]any, semantic map[string]any, limit, bu
 			}
 			excerpt = ragExcerpt(excerpt, max(32, length/2))
 			item["text"], item["textTruncated"] = excerpt, true
+			if _, lexical := item["queryMatchScope"]; lexical {
+				// Bounding may remove a matching token. Retain record-level recall
+				// without claiming every lexical term remains in the excerpt.
+				item["queryMatchScope"] = "record"
+			}
 			location["end"] = start + len(utf16.Encode([]rune(excerpt)))
 		}
 	}

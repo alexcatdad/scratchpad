@@ -983,6 +983,27 @@ func (e PostRagRetrieveJSONBodyIntent) Valid() bool {
 	}
 }
 
+// Defines values for PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope.
+const (
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopePassage PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "passage"
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeRecord  PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "record"
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeTitle   PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "title"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope enum.
+func (e PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope) Valid() bool {
+	switch e {
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopePassage:
+		return true
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeRecord:
+		return true
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeTitle:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostRagRetrieve200JSONResponseBodySemanticIndexCoverage.
 const (
 	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete    PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "complete"
@@ -1823,6 +1844,16 @@ type PostRagRetrieveJSONBody struct {
 // PostRagRetrieveJSONBodyIntent defines parameters for PostRagRetrieve.
 type PostRagRetrieveJSONBodyIntent string
 
+// PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope string
+
+// PostRagRetrieve200JSONResponseBody_Results_Item defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBody_Results_Item struct {
+	// QueryMatchScope Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction.
+	QueryMatchScope      *PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope `json:"queryMatchScope,omitempty"`
+	AdditionalProperties map[string]interface{}                                    `json:"-"`
+}
+
 // PostRagRetrieve200JSONResponseBodySemanticIndexCoverage defines parameters for PostRagRetrieve.
 type PostRagRetrieve200JSONResponseBodySemanticIndexCoverage string
 
@@ -2336,6 +2367,74 @@ func (a GetAuthCredentials200JSONResponseBody_Credentials_Item) MarshalJSON() ([
 		object["source"], err = json.Marshal(a.Source)
 		if err != nil {
 			return nil, fmt.Errorf("error marshaling 'source': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
+// Getter for additional properties for PostRagRetrieve200JSONResponseBody_Results_Item. Returns the specified
+// element and whether it was found
+func (a PostRagRetrieve200JSONResponseBody_Results_Item) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for PostRagRetrieve200JSONResponseBody_Results_Item
+func (a *PostRagRetrieve200JSONResponseBody_Results_Item) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for PostRagRetrieve200JSONResponseBody_Results_Item to handle AdditionalProperties
+func (a *PostRagRetrieve200JSONResponseBody_Results_Item) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["queryMatchScope"]; found {
+		err = json.Unmarshal(raw, &a.QueryMatchScope)
+		if err != nil {
+			return fmt.Errorf("error reading 'queryMatchScope': %w", err)
+		}
+		delete(object, "queryMatchScope")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for PostRagRetrieve200JSONResponseBody_Results_Item to handle AdditionalProperties
+func (a PostRagRetrieve200JSONResponseBody_Results_Item) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.QueryMatchScope != nil {
+		object["queryMatchScope"], err = json.Marshal(a.QueryMatchScope)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'queryMatchScope': %w", err)
 		}
 	}
 
@@ -11092,8 +11191,8 @@ type PostRagRetrieveResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		Results        []map[string]interface{} `json:"results"`
-		ResultsOmitted int                      `json:"resultsOmitted"`
+		Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+		ResultsOmitted int                                               `json:"resultsOmitted"`
 		Semantic       struct {
 			Available     bool                                                    `json:"available"`
 			IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
@@ -11108,8 +11207,8 @@ type PostRagRetrieveResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostRagRetrieveResponse) GetJSON200() *struct {
-	Results        []map[string]interface{} `json:"results"`
-	ResultsOmitted int                      `json:"resultsOmitted"`
+	Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+	ResultsOmitted int                                               `json:"resultsOmitted"`
 	Semantic       struct {
 		Available     bool                                                    `json:"available"`
 		IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
@@ -15260,8 +15359,8 @@ func ParsePostRagRetrieveResponse(rsp *http.Response) (*PostRagRetrieveResponse,
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Results        []map[string]interface{} `json:"results"`
-			ResultsOmitted int                      `json:"resultsOmitted"`
+			Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+			ResultsOmitted int                                               `json:"resultsOmitted"`
 			Semantic       struct {
 				Available     bool                                                    `json:"available"`
 				IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`

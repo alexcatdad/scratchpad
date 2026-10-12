@@ -3274,9 +3274,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
-                        results: {
+                        results: ({
+                            /**
+                             * @description Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction.
+                             * @enum {string}
+                             */
+                            queryMatchScope?: "record" | "passage" | "title";
+                        } & {
                             [key: string]: unknown;
-                        }[];
+                        })[];
                         resultsOmitted: number;
                         semantic: {
                             available: boolean;
