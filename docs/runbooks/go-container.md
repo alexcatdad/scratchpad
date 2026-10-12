@@ -86,6 +86,9 @@ the upgraded volume. Restarting Go proves refusal did not damage the source.
 Restoring the pre-upgrade snapshot into a fresh volume recovers independent
 browser login and the original capture through TypeScript, while excluding later
 writes. No migration marker editing or destructive down migration is used.
+The PostgreSQL rollback variant takes an uncompressed native schema-1 dump before
+Go starts, applies the same upgrade/refusal/source-preservation checks, and
+recovers through the retained image after native restore into a fresh database.
 
 The retained npm wrapper can report exit 1 when Docker sends SIGTERM. The fixture
 accepts that status only with the wrapper's explicit `signal SIGTERM` log; Go
@@ -105,8 +108,7 @@ database and restarts the actual Go image at the same public origin. Native
 browser login, exact original record-response equality and exclusion of the
 post-backup capture must pass. The source database and archive are not rewritten
 to downgrade a schema. This verifies ordinary PostgreSQL image recovery;
-encrypted PostgreSQL provider recovery and deployed acceptance
-remain separate.
+deployed acceptance remains separate.
 
 The pgvector scenario uses the same pinned pgvector 0.8.7/PostgreSQL 18 image as
 canonical CI and installs the extension in its owned source database before Go
@@ -125,7 +127,9 @@ synthetic provider without published ports. Correct and wrong installation keys
 live in separate protected named volumes mounted read-only outside the database
 volume. It saves a reusable synthetic token through the authenticated API,
 verifies provider connectivity, and checks that the completed SQLite archive
-excludes the token's plaintext. After restoration, the retained key permits
+excludes the token's plaintext. Its PostgreSQL variant uses an uncompressed
+native archive and the same mounted-key failure/recovery and secretless-provider
+checks. After restoration, the retained key permits
 provider calls. Wrong and missing keys return `SECRET_UNAVAILABLE` without
 dispatching requests; original reads and new captures remain available. Returning
 the retained key restores connectivity without replacing settings or history.

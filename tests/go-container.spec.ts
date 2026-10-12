@@ -9,6 +9,8 @@ for (const scenario of [
   "go-secret-restore",
   "go-postgres-restore",
   "go-pgvector-restore",
+  "go-postgres-secret-restore",
+  "typescript-postgres-rollback",
 ] as const) {
   test(`actual images preserve browser access through ${scenario}`, async ({
     page,
@@ -16,13 +18,18 @@ for (const scenario of [
     const context = process.env.TEST_DOCKER_CONTEXT;
     const image = process.env.TEST_GO_IMAGE;
     const retainedImage = process.env.TEST_RETAINED_IMAGE;
+    const rollback =
+      scenario === "typescript-rollback" ||
+      scenario === "typescript-postgres-rollback";
     let databaseURL = "";
     const ragRestore = scenario === "go-pgvector-restore";
-    const postgresRestore = scenario === "go-postgres-restore" || ragRestore;
+    const postgresRestore =
+      scenario === "go-postgres-restore" ||
+      ragRestore ||
+      scenario === "go-postgres-secret-restore" ||
+      scenario === "typescript-postgres-rollback";
     test.skip(
-      !context ||
-        !image ||
-        (scenario === "typescript-rollback" && !retainedImage),
+      !context || !image || (rollback && !retainedImage),
       "Explicit disposable Docker context and Go image are required",
     );
     const docker = (...args: string[]) =>
@@ -50,7 +57,9 @@ for (const scenario of [
       } else expect(goRuntime ? ["0"] : ["0", "143"]).toContain(code);
     };
     const suffix = randomUUID();
-    const secretRestore = scenario === "go-secret-restore";
+    const secretRestore =
+      scenario === "go-secret-restore" ||
+      scenario === "go-postgres-secret-restore";
     const network = `scratchpad-go-provider-${suffix}`;
     const correctKeyVolume = `scratchpad-go-key-${suffix}`,
       wrongKeyVolume = `scratchpad-go-wrong-key-${suffix}`;
@@ -96,13 +105,10 @@ for (const scenario of [
         "-e",
         `SCRATCHPAD_PUBLIC_URL=${origin}`,
         ...(ragRestore ? ["-e", "SCRATCHPAD_RAG_ENABLED=true"] : []),
-        ...(postgresRestore
-          ? ["--network", network, "-e", "SCRATCHPAD_DATABASE_URL"]
-          : []),
+        ...(postgresRestore || secretRestore ? ["--network", network] : []),
+        ...(postgresRestore ? ["-e", "SCRATCHPAD_DATABASE_URL"] : []),
         ...(secretRestore
           ? [
-              "--network",
-              network,
               ...(selectedKeyVolume
                 ? ["-v", `${selectedKeyVolume}:/keys:ro`]
                 : []),
@@ -243,22 +249,18 @@ for (const scenario of [
       }
       docker("volume", "create", sourceVolume);
       volumes.push(sourceVolume);
-      const sourceImage =
-        scenario === "typescript-rollback"
-          ? (retainedImage ?? "")
-          : (image ?? "");
-      const setupArgs =
-        scenario === "typescript-rollback"
-          ? [
-              "--entrypoint",
-              "node",
-              sourceImage,
-              "--import",
-              "tsx",
-              "/app/apps/web/src/server/admin.ts",
-              "setup",
-            ]
-          : [sourceImage, "setup"];
+      const sourceImage = rollback ? (retainedImage ?? "") : (image ?? "");
+      const setupArgs = rollback
+        ? [
+            "--entrypoint",
+            "node",
+            sourceImage,
+            "--import",
+            "tsx",
+            "/app/apps/web/src/server/admin.ts",
+            "setup",
+          ]
+        : [sourceImage, "setup"];
       const token =
         docker(
           "run",
@@ -453,13 +455,14 @@ for (const scenario of [
             "-d",
             "source",
             "--format=custom",
+            "--compress=0",
             "--no-owner",
             "--no-acl",
           ],
           { timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] },
         );
         expect(archive.subarray(0, 5).toString()).toBe("PGDMP");
-      } else if (scenario === "typescript-rollback") {
+      } else if (rollback) {
         expect(
           docker(
             "exec",
@@ -484,14 +487,22 @@ for (const scenario of [
             ),
           ),
         ).toMatchObject({ database: "sqlite", schemaVersion: 2 });
-      if (secretRestore)
-        docker(
-          "exec",
-          source,
-          "node",
-          "-e",
-          "process.exit(require('node:fs').readFileSync('/data/checkpoint.sqlite').includes(Buffer.from('synthetic-container-provider-token'))?1:0)",
-        );
+      if (secretRestore) {
+        if (postgresRestore)
+          expect(
+            archive?.includes(
+              Buffer.from("synthetic-container-provider-token"),
+            ),
+          ).toBe(false);
+        else
+          docker(
+            "exec",
+            source,
+            "node",
+            "-e",
+            "process.exit(require('node:fs').readFileSync('/data/checkpoint.sqlite').includes(Buffer.from('synthetic-container-provider-token'))?1:0)",
+          );
+      }
       await page.getByRole("button", { name: "Memory", exact: true }).click();
       await page
         .getByRole("button", { name: "New record", exact: true })
@@ -509,9 +520,9 @@ for (const scenario of [
       await expect(
         page.getByRole("button", { name: /After snapshot capture/ }),
       ).toBeVisible();
-      stop(source, scenario !== "typescript-rollback");
+      stop(source, !rollback);
       if (ragRestore) sourceProviderCalls = providerCalls();
-      if (scenario === "typescript-rollback") {
+      if (rollback) {
         const upgraded = await start(sourceVolume);
         await page.goto(origin);
         await page
@@ -623,7 +634,7 @@ for (const scenario of [
         );
       const restored = await start(restoredVolume, sourceImage);
       await page.goto(origin);
-      if (scenario !== "typescript-rollback")
+      if (!rollback)
         await page
           .getByRole("button", { name: "Sign out", exact: true })
           .click();
@@ -731,7 +742,7 @@ for (const scenario of [
           ).status(),
         ).toBe(200);
       }
-      stop(restored, scenario !== "typescript-rollback");
+      stop(restored, !rollback);
       if (secretRestore) {
         for (const keyVolume of [wrongKeyVolume, ""]) {
           selectedKeyVolume = keyVolume;
