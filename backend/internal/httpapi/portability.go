@@ -58,7 +58,28 @@ func (s *SSH) Import() http.HandlerFunc {
 				}
 			}
 		}
-		if decodeErr != nil || body == nil || body["format"] != "scratchpad" || body["version"] != float64(1) {
+		if decodeErr != nil || body == nil {
+			s.fail(w, importInvalid())
+			return
+		}
+		if body["format"] == "jsonl" {
+			var result map[string]any
+			err := s.Store.Write(ctx, func(conn *sql.Conn) error {
+				actor, err := apiActor(ctx, conn, r, s.Origin)
+				if err != nil {
+					return err
+				}
+				result, err = importLegacy(ctx, conn, body, actor)
+				return err
+			})
+			if err != nil {
+				s.fail(w, err)
+				return
+			}
+			JSON(w, 200, result)
+			return
+		}
+		if body["format"] != "scratchpad" || body["version"] != float64(1) {
 			s.fail(w, importInvalid())
 			return
 		}
