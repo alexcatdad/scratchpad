@@ -94,9 +94,17 @@ func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[str
 		}
 		var raw []byte
 		types := "'embed','analyze','export'"
+		generationFilter := ""
+		args := []any{timestamp(time.Now())}
 		if a.rag && a.auth.Store.Engine == "postgres" {
 			if err := a.ragAvailable(ctx, conn); err == nil {
 				types += ",'rag_index'"
+				fingerprint, err := ragFingerprint(snapshot.config)
+				if err != nil {
+					return err
+				}
+				generationFilter = " AND (" + typ + "<>'rag_index' OR (data->>'fingerprint'=$2 AND data->>'processingVersion'=$3))"
+				args = append(args, fingerprint, ragProcessingVersion)
 			} else {
 				var protocol *protocolError
 				if !errors.As(err, &protocol) || protocol.code != "RAG_UNAVAILABLE" {
@@ -104,7 +112,7 @@ func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[str
 				}
 			}
 		}
-		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ("+types+") AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
+		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ("+types+")"+generationFilter+" AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", args...).Scan(&raw)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}

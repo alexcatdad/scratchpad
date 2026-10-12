@@ -947,6 +947,24 @@ func (e PatchProjectsIdJSONBodyKind) Valid() bool {
 	}
 }
 
+// Defines values for GetRagCoverage200JSONResponseBodyStatus.
+const (
+	GetRagCoverage200JSONResponseBodyStatusComplete   GetRagCoverage200JSONResponseBodyStatus = "complete"
+	GetRagCoverage200JSONResponseBodyStatusIncomplete GetRagCoverage200JSONResponseBodyStatus = "incomplete"
+)
+
+// Valid indicates whether the value is a known member of the GetRagCoverage200JSONResponseBodyStatus enum.
+func (e GetRagCoverage200JSONResponseBodyStatus) Valid() bool {
+	switch e {
+	case GetRagCoverage200JSONResponseBodyStatusComplete:
+		return true
+	case GetRagCoverage200JSONResponseBodyStatusIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostRagRetrieveJSONBodyIntent.
 const (
 	Current PostRagRetrieveJSONBodyIntent = "current"
@@ -967,13 +985,16 @@ func (e PostRagRetrieveJSONBodyIntent) Valid() bool {
 
 // Defines values for PostRagRetrieve200JSONResponseBodySemanticIndexCoverage.
 const (
-	NotAssessed PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "not_assessed"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete   PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "complete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "incomplete"
 )
 
 // Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodySemanticIndexCoverage enum.
 func (e PostRagRetrieve200JSONResponseBodySemanticIndexCoverage) Valid() bool {
 	switch e {
-	case NotAssessed:
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete:
+		return true
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete:
 		return true
 	default:
 		return false
@@ -1746,6 +1767,16 @@ type PatchProjectsIdSettingsParams struct {
 	// IfMatch Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion.
 	IfMatch *string `json:"If-Match,omitempty"`
 }
+
+// GetRagCoverageParams defines parameters for GetRagCoverage.
+type GetRagCoverageParams struct {
+	ProjectId    *string   `form:"projectId,omitempty" json:"projectId,omitempty"`
+	ProjectIds   *[]string `form:"projectIds,omitempty" json:"projectIds,omitempty"`
+	CrossProject *bool     `form:"crossProject,omitempty" json:"crossProject,omitempty"`
+}
+
+// GetRagCoverage200JSONResponseBodyStatus defines parameters for GetRagCoverage.
+type GetRagCoverage200JSONResponseBodyStatus string
 
 // PostRagIndexJSONBody defines parameters for PostRagIndex.
 type PostRagIndexJSONBody struct {
@@ -2887,6 +2918,11 @@ type ClientInterface interface {
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetRagCoverage Go backend current-generation indexing coverage without provider access
+	//
+	// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+	GetRagCoverage(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
 	//
 	// Takes any type of body and a specified content type.
@@ -2903,7 +2939,7 @@ type ClientInterface interface {
 
 	// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2912,7 +2948,7 @@ type ClientInterface interface {
 
 	// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4236,6 +4272,21 @@ func (c *Client) PatchProjectsIdSettings(ctx context.Context, id string, params 
 	return c.Client.Do(req)
 }
 
+// GetRagCoverage Go backend current-generation indexing coverage without provider access
+//
+// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+func (c *Client) GetRagCoverage(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRagCoverageRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
 //
 // Takes any type of body and a specified content type.
@@ -4272,7 +4323,7 @@ func (c *Client) PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestB
 
 // PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4291,7 +4342,7 @@ func (c *Client) PostRagRetrieveWithBody(ctx context.Context, contentType string
 
 // PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -6471,6 +6522,84 @@ func NewPatchProjectsIdSettingsRequestWithBody(server string, id string, params 
 	return req, nil
 }
 
+// NewGetRagCoverageRequest constructs an http.Request for the GetRagCoverage method
+func NewGetRagCoverageRequest(server string, params *GetRagCoverageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/coverage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ProjectId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "projectId", *params.ProjectId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProjectIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "projectIds", *params.ProjectIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CrossProject != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "crossProject", *params.CrossProject, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostRagIndexRequest calls the generic PostRagIndex builder with application/json body
 func NewPostRagIndexRequest(server string, body PostRagIndexJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -8287,6 +8416,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettingsWithResponse(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchProjectsIdSettingsResponse, error)
 
+	// GetRagCoverageWithResponse Go backend current-generation indexing coverage without provider access
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+	GetRagCoverageWithResponse(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*GetRagCoverageResponse, error)
+
 	// PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -8303,7 +8439,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8312,7 +8448,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -10745,6 +10881,76 @@ func (r PatchProjectsIdSettingsResponse) ContentType() string {
 	return ""
 }
 
+type GetRagCoverageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		EligibleSources     int                                     `json:"eligibleSources"`
+		FailedSources       int                                     `json:"failedSources"`
+		Fingerprint         string                                  `json:"fingerprint"`
+		IncompatibleSources int                                     `json:"incompatibleSources"`
+		IndexedSources      int                                     `json:"indexedSources"`
+		PassageCount        int                                     `json:"passageCount"`
+		QueuedSources       int                                     `json:"queuedSources"`
+		RunningSources      int                                     `json:"runningSources"`
+		Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+		UnindexedSources    int                                     `json:"unindexedSources"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRagCoverageResponse) GetJSON200() *struct {
+	EligibleSources     int                                     `json:"eligibleSources"`
+	FailedSources       int                                     `json:"failedSources"`
+	Fingerprint         string                                  `json:"fingerprint"`
+	IncompatibleSources int                                     `json:"incompatibleSources"`
+	IndexedSources      int                                     `json:"indexedSources"`
+	PassageCount        int                                     `json:"passageCount"`
+	QueuedSources       int                                     `json:"queuedSources"`
+	RunningSources      int                                     `json:"runningSources"`
+	Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+	UnindexedSources    int                                     `json:"unindexedSources"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetRagCoverageResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRagCoverageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRagCoverageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRagCoverageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRagCoverageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PostRagIndexResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12870,6 +13076,19 @@ func (c *ClientWithResponses) PatchProjectsIdSettingsWithResponse(ctx context.Co
 	return ParsePatchProjectsIdSettingsResponse(rsp)
 }
 
+// GetRagCoverageWithResponse Go backend current-generation indexing coverage without provider access
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+func (c *ClientWithResponses) GetRagCoverageWithResponse(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*GetRagCoverageResponse, error) {
+	rsp, err := c.GetRagCoverage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRagCoverageResponse(rsp)
+}
+
 // PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
@@ -12898,7 +13117,7 @@ func (c *ClientWithResponses) PostRagIndexWithResponse(ctx context.Context, body
 
 // PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12913,7 +13132,7 @@ func (c *ClientWithResponses) PostRagRetrieveWithBodyWithResponse(ctx context.Co
 
 // PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -14831,6 +15050,50 @@ func ParsePatchProjectsIdSettingsResponse(rsp *http.Response) (*PatchProjectsIdS
 		var dest struct {
 			Settings *ProjectSettings `json:"settings,omitempty"`
 			Version  *int             `json:"version,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRagCoverageResponse parses an HTTP response from a GetRagCoverageWithResponse call
+func ParseGetRagCoverageResponse(rsp *http.Response) (*GetRagCoverageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRagCoverageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			EligibleSources     int                                     `json:"eligibleSources"`
+			FailedSources       int                                     `json:"failedSources"`
+			Fingerprint         string                                  `json:"fingerprint"`
+			IncompatibleSources int                                     `json:"incompatibleSources"`
+			IndexedSources      int                                     `json:"indexedSources"`
+			PassageCount        int                                     `json:"passageCount"`
+			QueuedSources       int                                     `json:"queuedSources"`
+			RunningSources      int                                     `json:"runningSources"`
+			Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+			UnindexedSources    int                                     `json:"unindexedSources"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

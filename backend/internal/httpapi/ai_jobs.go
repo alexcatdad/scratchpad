@@ -48,7 +48,13 @@ func parseJobScope(body map[string]any) (jobScope, error) {
 	}
 	return scope, nil
 }
-func allowedJobs(ctx context.Context, conn *sql.Conn, scope jobScope) ([]string, error) {
+
+type scopeReader interface {
+	entityReader
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}
+
+func allowedJobs(ctx context.Context, conn scopeReader, scope jobScope) ([]string, error) {
 	ids := scope.ProjectIDs
 	if ids == nil && scope.ProjectID != "" {
 		ids = []string{scope.ProjectID}

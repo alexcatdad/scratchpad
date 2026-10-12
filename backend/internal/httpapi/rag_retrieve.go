@@ -110,6 +110,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			return
 		}
 		results := []map[string]any{}
+		coverageStatus := "incomplete"
 		omitted := 0
 		err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 			if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
@@ -118,6 +119,11 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			if err := a.ragAvailable(ctx, conn); err != nil {
 				return err
 			}
+			coverage, err := a.ragCoverage(ctx, conn, scope)
+			if err != nil {
+				return err
+			}
+			coverageStatus = coverage.Status
 			ids, err := allowedJobs(ctx, conn, scope)
 			if err != nil {
 				return err
@@ -233,6 +239,6 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			a.auth.fail(w, err)
 			return
 		}
-		JSON(w, 200, map[string]any{"results": results, "resultsOmitted": omitted, "semantic": map[string]any{"available": true, "indexCoverage": "not_assessed"}})
+		JSON(w, 200, map[string]any{"results": results, "resultsOmitted": omitted, "semantic": map[string]any{"available": true, "indexCoverage": coverageStatus}})
 	}
 }

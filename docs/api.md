@@ -1766,8 +1766,9 @@ without re-embedding unchanged source text.
 
 The response is `{results, resultsOmitted, semantic}`. `semantic.available` is
 true after successful semantic retrieval; `semantic.indexCoverage` is currently
-`not_assessed`, so missing results must not be interpreted as absent evidence.
-Hybrid rank fusion, lexical fallback, assessed coverage and RAG MCP integration
+`complete` or `incomplete`, scoped to eligible immutable sources in the current
+embedding generation. Incomplete results must not be interpreted as absent evidence.
+Hybrid rank fusion, lexical fallback and RAG MCP integration
 remain required work.
 See [the RAG runbook](runbooks/go-rag.md) for projection migration, restart,
 rebuild and compatibility boundaries.
@@ -1786,3 +1787,14 @@ continues while embedding requests are blocked, rechecks consent/configuration
 under the shared writer lock and reuses durable source jobs through restart.
 Completion-only model changes preserve the generation. Full indexing coverage,
 hybrid fallback and the RAG MCP interface remain subsequent work.
+
+## Go replacement addition: current-generation coverage
+
+Authenticated `GET /rag/coverage` accepts project scope in query parameters and
+returns snapshot-consistent eligible/indexed/queued/running/failed/unindexed and
+incompatible source counts, compatible `passageCount`, current `fingerprint` and
+`status` (`complete` or `incomplete`). It requires project participation consent
+and never calls the provider or decrypts its token. Source hashes, generation,
+completed jobs and activated passage counts must agree before a source counts
+as indexed. Retrieval now reports assessed current coverage. Old queued passage
+generations are retained and excluded from current worker selection.

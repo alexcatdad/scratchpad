@@ -112,6 +112,7 @@ func run() error {
 		}
 	}
 	mux.HandleFunc("POST /api/v1/rag/index", ai.RAGIndex())
+	mux.HandleFunc("GET /api/v1/rag/coverage", ai.RAGCoverage())
 	mux.HandleFunc("POST /api/v1/rag/retrieve", ai.RAGRetrieve())
 	conversionContext, conversionCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	conversionPending := ai.ConvertLegacy(conversionContext) != nil

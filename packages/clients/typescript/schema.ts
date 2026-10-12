@@ -940,9 +940,26 @@ export interface paths {
         put?: never;
         /**
          * Go backend bounded cited passage evidence using exact native semantic ranking
-         * @description First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
+         * @description First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
          */
         post: operations["post_rag_retrieve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Go backend current-generation indexing coverage without provider access */
+        get: operations["get_rag_coverage"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3237,7 +3254,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; indexing coverage is explicitly not yet assessed */
+            /** @description Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; current-generation indexing coverage is assessed */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3251,8 +3268,45 @@ export interface operations {
                         semantic: {
                             available: boolean;
                             /** @enum {string} */
-                            indexCoverage: "not_assessed";
+                            indexCoverage: "complete" | "incomplete";
                         };
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_rag_coverage: {
+        parameters: {
+            query?: {
+                projectId?: string;
+                projectIds?: string[];
+                crossProject?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Snapshot-consistent eligible source and compatible passage counts; completeness does not establish semantic provider availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "complete" | "incomplete";
+                        fingerprint: string;
+                        eligibleSources: number;
+                        indexedSources: number;
+                        queuedSources: number;
+                        runningSources: number;
+                        failedSources: number;
+                        unindexedSources: number;
+                        incompatibleSources: number;
+                        passageCount: number;
                     };
                 };
             };

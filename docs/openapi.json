@@ -3433,7 +3433,7 @@
       "post": {
         "operationId": "post_rag_retrieve",
         "summary": "Go backend bounded cited passage evidence using exact native semantic ranking",
-        "description": "First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.",
+        "description": "First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3479,7 +3479,7 @@
         },
         "responses": {
           "200": {
-            "description": "Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; indexing coverage is explicitly not yet assessed",
+            "description": "Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; current-generation indexing coverage is assessed",
             "content": {
               "application/json": {
                 "schema": {
@@ -3506,9 +3506,113 @@
                         },
                         "indexCoverage": {
                           "type": "string",
-                          "enum": ["not_assessed"]
+                          "enum": ["complete", "incomplete"]
                         }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/coverage": {
+      "get": {
+        "operationId": "get_rag_coverage",
+        "summary": "Go backend current-generation indexing coverage without provider access",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectIds",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "crossProject",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot-consistent eligible source and compatible passage counts; completeness does not establish semantic provider availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "fingerprint",
+                    "eligibleSources",
+                    "indexedSources",
+                    "queuedSources",
+                    "runningSources",
+                    "failedSources",
+                    "unindexedSources",
+                    "incompatibleSources",
+                    "passageCount"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["complete", "incomplete"]
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "eligibleSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "indexedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "queuedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "runningSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "failedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unindexedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "incompatibleSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "passageCount": {
+                      "type": "integer",
+                      "minimum": 0
                     }
                   }
                 }

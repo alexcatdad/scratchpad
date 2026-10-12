@@ -4,7 +4,7 @@ Issue #36 introduces passage RAG separately from the existing whole-record
 semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
-Hybrid ranking, lexical fallback, assessed coverage and the RAG MCP tool remain
+Hybrid ranking, lexical fallback and the RAG MCP tool remain
 required for the full feature.
 
 ## Configuration and availability
@@ -103,8 +103,8 @@ signals that the ten-edge fetch cap was reached and further references may exist
 `resultsOmitted` counts eligible candidates excluded by the result or byte limits.
 
 The response includes `results`, `resultsOmitted` and
-`semantic: {available: true, indexCoverage: "not_assessed"}`. Scores express
-similarity, not decision authority. Coverage is not yet assessed, and no lexical
+`semantic: {available: true, indexCoverage: "complete" | "incomplete"}`. Scores express
+similarity, not decision authority. Coverage is assessed separately from provider availability. No lexical
 fallback is implemented in this slice. Missing results or a provider failure
 must not be treated as proof that source evidence is absent. Full hybrid retrieval and explicit assessed uncertainty remain required work.
 
@@ -157,3 +157,26 @@ AI disablement, unavailable provider secrets and absent pgvector keep work durab
 Absent pgvector prevents passage-job claims while ordinary AI behavior remains
 independent; late installation initializes the optional projection before dispatch.
 Existing retry/failure and consent/lease activation rules continue to apply.
+
+## Indexing coverage and generation priority
+
+Authenticated `GET /api/v1/rag/coverage` accepts one `projectId` by default, or
+explicit repeated `projectIds` with `crossProject=true` and participation consent.
+It reads a repeatable snapshot without contacting or unlocking the provider.
+The response reports `eligibleSources`, `indexedSources`, `queuedSources`,
+`runningSources`, `failedSources`, `unindexedSources`, `incompatibleSources`,
+`passageCount`, the current `fingerprint`, and `status` (`complete` or `incomplete`).
+
+Coverage rehashes immutable sources and checks current processing/embedding
+compatibility, completed jobs and matching activated passage counts. Missing
+passages cannot be inferred complete from the job alone. Older jobs/projections
+count as incompatible source evidence, not current indexing. Incompatible counts
+may remain nonzero after the current generation is complete. Completeness proves
+index coverage, not an answer or provider availability. Retrieval carries its
+assessed coverage status alongside evidence in the same admission transaction.
+
+Workers select only the current passage generation, preserving older queued work
+without letting it delay current indexing. Restoring compatible settings can
+resume that retained work. Legacy AI-job selection is unchanged. Coverage still
+processes eligible source history for exact hashes/counts; query/index performance
+and stronger projection integrity checks remain required delivery work.
