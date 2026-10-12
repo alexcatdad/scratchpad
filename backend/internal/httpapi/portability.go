@@ -238,7 +238,9 @@ func contains(values []string, value string) bool {
 }
 func portableReferences(kind string, value map[string]any) error {
 	version, ok := portableVersion(value["version"])
-	if !portableID(value["id"]) || !ok || version < 1 || math.Trunc(version) != version || !portableTimestamp(value["createdAt"]) {
+	// PostgreSQL stores INTEGER versions. Require that common range and exact
+	// numerical admission before either engine can persist an archive entry.
+	if !portableID(value["id"]) || !ok || version < 1 || version > 2147483647 || math.Trunc(version) != version || !EqualJSONNumbers(value["version"], version) || !portableTimestamp(value["createdAt"]) {
 		return importInvalid()
 	}
 	fields := []string{}
