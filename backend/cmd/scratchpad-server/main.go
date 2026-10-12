@@ -97,6 +97,11 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	dashboard, err := httpapi.Dashboard(os.Getenv("SCRATCHPAD_DASHBOARD_URL"))
+	if err != nil {
+		return err
+	}
+	mux.Handle("/", dashboard)
 	ragSetting := os.Getenv("SCRATCHPAD_RAG_ENABLED")
 	if ragSetting != "" && ragSetting != "true" && ragSetting != "false" {
 		return errors.New("CONFIG_INVALID: SCRATCHPAD_RAG_ENABLED must be true or false.")

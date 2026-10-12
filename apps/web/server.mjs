@@ -8,6 +8,11 @@ for (const name of [".env.production", ".env"]) {
   if (existsSync(path)) process.loadEnvFile(path);
 }
 process.env.NODE_ENV ??= "production";
+if (
+  process.env.SCRATCHPAD_UI_ONLY &&
+  !["true", "false"].includes(process.env.SCRATCHPAD_UI_ONLY)
+)
+  throw new Error("SCRATCHPAD_UI_ONLY must be true or false.");
 const { default: entry } = await import("./dist/server/server.js");
 
 /** @type {import("srvx").ServerMiddleware} */

@@ -107,10 +107,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: .
       - name: Typecheck the Go authentication browser seams
-        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck tests/go-passkeys.spec.ts tests/go-github.spec.ts
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck tests/go-passkeys.spec.ts tests/go-github.spec.ts tests/go-dashboard.spec.ts
         working-directory: .
-      - name: Verify Go passkeys on both engines and GitHub browser OAuth
-        run: npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts
+      - name: Verify Go passkeys, GitHub OAuth and retained dashboard
+        run: |
+          npm run build -w @scratchpad/web
+          npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts tests/go-dashboard.spec.ts
         working-directory: .
         env:
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
