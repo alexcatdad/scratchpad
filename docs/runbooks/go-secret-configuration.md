@@ -81,9 +81,13 @@ Retain the key with your recovery material. Restoring encrypted settings require
 
 ## Verification
 
+`GET /api/v1/settings` reports effective `aiEnabled` from current provider configuration. `PATCH /settings` accepts `{expectedVersion, settings: {aiEnabled?, defaultProjectSettings?}}`. Initial global settings require explicit version zero; later updates retain positive versions/`If-Match`. Global policy, provider enablement/generation and both audits commit together. New normal projects inherit the defaults; existing projects retain consent and external projects use conservative defaults. Global settings responses/audits include only policy and entity metadata, never legacy provider-secret fields. A direct provider update is reflected by subsequent global reads.
+
+The real stdio initialization instructions recommend synthetic references such as `secret://provider/main` and exclude API tokens, passwords, private keys and installation keys from captures. This is guidance for the consuming agent, not a promise of automatic redaction or whole-record encryption.
+
 ```sh
 npm run test:backend
 npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts
 ```
 
-Supply disposable `TEST_POSTGRES_URL` to include PostgreSQL. HTTP/provider tests cover secret persistence/restart, private SQLite snapshot absence of newly stored plaintext, missing/wrong keys, legacy pending/conversion, projected mounts, tampered ciphertext, lost-token replacement, strict versions/configuration, token-free providers and configuration changes during blocked provider calls. Broader workers, global configuration, PostgreSQL operational restore, MCP secret-reference guidance and RAG remain issue-36 requirements.
+Supply disposable `TEST_POSTGRES_URL` to include PostgreSQL. HTTP/provider tests cover secret persistence/restart, private SQLite snapshot absence of newly stored plaintext, missing/wrong keys, legacy pending/conversion, projected mounts, tampered ciphertext, lost-token replacement, strict versions/configuration, token-free providers and configuration changes during blocked provider calls. Global settings now control AI enablement atomically with provider configuration, and MCP initialization includes secret-reference guidance. Broader workers, PostgreSQL operational restore and RAG remain issue-36 requirements.

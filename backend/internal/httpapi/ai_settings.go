@@ -184,71 +184,7 @@ func (a *AI) Settings(patch bool) http.HandlerFunc {
 			if err != nil {
 				return err
 			}
-			raw, err := optional(ctx, conn, "ai_settings", "global")
-			if err != nil {
-				return err
-			}
-			var previous map[string]any
-			if raw != nil && json.Unmarshal(raw, &previous) != nil {
-				return aiInvalid()
-			}
-			version := float64(0)
-			if previous != nil {
-				version, _ = previous["version"].(float64)
-			}
-			if version != expected {
-				return &protocolError{"CONFLICT", "AI configuration changed. Read it again.", 409}
-			}
-			cfg, err := aiConfig(previous)
-			if err != nil {
-				return err
-			}
-			next := aiConfigMap(cfg)
-			for _, field := range aiFields {
-				if value, exists := body[field]; exists {
-					next[field] = value
-				}
-			}
-			cfg, err = aiConfig(next)
-			if err != nil {
-				return err
-			}
-			next = aiConfigMap(cfg)
-			next["apiKey"] = previous["apiKey"]
-			if value, exists := body["apiKey"]; exists {
-				key, ok := value.(string)
-				if !ok || len(utf16.Encode([]rune(key))) > 10000 {
-					return aiInvalid()
-				}
-				next["apiKey"], err = a.box.Seal(key, "ai_settings", "global", "apiKey")
-				if err != nil {
-					return secretUnavailable()
-				}
-			}
-			generation, _ := previous["dispatchGeneration"].(float64)
-			next["dispatchGeneration"] = generation + 1
-			var before map[string]any
-			if previous != nil {
-				oldCfg, err := aiConfig(previous)
-				if err != nil {
-					return err
-				}
-				before = aiConfigMap(oldCfg)
-				before["apiKeyConfigured"] = previous["apiKey"] != nil && previous["apiKey"] != ""
-				next["id"], next["version"], next["createdAt"] = previous["id"], previous["version"], previous["createdAt"]
-				err = update(ctx, conn, "ai_settings", next)
-			} else {
-				err = insert(ctx, conn, "ai_settings", "global", next)
-			}
-			if err != nil {
-				return err
-			}
-			after := aiConfigMap(cfg)
-			after["apiKeyConfigured"] = next["apiKey"] != nil && next["apiKey"] != ""
-			if err = apiAudit(ctx, conn, "ai.configured", "ai_settings", "global", actor, before, after); err != nil {
-				return err
-			}
-			result, err = a.public(next)
+			result, err = a.configure(ctx, conn, body, actor, expected)
 			return err
 		})
 		if err != nil {
@@ -257,4 +193,72 @@ func (a *AI) Settings(patch bool) http.HandlerFunc {
 		}
 		JSON(w, 200, result)
 	}
+}
+
+func (a *AI) configure(ctx context.Context, conn *sql.Conn, body, actor map[string]any, expected float64) (map[string]any, error) {
+	raw, err := optional(ctx, conn, "ai_settings", "global")
+	if err != nil {
+		return nil, err
+	}
+	var previous map[string]any
+	if raw != nil && json.Unmarshal(raw, &previous) != nil {
+		return nil, aiInvalid()
+	}
+	version := float64(0)
+	if previous != nil {
+		version, _ = previous["version"].(float64)
+	}
+	if version != expected {
+		return nil, &protocolError{"CONFLICT", "AI configuration changed. Read it again.", 409}
+	}
+	cfg, err := aiConfig(previous)
+	if err != nil {
+		return nil, err
+	}
+	next := aiConfigMap(cfg)
+	for _, field := range aiFields {
+		if value, exists := body[field]; exists {
+			next[field] = value
+		}
+	}
+	cfg, err = aiConfig(next)
+	if err != nil {
+		return nil, err
+	}
+	next = aiConfigMap(cfg)
+	next["apiKey"] = previous["apiKey"]
+	if value, exists := body["apiKey"]; exists {
+		key, ok := value.(string)
+		if !ok || len(utf16.Encode([]rune(key))) > 10000 {
+			return nil, aiInvalid()
+		}
+		next["apiKey"], err = a.box.Seal(key, "ai_settings", "global", "apiKey")
+		if err != nil {
+			return nil, secretUnavailable()
+		}
+	}
+	generation, _ := previous["dispatchGeneration"].(float64)
+	next["dispatchGeneration"] = generation + 1
+	var before map[string]any
+	if previous != nil {
+		oldCfg, err := aiConfig(previous)
+		if err != nil {
+			return nil, err
+		}
+		before = aiConfigMap(oldCfg)
+		before["apiKeyConfigured"] = previous["apiKey"] != nil && previous["apiKey"] != ""
+		next["id"], next["version"], next["createdAt"] = previous["id"], previous["version"], previous["createdAt"]
+		err = update(ctx, conn, "ai_settings", next)
+	} else {
+		err = insert(ctx, conn, "ai_settings", "global", next)
+	}
+	if err != nil {
+		return nil, err
+	}
+	after := aiConfigMap(cfg)
+	after["apiKeyConfigured"] = next["apiKey"] != nil && next["apiKey"] != ""
+	if err = apiAudit(ctx, conn, "ai.configured", "ai_settings", "global", actor, before, after); err != nil {
+		return nil, err
+	}
+	return a.public(next)
 }
