@@ -180,6 +180,16 @@ jobs:
       - run: npm ci
       - name: Verify native vector ranking, consent, rebuild and readiness
         run: npm run test -w @scratchpad/web -- src/server/pgvector.test.ts
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            mcp/go.sum
+      - name: Verify Go RAG availability with native pgvector
+        run: go -C backend test -race -count=1 -run TestRAG ./...
+        env:
+          TEST_POSTGRES_URL: postgres://postgres:scratchpad-test@localhost:5432/postgres
   infrastructure:
     runs-on: ubuntu-latest
     steps:

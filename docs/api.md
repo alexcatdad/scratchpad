@@ -1730,3 +1730,16 @@ Issue #22 retains central-first immutable capture and stable retry identities. O
 The development Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; the legacy TypeScript validator remains unchanged until cutover.
 
 The existing context response remains the default or explicit `version=1`. Explicit `version=2` returns distinct source previews, section references, lifecycle/authority/confidence, counts and truncation under response limits. The separate `/projects/{id}/context/compact` endpoint defaults to version 2 and supports generated SDKs without changing the legacy Go method signature. Limits are `limit` (1–100, default 20), `maxChars` (4096–64000 serialized UTF-8 bytes including newline, default 12000), and `previewChars` (32–2000 UTF-16 units, default 320). Current state is selected before history limits. Source detail remains available by ID. See [the contract and runbook](runbooks/go-context.md) for fields, omission reporting, compatibility and verification limits.
+
+## Go replacement addition: RAG availability
+
+Authenticated `GET /rag/status` reports the separate new RAG prerequisite state:
+`enabled`, `available`, `database` (`sqlite` or `postgres`), and `reason`
+(`disabled`, `postgres_required`, `pgvector_required`, or `available`).
+`pgvectorVersion` is included only when available. The deployment opt-in is
+`SCRATCHPAD_RAG_ENABLED=true`; false or unset disables it. The live application
+schema must contain pgvector. The server does not install extensions, and missing
+RAG prerequisites do not disable ordinary memory or existing semantic search.
+This Go-only development addition does not yet report indexing coverage or serve
+passage evidence. See [the RAG runbook](runbooks/go-rag.md) for verification and
+the remaining implementation boundaries.

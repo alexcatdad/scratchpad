@@ -3322,6 +3322,53 @@
           }
         }
       }
+    },
+    "/api/v1/rag/status": {
+      "get": {
+        "operationId": "get_rag_status",
+        "summary": "Go backend RAG prerequisite availability, separate from indexing coverage",
+        "responses": {
+          "200": {
+            "description": "Authenticated availability; missing prerequisites do not disable ordinary memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["enabled", "available", "database", "reason"],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "database": {
+                      "type": "string",
+                      "enum": ["sqlite", "postgres"]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "disabled",
+                        "postgres_required",
+                        "pgvector_required",
+                        "available"
+                      ]
+                    },
+                    "pgvectorVersion": {
+                      "type": "string",
+                      "description": "Present when pgvector is installed in the application schema and RAG is enabled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -895,6 +895,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/rag/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Go backend RAG prerequisite availability, separate from indexing coverage */
+        get: operations["get_rag_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -3081,6 +3098,36 @@ export interface operations {
                 content: {
                     "application/json": {
                         [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_rag_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated availability; missing prerequisites do not disable ordinary memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        available: boolean;
+                        /** @enum {string} */
+                        database: "sqlite" | "postgres";
+                        /** @enum {string} */
+                        reason: "disabled" | "postgres_required" | "pgvector_required" | "available";
+                        /** @description Present when pgvector is installed in the application schema and RAG is enabled */
+                        pgvectorVersion?: string;
                     };
                 };
             };

@@ -944,6 +944,48 @@ func (e PatchProjectsIdJSONBodyKind) Valid() bool {
 	}
 }
 
+// Defines values for GetRagStatus200JSONResponseBodyDatabase.
+const (
+	GetRagStatus200JSONResponseBodyDatabasePostgres GetRagStatus200JSONResponseBodyDatabase = "postgres"
+	GetRagStatus200JSONResponseBodyDatabaseSqlite   GetRagStatus200JSONResponseBodyDatabase = "sqlite"
+)
+
+// Valid indicates whether the value is a known member of the GetRagStatus200JSONResponseBodyDatabase enum.
+func (e GetRagStatus200JSONResponseBodyDatabase) Valid() bool {
+	switch e {
+	case GetRagStatus200JSONResponseBodyDatabasePostgres:
+		return true
+	case GetRagStatus200JSONResponseBodyDatabaseSqlite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetRagStatus200JSONResponseBodyReason.
+const (
+	Available        GetRagStatus200JSONResponseBodyReason = "available"
+	Disabled         GetRagStatus200JSONResponseBodyReason = "disabled"
+	PgvectorRequired GetRagStatus200JSONResponseBodyReason = "pgvector_required"
+	PostgresRequired GetRagStatus200JSONResponseBodyReason = "postgres_required"
+)
+
+// Valid indicates whether the value is a known member of the GetRagStatus200JSONResponseBodyReason enum.
+func (e GetRagStatus200JSONResponseBodyReason) Valid() bool {
+	switch e {
+	case Available:
+		return true
+	case Disabled:
+		return true
+	case PgvectorRequired:
+		return true
+	case PostgresRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostRecordsIdEvidenceJSONBodyKind.
 const (
 	Conversation PostRecordsIdEvidenceJSONBodyKind = "conversation"
@@ -1662,6 +1704,12 @@ type PatchProjectsIdSettingsParams struct {
 	// IfMatch Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion.
 	IfMatch *string `json:"If-Match,omitempty"`
 }
+
+// GetRagStatus200JSONResponseBodyDatabase defines parameters for GetRagStatus.
+type GetRagStatus200JSONResponseBodyDatabase string
+
+// GetRagStatus200JSONResponseBodyReason defines parameters for GetRagStatus.
+type GetRagStatus200JSONResponseBodyReason string
 
 // GetRecordsParams defines parameters for GetRecords.
 type GetRecordsParams struct {
@@ -2759,6 +2807,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRagStatus Go backend RAG prerequisite availability, separate from indexing coverage
+	//
+	// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+	GetRagStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRecords Deterministic filtered/full-text memory
 	//
@@ -4062,6 +4115,21 @@ func (c *Client) PatchProjectsIdSettingsWithBody(ctx context.Context, id string,
 // Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 func (c *Client) PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPatchProjectsIdSettingsRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRagStatus Go backend RAG prerequisite availability, separate from indexing coverage
+//
+// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+func (c *Client) GetRagStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRagStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -6220,6 +6288,33 @@ func NewPatchProjectsIdSettingsRequestWithBody(server string, id string, params 
 	return req, nil
 }
 
+// NewGetRagStatusRequest constructs an http.Request for the GetRagStatus method
+func NewGetRagStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/status")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetRecordsRequest constructs an http.Request for the GetRecords method
 func NewGetRecordsRequest(server string, params *GetRecordsParams) (*http.Request, error) {
 	var err error
@@ -7928,6 +8023,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettingsWithResponse(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchProjectsIdSettingsResponse, error)
+
+	// GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+	GetRagStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRagStatusResponse, error)
 
 	// GetRecordsWithResponse Deterministic filtered/full-text memory
 	//
@@ -10348,6 +10450,70 @@ func (r PatchProjectsIdSettingsResponse) ContentType() string {
 	return ""
 }
 
+type GetRagStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Available bool                                    `json:"available"`
+		Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+		Enabled   bool                                    `json:"enabled"`
+
+		// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+		PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+		Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRagStatusResponse) GetJSON200() *struct {
+	Available bool                                    `json:"available"`
+	Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+	Enabled   bool                                    `json:"enabled"`
+
+	// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+	PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+	Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetRagStatusResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRagStatusResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRagStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRagStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRagStatusResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRecordsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12295,6 +12461,19 @@ func (c *ClientWithResponses) PatchProjectsIdSettingsWithResponse(ctx context.Co
 	return ParsePatchProjectsIdSettingsResponse(rsp)
 }
 
+// GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+func (c *ClientWithResponses) GetRagStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRagStatusResponse, error) {
+	rsp, err := c.GetRagStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRagStatusResponse(rsp)
+}
+
 // GetRecordsWithResponse Deterministic filtered/full-text memory
 //
 // Returns a wrapper object for the known response body format(s).
@@ -14187,6 +14366,47 @@ func ParsePatchProjectsIdSettingsResponse(rsp *http.Response) (*PatchProjectsIdS
 		var dest struct {
 			Settings *ProjectSettings `json:"settings,omitempty"`
 			Version  *int             `json:"version,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRagStatusResponse parses an HTTP response from a GetRagStatusWithResponse call
+func ParseGetRagStatusResponse(rsp *http.Response) (*GetRagStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRagStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Available bool                                    `json:"available"`
+			Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+			Enabled   bool                                    `json:"enabled"`
+
+			// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+			PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+			Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

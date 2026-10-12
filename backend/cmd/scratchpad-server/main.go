@@ -97,6 +97,11 @@ func run() error {
 		return err
 	}
 	mux := http.NewServeMux()
+	ragSetting := os.Getenv("SCRATCHPAD_RAG_ENABLED")
+	if ragSetting != "" && ragSetting != "true" && ragSetting != "false" {
+		return errors.New("CONFIG_INVALID: SCRATCHPAD_RAG_ENABLED must be true or false.")
+	}
+	mux.HandleFunc("GET /api/v1/rag/status", auth.RAGStatus(ragSetting == "true"))
 	ai := httpapi.NewAI(auth, secrets.Load(os.Getenv("SCRATCHPAD_ENCRYPTION_KEY_FILE")))
 	conversionContext, conversionCancel := context.WithTimeout(context.Background(), 10*time.Second)
 	conversionPending := ai.ConvertLegacy(conversionContext) != nil
