@@ -162,6 +162,11 @@ func TestRealStdioFullResumptionSurvivesGoRestart(t *testing.T) {
 					t.Fatal("synthetic Git fixture failed")
 				}
 			}
+			// Keep this fixture's capture provenance stable across its own mirror
+			// writes; unrelated workspace changes must still change retry identity.
+			if err := os.WriteFile(filepath.Join(workspace, ".git", "info", "exclude"), []byte("/scratchpad/decisions.jsonl\n"), 0600); err != nil {
+				t.Fatal("synthetic mirror exclusion failed")
+			}
 			var origin string
 			state := filepath.Join(t.TempDir(), "resume.json")
 			for _, phase := range []string{"capture", "verify"} {
