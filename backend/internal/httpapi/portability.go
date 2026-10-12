@@ -348,6 +348,16 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if _, exists := value["authority"]; !exists {
 			return importInvalid()
 		}
+		if confidence, exists := value["confidence"]; exists {
+			if _, err := captureEnum(confidence, []string{"high", "medium", "low", "unknown"}); err != nil {
+				return importInvalid()
+			}
+		}
+		if reason, exists := value["confidenceReason"]; exists {
+			if _, err := captureText(reason, 100000); err != nil {
+				return importInvalid()
+			}
+		}
 		if !portableTimestamp(value["recordedAt"]) {
 			return importInvalid()
 		}
@@ -376,6 +386,22 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		}
 		if (kind == "metadata" || kind == "mirror") && value["id"] != value["recordId"] {
 			return importInvalid()
+		}
+		if kind == "revision" {
+			if reason, exists := value["reason"]; exists {
+				if _, ok := reason.(string); !ok {
+					return importInvalid()
+				}
+			}
+		}
+		if kind == "mirror" {
+			for _, field := range []string{"path", "error"} {
+				if text, exists := value[field]; exists {
+					if _, err := curationText(text, 4000); err != nil {
+						return importInvalid()
+					}
+				}
+			}
 		}
 		if kind == "evidence" {
 			if _, err := captureEnum(value["kind"], []string{"url", "git_commit", "pull_request", "issue", "file", "conversation", "test", "deployment", "other"}); err != nil {
@@ -417,6 +443,11 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 			}
 		}
 	case "relationship":
+		if note, exists := value["note"]; exists {
+			if _, err := curationText(note, 10000); err != nil {
+				return importInvalid()
+			}
+		}
 		for _, field := range []string{"fromRecordId", "toRecordId"} {
 			if err := portableEntity(ctx, conn, "record", value[field]); err != nil {
 				return err
