@@ -93,7 +93,20 @@ still requires exit 0. This verifies the selected images' data/authentication
 behavior, not a new termination guarantee for the retained wrapper. Missing
 explicit image/context configuration skips the corresponding fixture. Local
 image verification does not establish published-release compatibility,
-PostgreSQL image acceptance or deployed rollback.
+or deployed rollback.
+
+The PostgreSQL image scenario creates an unpublished PostgreSQL 18.6 container
+on its own network and a private named database volume. Go receives the
+connection URL through the process environment; passwords are not client
+arguments or printed archive contents. Matching `pg_dump` and `pg_restore`
+clients run inside that owned database container. The workflow dumps the live
+source, acknowledges a later capture, stops Go, restores the archive into a fresh
+database and restarts the actual Go image at the same public origin. Native
+browser login, exact original record-response equality and exclusion of the
+post-backup capture must pass. The source database and archive are not rewritten
+to downgrade a schema. This verifies ordinary PostgreSQL image recovery; optional
+pgvector/RAG, encrypted PostgreSQL provider recovery and deployed acceptance
+remain separate.
 
 The encrypted-provider image scenario uses a private Docker network and a
 synthetic provider without published ports. Correct and wrong installation keys

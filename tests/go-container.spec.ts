@@ -7,6 +7,7 @@ for (const scenario of [
   "go-restore",
   "typescript-rollback",
   "go-secret-restore",
+  "go-postgres-restore",
 ] as const) {
   test(`actual images preserve browser access through ${scenario}`, async ({
     page,
@@ -14,6 +15,8 @@ for (const scenario of [
     const context = process.env.TEST_DOCKER_CONTEXT;
     const image = process.env.TEST_GO_IMAGE;
     const retainedImage = process.env.TEST_RETAINED_IMAGE;
+    let databaseURL = "";
+    const postgresRestore = scenario === "go-postgres-restore";
     test.skip(
       !context ||
         !image ||
@@ -25,6 +28,11 @@ for (const scenario of [
         encoding: "utf8",
         timeout: 30_000,
         stdio: ["ignore", "pipe", "pipe"],
+        env: {
+          ...process.env,
+          SCRATCHPAD_DATABASE_URL: databaseURL,
+          POSTGRES_PASSWORD: "synthetic-container-database-password",
+        },
       }).trim();
     const stop = (id: string, goRuntime: boolean) => {
       docker("stop", "--time", "20", id);
@@ -46,6 +54,8 @@ for (const scenario of [
       wrongKeyVolume = `scratchpad-go-wrong-key-${suffix}`;
     let selectedKeyVolume = correctKeyVolume;
     let networkCreated = false;
+    let databaseContainer = "";
+    let archive: Buffer | undefined;
     const sourceVolume = `scratchpad-go-source-${suffix}`,
       restoredVolume = `scratchpad-go-restore-${suffix}`;
     const containers: string[] = [],
@@ -70,6 +80,9 @@ for (const scenario of [
         `127.0.0.1:${port}:3000`,
         "-e",
         `SCRATCHPAD_PUBLIC_URL=${origin}`,
+        ...(postgresRestore
+          ? ["--network", network, "-e", "SCRATCHPAD_DATABASE_URL"]
+          : []),
         ...(secretRestore
           ? [
               "--network",
@@ -106,6 +119,54 @@ for (const scenario of [
       return id;
     };
     try {
+      if (postgresRestore) {
+        docker("network", "create", network);
+        networkCreated = true;
+        const databaseVolume = `scratchpad-go-postgres-${suffix}`;
+        docker("volume", "create", databaseVolume);
+        volumes.push(databaseVolume);
+        databaseContainer = docker(
+          "run",
+          "-d",
+          "--network",
+          network,
+          "--network-alias",
+          "database",
+          "-v",
+          `${databaseVolume}:/var/lib/postgresql`,
+          "-e",
+          "POSTGRES_USER=scratchpad",
+          "-e",
+          "POSTGRES_PASSWORD",
+          "-e",
+          "POSTGRES_DB=source",
+          "postgres:18.6",
+        );
+        containers.push(databaseContainer);
+        await expect
+          .poll(
+            () =>
+              spawnSync(
+                "docker",
+                [
+                  "--context",
+                  context ?? "",
+                  "exec",
+                  databaseContainer,
+                  "pg_isready",
+                  "-U",
+                  "scratchpad",
+                  "-d",
+                  "source",
+                ],
+                { timeout: 10_000 },
+              ).status,
+            { timeout: 20_000 },
+          )
+          .toBe(0);
+        databaseURL =
+          "postgres://scratchpad:synthetic-container-database-password@database:5432/source?sslmode=disable";
+      }
       if (secretRestore) {
         docker("network", "create", network);
         networkCreated = true;
@@ -161,7 +222,16 @@ for (const scenario of [
             ]
           : [sourceImage, "setup"];
       const token =
-        docker("run", "--rm", "-v", `${sourceVolume}:/data`, ...setupArgs)
+        docker(
+          "run",
+          "--rm",
+          "-v",
+          `${sourceVolume}:/data`,
+          ...(postgresRestore
+            ? ["--network", network, "-e", "SCRATCHPAD_DATABASE_URL"]
+            : []),
+          ...setupArgs,
+        )
           .split("\n")
           .at(-1) ?? "";
       const source = await start(sourceVolume, sourceImage);
@@ -253,7 +323,27 @@ for (const scenario of [
           exact: true,
         }),
       ).toBeVisible();
-      if (scenario === "typescript-rollback") {
+      if (postgresRestore) {
+        archive = execFileSync(
+          "docker",
+          [
+            "--context",
+            context ?? "",
+            "exec",
+            databaseContainer,
+            "pg_dump",
+            "-U",
+            "scratchpad",
+            "-d",
+            "source",
+            "--format=custom",
+            "--no-owner",
+            "--no-acl",
+          ],
+          { timeout: 30_000, stdio: ["ignore", "pipe", "pipe"] },
+        );
+        expect(archive.subarray(0, 5).toString()).toBe("PGDMP");
+      } else if (scenario === "typescript-rollback") {
         expect(
           docker(
             "exec",
@@ -371,19 +461,49 @@ for (const scenario of [
       }
       docker("volume", "create", restoredVolume);
       volumes.push(restoredVolume);
-      docker(
-        "run",
-        "--rm",
-        "-v",
-        `${sourceVolume}:/source:ro`,
-        "-v",
-        `${restoredVolume}:/data`,
-        "--entrypoint",
-        "node",
-        image ?? "",
-        "-e",
-        "const fs=require('node:fs');fs.copyFileSync('/source/checkpoint.sqlite','/data/scratchpad.sqlite');fs.chmodSync('/data/scratchpad.sqlite',0o600)",
-      );
+      if (postgresRestore) {
+        docker(
+          "exec",
+          databaseContainer,
+          "createdb",
+          "-U",
+          "scratchpad",
+          "restored",
+        );
+        execFileSync(
+          "docker",
+          [
+            "--context",
+            context ?? "",
+            "exec",
+            "-i",
+            databaseContainer,
+            "pg_restore",
+            "-U",
+            "scratchpad",
+            "--dbname=restored",
+            "--exit-on-error",
+            "--no-owner",
+            "--no-acl",
+          ],
+          { input: archive, timeout: 30_000, stdio: ["pipe", "pipe", "pipe"] },
+        );
+        databaseURL =
+          "postgres://scratchpad:synthetic-container-database-password@database:5432/restored?sslmode=disable";
+      } else
+        docker(
+          "run",
+          "--rm",
+          "-v",
+          `${sourceVolume}:/source:ro`,
+          "-v",
+          `${restoredVolume}:/data`,
+          "--entrypoint",
+          "node",
+          image ?? "",
+          "-e",
+          "const fs=require('node:fs');fs.copyFileSync('/source/checkpoint.sqlite','/data/scratchpad.sqlite');fs.chmodSync('/data/scratchpad.sqlite',0o600)",
+        );
       const restored = await start(restoredVolume, sourceImage);
       await page.goto(origin);
       if (scenario !== "typescript-rollback")
@@ -545,7 +665,7 @@ for (const scenario of [
         stop(secretless, true);
       }
     } finally {
-      for (const id of containers) docker("rm", "-f", id);
+      for (const id of containers) docker("rm", "-f", "-v", id);
       for (const volume of volumes) docker("volume", "rm", volume);
       if (networkCreated) docker("network", "rm", network);
     }
