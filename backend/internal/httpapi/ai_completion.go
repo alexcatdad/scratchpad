@@ -290,7 +290,7 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 					citedProjects = append(citedProjects, stringValue(known[id], "projectId"))
 				}
 				citedProjects = uniqueIDs(citedProjects)
-				insufficient := (contains([]string{"duplicate_candidate", "contradiction", "pattern"}, generated.Kind) && len(sourceIDs) < 2) || (generated.Kind == "pattern" && scope.CrossProject && len(citedProjects) < 2)
+				insufficient := (contains([]string{"duplicate_candidate", "relationship_candidate", "contradiction", "pattern"}, generated.Kind) && len(sourceIDs) < 2) || (generated.Kind == "pattern" && scope.CrossProject && len(citedProjects) < 2)
 				if insufficient {
 					found := false
 					for _, warning := range warnings {

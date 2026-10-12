@@ -74,7 +74,7 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 		ctx, cancel := context.WithTimeout(r.Context(), time.Duration(snapshot.config.RequestTimeoutSeconds+10)*time.Second)
 		defer cancel()
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(time.Duration(snapshot.config.RequestTimeoutSeconds+10) * time.Second))
-		signature, err := aiFingerprint(snapshot.config)
+		signature, err := embeddingFingerprint(snapshot.config)
 		if err != nil {
 			a.auth.fail(w, err)
 			return
