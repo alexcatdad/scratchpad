@@ -32,7 +32,7 @@ Without `TEST_POSTGRES_URL`, PostgreSQL cases explicitly skip. To run them, supp
 TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpad_test npm run test:backend
 ```
 
-Tests execute real race-instrumented server, MCP and integration-runner binaries and exercise CLI startup, HTTP and stdio. The backend test command disables Go result caching with `-count=1`: these external-process tests must rebuild and exercise the current executable after backend-only changes. Legacy fixture SQL constructs historical input; assertions do not query internal tables. Coverage includes fresh/repeated startup, supported schema-1 upgrade, competing startups, failed-DDL rollback/retry, unsupported and malformed schemas, unsafe SQLite paths, interrupted lock-wait startup, restored sessions and unchanged record details across restart. SSH tests use real local signing, prove successful authenticated record retrieval through stdio on both engines, reject transplanted and reused signatures, verify concurrent single-use proof consumption and preserve challenges across restart. GitHub fixtures cover freshness, removal, future timestamps, binding changes, local blocking and automatic admission from the published snapshot. A closed SQLite schema-1 snapshot is also restored into a separate file before authenticated retrieval. This closed-fixture copy is not a live SQLite backup procedure. Native PostgreSQL dump/restore is verified separately below. Interruption during actual DDL execution, pre-upgrade PostgreSQL downgrade, full dashboard workflows and full delivery acceptance remain required before cutover.
+Tests execute real race-instrumented server, MCP and integration-runner binaries and exercise CLI startup, HTTP and stdio. The backend test command disables Go result caching with `-count=1`: these external-process tests must rebuild and exercise the current executable after backend-only changes. Legacy fixture SQL constructs historical input; assertions do not query internal tables. Coverage includes fresh/repeated startup, supported schema-1 upgrade, competing startups, failed-DDL rollback/retry, unsupported and malformed schemas, unsafe SQLite paths, interrupted lock-wait startup, restored sessions and unchanged record details across restart. SSH tests use real local signing, prove successful authenticated record retrieval through stdio on both engines, reject transplanted and reused signatures, verify concurrent single-use proof consumption and preserve challenges across restart. GitHub fixtures cover freshness, removal, future timestamps, binding changes, local blocking and automatic admission from the published snapshot. A closed SQLite schema-1 snapshot is also restored into a separate file before authenticated retrieval. This closed-fixture copy is not a live SQLite backup procedure. Native PostgreSQL dump/restore is verified separately below. Pre-upgrade PostgreSQL rollback is verified separately below. Interruption during actual DDL execution, full dashboard workflows and full delivery acceptance remain required before cutover.
 
 GitHub Actions adds a separate Go-backend lane with PostgreSQL 18.6, formatting, vet, race tests, build and vulnerability checking. Local PostgreSQL 17 verification does not establish PostgreSQL 18.6 CI acceptance.
 
@@ -248,7 +248,32 @@ Configured PostgreSQL fixtures require `pg_dump` and `pg_restore`; missing clien
 fail rather than silently omit restore coverage. CI uses the matching clients
 inside its owned PostgreSQL service through `TEST_POSTGRES_CONTAINER_ID`. Local
 verification uses native clients. These checks do not establish deployed restore,
-browser-passkey recovery, pre-upgrade PostgreSQL downgrade, or full release parity.
+browser-passkey recovery or full release parity. The pre-upgrade rollback scenario is verified separately below.
+
+### Pre-upgrade PostgreSQL rollback verification
+
+The retained TypeScript API refuses a Go-upgraded schema-2 database. Rollback
+restores the pre-upgrade schema-1 archive into a fresh database instead of editing
+migration markers or applying a destructive down migration. Native tests take
+that archive before Go starts, upgrade and write through Go, verify TypeScript
+refusal and preservation of the upgraded source, then recover authenticated
+original record reads through the real TypeScript API process on the restored
+snapshot. Post-upgrade writes remain on the upgraded database and are absent
+from the rollback snapshot.
+
+This fixture requires project Node 24 and installed pinned dependencies:
+
+```sh
+npm ci
+TEST_POSTGRES_URL=postgres://postgres@127.0.0.1:5432/postgres \
+  npm run test:backend
+```
+
+Use the project's Node-version selection before running the command. Missing
+Node/dependencies fail configured rollback verification. CI installs them before
+the full Go suite. The TypeScript fixture uses actual HTTP/API handlers; it does
+not establish dashboard rendering, a published-container rollback or deployed
+acceptance. Retain and verify the actual old deployment artifact before cutover.
 
 ### Runtime replacement and SQLite restoration
 

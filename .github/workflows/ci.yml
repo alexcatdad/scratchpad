@@ -89,10 +89,6 @@ jobs:
             mcp/go.sum
       - run: test -z "$(gofmt -l .)"
       - run: go vet ./...
-      - name: Verify Go backend and operational PostgreSQL restore
-        run: go test -race -count=1 -timeout 15m ./...
-        env:
-          TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
       - run: go build -o "$RUNNER_TEMP/scratchpad-server" ./cmd/scratchpad-server
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -101,6 +97,13 @@ jobs:
           cache: npm
       - run: npm ci
         working-directory: .
+      - name: Typecheck the retained API rollback fixture
+        run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM,DOM.Iterable --strict --esModuleInterop --skipLibCheck tests/typescript-api-fixture.ts
+        working-directory: .
+      - name: Verify Go backend, PostgreSQL restore and retained-runtime rollback
+        run: go test -race -count=1 -timeout 15m ./...
+        env:
+          TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
       - run: npx playwright install --with-deps chromium
         working-directory: .
       - name: Typecheck the Go authentication browser seams
