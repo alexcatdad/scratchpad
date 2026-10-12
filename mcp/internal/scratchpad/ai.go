@@ -67,7 +67,7 @@ func registerAI(server *mcp.Server, client *Client) {
 			body["maxChars"] = *input.MaxChars
 		}
 		var result any
-		err = client.request(ctx, "POST", "/rag/retrieve", body, "", &result)
+		err = client.requestEvidence(ctx, body, &result)
 		return nil, result, err
 	})
 	type SemanticSearch struct {

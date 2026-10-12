@@ -60,6 +60,12 @@ See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD
 
 Local builds identify as `dev`. Release builds inject the tag with `go build -ldflags '-X main.version=<version>'`; both `--version` and MCP initialization report that value.
 
+## Compact project context
+
+`get_project_context` defaults to legacy context. Supply `version: 2` for compact
+context; `limit`, `maxChars` and `previewChars` require that version. Other
+combinations fail instead of silently ignoring the supplied limits.
+
 ## Cited RAG evidence
 
 `retrieve_evidence` forwards a question or identifier to the Go PostgreSQL RAG
@@ -76,3 +82,6 @@ quoted locations, authority, applicability, relationship previews and indexing
 uncertainty. Inspect sources with `get_record`; similarity does not establish
 accepted policy, and incomplete indexing is not absent evidence. Backend support
 is required; unsupported deployments return a tool error.
+
+`retrieve_evidence` follows caller cancellation and the server's configured
+request deadline. Ordinary MCP API calls retain the client's 30-second timeout.

@@ -148,6 +148,9 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 				return nil, nil, &APIError{Code: "VALIDATION_FAILED", Message: field + " must be an integer when supplied."}
 			}
 		}
+		if (in.Limit != nil || in.MaxChars != nil || in.PreviewChars != nil) && (in.Version == nil || *in.Version != 2) {
+			return nil, nil, &APIError{Code: "VALIDATION_FAILED", Message: "Compact context limits require explicit version 2."}
+		}
 		p, _, err := c.resolve(ctx, in.Scope)
 		if err != nil {
 			return nil, nil, err

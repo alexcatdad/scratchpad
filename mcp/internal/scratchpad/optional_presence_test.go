@@ -16,7 +16,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func presenceStdioSession(t *testing.T, handler http.HandlerFunc) (context.Context, *mcp.ClientSession) {
+func presenceStdioSession(t *testing.T, handler http.HandlerFunc, deadlines ...time.Duration) (context.Context, *mcp.ClientSession) {
 	t.Helper()
 	api := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer synthetic-presence-token" {
@@ -31,7 +31,11 @@ func presenceStdioSession(t *testing.T, handler http.HandlerFunc) (context.Conte
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	deadline := 15 * time.Second
+	if len(deadlines) > 0 {
+		deadline = deadlines[0]
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), deadline)
 	t.Cleanup(cancel)
 	command := exec.CommandContext(ctx, executable, "-test.run=^TestStdioProtocol$")
 	command.Env = append(os.Environ(), "SCRATCHPAD_TEST_HELPER=1", "SCRATCHPAD_TEST_API_URL="+api.URL)
