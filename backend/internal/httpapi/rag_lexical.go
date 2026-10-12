@@ -63,7 +63,7 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 	if intent == "current" {
 		filter = ` AND COALESCE(m.data->'archived','false'::jsonb)<>'true'::jsonb AND COALESCE(m.data->>'legacyStatus','') NOT IN ('superseded','superseded_or_partial') AND NOT EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id)`
 	}
-	statement := `SELECT r.data,m.data,ts_rank_cd(s.document,plainto_tsquery('simple',$1)),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='partially_replaces' AND l.data->>'toRecordId'=r.id) FROM record_search s JOIN entities r ON r.kind='record' AND r.id=s.record_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE s.document @@ plainto_tsquery('simple',$1) AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'` + filter + ` ORDER BY ts_rank_cd(s.document,plainto_tsquery('simple',$1)) DESC,r.id LIMIT 100`
+	statement := `SELECT r.data,m.data,ts_rank_cd(s.document,plainto_tsquery('simple',$1)),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='partially_replaces' AND l.data->>'toRecordId'=r.id),COALESCE((SELECT jsonb_agg(edge.data) FROM(SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=r.id OR t.id=r.id) AND f.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND t.data->>'projectId' IN (` + strings.Join(places, ",") + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) edge),'[]'::jsonb) FROM record_search s JOIN entities r ON r.kind='record' AND r.id=s.record_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE s.document @@ plainto_tsquery('simple',$1) AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'` + filter + ` ORDER BY ts_rank_cd(s.document,plainto_tsquery('simple',$1)) DESC,r.id LIMIT 100`
 	rows, err := tx.QueryContext(ctx, statement, args...)
 	if err != nil {
 		a.auth.fail(w, err)
@@ -71,14 +71,19 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 	}
 	defer rows.Close()
 	for rows.Next() {
-		var raw, meta []byte
+		var raw, meta, edges []byte
 		var score float64
 		var full, partial bool
-		if err = rows.Scan(&raw, &meta, &score, &full, &partial); err != nil {
+		if err = rows.Scan(&raw, &meta, &score, &full, &partial, &edges); err != nil {
 			a.auth.fail(w, err)
 			return
 		}
 		var record, metadata map[string]any
+		var links []map[string]any
+		if json.Unmarshal(edges, &links) != nil {
+			a.auth.fail(w, aiUnavailable())
+			return
+		}
 		if json.Unmarshal(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
 			a.auth.fail(w, aiUnavailable())
 			return
@@ -157,7 +162,15 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 			applicability = "unverified"
 		}
 		location := map[string]any{"field": "content", "unit": "utf16", "start": excerptStart, "end": excerptStart + len(utf16.Encode([]rune(excerpt)))}
-		item := map[string]any{"id": "passage_" + identity, "recordId": id, "projectId": record["projectId"], "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + id, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": ragProcessingVersion, "retrieval": "lexical", "relationships": []any{}}
+		citations := []map[string]any{}
+		for _, link := range links {
+			citation := map[string]any{"id": link["id"], "type": link["type"], "fromRecordId": link["fromRecordId"], "toRecordId": link["toRecordId"]}
+			if note := stringValue(link, "note"); note != "" {
+				citation["note"] = ragExcerpt(note, 128)
+			}
+			citations = append(citations, citation)
+		}
+		item := map[string]any{"id": "passage_" + identity, "recordId": id, "projectId": record["projectId"], "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + id, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": ragProcessingVersion, "retrieval": "lexical", "relationships": citations, "relationshipsOmitted": 0, "relationshipPreviewLimitReached": len(links) == 10}
 		for {
 			candidate := append(append([]map[string]any{}, results...), item)
 			encoded, err := json.Marshal(map[string]any{"results": candidate, "resultsOmitted": omitted, "semantic": semantic})
@@ -170,7 +183,16 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 				break
 			}
 			length := len(utf16.Encode([]rune(excerpt)))
-			if len(results) > 0 || length <= 32 {
+			if len(results) > 0 {
+				omitted++
+				break
+			}
+			if len(citations) > 0 {
+				citations = citations[:len(citations)-1]
+				item["relationships"], item["relationshipsOmitted"] = citations, len(links)-len(citations)
+				continue
+			}
+			if length <= 32 {
 				omitted++
 				break
 			}

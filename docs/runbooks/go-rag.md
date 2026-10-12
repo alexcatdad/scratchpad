@@ -4,7 +4,7 @@ Issue #36 introduces passage RAG separately from the existing whole-record
 semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
-Partial-index raw-source merging, fallback relationship previews, retrieval
+Partial-index raw-source merging, retrieval
 evaluation and the RAG MCP tool remain required for the full feature.
 
 ## Configuration and availability
@@ -202,7 +202,23 @@ Fallback reports `semantic.available=false`, a fixed `reason` code and assessed
 coverage, or `indexCoverage=unavailable` when pgvector is absent. Index-unavailable
 lexical evidence can include sources that have never been embedded. A successful
 query with no results is not proof that incomplete or unavailable indexing has no
-evidence. The current fallback does not yet include relationship previews, and
-healthy partial-index retrieval does not yet merge unindexed raw lexical sources
+evidence. Fallback now includes bounded accepted relationship previews; healthy partial-index
+retrieval does not yet merge unindexed raw lexical sources
 with nonempty semantic results. Those cases, broader dedup/recall evaluation and
 the real stdio RAG tool remain required before full acceptance.
+
+## Relationships in lexical fallback
+
+Lexical fallback includes up to ten accepted relationship previews. Both endpoints
+must belong to the selected eligible project scope. Replacement and contradiction
+previews are prioritized before other relationships; private/out-of-scope IDs and
+notes are excluded. Governing lifecycle remains independent of preview limits,
+so a source can be correctly historical even when a governing edge is not visible
+within selected participation.
+
+Preview notes are capped at 128 UTF-16 units. `relationshipPreviewLimitReached`
+signals the fetch cap, and `relationshipsOmitted` counts previews removed to fit
+the byte budget. References are removed before shortening the first source
+excerpt, including when that excerpt is already short. Current-only retrieval
+continues to exclude accepted replacements; history retains the superseded source
+and its accessible citations.

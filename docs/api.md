@@ -1811,5 +1811,13 @@ lexical source evidence when available, with `retrieval: "lexical"`,
 `semantic.available=false`, a fixed `reason`, and `indexCoverage` as assessed or
 `unavailable`. Authentication and consent failures remain errors. Fallback uses
 immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
-Partial-index raw-source merging, fallback relationship previews, broader
+Partial-index raw-source merging, broader
 retrieval evaluation and actual stdio RAG remain required acceptance work.
+
+## Go replacement addition: fallback relationship citations
+
+Lexical fallback now retains bounded accepted replacement/contradiction and other
+relationship references. Both endpoints must belong to the selected eligible
+projects. Excluded-project IDs and notes remain hidden. Lifecycle classification
+is independent of scoped preview limits, and the response budget reports preview
+omissions before shortening the first cited source excerpt.
