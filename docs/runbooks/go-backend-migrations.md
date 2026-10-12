@@ -4,7 +4,7 @@ This is an incremental implementation of issue [#36](https://github.com/alexcatd
 
 ## Implemented boundary
 
-The separate `backend` Go module supplies `scratchpad-server migrate` and `scratchpad-server serve`. Both finish ordered transactional migrations before serving requests. The server exposes the existing `GET /health`, `GET /ready` and authenticated `GET /api/v1/records/{id}` shapes. Record details include immutable raw captures, metadata, revisions, evidence, relationships, mirror state and related audit history. These reads accept restored bearer or browser sessions, enforce session transport, expiration and revocation, and check cached GitHub authorization and local key blocking. Passkey enrollment, discoverable login, owner recovery, authentication status, public credential metadata, session logout, GitHub OAuth, key synchronization, blocking and unlinking are implemented. Manual SSH enrollment and credential revocation are also implemented; Project resolution, listing, settings and versioned updates are implemented; Immutable capture and durable retry identities are also implemented; Lexical listing/search is implemented; Deterministic project context is implemented; Metadata/revisions, evidence, mirror reports and relationship curation are implemented; Owner profile/public-GitHub presentation is implemented; Native knowledge export/import and legacy JSONL import are implemented; remaining configuration routes and workers are later slices.
+The separate `backend` Go module supplies `scratchpad-server migrate` and `scratchpad-server serve`. Both finish ordered transactional migrations before serving requests. The server exposes the existing `GET /health`, `GET /ready` and authenticated `GET /api/v1/records/{id}` shapes. Record details include immutable raw captures, metadata, revisions, evidence, relationships, mirror state and related audit history. These reads accept restored bearer or browser sessions, enforce session transport, expiration and revocation, and check cached GitHub authorization and local key blocking. Passkey enrollment, discoverable login, owner recovery, authentication status, public credential metadata, session logout, GitHub OAuth, key synchronization, blocking and unlinking are implemented. Manual SSH enrollment and credential revocation are also implemented; Project resolution, listing, settings and versioned updates are implemented; Immutable capture and durable retry identities are also implemented; Lexical listing/search is implemented; Deterministic project context is implemented; Metadata/revisions, evidence, mirror reports and relationship curation are implemented; Owner profile/public-GitHub presentation is implemented; Native knowledge export/import, legacy JSONL import and schema-preserving online SQLite backup are implemented; remaining configuration routes and workers are later slices.
 
 `POST /api/v1/auth/mcp/challenge` and `POST /api/v1/auth/mcp/verify` implement recipient-bound SSH proof v2 with the existing `scratchpad-auth-v2` namespace. Configure `SCRATCHPAD_PUBLIC_URL` as the externally trusted HTTPS origin, or a loopback HTTP origin for development; it must match the MCP's instance URL. Configure the bind address separately with `SCRATCHPAD_LISTEN_ADDR` (development default `127.0.0.1:3000`). SSH signatures are verified with local `ssh-keygen` outside database transactions. The server accepts public keys and signatures only; private keys remain with the MCP. Signature verification is bounded to five seconds, two anonymous verifications per client and eight globally, with 120 authentication requests per minute per client and at most 4096 client counters. Forwarded client headers are not trusted by this development executable.
 
@@ -170,7 +170,31 @@ HTTP tests cover all eight types, raw evidence/provenance, fixed TypeScript hash
 
 ## Backup and rollback before any future cutover
 
+The development Go binary implements `backup <absolute-destination>` for existing supported SQLite installations. This command bypasses migration/startup and opens the source read-only, so a schema-1 installation remains schema 1. It uses SQLite's online backup API inside a consistent source read transaction, includes committed WAL data and preserves credentials, sessions, retries, settings, indexes and knowledge. A completed snapshot is checked independently as a closed main file, synced and atomically published without replacing an existing destination. Snapshot mode is `0600`, and its parent must meet the existing private-storage profile. Missing/unsafe/unsupported sources, existing target files or journals, and source sidecar aliases are refused. SIGINT/SIGTERM and the bounded backup deadline cancel unfinished work and clean staging files.
+
+For a development binary, an operator can create a pre-upgrade snapshot without starting the Go server:
+
+```sh
+go -C backend build -o /private/tmp/scratchpad-server ./cmd/scratchpad-server
+SCRATCHPAD_DATABASE_URL='' SCRATCHPAD_DATABASE_PATH='/absolute/source/scratchpad.sqlite' \
+  /private/tmp/scratchpad-server backup '/absolute/private-backups/pre-go.sqlite'
+```
+
+The successful JSON report includes the source schema version and destination. The PostgreSQL branch returns `BACKUP_EXTERNAL` before connecting or touching SQLite files; use the operator-controlled `pg_dump`/`pg_restore` procedure for that engine. A SQLite backup command does not prove PostgreSQL operational restore.
+
 Stop application writers and workers before replacing a runtime. Retain the exact old executable/image and configuration. For the current SQLite application, use its existing online administrative backup command; do not copy only the main database while WAL writers are active. For PostgreSQL, use the existing administrative backup procedure or an operator-controlled `pg_dump`, and restore into a separate disposable database to verify the backup before upgrading.
+
+Restore a completed SQLite snapshot into a fresh private directory or volume while the target service is stopped. Retain the original snapshot unchanged. For a host directory, these operator steps refuse an existing restore directory:
+
+```sh
+restore_dir='/absolute/fresh-restore-directory'
+mkdir -m 700 "$restore_dir"
+install -m 600 '/absolute/private-backups/pre-go.sqlite' "$restore_dir/scratchpad.sqlite"
+```
+
+Point the retained runtime and configuration at that new database, then verify readiness, owner authentication, immutable record details, search and retry behavior before accepting the restore. Starting Go intentionally migrates the restored copy; starting the retained TypeScript runtime is the schema-1 rollback path. Do not start Go on the retained snapshot itself. For container volumes, follow the stopped-service/fresh-volume procedure in the deployment runbook.
+
+CLI/HTTP tests verify unchanged schema-1 source bytes, snapshot privacy, authentication and immutable history after fresh-volume restore, committed live WAL data, curation/audits, lexical indexes, retry replay and exclusion of later writes. They also verify unsafe/existing path refusal, sidecar safety, one winner among concurrent backups, cancellation cleanup and safe PostgreSQL delegation. Run them with `npm run test:backend`; no deployed restore or PostgreSQL dump/restore acceptance is implied by these SQLite checks.
 
 Keep backups private: they include hashed authentication/session state and may still contain legacy plaintext provider secrets. Schema migrations do not convert reusable secret values. Encryption and independently reported legacy conversion remain later issue-36 slices; missing deployment encryption keys do not enter this migration path.
 

@@ -19,8 +19,19 @@ import (
 )
 
 func run() error {
+	if len(os.Args) == 3 && os.Args[1] == "backup" {
+		stop, cleanup := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cleanup()
+		ctx, cancel := context.WithTimeout(stop, 60*time.Second)
+		defer cancel()
+		version, err := persistence.Backup(ctx, os.Getenv("SCRATCHPAD_DATABASE_PATH"), os.Getenv("SCRATCHPAD_DATABASE_URL"), os.Args[2])
+		if err != nil {
+			return err
+		}
+		return json.NewEncoder(os.Stdout).Encode(map[string]any{"database": "sqlite", "schemaVersion": version, "destination": os.Args[2]})
+	}
 	if len(os.Args) != 2 || (os.Args[1] != "migrate" && os.Args[1] != "serve" && os.Args[1] != "setup" && os.Args[1] != "recover") {
-		return errors.New("Usage: scratchpad-server migrate|serve|setup|recover")
+		return errors.New("Usage: scratchpad-server migrate|serve|setup|recover|backup <absolute-destination>")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	store, err := persistence.Open(ctx, os.Getenv("SCRATCHPAD_DATABASE_PATH"), os.Getenv("SCRATCHPAD_DATABASE_URL"))
