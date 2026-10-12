@@ -200,8 +200,18 @@ func postgresOperationalRestore(t *testing.T, rag bool) {
 					t.Fatal("restore lost native passage coverage")
 				}
 				status, evidence := curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "RESTORE_EVIDENCE_WITNESS"})
-				if status != 200 || len(evidence["results"].([]any)) != 1 || evidence["results"].([]any)[0].(map[string]any)["recordId"] != record["id"] {
+				if status != 200 {
 					t.Fatal("restored passage evidence was not retrievable")
+				}
+				fields := []string{"title"}
+				if phase == "retained-key" {
+					fields = append(fields, "content")
+				}
+				items := assertRAGEvidenceFields(t, evidence["results"].([]any), record, fields...)
+				for _, item := range items {
+					if item["applicability"] != "current" || len(item["relationships"].([]any)) != 0 {
+						t.Fatal("restored evidence changed lifecycle or relationships")
+					}
 				}
 				semantic := evidence["semantic"].(map[string]any)
 				if semantic["available"] != (phase == "retained-key") {

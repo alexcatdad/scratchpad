@@ -78,12 +78,14 @@ func TestRAGHistoryLifecycleIsNotTruncatedWithRelationshipPreviews(t *testing.T)
 		}
 	}
 	status, response = curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "historical choice", "intent": "history"})
-	if status != 200 || len(response["results"].([]any)) != 1 {
+	if status != 200 {
 		t.Fatalf("historical evidence missing: %d %v", status, response)
 	}
-	item := response["results"].([]any)[0].(map[string]any)
-	if item["applicability"] != "superseded" || len(item["relationships"].([]any)) > 10 {
-		t.Fatalf("bounded relationship previews changed historical authority: %v", item)
+	items := assertRAGEvidenceFields(t, response["results"].([]any), record, "content", "title")
+	for _, item := range items {
+		if item["applicability"] != "superseded" || len(item["relationships"].([]any)) > 10 {
+			t.Fatalf("bounded relationship previews changed historical authority: %v", item)
+		}
 	}
 	status, response = curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "historical choice"})
 	if status != 200 || len(response["results"].([]any)) != 0 {

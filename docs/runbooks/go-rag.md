@@ -238,8 +238,15 @@ It merges them with indexed lexical candidates, deduplicates passage IDs, ranks
 the lexical union and retains its best 100 before reciprocal-rank fusion with
 semantic candidates. Indexed sources retain cosine scores; raw lexical sources
 retain lexical scores and `retrieval: "lexical"`. Both carry fusion `rankScore`.
-The final 100 fused candidates share one result-count and byte-budget selection.
+The complete bounded candidate union shares one result-count and byte-budget
+selection, returning at most 100 results and counting all omitted candidates.
 Semantic availability stays true while index coverage stays incomplete.
+
+Indexed lexical matches use passage text. A title-only match is represented once
+per record, including with complete index coverage, and cites the exact `title`
+field rather than an unrelated content range. Matching body passages retain their
+`content` citations. A title hit and a semantic content passage may both cite the
+same record, each with its own evidence identity and exact field range.
 
 HTTP regression coverage includes a completed semantic source alongside a pending
 exact match, overlapping indexed/raw passage identities and a 4096-byte budget.

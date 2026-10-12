@@ -61,6 +61,11 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 
 // Both retrieval paths use the same authenticated transaction's source scope.
 func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query, intent string) ([]map[string]any, error) {
+	return ragLexicalEvidenceFor(ctx, q, ids, query, intent, false)
+}
+
+// Complete indexes supply passage-local matches; title discovery remains once per source.
+func ragLexicalEvidenceFor(ctx context.Context, q scopeReader, ids []string, query, intent string, titlesOnly bool) ([]map[string]any, error) {
 	terms := lexicalTerms.FindAllString(query, 30)
 	results := []map[string]any{}
 	if len(terms) == 0 {
@@ -75,6 +80,9 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 	filter := ""
 	if intent == "current" {
 		filter = ` AND COALESCE(m.data->'archived','false'::jsonb)<>'true'::jsonb AND COALESCE(m.data->>'legacyStatus','') NOT IN ('superseded','superseded_or_partial') AND NOT EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id)`
+	}
+	if titlesOnly {
+		filter += ` AND to_tsvector('simple',COALESCE(r.data->>'title','')) @@ plainto_tsquery('simple',$1)`
 	}
 	statement := `SELECT r.data,m.data,ts_rank_cd(s.document,plainto_tsquery('simple',$1)),EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id),EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='partially_replaces' AND l.data->>'toRecordId'=r.id),COALESCE((SELECT jsonb_agg(edge.data) FROM(SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=r.id OR t.id=r.id) AND f.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND t.data->>'projectId' IN (` + strings.Join(places, ",") + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) edge),'[]'::jsonb) FROM record_search s JOIN entities r ON r.kind='record' AND r.id=s.record_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE s.document @@ plainto_tsquery('simple',$1) AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'` + filter + ` ORDER BY ts_rank_cd(s.document,plainto_tsquery('simple',$1)) DESC,r.id LIMIT 100`
 	rows, err := q.QueryContext(ctx, statement, args...)
@@ -128,9 +136,19 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 			}
 		}
 		text := string(utf16.Decode(units[bestStart:bestEnd]))
+		field, prefix := "content", "passage_"
+		if titlesOnly || bestMatches == 0 {
+			text = stringValue(record, "title")
+			bestStart, bestEnd = 0, len(utf16.Encode([]rune(text)))
+			field, prefix = "title", "title_"
+		}
 		excerpt, offset := ragLexicalExcerpt(text, terms)
 		excerptStart := bestStart + offset
-		identity, err := aiHash(map[string]any{"recordId": id, "contentHash": hash, "processingVersion": ragProcessingVersion, "start": bestStart, "end": bestEnd})
+		identityFields := map[string]any{"recordId": id, "contentHash": hash, "processingVersion": ragProcessingVersion, "start": bestStart, "end": bestEnd}
+		if field == "title" {
+			identityFields["field"] = field
+		}
+		identity, err := aiHash(identityFields)
 		if err != nil {
 			return nil, err
 		}
@@ -148,7 +166,7 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 		if applicability == "current" && truthy(objectValue(record, "provenance")["import"]) {
 			applicability = "unverified"
 		}
-		location := map[string]any{"field": "content", "unit": "utf16", "start": excerptStart, "end": excerptStart + len(utf16.Encode([]rune(excerpt)))}
+		location := map[string]any{"field": field, "unit": "utf16", "start": excerptStart, "end": excerptStart + len(utf16.Encode([]rune(excerpt)))}
 		citations := []map[string]any{}
 		for _, link := range links {
 			citation := map[string]any{"id": link["id"], "type": link["type"], "fromRecordId": link["fromRecordId"], "toRecordId": link["toRecordId"]}
@@ -157,7 +175,7 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 			}
 			citations = append(citations, citation)
 		}
-		item := map[string]any{"id": "passage_" + identity, "recordId": id, "projectId": record["projectId"], "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + id, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": ragProcessingVersion, "retrieval": "lexical", "relationships": citations, "relationshipsOmitted": 0, "relationshipPreviewLimitReached": len(links) == 10}
+		item := map[string]any{"id": prefix + identity, "recordId": id, "projectId": record["projectId"], "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + id, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": ragProcessingVersion, "retrieval": "lexical", "relationships": citations, "relationshipsOmitted": 0, "relationshipPreviewLimitReached": len(links) == 10}
 		results = append(results, item)
 	}
 	return results, rows.Err()

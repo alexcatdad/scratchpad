@@ -45,7 +45,13 @@ func TestRAGFusedOmissionsCountAllDistinctCandidates(t *testing.T) {
 		if i >= 100 {
 			title = fmt.Sprintf("FUSION_WITNESS %03d", i)
 		}
-		record := curationCapture(t, origin, project, title)
+		// The corpus tests passage-local lexical fusion, so its query token belongs
+		// to immutable passage content as well as the display title.
+		status, captured := captureRequest(t, origin, project, "", map[string]any{"type": "finding", "title": title, "authority": "observed", "payload": map[string]any{"finding": title + " retains raw history."}})
+		if status != 201 {
+			t.Fatal("fusion corpus capture failed")
+		}
+		record := captured["record"].(map[string]any)
 		records[record["id"].(string)] = record
 	}
 	jobs := waitRAGJobs(t, origin, 200)

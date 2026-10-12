@@ -76,7 +76,7 @@ func TestRAGLexicalFallbackBudgetKeepsShortEvidenceAndReportsEdgeOmissions(t *te
 	}
 	item := response["results"].([]any)[0].(map[string]any)
 	encoded, _ := json.Marshal(response)
-	if len(encoded)+1 > 4096 || item["relationshipsOmitted"].(float64) < 1 || item["text"] != record["content"] {
+	if len(encoded)+1 > 4096 || item["relationshipsOmitted"].(float64) < 1 || item["text"] != record["title"] || item["sourceLocation"].(map[string]any)["field"] != "title" {
 		t.Fatal("fallback budget lost immutable excerpt or omission accounting")
 	}
 }
