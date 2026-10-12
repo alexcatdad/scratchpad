@@ -92,3 +92,60 @@ Two baseline trials, two first-iteration trials and two final-query trials each 
 | Distinct native selection | 4.2–4.3             | 137.6–137.8      | 105.1–110.7    | 16.0–16.9       | 122.9–133.2     | 194.8–201.1      |
 
 Mean measured elapsed time decreased 8.6%; mean per-trial search p95 decreased 20.4%. Context p95 increased despite the shorter overall workload. This is a local improvement to one read path, not resolution of the original Go concurrency regression. Metadata, relationships, blank-query listing and context still need focused-query/wait analysis. Database waiting, CPU attribution, PostgreSQL and compact/RAG performance remain unmeasured here. The final distinct query passed lexical HTTP regressions on both engines; performance claims apply only to these repeated SQLite trials.
+
+## Bounded pool and context headers — 2026-10-12
+
+Final measured source: `0be9432`. The same frozen MCP executable (SHA-256
+`6dfd3ab08a0d6f0bc9a0fbc0a01ca85e697b9a17b81a10f35c6d0932ad0e27d4`)
+ran against both backends on an Apple M2 Max with 12 logical CPUs and 32 GiB,
+macOS arm64, Node 24.21.0 and Go 1.27.2. Each trial used a fresh private schema-1
+SQLite fixture and actual SSH proof. Go applied its normal schema-3 upgrade.
+Other owned build, test and agent jobs had finished before timing. The four
+trials alternated TypeScript/Go, then Go/TypeScript, with eight agents, 1,000
+seeded findings and ten rounds per agent. All 1,600 measured operations passed;
+setup, seeding and initial authentication remain outside measured rounds.
+
+| Backend    | Measured rounds (s) | Capture p95 (ms) | Retry p95 (ms) | Detail p95 (ms) | Search p95 (ms) | Context p95 (ms) |
+| ---------- | ------------------- | ---------------- | -------------- | --------------- | --------------- | ---------------- |
+| TypeScript | 3.64–3.88           | 97.0–116.6       | 85.4–115.2     | 20.7–21.1       | 99.3–117.4      | 105.6–116.8      |
+| Go         | 3.78–3.89           | 88.5–90.6        | 83.2–90.4      | 11.3–12.2       | 82.6–110.7      | 149.3–159.6      |
+
+Mean measured elapsed time was 3.832 seconds for Go and 3.757 seconds for
+TypeScript: Go took 2.0% longer. This small repeated sample does not establish
+a statistically reliable overall speed advantage. Legacy context remains slower
+in Go even though other operation tails improved in this sample. Capture/retry
+responses averaged 2,379 encoded MCP bytes, details 5,461, search 5,900.6 and
+context approximately 133,246 on both backends. Compact context was not requested
+by this workload; bounded previews do not explain these legacy response sizes.
+
+The preceding diagnostic source (`72eb8bc`) still had a single SQLite connection.
+Its matched MCP comparison measured Go 15.1% longer than TypeScript. A separate
+HTTP-only probe reported approximately 14.7 seconds of aggregate connection-pool
+waiting; changing only the pool to four connections reduced this to approximately
+2.8 seconds and reduced that HTTP replay from 2.30 to 0.82 seconds. Aggregate
+waiting sums concurrent goroutines and is not wall-clock elapsed time. These
+temporary diagnostic observations explain the bounded-pool change; they are not
+final-source CPU/wait measurements or a controlled absolute before/after speed
+claim. A timing run overlapping regression tests was excluded.
+
+The authenticated slow-reader regression first timed out an independent capture
+after three seconds, then passed three consecutive runs with the bounded pool.
+File-backed SQLite opens at most four connections after serialized startup/WAL
+activation; `BEGIN IMMEDIATE` still serializes writes. Memory databases retain one
+connection. No cache-size or PostgreSQL locking change was made.
+
+Separately, the compact-context history regression constructs 2,000 long findings
+(approximately 384 MB of immutable JSON) and one current state. Before selection
+from indexed headers, it failed with HTTP 503 at the existing ten-second deadline.
+With migration-3 header maintenance and selective body hydration, two race-enabled
+runs completed in 433 and 440 ms, preserving exact totals, omission counts and
+current-state priority. These are public behavior checks, not the same workload
+as the MCP table above. Ordinary selected bodies are hydrated by identifier;
+legacy accepted answers with missing rendered content retain their payload
+fallback. Counts and lifecycle selection still scan the project's small headers.
+
+Final-source CPU/wait attribution, PostgreSQL concurrency, compact/RAG latency
+distributions and production capacity remain separate evaluation work. All seven
+rebuilt-image recovery/rollback cases and the combined-runtime lifecycle case
+passed with schema 3; local success does not establish canonical CI, release or
+deployment acceptance.
