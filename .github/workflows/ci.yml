@@ -112,6 +112,8 @@ jobs:
       - name: Verify Go passkeys on both engines and GitHub browser OAuth
         run: npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts
         working-directory: .
+        env:
+          TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
   postgres:
     runs-on: ubuntu-latest
     services:

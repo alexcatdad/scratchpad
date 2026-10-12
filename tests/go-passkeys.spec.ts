@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import { postgresArchive } from "./postgres-archive";
 
 for (const engine of ["sqlite", "postgres"] as const) {
   test(`Go owner enrollment, login and recovery persist on ${engine}`, async ({
@@ -22,6 +23,8 @@ for (const engine of ["sqlite", "postgres"] as const) {
     let databaseAdmin: ReturnType<typeof postgres> | undefined;
     let databaseCreated = false;
     const databaseName = `scratchpad_passkeys_${randomUUID().replaceAll("-", "")}`;
+    const restoredDatabaseName = `${databaseName}_restored`;
+    let restoredDatabaseCreated = false;
     try {
       const binary = join(dir, "server");
       execFileSync(
@@ -202,29 +205,36 @@ for (const engine of ["sqlite", "postgres"] as const) {
       });
       expect(credentials.credentials[0]).not.toHaveProperty("publicKey");
       await page.context().clearCookies();
-      const login = await page.evaluate(async () => {
-        const optionsResponse = await fetch("/api/v1/auth/login/options", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: "{}",
+      const loginWithPasskey = () =>
+        page.evaluate(async () => {
+          const optionsResponse = await fetch("/api/v1/auth/login/options", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+          });
+          if (!optionsResponse.ok)
+            return { status: optionsResponse.status, authenticated: false };
+          const { challengeId, options } = await optionsResponse.json();
+          const credential = (await navigator.credentials.get({
+            publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options),
+          })) as PublicKeyCredential;
+          const response = await fetch("/api/v1/auth/login/verify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              challengeId,
+              response: credential.toJSON(),
+            }),
+          });
+          return {
+            status: response.status,
+            authenticated: (await response.json()).authenticated,
+          };
         });
-        if (!optionsResponse.ok)
-          return { status: optionsResponse.status, authenticated: false };
-        const { challengeId, options } = await optionsResponse.json();
-        const credential = (await navigator.credentials.get({
-          publicKey: PublicKeyCredential.parseRequestOptionsFromJSON(options),
-        })) as PublicKeyCredential;
-        const response = await fetch("/api/v1/auth/login/verify", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ challengeId, response: credential.toJSON() }),
-        });
-        return {
-          status: response.status,
-          authenticated: (await response.json()).authenticated,
-        };
+      expect(await loginWithPasskey()).toEqual({
+        status: 200,
+        authenticated: true,
       });
-      expect(login).toEqual({ status: 200, authenticated: true });
       const oldCookie = (await page.context().cookies()).find(
         (item) => item.name === "scratchpad_session",
       );
@@ -246,6 +256,42 @@ for (const engine of ["sqlite", "postgres"] as const) {
             (await (await fetch("/api/v1/auth/status")).json()).authenticated,
         ),
       ).toBe(false);
+      if (engine === "postgres") {
+        // Keep the browser origin and authenticator while replacing its database.
+        const archive = postgresArchive("pg_dump", env.SCRATCHPAD_DATABASE_URL);
+        server?.kill("SIGTERM");
+        await stopped;
+        await databaseAdmin?.unsafe(
+          `CREATE DATABASE "${restoredDatabaseName}"`,
+        );
+        restoredDatabaseCreated = true;
+        const url = new URL(env.SCRATCHPAD_DATABASE_URL);
+        url.pathname = `/${restoredDatabaseName}`;
+        env.SCRATCHPAD_DATABASE_URL = url.toString();
+        postgresArchive("pg_restore", env.SCRATCHPAD_DATABASE_URL, archive);
+        await start();
+        expect(
+          await page.evaluate(async () =>
+            (await fetch("/api/v1/auth/status")).json(),
+          ),
+        ).toMatchObject({ initialized: true, authenticated: false });
+        expect(await loginWithPasskey()).toEqual({
+          status: 200,
+          authenticated: true,
+        });
+        expect(
+          await page.evaluate(
+            async () =>
+              (
+                await fetch("/api/v1/auth/logout", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: "{}",
+                })
+              ).status,
+          ),
+        ).toBe(200);
+      }
       const recoveryToken = execFileSync(binary, ["recover"], {
         env,
         encoding: "utf8",
@@ -466,6 +512,10 @@ for (const engine of ["sqlite", "postgres"] as const) {
         await stopped;
       } finally {
         try {
+          if (databaseAdmin && restoredDatabaseCreated)
+            await databaseAdmin.unsafe(
+              `DROP DATABASE "${restoredDatabaseName}" WITH (FORCE)`,
+            );
           if (databaseAdmin && databaseCreated)
             await databaseAdmin.unsafe(
               `DROP DATABASE "${databaseName}" WITH (FORCE)`,

@@ -57,6 +57,21 @@ TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpa
 
 The browser uses a minimal test document and native WebAuthn with virtual authenticators; every API request reaches the real Go process. This verifies the browser authentication seam, not full React dashboard parity. Tests cover token rotation, first/additional enrollment, missing enrollment authorization, replay, discoverable login, logout, recovery, retained credentials and challenge/session persistence through restart. Separate HTTP tests use independently signed assertions against historical TypeScript-format fixtures and cover UV, origin, RP ID, challenge, counter, session transport and concurrent consumption. The Go-backend CI lane runs these browser workflows on SQLite and PostgreSQL 18.6.
 
+The PostgreSQL browser workflow also dumps the enrolled installation with native
+`pg_dump`, restores it into a new empty database, and restarts Go at the same
+public origin. The real Chromium authenticator signs a fresh successful login
+after restoration. Administrator recovery then enrolls a new device, invalidates
+old sessions and preserves the original passkey for subsequent login. Restarted
+challenge consumption and authenticated additional enrollment continue on the
+restored database. Client private passkey material remains in the synthetic
+browser authenticator, outside the database archive.
+
+The fixture deletes both owned databases and stops its server. CI uses archive
+clients from its owned PostgreSQL service; native local clients are required for
+configured PostgreSQL browser tests. This covers browser authentication after
+restoration, separately from dashboard rendering, real hardware authenticators,
+published-container rollback and deployed acceptance.
+
 ## GitHub OAuth and published SSH keys
 
 Configure both `SCRATCHPAD_GITHUB_CLIENT_ID` and `SCRATCHPAD_GITHUB_CLIENT_SECRET` from the installation's administrator-managed OAuth app. Partial or blank-valued configuration fails startup with `CONFIG_INVALID`. Register the exact `${SCRATCHPAD_PUBLIC_URL}/api/v1/auth/github/callback` URL with GitHub; only the configured origin is trusted. Public profile information never authorizes an owner. No new database migration is required: GitHub state retains the existing entity layout.
@@ -247,8 +262,9 @@ TEST_PGVECTOR_URL=postgres://postgres@127.0.0.1:5432/postgres \
 Configured PostgreSQL fixtures require `pg_dump` and `pg_restore`; missing clients
 fail rather than silently omit restore coverage. CI uses the matching clients
 inside its owned PostgreSQL service through `TEST_POSTGRES_CONTAINER_ID`. Local
-verification uses native clients. These checks do not establish deployed restore,
-browser-passkey recovery or full release parity. The pre-upgrade rollback scenario is verified separately below.
+verification uses native clients. These checks do not establish deployed restore
+or full release parity. Browser passkey restoration is verified by the separate
+Chromium workflow above. The pre-upgrade rollback scenario is verified separately below.
 
 ### Pre-upgrade PostgreSQL rollback verification
 
