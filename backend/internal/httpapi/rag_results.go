@@ -58,7 +58,9 @@ func ragFuse(candidates []ragCandidate) []map[string]any {
 		}
 		return stringValue(results[i], "id") < stringValue(results[j], "id")
 	})
-	return results[:min(100, len(results))]
+	// Keep the bounded query union intact until response bounding, which counts
+	// every deduplicated candidate excluded by the caller's limit or byte budget.
+	return results
 }
 
 func ragBoundEvidence(items []map[string]any, semantic map[string]any, limit, budget int) (map[string]any, error) {
