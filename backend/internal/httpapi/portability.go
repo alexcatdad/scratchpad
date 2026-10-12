@@ -543,6 +543,47 @@ func exportSection(ctx context.Context, tx *sql.Tx, kind string) ([]json.RawMess
 				return nil, err
 			}
 		}
+		if kind == "audit" {
+			var stored map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &stored); err != nil {
+				return nil, err
+			}
+			var entityType, action string
+			_ = json.Unmarshal(stored["entityType"], &entityType)
+			_ = json.Unmarshal(stored["action"], &action)
+			if entityType == "ai_settings" || action == "ai.configured" || action == "secrets.converted" {
+				// Configuration snapshots are operational state, including legacy
+				// plaintext keys. Preserve the audit envelope without exporting them.
+				delete(stored, "previous")
+				delete(stored, "next")
+			} else if entityType == "settings" || action == "settings.updated" {
+				for _, snapshot := range []string{"previous", "next"} {
+					if value, exists := stored[snapshot]; exists {
+						var fields map[string]json.RawMessage
+						if err := json.Unmarshal(value, &fields); err != nil {
+							delete(stored, snapshot)
+							continue
+						}
+						public := map[string]json.RawMessage{}
+						for _, field := range []string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"} {
+							if v, ok := fields[field]; ok {
+								public[field] = v
+							}
+						}
+						stored[snapshot], err = json.Marshal(public)
+						if err != nil {
+							return nil, err
+						}
+					}
+				}
+			}
+			if entityType == "ai_settings" || entityType == "settings" || action == "ai.configured" || action == "secrets.converted" || action == "settings.updated" {
+				raw, err = json.Marshal(stored)
+				if err != nil {
+					return nil, err
+				}
+			}
+		}
 		values = append(values, raw)
 	}
 	return values, rows.Err()
