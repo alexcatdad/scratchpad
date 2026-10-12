@@ -1,6 +1,13 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer as createHTTPServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -19,6 +26,40 @@ for (const engine of ["sqlite", "postgres"] as const) {
     chmodSync(dir, 0o700);
     const children: ReturnType<typeof spawn>[] = [];
     const exits: Promise<void>[] = [];
+    let completionCalls = 0,
+      embeddingCalls = 0;
+    let providerUnavailable = false;
+    const provider = createHTTPServer((request, response) => {
+      request.resume();
+      response.setHeader("Content-Type", "application/json");
+      if (providerUnavailable) {
+        response.statusCode = 503;
+        response.end(
+          JSON.stringify({
+            error: { message: "synthetic-dashboard-provider-token" },
+          }),
+        );
+      } else if (
+        request.headers.authorization !==
+        "Bearer synthetic-dashboard-provider-token"
+      ) {
+        response.writeHead(401).end();
+      } else if (request.url === "/v1/embeddings") {
+        embeddingCalls++;
+        response.end(
+          JSON.stringify({ data: [{ index: 0, embedding: [1, 0] }] }),
+        );
+      } else if (request.url === "/v1/chat/completions") {
+        completionCalls++;
+        response.end(
+          JSON.stringify({
+            choices: [{ message: { content: '{"ok":true}' } }],
+          }),
+        );
+      } else {
+        response.writeHead(404).end();
+      }
+    });
     let databaseAdmin: ReturnType<typeof postgres> | undefined;
     let databaseCreated = false;
     const databaseName = `scratchpad_dashboard_${randomUUID().replaceAll("-", "")}`;
@@ -51,6 +92,16 @@ for (const engine of ["sqlite", "postgres"] as const) {
       );
     };
     try {
+      await new Promise<void>((done) => provider.listen(0, "127.0.0.1", done));
+      const providerAddress = provider.address();
+      if (!providerAddress || typeof providerAddress === "string")
+        throw new Error("Missing provider fixture address");
+      const installationKey = join(dir, "installation-key");
+      writeFileSync(
+        installationKey,
+        `${Buffer.alloc(32, 44).toString("base64")}\n`,
+        { mode: 0o600 },
+      );
       const binary = join(dir, "server");
       execFileSync(
         "go",
@@ -66,6 +117,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         SCRATCHPAD_DASHBOARD_URL: uiOrigin,
         SCRATCHPAD_GITHUB_CLIENT_ID: "",
         SCRATCHPAD_GITHUB_CLIENT_SECRET: "",
+        SCRATCHPAD_ENCRYPTION_KEY_FILE: installationKey,
       };
       if (engine === "postgres") {
         databaseAdmin = postgres(process.env.TEST_POSTGRES_URL ?? "", {
@@ -87,6 +139,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         PORT: String(uiPort),
         HOST: "127.0.0.1",
         SCRATCHPAD_UI_ONLY: "true",
+        SCRATCHPAD_ENCRYPTION_KEY_FILE: "",
         SCRATCHPAD_DATABASE_PATH: join(dir, "unused-ui.sqlite"),
       });
       start(binary, ["serve"], env);
@@ -199,6 +252,60 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByText("Profile saved.", { exact: true }),
       ).toBeVisible();
+      const ai = page.getByRole("region", {
+        name: "AI provider settings",
+        exact: true,
+      });
+      await ai.getByLabel("Enable AI processing", { exact: true }).check();
+      await ai
+        .getByLabel("OpenAI-compatible base URL", { exact: false })
+        .fill(`http://127.0.0.1:${providerAddress.port}/v1`);
+      await ai
+        .getByLabel("LLM model", { exact: true })
+        .fill("synthetic-completion");
+      await ai
+        .getByLabel("Embedding model", { exact: true })
+        .fill("synthetic-embedding");
+      await ai.getByLabel("Embedding dimensions", { exact: true }).fill("2");
+      await ai
+        .getByLabel("Analysis interval (minutes)", { exact: false })
+        .fill("0");
+      await ai
+        .getByLabel("Provider API key", { exact: false })
+        .fill("synthetic-dashboard-provider-token");
+      await ai
+        .getByRole("button", { name: "Save AI settings", exact: true })
+        .click();
+      await expect(
+        ai.getByText(
+          "AI settings saved. Project participation is controlled separately.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      await expect(
+        ai.getByLabel("Provider API key", { exact: false }),
+      ).toHaveValue("");
+      await expect(
+        ai.getByPlaceholder("Key stored; leave blank to keep", { exact: true }),
+      ).toBeVisible();
+      await ai
+        .getByRole("button", { name: "Test saved provider", exact: true })
+        .click();
+      await expect(
+        ai.getByText(
+          "Provider test passed using synthetic text for completion and embeddings.",
+          { exact: true },
+        ),
+      ).toBeVisible();
+      expect(completionCalls).toBe(1);
+      expect(embeddingCalls).toBe(1);
+      providerUnavailable = true;
+      await ai
+        .getByRole("button", { name: "Test saved provider", exact: true })
+        .click();
+      await expect(ai.getByRole("alert")).toHaveText(
+        "AI provider is unavailable or returned invalid output.",
+      );
       const downloaded = page.waitForEvent("download");
       await page
         .getByRole("button", { name: "Download export", exact: true })
@@ -208,6 +315,21 @@ for (const engine of ["sqlite", "postgres"] as const) {
       if (!archivePath) throw new Error("Missing exported archive");
       const contents = readFileSync(archivePath);
       expect(contents.toString()).toContain("Go dashboard evidence");
+      expect(contents.toString()).not.toContain(
+        "synthetic-dashboard-provider-token",
+      );
+      expect(await page.locator("body").innerText()).not.toContain(
+        "synthetic-dashboard-provider-token",
+      );
+      await ai
+        .getByRole("button", { name: "Remove provider key", exact: true })
+        .click();
+      await expect(
+        ai.getByText("Stored provider key removed.", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        ai.getByPlaceholder("Optional for local providers", { exact: true }),
+      ).toBeVisible();
       await page
         .getByLabel("Import Scratchpad export", { exact: true })
         .setInputFiles({
@@ -255,6 +377,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByLabel("Owner display name", { exact: true }),
       ).toHaveValue("Dashboard test owner");
+      await expect(
+        ai.getByRole("button", { name: "Remove provider key", exact: true }),
+      ).toHaveCount(0);
       await page.getByRole("button", { name: "Sign out", exact: true }).click();
       await expect(
         page.getByRole("heading", { name: "Welcome back.", exact: true }),
@@ -295,6 +420,8 @@ for (const engine of ["sqlite", "postgres"] as const) {
             );
         } finally {
           await databaseAdmin?.end();
+          provider.closeAllConnections();
+          await new Promise<void>((done) => provider.close(() => done()));
           rmSync(dir, { recursive: true, force: true });
         }
       }

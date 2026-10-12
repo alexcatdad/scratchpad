@@ -72,7 +72,10 @@ Build the web workspace before the browser test. The Chromium workflow verifies
 actual React passkey enrollment, logout/login, project creation and settings,
 capture, record inspection, owner profile persistence, native export and
 idempotent re-import, new historical JSONL import and API availability after
-renderer shutdown. It runs against SQLite and optional disposable PostgreSQL;
+renderer shutdown. It also saves a synthetic encrypted provider token, tests
+completion and embeddings against a local provider, verifies safe provider
+failure, removes the stored key and checks that UI/export outputs exclude its
+value. The renderer receives no installation key. It runs against SQLite and optional disposable PostgreSQL;
 the database connection needs permission to create and drop the fixture's own
 database. PostgreSQL cases explicitly skip when the fixture is not configured.
 The HTTP test verifies credential
