@@ -48,8 +48,10 @@ func (a *AI) provider(ctx context.Context) (providerSnapshot, error) {
 	return providerSnapshot{cfg, key, generation}, nil
 }
 func (a *AI) providerCurrent(ctx context.Context, conn *sql.Conn, r *http.Request, snapshot providerSnapshot) error {
-	if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
-		return err
+	if r != nil {
+		if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
+			return err
+		}
 	}
 	row, err := entityMap(ctx, conn, "ai_settings", "global")
 	if err != nil {
@@ -62,6 +64,9 @@ func (a *AI) providerCurrent(ctx context.Context, conn *sql.Conn, r *http.Reques
 	return nil
 }
 func (a *AI) postProvider(ctx context.Context, r *http.Request, snapshot providerSnapshot, path string, body any) ([]byte, error) {
+	return a.postProviderGuarded(ctx, r, snapshot, path, body, nil)
+}
+func (a *AI) postProviderGuarded(ctx context.Context, r *http.Request, snapshot providerSnapshot, path string, body any, guard func(*sql.Conn) error) ([]byte, error) {
 	encoded, err := json.Marshal(body)
 	if err != nil {
 		return nil, aiUnavailable()
@@ -84,8 +89,16 @@ func (a *AI) postProvider(ctx context.Context, r *http.Request, snapshot provide
 	done := make(chan response, 1)
 	dispatched := false
 	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+		if r == nil && guard == nil {
+			return aiUnavailable()
+		}
 		if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
 			return err
+		}
+		if guard != nil {
+			if err := guard(conn); err != nil {
+				return err
+			}
 		}
 		// Admit the request under the configuration lock, then release it
 		// without waiting for provider headers or body.

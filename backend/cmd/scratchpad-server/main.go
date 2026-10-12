@@ -109,6 +109,7 @@ func run() error {
 	mux.HandleFunc("GET /api/v1/ai/jobs", ai.Jobs("list"))
 	mux.HandleFunc("POST /api/v1/ai/jobs", ai.Jobs("enqueue"))
 	mux.HandleFunc("POST /api/v1/ai/jobs/{id}/retry", ai.Jobs("retry"))
+	mux.HandleFunc("POST /api/v1/search/semantic", ai.SemanticSearch())
 	mux.HandleFunc("POST /api/v1/export", auth.Export())
 	mux.HandleFunc("POST /api/v1/import", auth.Import())
 	mux.HandleFunc("GET /api/v1/profile", auth.Profile("get"))
@@ -168,6 +169,9 @@ func run() error {
 	workerDone := make(chan struct{})
 	go func() { defer close(workerDone); github.Run(workerContext) }()
 	defer func() { cancelWorker(); <-workerDone }()
+	aiWorkerDone := make(chan struct{})
+	go func() { defer close(aiWorkerDone); ai.Run(workerContext) }()
+	defer func() { cancelWorker(); <-aiWorkerDone }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
 	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "database": store.Engine, "schemaVersion": store.Version, "secretConversionFailed": conversionPending}); err != nil {
