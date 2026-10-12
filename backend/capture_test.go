@@ -132,7 +132,7 @@ func TestConcurrentRetriesUseOneCaptureAndCurrentMirrorConsent(t *testing.T) {
 			_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Concurrent captures"}, restoredToken)
 			id := project["project"].(map[string]any)["id"].(string)
 			record := map[string]any{"type": "decision", "title": "One capture", "authority": "explicit", "payload": map[string]any{"decision": "Keep retries stable."}}
-			data, _ := json.Marshal(map[string]any{"projectId": id, "record": record})
+			data, _ := json.Marshal(map[string]any{"projectId": id, "record": record, "gitContext": map[string]any{"branch": "main"}})
 			results := make(chan map[string]any, 8)
 			failures := make(chan error, 8)
 			for range 8 {

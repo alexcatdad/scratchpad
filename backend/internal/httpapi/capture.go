@@ -264,7 +264,16 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 			s.fail(w, validationProject())
 			return
 		}
-		serialized, err := json.Marshal(map[string]any{"projectId": projectID, "record": record})
+		identity := map[string]any{"projectId": projectID, "record": record, "captureIdentityVersion": 2}
+		if raw, exists := body["gitContext"]; exists {
+			var context any
+			if json.Unmarshal(raw, &context) != nil {
+				s.fail(w, validationProject())
+				return
+			}
+			identity["gitContext"] = context
+		}
+		serialized, err := json.Marshal(identity)
 		if err != nil {
 			s.fail(w, err)
 			return
@@ -296,9 +305,15 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 				var previousRequest, previousResponse string
 				err = conn.QueryRowContext(ctx, `SELECT request,response FROM retries WHERE scope=$1 AND key=$2`, scope, key).Scan(&previousRequest, &previousResponse)
 				if err == nil {
-					var previous, current any
+					var previous, current map[string]any
 					if json.Unmarshal([]byte(previousRequest), &previous) != nil || json.Unmarshal(serialized, &current) != nil {
 						return errors.New("invalid retry")
+					}
+					// Historical retries bound only project and normalized capture fields.
+					// Preserve their equality; new identities also bind context presence.
+					if _, versioned := previous["captureIdentityVersion"]; !versioned {
+						delete(current, "captureIdentityVersion")
+						delete(current, "gitContext")
 					}
 					if !reflect.DeepEqual(previous, current) {
 						return &protocolError{"CONFLICT", "Idempotency key was used for a different capture.", 409}

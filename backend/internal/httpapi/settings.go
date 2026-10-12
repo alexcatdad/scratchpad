@@ -118,10 +118,18 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 			for key, value := range parsed {
 				next[key] = value
 			}
+			provider, err := readSettings(ctx, conn, "ai_settings")
+			if err != nil {
+				return err
+			}
+			beforeConfig, err := aiConfig(provider)
+			if err != nil {
+				return err
+			}
 			var before map[string]any
 			if previous != nil {
 				state := domain.GlobalSettingsFrom(previous)
-				before = publicSettings(previous, state.AIEnabled)
+				before = publicSettings(previous, beforeConfig.Enabled)
 				expected, err := expectedVersion(body, r)
 				if err != nil {
 					return err
@@ -137,13 +145,6 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 				if err = insert(ctx, conn, "settings", "global", next); err != nil {
 					return err
 				}
-			}
-			if err = apiAudit(ctx, conn, "settings.updated", "settings", "global", actor, before, publicSettings(next, domain.GlobalSettingsFrom(next).AIEnabled)); err != nil {
-				return err
-			}
-			provider, err := readSettings(ctx, conn, "ai_settings")
-			if err != nil {
-				return err
 			}
 			if value, exists := parsed["aiEnabled"]; exists {
 				version := float64(0)
@@ -163,7 +164,7 @@ func (a *AI) GlobalSettings(patch bool) http.HandlerFunc {
 				return err
 			}
 			result = publicSettings(next, cfg.Enabled)
-			return nil
+			return apiAudit(ctx, conn, "settings.updated", "settings", "global", actor, before, result)
 		})
 		if err != nil {
 			a.auth.fail(w, err)
