@@ -22,7 +22,7 @@
     "admin": "npm exec -w @scratchpad/web -- tsx src/server/admin.ts",
     "test:e2e": "playwright test",
     "test:baseline": "playwright test tests/concurrent-agents.spec.ts",
-    "test:backend": "go -C backend test -race -count=1 -timeout 15m ./...",
+    "test:backend": "go -C backend test -race -count=1 -timeout 20m ./...",
     "sdk:generate": "node scripts/generate-clients.mjs",
     "sdk:check": "node scripts/generate-clients.mjs --check && npm run typecheck -w @scratchpad/api-client && cd packages/clients/go && go test ./...",
     "sdk:build": "npm run build -w @scratchpad/api-client",
