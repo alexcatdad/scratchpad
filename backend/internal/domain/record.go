@@ -1,6 +1,9 @@
 package domain
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+)
 
 // Record is the validated capture being assembled by the central application.
 // Payload and context remain flexible; imported immutable JSON is never rebuilt
@@ -32,6 +35,16 @@ func (record *Record) Fields() (map[string]any, error) {
 		return nil, err
 	}
 	var fields map[string]any
-	err = json.Unmarshal(data, &fields)
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	err = decoder.Decode(&fields)
+	// Operational counters retain their existing runtime types. Flexible source
+	// numbers stay exact through persistence, audit and the capture response.
+	if _, exists := fields["version"]; exists {
+		fields["version"] = record.Version
+	}
+	if _, exists := fields["payloadVersion"]; exists {
+		fields["payloadVersion"] = float64(record.PayloadVersion)
+	}
 	return fields, err
 }

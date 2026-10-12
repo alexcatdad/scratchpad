@@ -104,8 +104,19 @@ func hydrateContextRecords(ctx context.Context, tx *sql.Tx, records []map[string
 			return err
 		}
 		var capture map[string]any
-		if err = json.Unmarshal(raw, &capture); err != nil {
+		if err = DecodeJSONNumbers(raw, &capture); err != nil {
 			return err
+		}
+		// Preserve flexible payload/extension values while retaining the numeric
+		// representation consumed by existing operational version admission.
+		for _, field := range []string{"version", "payloadVersion"} {
+			if number, ok := capture[field].(json.Number); ok {
+				value, err := number.Float64()
+				if err != nil {
+					return err
+				}
+				capture[field] = value
+			}
 		}
 		record := byID[id]
 		annotations := map[string]any{}

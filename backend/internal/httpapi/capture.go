@@ -44,7 +44,7 @@ func captureRecord(raw json.RawMessage) (*domain.Record, json.RawMessage, error)
 		return nil, nil, validationProject()
 	}
 	var fields map[string]any
-	if json.Unmarshal(raw, &fields) != nil {
+	if DecodeJSONNumbers(raw, &fields) != nil {
 		return nil, nil, validationProject()
 	}
 	record := &domain.Record{}
@@ -267,7 +267,7 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 		identity := map[string]any{"projectId": projectID, "record": record, "captureIdentityVersion": 2}
 		if raw, exists := body["gitContext"]; exists {
 			var context any
-			if json.Unmarshal(raw, &context) != nil {
+			if DecodeJSONNumbers(raw, &context) != nil {
 				s.fail(w, validationProject())
 				return
 			}
@@ -306,19 +306,27 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 				err = conn.QueryRowContext(ctx, `SELECT request,response FROM retries WHERE scope=$1 AND key=$2`, scope, key).Scan(&previousRequest, &previousResponse)
 				if err == nil {
 					var previous, current map[string]any
-					if json.Unmarshal([]byte(previousRequest), &previous) != nil || json.Unmarshal(serialized, &current) != nil {
+					if DecodeJSONNumbers([]byte(previousRequest), &previous) != nil || DecodeJSONNumbers(serialized, &current) != nil {
 						return errors.New("invalid retry")
 					}
+					same := EqualJSONNumbers(previous, current)
 					// Historical retries bound only project and normalized capture fields.
 					// Preserve their equality; new identities also bind context presence.
 					if _, versioned := previous["captureIdentityVersion"]; !versioned {
+						if json.Unmarshal([]byte(previousRequest), &previous) != nil {
+							return errors.New("invalid retry")
+						}
+						if json.Unmarshal(serialized, &current) != nil {
+							return &protocolError{"CONFLICT", "Idempotency key was used for a different capture.", 409}
+						}
 						delete(current, "captureIdentityVersion")
 						delete(current, "gitContext")
+						same = reflect.DeepEqual(previous, current)
 					}
-					if !reflect.DeepEqual(previous, current) {
+					if !same {
 						return &protocolError{"CONFLICT", "Idempotency key was used for a different capture.", 409}
 					}
-					if err = json.Unmarshal([]byte(previousResponse), &result); err != nil {
+					if err = DecodeJSONNumbers([]byte(previousResponse), &result); err != nil {
 						return err
 					}
 					result["mirror"] = map[string]any{"eligible": mirrorEligibleType(project, record.Type)}
@@ -342,7 +350,7 @@ func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 			}
 			var git map[string]any
 			if raw, exists := body["gitContext"]; exists {
-				if json.Unmarshal(raw, &git) != nil || git == nil {
+				if DecodeJSONNumbers(raw, &git) != nil || git == nil {
 					return validationProject()
 				}
 			}
@@ -474,10 +482,10 @@ func compactCaptureJSON(raw json.RawMessage) (string, error) {
 		return captureJSONString(text), nil
 	default:
 		var value any
-		if json.Unmarshal(raw, &value) != nil {
+		if DecodeJSONNumbers(raw, &value) != nil {
 			return "", validationProject()
 		}
-		if number, ok := value.(float64); ok && number == 0 {
+		if number, ok := value.(json.Number); ok && EqualJSONNumbers(number, json.Number("0")) {
 			value = float64(0)
 		}
 		data, err := json.Marshal(value)

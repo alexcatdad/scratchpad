@@ -9,7 +9,6 @@ import (
 	"io"
 	"math"
 	"net/http"
-	"reflect"
 	"regexp"
 	"strings"
 	"time"
@@ -63,6 +62,7 @@ func (s *SSH) Import() http.HandlerFunc {
 		}
 		var body map[string]any
 		decoder := json.NewDecoder(bytes.NewReader(payload))
+		decoder.UseNumber()
 		decodeErr := decoder.Decode(&body)
 		if decodeErr == nil {
 			trailing := decoder.Decode(new(any))
@@ -94,7 +94,7 @@ func (s *SSH) Import() http.HandlerFunc {
 			JSON(w, 200, result)
 			return
 		}
-		if body["format"] != "scratchpad" || body["version"] != float64(1) {
+		if body["format"] != "scratchpad" || !EqualJSONNumbers(body["version"], 1) {
 			s.fail(w, importInvalid())
 			return
 		}
@@ -141,10 +141,10 @@ func (s *SSH) Import() http.HandlerFunc {
 					}
 					if previous != nil {
 						var stored map[string]any
-						if json.Unmarshal(previous, &stored) != nil {
+						if DecodeJSONNumbers(previous, &stored) != nil {
 							return importInvalid()
 						}
-						if !reflect.DeepEqual(stored, value) {
+						if !EqualJSONNumbers(stored, value) {
 							return &protocolError{"CONFLICT", "Import conflicts with existing knowledge.", 409}
 						}
 						if kind != "ai_artifact" && kind != "curated_artifact" {
@@ -169,7 +169,8 @@ func (s *SSH) Import() http.HandlerFunc {
 					if err != nil {
 						return err
 					}
-					if _, err = conn.ExecContext(ctx, `INSERT INTO entities(kind,id,data,version,created_at) VALUES($1,$2,$3,$4,$5)`, kind, id, string(encoded), value["version"], value["createdAt"]); err != nil {
+					version, _ := portableVersion(value["version"])
+					if _, err = conn.ExecContext(ctx, `INSERT INTO entities(kind,id,data,version,created_at) VALUES($1,$2,$3,$4,$5)`, kind, id, string(encoded), version, value["createdAt"]); err != nil {
 						return err
 					}
 					if kind == "record" {
@@ -236,7 +237,7 @@ func contains(values []string, value string) bool {
 	return false
 }
 func portableReferences(kind string, value map[string]any) error {
-	version, ok := value["version"].(float64)
+	version, ok := portableVersion(value["version"])
 	if !portableID(value["id"]) || !ok || version < 1 || math.Trunc(version) != version || !portableTimestamp(value["createdAt"]) {
 		return importInvalid()
 	}
@@ -260,6 +261,17 @@ func portableReferences(kind string, value map[string]any) error {
 		}
 	}
 	return nil
+}
+
+func portableVersion(value any) (float64, bool) {
+	if version, ok := value.(float64); ok {
+		return version, true
+	}
+	if version, ok := value.(json.Number); ok {
+		parsed, err := version.Float64()
+		return parsed, err == nil
+	}
+	return 0, false
 }
 
 func portableEntity(ctx context.Context, conn *sql.Conn, kind string, id any) error {

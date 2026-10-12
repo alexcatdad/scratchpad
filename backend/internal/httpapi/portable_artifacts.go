@@ -3,7 +3,6 @@ package httpapi
 import (
 	"context"
 	"database/sql"
-	"reflect"
 	"strings"
 )
 
@@ -172,7 +171,7 @@ func validatePortableArtifact(ctx context.Context, conn *sql.Conn, section strin
 	}
 	if raw, exists := value["privacyDependencies"]; exists {
 		dependency, ok := raw.(map[string]any)
-		if !ok || len(dependency) != 4 || dependency["version"] != float64(1) {
+		if !ok || len(dependency) != 4 || !EqualJSONNumbers(dependency["version"], 1) {
 			return privacyInvalid()
 		}
 		records, ok := portableIDs(dependency["recordIds"])
@@ -225,15 +224,19 @@ func validatePortableArtifact(ctx context.Context, conn *sql.Conn, section strin
 		if err := portableEntity(ctx, conn, "ai_artifact", value["artifactId"]); err != nil {
 			return err
 		}
-		suggestion, err := entityMap(ctx, conn, "ai_artifact", stringValue(value, "artifactId"))
+		rawSuggestion, err := get(ctx, conn, "ai_artifact", stringValue(value, "artifactId"))
 		if err != nil {
 			return err
+		}
+		var suggestion map[string]any
+		if DecodeJSONNumbers(rawSuggestion, &suggestion) != nil {
+			return importInvalid()
 		}
 		if suggestion["status"] != "accepted" {
 			return importInvalid()
 		}
 		for _, field := range []string{"kind", "content", "sourceRecordIds", "projectIds", "generator", "privacyDependencies"} {
-			if !reflect.DeepEqual(value[field], suggestion[field]) {
+			if !EqualJSONNumbers(value[field], suggestion[field]) {
 				return importInvalid()
 			}
 		}
