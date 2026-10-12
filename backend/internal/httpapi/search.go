@@ -168,7 +168,8 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		selected := []map[string]any{}
 		for _, record := range filtered {
 			date, id := stringValue(record, "createdAt"), stringValue(record, "id")
-			if date < pair[0] || (date == pair[0] && id < pair[1]) {
+			dateOrder := ordering.CompareString(date, pair[0])
+			if dateOrder < 0 || (dateOrder == 0 && ordering.CompareString(id, pair[1]) < 0) {
 				selected = append(selected, record)
 			}
 		}
@@ -409,6 +410,8 @@ func truthy(value any) bool {
 		return value != ""
 	case float64:
 		return value != 0
+	case json.Number:
+		return !EqualJSONNumbers(value, json.Number("0"))
 	default:
 		return true
 	}
