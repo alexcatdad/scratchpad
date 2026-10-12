@@ -98,10 +98,27 @@ Verify this boundary with real Go processes, synthetic GitHub HTTPS responses an
 
 ```sh
 npm run test:backend
+npm run build -w @scratchpad/web
 npx playwright test tests/go-github.spec.ts tests/go-passkeys.spec.ts
 ```
 
-Supply `TEST_POSTGRES_URL` for the HTTP workflows on disposable PostgreSQL; the GitHub browser redirect test uses isolated SQLite. Fixtures replace only the external GitHub service through a synthetic trusted HTTPS proxy, preserving the fixed production GitHub origins. HTTP coverage includes browser-bound/replayed state, malformed account authority, paginated key categories, partial failure, unsafe pagination, key removal/blocking, stable identity, replacement, independent unlinking, recovery, restart freshness and revocation while OAuth is awaiting GitHub. Chromium verifies the cross-provider redirect, Lax state cookie, Strict session cookie and state-cookie removal. These checks do not establish acceptance against a real administrator-configured GitHub app or a deployed dashboard.
+Supply `TEST_POSTGRES_URL` for the HTTP and browser workflows on disposable
+PostgreSQL. The GitHub browser workflow uses the actual retained React dashboard
+with the private UI-only renderer and authoritative Go origin on both engines.
+Build the web workspace before running it. Fixtures replace only the external
+GitHub service through a synthetic trusted HTTPS proxy, preserving the fixed
+production GitHub origins. HTTP coverage includes browser-bound/replayed state,
+malformed account authority, paginated key categories, partial failure, unsafe
+pagination, key removal/blocking, stable identity, replacement, independent
+unlinking, recovery, restart freshness and revocation while OAuth is awaiting
+GitHub. Chromium verifies the real sign-in control, cross-provider redirect, Lax
+state cookie, Strict session cookie and state-cookie removal. Settings controls
+block/unblock a published key and preserve the block through synchronization;
+actual OpenSSH possession proves machine-session revocation and prevents revival
+on unblock. Independent passkey enrollment, fresh authentication for disconnection
+and subsequent passkey login use native Chromium WebAuthn. These checks do not
+establish acceptance against a real administrator-configured GitHub app or a
+deployed dashboard.
 
 ## Local SSH enrollment and credential revocation
 
