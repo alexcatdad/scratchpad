@@ -105,7 +105,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 		return nil, importInvalid()
 	}
 	text, ok := body["jsonl"].(string)
-	if !ok || len(utf16.Encode([]rune(text))) > 32*1024*1024 {
+	if !ok || len(text) > 32*1024*1024 {
 		return nil, importInvalid()
 	}
 	warnings, results := []any{}, []any{}
