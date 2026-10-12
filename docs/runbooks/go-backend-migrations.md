@@ -94,6 +94,13 @@ The Go GitHub client requires `200 OK` from its fixed OAuth and identity/key end
 
 The worker checks due bindings immediately at startup and every 30 seconds, using persisted `lastAttemptAt` to refresh after five minutes. Previously linked bindings continue public-key refresh if OAuth is subsequently disabled. Shutdown cancels external work and waits for the worker; failure-state persistence is bounded to five seconds. Restart cannot extend complete-cache freshness.
 
+`TestGithubPublishedKeyAuthorizesRealStdioUntilRemoved` verifies OAuth setup and
+published-key possession through the real stdio MCP executable on both engines.
+A partial refresh preserves authenticated record reads; complete removal denies
+fresh machine access while independent access remains available. Reappearance
+permits fresh login, and independent unlinking denies the published key again.
+Only the external GitHub service is replaced with synthetic HTTPS responses.
+
 Verify this boundary with real Go processes, synthetic GitHub HTTPS responses and native Chromium redirects:
 
 ```sh
