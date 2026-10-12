@@ -74,9 +74,9 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 	}
 	filter := ""
 	if intent == "current" {
-		filter = ` AND COALESCE(m.data->'archived','false'::jsonb)<>'true'::jsonb AND COALESCE(m.data->>'legacyStatus','') NOT IN ('superseded','superseded_or_partial') AND NOT EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id)`
+		filter = ` AND COALESCE(m.data->'archived','false'::jsonb)<>'true'::jsonb AND COALESCE(m.data->>'legacyStatus','') NOT IN ('superseded','superseded_or_partial') AND NOT EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id)`
 	}
-	statement := `SELECT r.data,m.data,ts_rank_cd(s.document,plainto_tsquery('simple',$1)),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id),EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='partially_replaces' AND l.data->>'toRecordId'=r.id),COALESCE((SELECT jsonb_agg(edge.data) FROM(SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=r.id OR t.id=r.id) AND f.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND t.data->>'projectId' IN (` + strings.Join(places, ",") + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) edge),'[]'::jsonb) FROM record_search s JOIN entities r ON r.kind='record' AND r.id=s.record_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE s.document @@ plainto_tsquery('simple',$1) AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'` + filter + ` ORDER BY ts_rank_cd(s.document,plainto_tsquery('simple',$1)) DESC,r.id LIMIT 100`
+	statement := `SELECT r.data,m.data,ts_rank_cd(s.document,plainto_tsquery('simple',$1)),EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id),EXISTS(SELECT 1 FROM entities l JOIN entities replacing_source ON replacing_source.kind='record' AND replacing_source.id=l.data->>'fromRecordId' WHERE replacing_source.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='partially_replaces' AND l.data->>'toRecordId'=r.id),COALESCE((SELECT jsonb_agg(edge.data) FROM(SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=r.id OR t.id=r.id) AND f.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND t.data->>'projectId' IN (` + strings.Join(places, ",") + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) edge),'[]'::jsonb) FROM record_search s JOIN entities r ON r.kind='record' AND r.id=s.record_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE s.document @@ plainto_tsquery('simple',$1) AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'` + filter + ` ORDER BY ts_rank_cd(s.document,plainto_tsquery('simple',$1)) DESC,r.id LIMIT 100`
 	rows, err := q.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return nil, err
@@ -128,24 +128,8 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 			}
 		}
 		text := string(utf16.Decode(units[bestStart:bestEnd]))
-		lower := strings.ToLower(text)
-		match := -1
-		for _, term := range terms {
-			at := strings.Index(lower, strings.ToLower(term))
-			if at >= 0 && (match < 0 || at < match) {
-				match = at
-			}
-		}
-		excerptStart := bestStart
-		if match >= 0 {
-			runes := []rune(text)
-			prefix := string(runes[:utf8.RuneCountInString(lower[:match])])
-			excerptStart = bestStart + max(0, len(utf16.Encode([]rune(prefix)))-160)
-			if excerptStart > bestStart && units[excerptStart] >= 0xdc00 && units[excerptStart] <= 0xdfff {
-				excerptStart--
-			}
-		}
-		excerpt := ragExcerpt(string(utf16.Decode(units[excerptStart:bestEnd])), 1000)
+		excerpt, offset := ragLexicalExcerpt(text, terms)
+		excerptStart := bestStart + offset
 		identity, err := aiHash(map[string]any{"recordId": id, "contentHash": hash, "processingVersion": ragProcessingVersion, "start": bestStart, "end": bestEnd})
 		if err != nil {
 			return nil, err
@@ -177,4 +161,25 @@ func ragLexicalEvidence(ctx context.Context, q scopeReader, ids []string, query,
 		results = append(results, item)
 	}
 	return results, rows.Err()
+}
+
+func ragLexicalExcerpt(text string, terms []string) (string, int) {
+	lower := strings.ToLower(text)
+	match := -1
+	for _, term := range terms {
+		at := strings.Index(lower, strings.ToLower(term))
+		if at >= 0 && (match < 0 || at < match) {
+			match = at
+		}
+	}
+	units := utf16.Encode([]rune(text))
+	start := 0
+	if match >= 0 {
+		prefix := []rune(text)[:utf8.RuneCountInString(lower[:match])]
+		start = max(0, len(utf16.Encode(prefix))-160)
+		if start > 0 && units[start] >= 0xdc00 && units[start] <= 0xdfff {
+			start--
+		}
+	}
+	return ragExcerpt(string(utf16.Decode(units[start:])), 1000), start
 }
