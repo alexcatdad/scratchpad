@@ -188,7 +188,7 @@ func run() error {
 		}
 		writeJSON(w, 200, map[string]string{"status": "ready", "database": store.Engine})
 	})
-	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
+	server := &http.Server{Handler: httpapi.RequestLog(mux, os.Stderr), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 32 * 1024}
 	stop, cleanup := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cleanup()
 	workerContext, cancelWorker := context.WithCancel(stop)

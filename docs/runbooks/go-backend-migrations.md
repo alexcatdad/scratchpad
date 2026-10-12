@@ -52,6 +52,12 @@ have a five-minute upload deadline, separate from the ordinary fifteen-second
 request read deadline. Parsing and transactional import then receive their own
 twenty-five-second deadline; authorization is rechecked in the write transaction.
 
+`serve` writes request metadata to stderr as JSON: method, pathname, status and
+elapsed milliseconds (`durationMs`). Queries, headers and bodies are excluded;
+unexpected handler failures use fixed diagnostics. CLI startup reports remain on
+stdout. The wrapper preserves deadline and streaming controls used by imports and
+the retained dashboard.
+
 ### Domain and focused-query compatibility
 
 Internal typed snapshots drive capture assembly, project/profile settings,
@@ -59,6 +65,10 @@ curation, relationships, jobs and scheduling. Imported entity JSON stays intact:
 updates patch known fields instead of reconstructing persisted objects, and
 record payloads remain flexible. Capture verification includes precise timestamps,
 explicit empty Git context, provenance, durable retries and nested custom payloads.
+Flexible payload and extension numbers retain their exact values across capture,
+native restore, selected record views and export. New retry/native replay checks
+compare equivalent decimal spellings without float rounding or exponent expansion;
+operational entity versions retain their existing admission semantics.
 
 Search selects small context headers and requested filter fields, then hydrates
 only the returned page's immutable records and metadata. Relationship reads select
