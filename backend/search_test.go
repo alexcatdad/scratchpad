@@ -253,3 +253,42 @@ func TestCaptureFailureRollsBackPublicHistoryAndRetry(t *testing.T) {
 		})
 	}
 }
+
+func TestLexicalSearchLoadsOnlyCandidateMetadata(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
+			origin := startServer(t, path, databaseURL)
+			projectID := jobProject(t, origin, "Focused search metadata", false, false)
+			wanted := curationCapture(t, origin, projectID, "MATCHING_METADATA_WITNESS")
+			unrelated := curationCapture(t, origin, projectID, "OTHER_METADATA_WITNESS")
+			driver, dsn := "sqlite", path
+			if engine == "postgres" {
+				driver, dsn = "pgx", databaseURL
+			}
+			db, err := sql.Open(driver, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			if _, err = db.Exec(`UPDATE entities SET data='[]' WHERE kind='metadata' AND id=$1`, unrelated["id"]); err != nil {
+				t.Fatal(err)
+			}
+			status, response := searchRecords(t, origin, "q=MATCHING_METADATA_WITNESS")
+			if status != 200 || len(response["records"].([]any)) != 1 {
+				t.Fatalf("unrelated metadata disabled targeted search: %d %v", status, response)
+			}
+			item := response["records"].([]any)[0].(map[string]any)
+			if item["id"] != wanted["id"] || item["metadata"].(map[string]any)["id"] != wanted["id"] {
+				t.Fatal("candidate metadata was lost or attached to the wrong source")
+			}
+			if _, err = db.Exec(`UPDATE entities SET data='[]' WHERE kind='metadata' AND id=$1`, wanted["id"]); err != nil {
+				t.Fatal(err)
+			}
+			status, _ = searchRecords(t, origin, "q=MATCHING_METADATA_WITNESS")
+			if status != 503 {
+				t.Fatal("matching corrupt metadata was silently ignored")
+			}
+		})
+	}
+}

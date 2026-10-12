@@ -117,9 +117,13 @@ HTTP tests cover capture/detail, provenance overrides, payload rendering, valida
 For nonempty lexical queries, the database joins distinct full-text matches to
 immutable record data before Go decodes it. Duplicate SQLite lexical entries do
 not duplicate records. Unmatched source bodies are not loaded into the
-record selection. A corruption fixture verifies targeted retrieval can succeed
+record selection. Metadata is then selected by candidate record IDs using one
+bound JSON-array parameter and each engine's native JSON set function. Unmatched
+and orphan metadata is not decoded, while corrupt relevant metadata still fails
+safely. This avoids a per-record query loop and parameter-count limits.
+A corruption fixture verifies targeted retrieval can succeed
 without decoding an unrelated source, while corrupt matching sources still fail
-safely. Blank-query listing, metadata/relationship selection, filters, ordering
+safely. Blank-query record listing, relationship selection, filters, ordering
 and cursor behavior remain separate from this optimization; this change does not
 claim history-independent cost for the entire read path.
 

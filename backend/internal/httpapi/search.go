@@ -104,14 +104,6 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 	}
 	records := []map[string]any{}
 	var err error
-	metadata, err := entityList(ctx, tx, "metadata")
-	if err != nil {
-		return nil, err
-	}
-	byID := map[string]map[string]any{}
-	for _, item := range metadata {
-		byID[stringValue(item, "id")] = item
-	}
 	query := params.Get("q")
 	if query == "" {
 		records, err = entityList(ctx, tx, "record")
@@ -154,6 +146,41 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 				return nil, err
 			}
 		}
+	}
+	ids := make([]string, 0, len(records))
+	for _, record := range records {
+		ids = append(ids, stringValue(record, "id"))
+	}
+	encodedIDs, err := json.Marshal(ids)
+	if err != nil {
+		return nil, err
+	}
+	metadataStatement := `SELECT data FROM entities WHERE kind='metadata' AND id IN (SELECT value FROM json_each($1))`
+	if engine == "postgres" {
+		metadataStatement = `SELECT data FROM entities WHERE kind='metadata' AND id IN (SELECT jsonb_array_elements_text($1::jsonb))`
+	}
+	metadataRows, err := tx.QueryContext(ctx, metadataStatement, string(encodedIDs))
+	if err != nil {
+		return nil, err
+	}
+	byID := map[string]map[string]any{}
+	for metadataRows.Next() {
+		var raw []byte
+		if err = metadataRows.Scan(&raw); err != nil {
+			metadataRows.Close()
+			return nil, err
+		}
+		var item map[string]any
+		if err = json.Unmarshal(raw, &item); err != nil {
+			metadataRows.Close()
+			return nil, err
+		}
+		byID[stringValue(item, "id")] = item
+	}
+	err = metadataRows.Err()
+	metadataRows.Close()
+	if err != nil {
+		return nil, err
 	}
 	links, err := entityList(ctx, tx, "relationship")
 	if err != nil {
