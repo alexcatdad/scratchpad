@@ -64,11 +64,18 @@ processes with their normal termination signal after development.
 ```sh
 go -C backend test -race -count=1 -run TestDashboard ./...
 npx playwright test tests/go-dashboard.spec.ts
+TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpad_test \
+  npx playwright test tests/go-dashboard.spec.ts
 ```
 
 Build the web workspace before the browser test. The Chromium workflow verifies
-actual React passkey enrollment, project creation, capture, record inspection and
-API availability after renderer shutdown. The HTTP test verifies credential
+actual React passkey enrollment, logout/login, project creation and settings,
+capture, record inspection, owner profile persistence, native export and
+idempotent re-import, new historical JSONL import and API availability after
+renderer shutdown. It runs against SQLite and optional disposable PostgreSQL;
+the database connection needs permission to create and drop the fixture's own
+database. PostgreSQL cases explicitly skip when the fixture is not configured.
+The HTTP test verifies credential
 isolation, session-cookie ownership and API route ownership. Fixtures use private
 temporary databases and synthetic credentials. These checks do not establish
 every dashboard workflow, real hardware, canonical CI or deployed acceptance.
