@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
 
-for (const scenario of ["go-restore", "typescript-rollback"] as const) {
+for (const scenario of [
+  "go-restore",
+  "typescript-rollback",
+  "go-secret-restore",
+] as const) {
   test(`actual images preserve browser access through ${scenario}`, async ({
     page,
   }) => {
@@ -36,6 +40,12 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
       } else expect(goRuntime ? ["0"] : ["0", "143"]).toContain(code);
     };
     const suffix = randomUUID();
+    const secretRestore = scenario === "go-secret-restore";
+    const network = `scratchpad-go-provider-${suffix}`;
+    const correctKeyVolume = `scratchpad-go-key-${suffix}`,
+      wrongKeyVolume = `scratchpad-go-wrong-key-${suffix}`;
+    let selectedKeyVolume = correctKeyVolume;
+    let networkCreated = false;
     const sourceVolume = `scratchpad-go-source-${suffix}`,
       restoredVolume = `scratchpad-go-restore-${suffix}`;
     const containers: string[] = [],
@@ -60,6 +70,17 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
         `127.0.0.1:${port}:3000`,
         "-e",
         `SCRATCHPAD_PUBLIC_URL=${origin}`,
+        ...(secretRestore
+          ? [
+              "--network",
+              network,
+              ...(selectedKeyVolume
+                ? ["-v", `${selectedKeyVolume}:/keys:ro`]
+                : []),
+              "-e",
+              "SCRATCHPAD_ENCRYPTION_KEY_FILE=/keys/installation-key",
+            ]
+          : []),
         selectedImage,
       );
       containers.push(id);
@@ -85,6 +106,42 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
       return id;
     };
     try {
+      if (secretRestore) {
+        docker("network", "create", network);
+        networkCreated = true;
+        for (const [volume, value] of [
+          [correctKeyVolume, 44],
+          [wrongKeyVolume, 45],
+        ] as const) {
+          docker("volume", "create", volume);
+          volumes.push(volume);
+          docker(
+            "run",
+            "--rm",
+            "-v",
+            `${volume}:/data`,
+            "--entrypoint",
+            "node",
+            image ?? "",
+            "-e",
+            `require('node:fs').writeFileSync('/data/installation-key',Buffer.alloc(32,${value}).toString('base64')+'\\n',{mode:0o600})`,
+          );
+        }
+        const provider = docker(
+          "run",
+          "-d",
+          "--network",
+          network,
+          "--network-alias",
+          "provider",
+          "--entrypoint",
+          "node",
+          image ?? "",
+          "-e",
+          "let calls=0,anonymousCalls=0;require('node:http').createServer((req,res)=>{req.resume();res.setHeader('Content-Type','application/json');if(req.url==='/stats'){res.end(JSON.stringify({calls,anonymousCalls}));return}if(req.headers.authorization&&req.headers.authorization!=='Bearer synthetic-container-provider-token'){res.writeHead(401).end();return}calls++;if(!req.headers.authorization)anonymousCalls++;res.end(JSON.stringify(req.url==='/v1/embeddings'?{data:[{index:0,embedding:[1,0]}]}:{choices:[{message:{content:'{\"ok\":true}'}}]}))}).listen(8080,'0.0.0.0')",
+        );
+        containers.push(provider);
+      }
       docker("volume", "create", sourceVolume);
       volumes.push(sourceVolume);
       const sourceImage =
@@ -158,8 +215,35 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
         .getByRole("button", { name: "Save record", exact: true })
         .click();
       const original = (await (await captureResponse).json()) as {
-        record: { id: string };
+        record: { id: string; projectId: string };
       };
+      if (secretRestore) {
+        const configured = await page.request.patch(
+          `${origin}/api/v1/ai/settings`,
+          {
+            headers: { Origin: origin },
+            data: {
+              expectedVersion: 0,
+              enabled: true,
+              baseUrl: "http://provider:8080/v1",
+              model: "synthetic-completion",
+              embeddingModel: "synthetic-embedding",
+              embeddingDimensions: 2,
+              scheduleMinutes: 0,
+              apiKey: "synthetic-container-provider-token",
+            },
+          },
+        );
+        expect(configured.status()).toBe(200);
+        expect(
+          (
+            await page.request.post(`${origin}/api/v1/ai/test`, {
+              headers: { Origin: origin },
+              data: {},
+            })
+          ).status(),
+        ).toBe(200);
+      }
       await page
         .getByRole("button", { name: /Container snapshot evidence/ })
         .click();
@@ -194,6 +278,14 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
             ),
           ),
         ).toMatchObject({ database: "sqlite", schemaVersion: 2 });
+      if (secretRestore)
+        docker(
+          "exec",
+          source,
+          "node",
+          "-e",
+          "process.exit(require('node:fs').readFileSync('/data/checkpoint.sqlite').includes(Buffer.from('synthetic-container-provider-token'))?1:0)",
+        );
       await page.getByRole("button", { name: "Memory", exact: true }).click();
       await page
         .getByRole("button", { name: "New record", exact: true })
@@ -211,7 +303,7 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
       await expect(
         page.getByRole("button", { name: /After snapshot capture/ }),
       ).toBeVisible();
-      stop(source, scenario === "go-restore");
+      stop(source, scenario !== "typescript-rollback");
       if (scenario === "typescript-rollback") {
         const upgraded = await start(sourceVolume);
         await page.goto(origin);
@@ -294,7 +386,7 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
       );
       const restored = await start(restoredVolume, sourceImage);
       await page.goto(origin);
-      if (scenario === "go-restore")
+      if (scenario !== "typescript-rollback")
         await page
           .getByRole("button", { name: "Sign out", exact: true })
           .click();
@@ -335,10 +427,127 @@ for (const scenario of ["go-restore", "typescript-rollback"] as const) {
         )
       ).json();
       expect(recovered.record).toEqual(original.record);
-      stop(restored, scenario === "go-restore");
+      if (secretRestore) {
+        expect(
+          (
+            await page.request.post(`${origin}/api/v1/ai/test`, {
+              headers: { Origin: origin },
+              data: {},
+            })
+          ).status(),
+        ).toBe(200);
+      }
+      stop(restored, scenario !== "typescript-rollback");
+      if (secretRestore) {
+        for (const keyVolume of [wrongKeyVolume, ""]) {
+          selectedKeyVolume = keyVolume;
+          const unavailable = await start(restoredVolume);
+          const denied = await page.request.post(`${origin}/api/v1/ai/test`, {
+            headers: { Origin: origin },
+            data: {},
+          });
+          expect(denied.status()).toBe(503);
+          expect((await denied.json()).error.code).toBe("SECRET_UNAVAILABLE");
+          const readable = await (
+            await page.request.get(
+              `${origin}/api/v1/records/${encodeURIComponent(original.record.id)}`,
+            )
+          ).json();
+          expect(readable.record).toEqual(original.record);
+          const capture = await page.request.post(`${origin}/api/v1/records`, {
+            headers: { Origin: origin },
+            data: {
+              projectId: original.record.projectId,
+              record: {
+                type: "finding",
+                title: `Memory with ${keyVolume ? "wrong" : "missing"} key`,
+                authority: "explicit",
+                confidence: "high",
+                payload: {
+                  finding:
+                    "Capture remains available while provider secrets cannot be decrypted.",
+                },
+              },
+            },
+          });
+          expect(capture.status()).toBe(201);
+          expect((await capture.json()).record.payload.finding).toBe(
+            "Capture remains available while provider secrets cannot be decrypted.",
+          );
+          expect(
+            JSON.parse(
+              docker(
+                "exec",
+                unavailable,
+                "node",
+                "-e",
+                "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+              ),
+            ).calls,
+          ).toBe(4);
+          stop(unavailable, true);
+        }
+        selectedKeyVolume = correctKeyVolume;
+        const retained = await start(restoredVolume);
+        expect(
+          (
+            await page.request.post(`${origin}/api/v1/ai/test`, {
+              headers: { Origin: origin },
+              data: {},
+            })
+          ).status(),
+        ).toBe(200);
+        expect(
+          JSON.parse(
+            docker(
+              "exec",
+              retained,
+              "node",
+              "-e",
+              "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+            ),
+          ),
+        ).toEqual({ calls: 6, anonymousCalls: 0 });
+        stop(retained, true);
+        selectedKeyVolume = "";
+        const secretless = await start(restoredVolume);
+        const configuration = await (
+          await page.request.get(`${origin}/api/v1/ai/settings`)
+        ).json();
+        const removed = await page.request.patch(
+          `${origin}/api/v1/ai/settings`,
+          {
+            headers: { Origin: origin },
+            data: { expectedVersion: configuration.version, apiKey: "" },
+          },
+        );
+        expect(removed.status()).toBe(200);
+        expect((await removed.json()).apiKeyConfigured).toBe(false);
+        expect(
+          (
+            await page.request.post(`${origin}/api/v1/ai/test`, {
+              headers: { Origin: origin },
+              data: {},
+            })
+          ).status(),
+        ).toBe(200);
+        expect(
+          JSON.parse(
+            docker(
+              "exec",
+              secretless,
+              "node",
+              "-e",
+              "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+            ),
+          ),
+        ).toEqual({ calls: 8, anonymousCalls: 2 });
+        stop(secretless, true);
+      }
     } finally {
       for (const id of containers) docker("rm", "-f", id);
       for (const volume of volumes) docker("volume", "rm", volume);
+      if (networkCreated) docker("network", "rm", network);
     }
   });
 }

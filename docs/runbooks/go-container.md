@@ -95,6 +95,22 @@ explicit image/context configuration skips the corresponding fixture. Local
 image verification does not establish published-release compatibility,
 PostgreSQL image acceptance or deployed rollback.
 
+The encrypted-provider image scenario uses a private Docker network and a
+synthetic provider without published ports. Correct and wrong installation keys
+live in separate protected named volumes mounted read-only outside the database
+volume. It saves a reusable synthetic token through the authenticated API,
+verifies provider connectivity, and checks that the completed SQLite archive
+excludes the token's plaintext. After restoration, the retained key permits
+provider calls. Wrong and missing keys return `SECRET_UNAVAILABLE` without
+dispatching requests; original reads and new captures remain available. Returning
+the retained key restores connectivity without replacing settings or history.
+The owner can also remove the unusable stored token while the key is missing;
+the same provider then operates without a secret, with outbound calls verified
+to omit authorization.
+Test-owned key volumes, provider containers and network are removed afterward.
+This verifies application recovery with synthetic data, not protection against
+compromise of the running container or real-provider interoperability.
+
 Before any real upgrade, retain the pre-upgrade operational backup, exact old
 image and configuration, and the installation key. Go upgrades schema 1 to 2;
 the retained TypeScript image rejects schema 2. Rollback requires a verified
