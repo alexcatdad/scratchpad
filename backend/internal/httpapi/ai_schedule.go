@@ -158,11 +158,48 @@ func (a *AI) schedule(ctx context.Context, snapshot providerSnapshot) error {
 				}
 			}
 		}
-		next := map[string]any{"nextAt": now + int64(snapshot.config.ScheduleMinutes)*60000}
+		next := map[string]any{"nextAt": now + int64(snapshot.config.ScheduleMinutes)*60000, "scheduleMinutes": snapshot.config.ScheduleMinutes}
 		if previous == nil {
 			return insert(ctx, conn, "ai_schedule", "global", next)
 		}
 		previous["nextAt"] = next["nextAt"]
+		previous["scheduleMinutes"] = next["scheduleMinutes"]
 		return update(ctx, conn, "ai_schedule", previous)
 	})
+}
+
+// Change the interval from the last persisted cycle, keeping that cycle's age
+// through a pause instead of leaving its old deadline attached to a new cadence.
+func (a *AI) changeScheduleInterval(ctx context.Context, conn *sql.Conn, oldMinutes, newMinutes int) error {
+	raw, err := optional(ctx, conn, "ai_schedule", "global")
+	if err != nil || raw == nil {
+		return err
+	}
+	var row map[string]any
+	if json.Unmarshal(raw, &row) != nil {
+		return aiInvalid()
+	}
+	schedule := domain.ScheduleFrom(row)
+	if schedule.NextAt == nil || math.IsNaN(*schedule.NextAt) || math.IsInf(*schedule.NextAt, 0) || *schedule.NextAt != math.Trunc(*schedule.NextAt) || *schedule.NextAt < 0 {
+		return aiInvalid()
+	}
+	if saved, exists := row["scheduleMinutes"]; exists {
+		minutes, ok := saved.(float64)
+		if !ok || minutes < 1 || minutes > 43200 || math.Trunc(minutes) != minutes {
+			return aiInvalid()
+		}
+		oldMinutes = int(minutes)
+	}
+	if newMinutes > 0 {
+		deadline := *schedule.NextAt + float64(newMinutes-oldMinutes)*60000
+		if oldMinutes == 0 {
+			// Historical paused schedules did not retain their interval.
+			deadline = float64(time.Now().UnixMilli())
+		}
+		row["nextAt"] = math.Max(0, deadline)
+		row["scheduleMinutes"] = newMinutes
+	} else if oldMinutes > 0 {
+		row["scheduleMinutes"] = oldMinutes
+	}
+	return update(ctx, conn, "ai_schedule", row)
 }

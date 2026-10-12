@@ -209,6 +209,7 @@ func (a *AI) configure(ctx context.Context, conn *sql.Conn, body, actor map[stri
 	if err != nil {
 		return nil, err
 	}
+	oldScheduleMinutes := cfg.ScheduleMinutes
 	next := aiConfigMap(cfg)
 	for _, field := range aiFields {
 		if value, exists := body[field]; exists {
@@ -248,6 +249,11 @@ func (a *AI) configure(ctx context.Context, conn *sql.Conn, body, actor map[stri
 	}
 	if err != nil {
 		return nil, err
+	}
+	if oldScheduleMinutes != cfg.ScheduleMinutes {
+		if err = a.changeScheduleInterval(ctx, conn, oldScheduleMinutes, cfg.ScheduleMinutes); err != nil {
+			return nil, err
+		}
 	}
 	after := aiConfigMap(cfg)
 	after["apiKeyConfigured"] = next["apiKey"] != nil && next["apiKey"] != ""
