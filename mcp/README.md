@@ -56,7 +56,7 @@ Capture responses always identify the resolved project and distinguish central s
 
 ## Acceptance and release identity
 
-See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Explicit project selection retains checkout provenance even when remotes are ambiguous.
+See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Scope-only reads and AI operations with an explicit `projectId` bypass checkout discovery. Capture invocations inspect the supplied or configured working directory for local provenance and optional mirroring; explicit owner project selection retains known checkout provenance even when remotes are ambiguous. Git inspection continues to prohibit repository-selected helper programs.
 
 Local builds identify as `dev`. Release builds inject the tag with `go build -ldflags '-X main.version=<version>'`; both `--version` and MCP initialization report that value.
 

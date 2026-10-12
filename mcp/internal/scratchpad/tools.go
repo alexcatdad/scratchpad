@@ -33,6 +33,9 @@ type CaptureResult struct {
 }
 
 func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitContext, error) {
+	if s.ProjectID != "" {
+		return map[string]any{"id": s.ProjectID}, nil, nil
+	}
 	dir := s.WorkingDirectory
 	if dir == "" {
 		dir = c.Config.WorkingDirectory
@@ -42,11 +45,8 @@ func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitCont
 		return nil, nil, err
 	}
 	g, err := Discover(ctx, dir)
-	if err != nil && s.ProjectID == "" {
+	if err != nil {
 		return nil, nil, err
-	}
-	if s.ProjectID != "" {
-		return map[string]any{"id": s.ProjectID}, g, nil
 	}
 	if g == nil || g.RepositoryIdentity == "" {
 		return nil, g, &APIError{Code: "PROJECT_IDENTITY_REQUIRED", Message: "No strong Git identity. Ask the owner, then resolve_project with an explicit name or pass projectId."}
@@ -57,12 +57,30 @@ func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitCont
 	err = c.request(ctx, "POST", "/projects/resolve", map[string]any{"context": map[string]any{"git": g}}, "", &result)
 	return result.Project, g, err
 }
+func (c *Client) resolveCapture(ctx context.Context, s Scope) (map[string]any, *GitContext, error) {
+	if s.ProjectID == "" {
+		return c.resolve(ctx, s)
+	}
+	dir := s.WorkingDirectory
+	if dir == "" {
+		dir = c.Config.WorkingDirectory
+	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Capture retains known checkout provenance after explicit owner selection,
+	// including partial context when discovery reports ambiguous remotes.
+	g, _ := Discover(ctx, dir)
+	return map[string]any{"id": s.ProjectID}, g, nil
+}
+
 func (c *Client) capture(ctx context.Context, kind string, common Common, payload any) (*mcp.CallToolResult, CaptureResult, error) {
 	out := CaptureResult{}
 	if strings.TrimSpace(common.RequestID) == "" {
 		return nil, out, errors.New("requestId must not be blank")
 	}
-	project, g, err := c.resolve(ctx, common.Scope)
+	project, g, err := c.resolveCapture(ctx, common.Scope)
 	if err != nil {
 		return nil, out, err
 	}

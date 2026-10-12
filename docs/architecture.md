@@ -1024,7 +1024,7 @@ Machine onboarding is an instruction-only skill using existing client configurat
 
 ## Accepted clarification: non-executing checkout discovery (2026-10-09)
 
-MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers.
+MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers. Scope-only reads and AI operations with explicit IDs skip discovery; capture invocations retain trusted Git provenance and optional mirroring under the existing capture contract.
 
 ### Accepted clarification: production request log privacy (2026-10-09)
 
