@@ -226,7 +226,7 @@ func (s *SSH) Revoke(configured bool) http.HandlerFunc {
 			if err = update(ctx, conn, "credential", credential); err != nil {
 				return err
 			}
-			if err = revokeGithubSessions(ctx, conn, map[string]bool{stringValue(credential, "id"): true}); err != nil {
+			if err = revokeGithubSessions(ctx, conn, map[string]bool{stringValue(credential, "id"): true}, s.Store.Engine); err != nil {
 				return err
 			}
 			return passkeyAudit(ctx, conn, "credential.revoked", "credential", stringValue(credential, "id"), map[string]any{"kind": "user"})

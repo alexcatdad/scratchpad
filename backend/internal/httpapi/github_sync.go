@@ -245,7 +245,7 @@ func (g *Github) Sync(ctx context.Context) error {
 				removed[stringValue(cred, "id")] = true
 			}
 		}
-		if err = revokeGithubSessions(writeCtx, conn, removed); err != nil {
+		if err = revokeGithubSessions(writeCtx, conn, removed, g.auth.Store.Engine); err != nil {
 			return err
 		}
 		current["username"], current["keys"], current["lastSuccessfulSyncAt"], current["lastSyncError"] = username, keys, timestamp(time.Now()), nil

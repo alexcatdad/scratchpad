@@ -7,11 +7,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -420,7 +422,7 @@ func (g *Github) callback(r *http.Request) (string, error) {
 			}
 		}
 		if candidate["intent"] == "recover" {
-			if err = revokeGithubSessions(ctx, conn, nil); err != nil {
+			if err = revokeGithubSessions(ctx, conn, nil, g.auth.Store.Engine); err != nil {
 				return err
 			}
 		}
@@ -492,17 +494,48 @@ func (g *Github) callback(r *http.Request) (string, error) {
 	}
 	return token, err
 }
-func revokeGithubSessions(ctx context.Context, conn *sql.Conn, ids map[string]bool) error {
-	sessions, err := entityList(ctx, conn, "session")
-	if err != nil {
+
+// Revoke operational tokens in SQL without decoding all session history or
+// issuing one write per expired session. Credential provenance and its audit
+// remain retained; unrelated session provenance uses the same matching as before.
+func revokeGithubSessions(ctx context.Context, conn *sql.Conn, ids map[string]bool, engine string) error {
+	selected := []string{}
+	if ids != nil {
+		for id, selectedID := range ids {
+			if selectedID {
+				selected = append(selected, id)
+			}
+		}
+		if len(selected) == 0 {
+			return nil
+		}
+		sort.Strings(selected)
+	}
+
+	// SQLite retains duplicate object keys. Go map decoding chooses the last
+	// canonical key, so json_extract (which chooses the first) is insufficient.
+	validData := "CASE WHEN json_valid(entities.data) THEN entities.data ELSE '{}' END"
+	credential := "(SELECT value FROM json_each(" + validData + ") WHERE key='credentialId' ORDER BY id DESC LIMIT 1)"
+	stringID := "(SELECT type FROM json_each(" + validData + ") WHERE key='credentialId' ORDER BY id DESC LIMIT 1)='text'"
+	if engine == "postgres" {
+		credential = `data->>'credentialId'`
+		stringID = `jsonb_typeof(data->'credentialId')='string'`
+	}
+	if ids == nil {
+		_, err := conn.ExecContext(ctx, "DELETE FROM entities WHERE kind='session'")
 		return err
 	}
-	for _, session := range sessions {
-		if ids == nil || ids[stringValue(session, "credentialId")] {
-			session["revokedAt"] = timestamp(time.Now())
-			if err = update(ctx, conn, "session", session); err != nil {
-				return err
-			}
+	for start := 0; start < len(selected); start += 128 {
+		batch := selected[start:min(start+128, len(selected))]
+		args := []any{}
+		places := make([]string, len(batch))
+		for i, id := range batch {
+			args = append(args, id)
+			places[i] = fmt.Sprintf("$%d", i+1)
+		}
+		_, err := conn.ExecContext(ctx, "DELETE FROM entities WHERE kind='session' AND "+stringID+" AND "+credential+" IN ("+strings.Join(places, ",")+")", args...)
+		if err != nil {
+			return err
 		}
 	}
 	return nil
@@ -522,5 +555,5 @@ func (g *Github) invalidate(ctx context.Context, conn *sql.Conn) error {
 			}
 		}
 	}
-	return revokeGithubSessions(ctx, conn, ids)
+	return revokeGithubSessions(ctx, conn, ids, g.auth.Store.Engine)
 }

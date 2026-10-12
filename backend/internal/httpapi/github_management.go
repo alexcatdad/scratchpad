@@ -90,7 +90,7 @@ func (g *Github) Management(unlink bool) http.HandlerFunc {
 						}
 					}
 				}
-				if err = revokeGithubSessions(ctx, conn, ids); err != nil {
+				if err = revokeGithubSessions(ctx, conn, ids, g.auth.Store.Engine); err != nil {
 					return err
 				}
 			}

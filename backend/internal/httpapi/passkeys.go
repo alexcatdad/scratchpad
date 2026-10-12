@@ -445,15 +445,8 @@ func (p *Passkeys) registrationVerify(ctx context.Context, r *http.Request, body
 		action := "credential.enrolled"
 		if capability != nil && capability["recovery"] == true {
 			action = "owner.recovered"
-			sessions, err := entityList(ctx, conn, "session")
-			if err != nil {
+			if err := revokeGithubSessions(ctx, conn, nil, p.auth.Store.Engine); err != nil {
 				return err
-			}
-			for _, s := range sessions {
-				s["revokedAt"] = timestamp(time.Now())
-				if err := update(ctx, conn, "session", s); err != nil {
-					return err
-				}
 			}
 		}
 		id, err := entityID("credential")
