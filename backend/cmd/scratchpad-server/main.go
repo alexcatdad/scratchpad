@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 	"github.com/alexcatdad/scratchpad/backend/internal/httpapi"
 	"github.com/alexcatdad/scratchpad/backend/internal/persistence"
 	"github.com/alexcatdad/scratchpad/backend/internal/secrets"
+	"golang.org/x/net/idna"
 )
 
 func run() error {
@@ -74,9 +76,27 @@ func run() error {
 		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
 	}
 	public.Scheme = strings.ToLower(public.Scheme)
-	hostname := strings.ToLower(public.Hostname())
-	if public.User != nil || public.RawQuery != "" || public.Fragment != "" || (public.Path != "" && public.Path != "/") || public.Host == "" || (public.Scheme != "https" && (public.Scheme != "http" || (hostname != "localhost" && hostname != "127.0.0.1" && hostname != "::1"))) {
+	hostname := public.Hostname()
+	loopback := strings.ToLower(hostname)
+	if public.User != nil || public.RawQuery != "" || public.Fragment != "" || (public.Path != "" && public.Path != "/") || public.Host == "" || (public.Scheme != "https" && (public.Scheme != "http" || (loopback != "localhost" && loopback != "127.0.0.1" && loopback != "::1"))) {
 		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
+	}
+	if address, err := netip.ParseAddr(hostname); err == nil {
+		hostname = address.String()
+		if address.Is4In6() {
+			// Browser origins and the MCP signer serialize mapped tails as hex.
+			pieces := address.As16()
+			hostname = fmt.Sprintf("::ffff:%x:%x", uint16(pieces[12])<<8|uint16(pieces[13]), uint16(pieces[14])<<8|uint16(pieces[15]))
+		}
+	} else if strings.IndexFunc(hostname, func(r rune) bool { return r > 127 }) >= 0 {
+		// IDNA lookup performs Unicode case mapping before ASCII serialization.
+		// Lowercasing first loses the combining dot in U+0130.
+		hostname, err = idna.Lookup.ToASCII(hostname)
+		if err != nil {
+			return errors.New("CONFIG_INVALID: public URL hostname is invalid.")
+		}
+	} else {
+		hostname = strings.ToLower(hostname)
 	}
 	port := public.Port()
 	if strings.HasSuffix(public.Host, ":") {
