@@ -248,6 +248,8 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Build retained renderer for native Go browser fixtures
+        run: npm run build -w @scratchpad/web
       - name: Verify browser and MCP against container backup restore
         run: npm run test:e2e
         env:
