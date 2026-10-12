@@ -2226,7 +2226,7 @@
     "/api/v1/ai/jobs": {
       "get": {
         "operationId": "get_ai_jobs",
-        "summary": "Inspect persisted jobs",
+        "summary": "Inspect a bounded page of persisted jobs",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2240,6 +2240,14 @@
                       "items": {
                         "$ref": "#/components/schemas/Job"
                       }
+                    },
+                    "hasActive": {
+                      "type": "boolean",
+                      "description": "Any retained job is queued or running, including jobs outside this page."
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "description": "Present only when another page exists."
                     }
                   }
                 }
@@ -2249,7 +2257,40 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "description": "Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Opaque continuation returned by the previous page."
+          },
+          {
+            "name": "jobId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:~-]+$"
+            },
+            "description": "Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor."
+          }
+        ]
       },
       "post": {
         "operationId": "post_ai_jobs",

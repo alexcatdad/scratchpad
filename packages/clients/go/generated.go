@@ -1548,6 +1548,17 @@ type SemanticQuery struct {
 	Query        string    `json:"query"`
 }
 
+// GetAiJobsParams defines parameters for GetAiJobs.
+type GetAiJobsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque continuation returned by the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// JobId Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor.
+	JobId *string `form:"jobId,omitempty" json:"jobId,omitempty"`
+}
+
 // PostAiJobsIdRetryParams defines parameters for PostAiJobsIdRetry.
 type PostAiJobsIdRetryParams struct {
 	// IfMatch Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion.
@@ -2473,10 +2484,12 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// GetAiJobs Inspect persisted jobs
+	// GetAiJobs Inspect a bounded page of persisted jobs
+	//
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-	GetAiJobs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostAiJobsWithBody Queue consent-filtered processing
 	//
@@ -3197,11 +3210,13 @@ type ClientInterface interface {
 	GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// GetAiJobs Inspect persisted jobs
+// GetAiJobs Inspect a bounded page of persisted jobs
+//
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-func (c *Client) GetAiJobs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAiJobsRequest(c.Server)
+func (c *Client) GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAiJobsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -4951,7 +4966,7 @@ func (c *Client) GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*
 }
 
 // NewGetAiJobsRequest constructs an http.Request for the GetAiJobs method
-func NewGetAiJobsRequest(server string) (*http.Request, error) {
+func NewGetAiJobsRequest(server string, params *GetAiJobsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4967,6 +4982,57 @@ func NewGetAiJobsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.JobId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "jobId", *params.JobId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -7941,12 +8007,14 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// GetAiJobsWithResponse Inspect persisted jobs
+	// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
+	//
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-	GetAiJobsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error)
+	GetAiJobsWithResponse(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error)
 
 	// PostAiJobsWithBodyWithResponse Queue consent-filtered processing
 	//
@@ -8716,7 +8784,12 @@ type GetAiJobsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		Jobs *[]Job `json:"jobs,omitempty"`
+		// HasActive Any retained job is queued or running, including jobs outside this page.
+		HasActive *bool  `json:"hasActive,omitempty"`
+		Jobs      *[]Job `json:"jobs,omitempty"`
+
+		// NextCursor Present only when another page exists.
+		NextCursor *string `json:"nextCursor,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -8724,7 +8797,12 @@ type GetAiJobsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAiJobsResponse) GetJSON200() *struct {
-	Jobs *[]Job `json:"jobs,omitempty"`
+	// HasActive Any retained job is queued or running, including jobs outside this page.
+	HasActive *bool  `json:"hasActive,omitempty"`
+	Jobs      *[]Job `json:"jobs,omitempty"`
+
+	// NextCursor Present only when another page exists.
+	NextCursor *string `json:"nextCursor,omitempty"`
 } {
 	return r.JSON200
 }
@@ -12229,13 +12307,15 @@ func (r GetReadyResponse) ContentType() string {
 	return ""
 }
 
-// GetAiJobsWithResponse Inspect persisted jobs
+// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
+//
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-func (c *ClientWithResponses) GetAiJobsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error) {
-	rsp, err := c.GetAiJobs(ctx, reqEditors...)
+func (c *ClientWithResponses) GetAiJobsWithResponse(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error) {
+	rsp, err := c.GetAiJobs(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -13632,7 +13712,12 @@ func ParseGetAiJobsResponse(rsp *http.Response) (*GetAiJobsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Jobs *[]Job `json:"jobs,omitempty"`
+			// HasActive Any retained job is queued or running, including jobs outside this page.
+			HasActive *bool  `json:"hasActive,omitempty"`
+			Jobs      *[]Job `json:"jobs,omitempty"`
+
+			// NextCursor Present only when another page exists.
+			NextCursor *string `json:"nextCursor,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

@@ -3,11 +3,14 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"time"
 )
 
@@ -161,23 +164,81 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 			return
 		}
 		if operation == "list" {
-			ordering := "CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END"
+			limit := 100
+			params := r.URL.Query()
+			if params.Has("limit") {
+				var err error
+				limit, err = strconv.Atoi(params.Get("limit"))
+				if err != nil || limit < 1 || limit > 200 {
+					a.auth.fail(w, validationProject())
+					return
+				}
+			}
+			ordering := "CASE WHEN json_valid(data) THEN CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END ELSE '' END"
+			statusField := "CASE WHEN json_valid(data) THEN json_extract(data,'$.status') ELSE NULL END"
 			if a.auth.Store.Engine == "postgres" {
 				ordering = "(CASE WHEN jsonb_typeof(data->'createdAt')='string' THEN data->>'createdAt' ELSE '' END) COLLATE \"C\""
+				statusField = "data->>'status'"
 			}
-			rows, err := a.auth.Store.DB.QueryContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' ORDER BY "+ordering+" DESC,created_at,id")
+			where := "kind='ai_job'"
+			args := []any{}
+			if params.Has("jobId") {
+				if !portableID(params.Get("jobId")) || params.Has("cursor") {
+					a.auth.fail(w, validationProject())
+					return
+				}
+				where += " AND id=$1"
+				args = append(args, params.Get("jobId"))
+			} else if params.Has("cursor") {
+				var cursor []string
+				raw, err := base64.RawURLEncoding.DecodeString(params.Get("cursor"))
+				if err != nil || len(raw) > 8192 || json.Unmarshal(raw, &cursor) != nil || len(cursor) != 3 || cursor[2] == "" {
+					a.auth.fail(w, validationProject())
+					return
+				}
+				where += " AND (" + ordering + "<$1 OR (" + ordering + "=$1 AND (created_at>$2 OR (created_at=$2 AND id>$3))))"
+				args = append(args, cursor[0], cursor[1], cursor[2])
+			}
+			args = append(args, limit+1)
+			options := &sql.TxOptions{ReadOnly: true}
+			if a.auth.Store.Engine == "postgres" {
+				options.Isolation = sql.LevelRepeatableRead
+			}
+			tx, err := a.auth.Store.DB.BeginTx(ctx, options)
+			if err != nil {
+				a.auth.fail(w, err)
+				return
+			}
+			defer tx.Rollback()
+			if _, err = apiActor(ctx, tx, r, a.auth.Origin); err != nil {
+				a.auth.fail(w, err)
+				return
+			}
+			rows, err := tx.QueryContext(ctx, "SELECT data,"+ordering+",created_at,id FROM entities WHERE "+where+" ORDER BY "+ordering+" DESC,created_at,id LIMIT $"+strconv.Itoa(len(args)), args...)
 			jobs := []map[string]any{}
+			var last []string
+			hasMore := false
 			if err == nil {
 				for rows.Next() {
+					if len(jobs) == limit {
+						hasMore = true
+						break
+					}
 					var raw []byte
-					if err = rows.Scan(&raw); err != nil {
+					var created, stored, id string
+					if err = rows.Scan(&raw, &created, &stored, &id); err != nil {
 						break
 					}
 					var job map[string]any
 					if err = json.Unmarshal(raw, &job); err != nil {
 						break
 					}
+					if job == nil {
+						err = errors.New("Invalid persisted AI job.")
+						break
+					}
 					jobs = append(jobs, job)
+					last = []string{created, stored, id}
 				}
 				if err == nil {
 					err = rows.Err()
@@ -188,7 +249,17 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 				a.auth.fail(w, err)
 				return
 			}
-			JSON(w, 200, map[string]any{"jobs": jobs})
+			var hasActive bool
+			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE kind='ai_job' AND "+statusField+" IN ('queued','running'))").Scan(&hasActive); err != nil {
+				a.auth.fail(w, err)
+				return
+			}
+			result := map[string]any{"jobs": jobs, "hasActive": hasActive}
+			if hasMore {
+				raw, _ := json.Marshal(last)
+				result["nextCursor"] = base64.RawURLEncoding.EncodeToString(raw)
+			}
+			JSON(w, 200, result)
 			return
 		}
 		var body map[string]any

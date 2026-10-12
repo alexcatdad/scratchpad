@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -122,9 +123,37 @@ func registerAI(server *mcp.Server, client *Client) {
 		err = client.request(ctx, "POST", "/ai/jobs", body, "", &result)
 		return nil, result, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "get_ai_jobs", Description: "Inspect persisted optional AI job status, retries and failures. Provider failure does not affect deterministic memory."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	type Jobs struct {
+		Limit  *int    `json:"limit,omitempty" jsonschema:"Page size, 1 to 200; omitted uses the server default"`
+		Cursor *string `json:"cursor,omitempty" jsonschema:"Opaque nonempty nextCursor from a previous page"`
+		JobID  *string `json:"jobId,omitempty" jsonschema:"Poll one persisted job by ID; cannot be combined with cursor"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "get_ai_jobs", Description: "Inspect persisted optional AI job status, retries and failures. Follow nextCursor for further pages; hasActive covers all jobs. Use jobId to poll a specific job. Provider failure does not affect deterministic memory."}, func(ctx context.Context, request *mcp.CallToolRequest, input Jobs) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || nullArgument(request, "cursor") || nullArgument(request, "jobId") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 200)) || (input.Cursor != nil && *input.Cursor == "") || (input.JobID != nil && (*input.JobID == "" || input.Cursor != nil)) {
+			return nil, nil, errors.New("invalid job pagination or lookup")
+		}
+		query := url.Values{}
+		if input.Limit != nil {
+			query.Set("limit", strconv.Itoa(*input.Limit))
+		}
+		if input.Cursor != nil {
+			query.Set("cursor", *input.Cursor)
+		}
+		if input.JobID != nil {
+			query.Set("jobId", *input.JobID)
+		}
+		path := "/ai/jobs"
+		if len(query) > 0 {
+			path += "?" + query.Encode()
+		}
 		var result any
-		err := client.request(ctx, "GET", "/ai/jobs", nil, "", &result)
+		err := client.request(ctx, "GET", path, nil, "", &result)
+		if err == nil && len(query) > 0 {
+			body, _ := result.(map[string]any)
+			if _, supported := body["hasActive"].(bool); !supported {
+				return nil, nil, errors.New("backend does not support AI job pagination or lookup; update the backend or call get_ai_jobs without arguments")
+			}
+		}
 		return nil, result, err
 	})
 	type Document struct {

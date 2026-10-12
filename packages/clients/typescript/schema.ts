@@ -609,7 +609,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inspect persisted jobs */
+        /**
+         * Inspect a bounded page of persisted jobs
+         * @description Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports queued/running work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+         */
         get: operations["get_ai_jobs"];
         put?: never;
         /** Queue consent-filtered processing */
@@ -2560,7 +2563,13 @@ export interface operations {
     };
     get_ai_jobs: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Opaque continuation returned by the previous page. */
+                cursor?: string;
+                /** @description Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor. */
+                jobId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2575,6 +2584,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         jobs?: components["schemas"]["Job"][];
+                        /** @description Any retained job is queued or running, including jobs outside this page. */
+                        hasActive?: boolean;
+                        /** @description Present only when another page exists. */
+                        nextCursor?: string;
                     };
                 };
             };
