@@ -300,7 +300,10 @@ func normalizeRemote(raw string) (string, error) {
 		host = "[" + host + "]"
 	}
 	port := target.Port()
-	if (target.Scheme == "https" && port == "443") || (target.Scheme == "http" && port == "80") {
+	if number, err := strconv.ParseUint(port, 10, 16); err == nil {
+		port = strconv.FormatUint(number, 10)
+	}
+	if (target.Scheme == "https" && port == "443") || (target.Scheme == "http" && port == "80") || (target.Scheme == "ssh" && port == "22") || (target.Scheme == "git" && port == "9418") {
 		port = ""
 	}
 	if port != "" {
