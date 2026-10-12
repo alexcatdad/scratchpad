@@ -278,7 +278,7 @@ func Records(store *persistence.Store) http.HandlerFunc {
 		}
 		d, err := recordDetail(ctx, tx, store.Engine, r.PathValue("id"))
 		if errors.Is(err, sql.ErrNoRows) {
-			Error(w, 404, "NOT_FOUND", "Record not found.")
+			Error(w, 404, "RECORD_NOT_FOUND", "Record not found.")
 			return
 		}
 		if err != nil {
