@@ -95,7 +95,14 @@ func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[str
 		var raw []byte
 		types := "'embed','analyze','export'"
 		if a.rag && a.auth.Store.Engine == "postgres" {
-			types += ",'rag_index'"
+			if err := a.ragAvailable(ctx, conn); err == nil {
+				types += ",'rag_index'"
+			} else {
+				var protocol *protocolError
+				if !errors.As(err, &protocol) || protocol.code != "RAG_UNAVAILABLE" {
+					return err
+				}
+			}
 		}
 		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ("+types+") AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
 		if errors.Is(err, sql.ErrNoRows) {
@@ -354,6 +361,23 @@ func (a *AI) failAIJob(ctx context.Context, job map[string]any, cause error) err
 // Each server processes one job at a time; persisted leases coordinate
 // competing instances. Schedule deadlines and enqueueing persist across restart.
 func (a *AI) Run(ctx context.Context) {
+	if a.rag && a.auth.Store.Engine == "postgres" {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			timer := time.NewTicker(time.Second)
+			defer timer.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-timer.C:
+					_ = a.backfillRAG(ctx)
+				}
+			}
+		}()
+		defer func() { <-done }()
+	}
 	tick := func() {
 		snapshot, err := a.provider(ctx)
 		if err != nil {

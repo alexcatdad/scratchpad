@@ -40,7 +40,18 @@ func ragInstance(t *testing.T) (string, string) {
 func TestRAGHistoryLifecycleIsNotTruncatedWithRelationshipPreviews(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		var body struct {
+			Input []string `json:"input"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Input) != 1 {
+			http.Error(w, "invalid fixture input", 400)
+			return
+		}
+		vector := []int{1, 0}
+		if strings.Contains(body.Input[0], "Related source") {
+			vector = []int{0, 1}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -83,7 +94,18 @@ func TestRAGHistoryLifecycleIsNotTruncatedWithRelationshipPreviews(t *testing.T)
 func TestRAGResponseBudgetRetainsCitedUnicodeEvidenceWithOmissions(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		var body struct {
+			Input []string `json:"input"`
+		}
+		if json.NewDecoder(r.Body).Decode(&body) != nil || len(body.Input) != 1 {
+			http.Error(w, "invalid fixture input", 400)
+			return
+		}
+		vector := []int{1, 0}
+		if strings.Contains(body.Input[0], "Supporting source") {
+			vector = []int{0, 1}
+		}
+		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

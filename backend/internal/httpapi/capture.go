@@ -216,7 +216,7 @@ func mirrorEligible(project, record map[string]any) bool {
 	}
 	return false
 }
-func (s *SSH) Capture() http.HandlerFunc {
+func (s *SSH) Capture(ai *AI) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
@@ -345,6 +345,9 @@ func (s *SSH) Capture() http.HandlerFunc {
 				return err
 			}
 			if err = apiAudit(ctx, conn, "record.created", "record", id, actor, nil, record); err != nil {
+				return err
+			}
+			if err = ai.queueCapturedRAG(ctx, conn, project, record, actor); err != nil {
 				return err
 			}
 			result = map[string]any{"record": record, "mirror": map[string]any{"eligible": mirrorEligible(project, record)}}

@@ -940,7 +940,7 @@ export interface paths {
         put?: never;
         /**
          * Go backend bounded cited passage evidence using exact native semantic ranking
-         * @description First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+         * @description First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
          */
         post: operations["post_rag_retrieve"];
         delete?: never;

@@ -99,61 +99,39 @@ func (a *AI) RAGIndex() http.HandlerFunc {
 			if err != nil {
 				return err
 			}
-			fingerprint, err := ragFingerprint(cfg)
+			var created bool
+			job, created, err = enqueueRAGRecord(ctx, conn, record, cfg, scope.CrossProject, actor)
 			if err != nil {
 				return err
 			}
-			hash, err := aiHash(record)
-			if err != nil {
-				return err
+			if !rebuild {
+				return nil
 			}
-			identity, err := aiHash([]string{id, hash, fingerprint})
-			if err != nil {
-				return err
-			}
-			jobID := "job_rag_" + identity
-			old, err := optional(ctx, conn, "ai_job", jobID)
-			if err != nil {
-				return err
-			}
-			if old != nil {
-				if err := json.Unmarshal(old, &job); err != nil {
-					return err
-				}
-				if !rebuild {
-					return nil
-				}
-				expected, err := expectedVersion(body, r)
-				if err != nil {
-					return err
-				}
-				if job["version"] != expected {
-					return &versionConflict{job["version"]}
-				}
-				if !contains([]string{"completed", "failed"}, stringValue(job, "status")) {
-					return &protocolError{"CONFLICT", "An active indexing job cannot be rebuilt.", 409}
-				}
-				previous, err := copyEntity(job)
-				if err != nil {
-					return err
-				}
-				job["status"], job["attempts"], job["runAfter"] = "queued", 0, timestamp(time.Now())
-				for _, field := range []string{"lastError", "completedAt", "leaseToken", "leaseUntil", "passageCount", "sourceCount"} {
-					job[field] = nil
-				}
-				if err = update(ctx, conn, "ai_job", job); err != nil {
-					return err
-				}
-				return apiAudit(ctx, conn, "ai.job.retried", "ai_job", jobID, actor, previous, job)
-			}
-			if rebuild {
+			if created {
 				return &protocolError{"CONFLICT", "No previous indexing job exists to rebuild.", 409}
 			}
-			job = map[string]any{"type": "rag_index", "scope": map[string]any{"projectIds": []string{stringValue(record, "projectId")}, "crossProject": scope.CrossProject}, "recordId": id, "contentHash": hash, "fingerprint": fingerprint, "processingVersion": ragProcessingVersion, "status": "queued", "attempts": 0, "runAfter": timestamp(time.Now())}
-			if err = insert(ctx, conn, "ai_job", jobID, job); err != nil {
+			expected, err := expectedVersion(body, r)
+			if err != nil {
 				return err
 			}
-			return apiAudit(ctx, conn, "ai.job.queued", "ai_job", jobID, actor, nil, job)
+			if job["version"] != expected {
+				return &versionConflict{job["version"]}
+			}
+			if !contains([]string{"completed", "failed"}, stringValue(job, "status")) {
+				return &protocolError{"CONFLICT", "An active indexing job cannot be rebuilt.", 409}
+			}
+			previous, err := copyEntity(job)
+			if err != nil {
+				return err
+			}
+			job["status"], job["attempts"], job["runAfter"] = "queued", 0, timestamp(time.Now())
+			for _, field := range []string{"lastError", "completedAt", "leaseToken", "leaseUntil", "passageCount", "sourceCount"} {
+				job[field] = nil
+			}
+			if err = update(ctx, conn, "ai_job", job); err != nil {
+				return err
+			}
+			return apiAudit(ctx, conn, "ai.job.retried", "ai_job", stringValue(job, "id"), actor, previous, job)
 		})
 		if err != nil {
 			a.auth.fail(w, err)
@@ -197,6 +175,9 @@ func (a *AI) executeRAGIndex(ctx context.Context, job map[string]any, snapshot p
 	var record map[string]any
 	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		if _, err := a.workerCurrent(ctx, conn, job, snapshot, false); err != nil {
+			return err
+		}
+		if err := a.auth.Store.RAGSchema(ctx, conn); err != nil {
 			return err
 		}
 		var err error

@@ -2903,7 +2903,7 @@ type ClientInterface interface {
 
 	// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2912,7 +2912,7 @@ type ClientInterface interface {
 
 	// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4272,7 +4272,7 @@ func (c *Client) PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestB
 
 // PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4291,7 +4291,7 @@ func (c *Client) PostRagRetrieveWithBody(ctx context.Context, contentType string
 
 // PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8303,7 +8303,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -8312,7 +8312,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 	//
-	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+	// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -12898,7 +12898,7 @@ func (c *ClientWithResponses) PostRagIndexWithResponse(ctx context.Context, body
 
 // PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12913,7 +12913,7 @@ func (c *ClientWithResponses) PostRagRetrieveWithBodyWithResponse(ctx context.Co
 
 // PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
 //
-// First semantic retrieval slice. Hybrid rank fusion, lexical fallback, automatic capture/backfill and complete indexing coverage remain subsequent implementation work.
+// First semantic retrieval slice. Hybrid rank fusion, lexical fallback and assessed indexing coverage remain subsequent implementation work.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

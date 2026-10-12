@@ -1767,7 +1767,22 @@ without re-embedding unchanged source text.
 The response is `{results, resultsOmitted, semantic}`. `semantic.available` is
 true after successful semantic retrieval; `semantic.indexCoverage` is currently
 `not_assessed`, so missing results must not be interpreted as absent evidence.
-Automatic historical backfill/capture enqueue, hybrid rank fusion, lexical
-fallback, assessed coverage and RAG MCP integration remain required work.
+Hybrid rank fusion, lexical fallback, assessed coverage and RAG MCP integration
+remain required work.
 See [the RAG runbook](runbooks/go-rag.md) for projection migration, restart,
 rebuild and compatibility boundaries.
+
+## Go replacement addition: automatic passage enqueue
+
+When PostgreSQL RAG is enabled, eligible `POST /records` captures queue their
+local passage generation in the same transaction as the source, audit and retry
+identity. Queue or audit failure rolls back all effects. Replayed captures preserve
+the original source and do not duplicate jobs. Enqueue does not require provider
+availability or decryption of its secret.
+
+A separate cancellable reconciliation loop discovers bounded batches of eligible
+history and newly consenting projects, including new embedding generations. It
+continues while embedding requests are blocked, rechecks consent/configuration
+under the shared writer lock and reuses durable source jobs through restart.
+Completion-only model changes preserve the generation. Full indexing coverage,
+hybrid fallback and the RAG MCP interface remain subsequent work.

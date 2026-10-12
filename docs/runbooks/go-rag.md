@@ -3,8 +3,9 @@
 Issue #36 introduces passage RAG separately from the existing whole-record
 semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
-semantic evidence. Automatic backfill/capture indexing, hybrid ranking, lexical
-fallback, assessed coverage and the RAG MCP tool remain required for the full feature.
+semantic evidence, atomic capture enqueue and eligible-history reconciliation.
+Hybrid ranking, lexical fallback, assessed coverage and the RAG MCP tool remain
+required for the full feature.
 
 ## Configuration and availability
 
@@ -105,8 +106,7 @@ The response includes `results`, `resultsOmitted` and
 `semantic: {available: true, indexCoverage: "not_assessed"}`. Scores express
 similarity, not decision authority. Coverage is not yet assessed, and no lexical
 fallback is implemented in this slice. Missing results or a provider failure
-must not be treated as proof that source evidence is absent. Full hybrid retrieval,
-automatic indexing and explicit assessed uncertainty remain required work.
+must not be treated as proof that source evidence is absent. Full hybrid retrieval and explicit assessed uncertainty remain required work.
 
 ## Verify with an isolated database
 
@@ -132,3 +132,28 @@ the installation, cluster and listener isolated; stop the owned cluster after
 verification. Do not install into the system PostgreSQL directories or use a
 remote Docker context implicitly. Local verification does not prove CI, a real
 provider, deployed acceptance or completed RAG retrieval.
+
+## Automatic indexing
+
+With PostgreSQL RAG enabled, each eligible capture queues its local source
+generation inside the capture transaction. Record, metadata, lexical projection,
+record/queue audits and retry identity commit together. Queue/audit failure rolls
+them all back; retrying the same request cannot duplicate either source or job.
+No provider connection or secret decryption occurs during enqueue. Projects
+without AI consent and derived generated sources do not enqueue.
+
+A separate reconciliation loop discovers eligible existing/imported history and
+newly consenting projects without checking provider availability. It continues
+while embedding requests are blocked and shares the server cancellation lifetime. Discovery selects at most 16
+missing source generations outside the shared writer lock; activation rechecks
+current embedding compatibility and project consent under that lock. Empty
+reconciliation batches do not acquire the writer lock. Repeated batches and
+restart reuse persisted jobs. Changing embedding compatibility queues distinct
+generations; completion-only changes do not. This query may still scan historical
+rows to locate missing generations, so history-independent reconciliation and
+measured contention remain future performance work.
+
+AI disablement, unavailable provider secrets and absent pgvector keep work durable.
+Absent pgvector prevents passage-job claims while ordinary AI behavior remains
+independent; late installation initializes the optional projection before dispatch.
+Existing retry/failure and consent/lease activation rules continue to apply.

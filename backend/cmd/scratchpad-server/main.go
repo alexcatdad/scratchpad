@@ -135,7 +135,7 @@ func run() error {
 	mux.HandleFunc("PATCH /api/v1/profile", auth.Profile("name"))
 	mux.HandleFunc("POST /api/v1/profile/github", auth.Profile("github"))
 	mux.HandleFunc("DELETE /api/v1/profile/github", auth.Profile("unlink"))
-	mux.HandleFunc("POST /api/v1/records", auth.Capture())
+	mux.HandleFunc("POST /api/v1/records", auth.Capture(ai))
 	mux.HandleFunc("PATCH /api/v1/records/{id}/metadata", auth.Curation("metadata"))
 	mux.HandleFunc("POST /api/v1/records/{id}/revisions", auth.Curation("revisions"))
 	mux.HandleFunc("POST /api/v1/records/{id}/evidence", auth.Curation("evidence"))
