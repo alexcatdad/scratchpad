@@ -51,4 +51,29 @@ Each operation reports its count, error count, minimum, mean, maximum, and neare
 
 The report also records the observed readiness database engine, client Go runtime, OS/architecture, UTC start time, measured elapsed time and workload version. Record backend runtime, host resources and database configuration alongside larger operational comparisons. This first workload does not attribute latency to event-loop stalls, database waits, CPU or memory usage. Add those observations during targeted profiling before claiming the cause of a slowdown or narrowing transaction locks. A small passing CI workload verifies behavior, not a production capacity target or a statistically strong performance result.
 
-The Go backend, migrations, encryption and RAG remain separate subsequent slices. Local measurements do not establish CI, release, deployment or live-user acceptance.
+The Go replacement is implemented incrementally; measurements remain separate from CI, release, deployment or live-user acceptance.
+
+## Matched SQLite comparison — 2026-10-12
+
+Measured source revision: `9daf65f85b6239c57f9c9d31d27a4f04ea7e3c1a`. Both backends used the same optimized MCP executable (SHA-256 `f3217987fe5cbdfafe218bb392e23a08cd4eee3700f24969e53f4ab3748e522d`), local Git checkout, synthetic SSH key and workload. Each trial used a fresh private SQLite database initialized in the TypeScript schema-1 format; Go performed its normal schema-2 migration. A synthetic credential fixture authorized actual local SSH possession proof. No live installation or provider was used.
+
+The host was Apple M2 Max, 12 logical CPUs and 32 GiB RAM, macOS arm64, Node v24.21.0 and Go 1.27.2. Go binaries were built without race instrumentation; TypeScript used the production build. SQLite retained each runtime's normal configuration. This compares implemented runtimes, including their libraries and schema handling, rather than isolating programming language.
+
+After successful three-agent smoke trials, each backend ran twice at 1, 4 and 8 agents, with 1,000 seeded findings and 10 rounds per agent. The second repetition reversed backend order. Every measured operation completed without errors; the larger trials verified 2,600 tool operations in total. Setup/authentication/seed time is excluded from measured rounds. Each round uses capture, identical retry, detail, search and legacy project context.
+
+The table reports the range across two trials; each p95 is a per-trial nearest-rank percentile. These are small local samples, not capacity targets or production acceptance.
+
+| Agents | Backend    | Measured rounds (s) | Capture p95 (ms) | Retry p95 (ms) | Detail p95 (ms) | Search p95 (ms) | Context p95 (ms) |
+| ------ | ---------- | ------------------- | ---------------- | -------------- | --------------- | --------------- | ---------------- |
+| 1      | typescript | 2.7–2.9             | 63.1–130.4       | 62.2–79.1      | 6.0–7.0         | 69.4–73.9       | 75.6–115.4       |
+| 1      | go         | 2.9–2.9             | 66.2–67.7        | 63.0–63.6      | 6.1–6.4         | 75.0–77.1       | 88.6–89.2        |
+| 4      | typescript | 3.0–3.0             | 71.1–71.9        | 69.9–72.3      | 7.9–10.7        | 74.3–76.2       | 83.4–83.9        |
+| 4      | go         | 3.2–3.2             | 68.7–70.3        | 68.5–68.7      | 9.7–10.8        | 82.5–95.2       | 97.6–104.0       |
+| 8      | typescript | 3.3–3.3             | 78.7–78.8        | 77.7–78.6      | 20.9–22.9       | 84.7–86.9       | 93.9–94.0        |
+| 8      | go         | 4.5–4.7             | 146.6–190.2      | 196.1–294.4    | 20.6–26.9       | 152.3–169.4     | 164.8–188.8      |
+
+Mean measured Go elapsed time was 4.6% higher at 1 agent, 7.8% higher at 4 agents, 38.4% higher at 8 agents. There is no demonstrated overall Go speedup in this workload. Eight-agent capture, retry, search and context tails regressed and require profiling before claiming improvement.
+
+Capture/retry responses were 2,379 encoded MCP bytes and details were 5,461 bytes per call on both runtimes. Legacy context averaged approximately 133 kB (130 KiB) per larger-workload call, with minor concurrency-dependent differences; search result sizes also varied with interleaving. Full latency distributions, error counts and response-byte totals are retained in the local JSON reports. No compact-context, RAG, PostgreSQL, database-wait, CPU or memory attribution is established by these SQLite trials.
+
+The next measurement should isolate HTTP service time and database waiting from MCP Git discovery, then repeat equivalent workloads after changes. The Go SQLite pool currently has one connection, and explicit project-scoped MCP reads still perform checkout discovery; these are inspected candidates for investigation, not proven causes. Preserve capture provenance, retry/audit atomicity and authorization when addressing them. Keep the shared PostgreSQL transaction lock until measured contention and correctness evidence justify changing it.
