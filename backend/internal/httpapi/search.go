@@ -102,10 +102,8 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 		}
 		limit = int(value)
 	}
-	records, err := entityList(ctx, tx, "record")
-	if err != nil {
-		return nil, err
-	}
+	records := []map[string]any{}
+	var err error
 	metadata, err := entityList(ctx, tx, "metadata")
 	if err != nil {
 		return nil, err
@@ -114,19 +112,23 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 	for _, item := range metadata {
 		byID[stringValue(item, "id")] = item
 	}
-	matches := map[string]bool{}
 	query := params.Get("q")
-	if query != "" {
+	if query == "" {
+		records, err = entityList(ctx, tx, "record")
+		if err != nil {
+			return nil, err
+		}
+	} else {
 		terms := lexicalTerms.FindAllString(query, 30)
 		if len(terms) > 0 {
-			statement := `SELECT record_id FROM record_search WHERE record_search MATCH $1`
+			statement := `SELECT DISTINCT r.data FROM record_search JOIN entities r ON r.kind='record' AND r.id=record_search.record_id WHERE record_search MATCH $1`
 			parts := []string{}
 			for _, term := range terms {
 				parts = append(parts, `"`+strings.ReplaceAll(term, `"`, `""`)+`"`)
 			}
 			argument := strings.Join(parts, " AND ")
 			if engine == "postgres" {
-				statement = `SELECT record_id FROM record_search WHERE document @@ plainto_tsquery('simple',$1)`
+				statement = `SELECT DISTINCT r.data FROM record_search JOIN entities r ON r.kind='record' AND r.id=record_search.record_id WHERE document @@ plainto_tsquery('simple',$1)`
 				argument = strings.Join(terms, " ")
 			}
 			rows, err := tx.QueryContext(ctx, statement, argument)
@@ -134,12 +136,17 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 				return nil, err
 			}
 			for rows.Next() {
-				var id string
-				if err = rows.Scan(&id); err != nil {
+				var raw []byte
+				if err = rows.Scan(&raw); err != nil {
 					rows.Close()
 					return nil, err
 				}
-				matches[id] = true
+				var record map[string]any
+				if err = json.Unmarshal(raw, &record); err != nil {
+					rows.Close()
+					return nil, err
+				}
+				records = append(records, record)
 			}
 			err = rows.Err()
 			rows.Close()
@@ -164,9 +171,6 @@ func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (
 	}
 	filtered := []map[string]any{}
 	for _, record := range records {
-		if query != "" && !matches[stringValue(record, "id")] {
-			continue
-		}
 		if !searchFilter(record, byID[stringValue(record, "id")], links, params) {
 			continue
 		}

@@ -114,6 +114,15 @@ HTTP tests cover capture/detail, provenance overrides, payload rendering, valida
 
 `GET /api/v1/records` and `POST /api/v1/search` implement the existing lexical retrieval shapes with metadata and nullable `nextCursor`. SQLite uses FTS5 and PostgreSQL uses its generated simple-language tsvector. Queries extract at most thirty Unicode letter/number/underscore terms and combine them as literal AND conditions, without executing caller-supplied query operators. POST search retains its query, repeated project/type lists, limit and cursor contract; authenticated browser POST requires the configured Origin.
 
+For nonempty lexical queries, the database joins distinct full-text matches to
+immutable record data before Go decodes it. Duplicate SQLite lexical entries do
+not duplicate records. Unmatched source bodies are not loaded into the
+record selection. A corruption fixture verifies targeted retrieval can succeed
+without decoding an unrelated source, while corrupt matching sources still fail
+safely. Blank-query listing, metadata/relationship selection, filters, ordering
+and cursor behavior remain separate from this optimization; this change does not
+claim history-independent cost for the entire read path.
+
 GET filters preserve exact project/type/authority/confidence, repeated project/type lists, tags, Git branch/path, import/client/display provenance, archived state, lifecycle status and relationship endpoints. Only accepted replacement relationships change lifecycle status; rejected links are omitted from relationship filtering. UTC date bounds compare arbitrary fractional-second precision without rounding it to Go nanoseconds or JavaScript milliseconds. Malformed ISO bounds, cursor tuple types and page limits are rejected.
 
 Pages retain descending created-time/identifier ordering, using locale-compatible ordering and the existing base64url `[createdAt,id]` cursor. Limits default to thirty and accept one to one hundred. New opaque entity IDs now use the established prefix plus UUIDv4 format; stored identifiers and retry references remain unchanged. This corrects the earlier development Go generator's base64 token IDs, whose mixed case could disagree with the legacy cursor ordering. The existing pinned UUID and Unicode-text modules are used directly; no module versions were upgraded for this change.

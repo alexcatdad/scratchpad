@@ -27,6 +27,45 @@ func searchRecords(t *testing.T, origin, query string) (int, map[string]any) {
 	}
 	return res.StatusCode, body
 }
+
+func TestLexicalSearchDecodesOnlyNativeMatchingRecords(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
+			origin := startServer(t, path, databaseURL)
+			projectID := jobProject(t, origin, "Focused lexical records", false, false)
+			wanted := curationCapture(t, origin, projectID, "FOCUSED_MATCH_WITNESS")
+			unrelated := curationCapture(t, origin, projectID, "UNRELATED_CORRUPTION_WITNESS")
+			driver, dsn := "sqlite", path
+			if engine == "postgres" {
+				driver, dsn = "pgx", databaseURL
+			}
+			db, err := sql.Open(driver, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			// A fault input makes decoding unrelated history observably incorrect.
+			if _, err = db.Exec(`UPDATE entities SET data='[]' WHERE kind='record' AND id=$1`, unrelated["id"]); err != nil {
+				t.Fatal(err)
+			}
+			if engine == "sqlite" {
+				// FTS5 has no uniqueness constraint on its stored record reference.
+				if _, err = db.Exec(`INSERT INTO record_search SELECT record_id,title,content FROM record_search WHERE record_id=$1`, wanted["id"]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			status, response := searchRecords(t, origin, "q=FOCUSED_MATCH_WITNESS")
+			if status != 200 || len(response["records"].([]any)) != 1 || response["records"].([]any)[0].(map[string]any)["id"] != wanted["id"] {
+				t.Fatalf("targeted search decoded unrelated record history: %d %v", status, response)
+			}
+			status, _ = searchRecords(t, origin, "q=UNRELATED_CORRUPTION_WITNESS")
+			if status != 503 {
+				t.Fatal("targeted search silently ignored corruption in a matching record")
+			}
+		})
+	}
+}
 func TestLexicalSearchAndPaginationReadNewCaptures(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
