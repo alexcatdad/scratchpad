@@ -1,3 +1,10 @@
+FROM golang:1.27.2-bookworm AS go-build
+WORKDIR /src
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+COPY backend ./
+RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /scratchpad-server ./cmd/scratchpad-server
+
 FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
@@ -10,7 +17,7 @@ RUN npm ci
 COPY apps/web apps/web
 RUN npm run build -w @scratchpad/web
 
-FROM node:24.21.0-bookworm-slim AS runtime
+FROM node:24.21.0-bookworm-slim AS runtime-base
 ENV NODE_ENV=production PORT=3000 SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/* \
@@ -22,3 +29,15 @@ USER 1000:1000
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD ["node", "-e", "fetch('http://localhost:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["npm", "run", "start", "-w", "@scratchpad/web"]
+
+FROM runtime-base AS go-runtime
+USER 0:0
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u1 && rm -rf /var/lib/apt/lists/*
+USER 1000:1000
+ENV SCRATCHPAD_LISTEN_ADDR=0.0.0.0:3000 SCRATCHPAD_UI_PORT=4000
+COPY --from=go-build --chown=node:node /scratchpad-server /usr/local/bin/scratchpad-server
+COPY --chown=node:node scripts/go-dashboard-runtime.mjs ./scripts/go-dashboard-runtime.mjs
+ENTRYPOINT ["node", "/app/scripts/go-dashboard-runtime.mjs", "/usr/local/bin/scratchpad-server"]
+CMD ["serve"]
+
+FROM runtime-base AS runtime

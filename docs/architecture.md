@@ -1039,3 +1039,11 @@ backend initialization. The real browser workflow verifies enrollment, project
 creation, capture, record inspection and API availability after renderer shutdown.
 This same-host integration does not establish full dashboard parity or container
 cutover. See the [dashboard runbook](runbooks/go-dashboard.md).
+
+An opt-in Docker `go-runtime` target packages Go with the retained renderer and a
+launcher that forwards administrative commands, drains both serving processes on
+termination and stops the companion on child failure. The final default image
+continues to run TypeScript. Actual locally built image verification covers
+browser enrollment, capture, online SQLite backup and fresh-volume restoration;
+full release and rollback acceptance remains separate. See the
+[Go container runbook](runbooks/go-container.md).
