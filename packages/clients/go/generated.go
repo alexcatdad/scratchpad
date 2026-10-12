@@ -1024,10 +1024,11 @@ func (e GetRagStatus200JSONResponseBodyDatabase) Valid() bool {
 
 // Defines values for GetRagStatus200JSONResponseBodyReason.
 const (
-	Available        GetRagStatus200JSONResponseBodyReason = "available"
-	Disabled         GetRagStatus200JSONResponseBodyReason = "disabled"
-	PgvectorRequired GetRagStatus200JSONResponseBodyReason = "pgvector_required"
-	PostgresRequired GetRagStatus200JSONResponseBodyReason = "postgres_required"
+	Available                      GetRagStatus200JSONResponseBodyReason = "available"
+	Disabled                       GetRagStatus200JSONResponseBodyReason = "disabled"
+	EmbeddingDimensionsUnsupported GetRagStatus200JSONResponseBodyReason = "embedding_dimensions_unsupported"
+	PgvectorRequired               GetRagStatus200JSONResponseBodyReason = "pgvector_required"
+	PostgresRequired               GetRagStatus200JSONResponseBodyReason = "postgres_required"
 )
 
 // Valid indicates whether the value is a known member of the GetRagStatus200JSONResponseBodyReason enum.
@@ -1036,6 +1037,8 @@ func (e GetRagStatus200JSONResponseBodyReason) Valid() bool {
 	case Available:
 		return true
 	case Disabled:
+		return true
+	case EmbeddingDimensionsUnsupported:
 		return true
 	case PgvectorRequired:
 		return true
@@ -11083,7 +11086,7 @@ type GetRagStatusResponse struct {
 		Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
 		Enabled   bool                                    `json:"enabled"`
 
-		// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+		// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
 		PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
 		Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
 	}
@@ -11097,7 +11100,7 @@ func (r GetRagStatusResponse) GetJSON200() *struct {
 	Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
 	Enabled   bool                                    `json:"enabled"`
 
-	// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+	// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
 	PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
 	Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
 } {
@@ -15219,7 +15222,7 @@ func ParseGetRagStatusResponse(rsp *http.Response) (*GetRagStatusResponse, error
 			Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
 			Enabled   bool                                    `json:"enabled"`
 
-			// PgvectorVersion Present when pgvector is installed in the application schema and RAG is enabled
+			// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
 			PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
 			Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
 		}

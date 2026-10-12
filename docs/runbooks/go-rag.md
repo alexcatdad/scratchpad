@@ -14,8 +14,9 @@ Other values fail server startup with `CONFIG_INVALID`. It controls the new Go
 RAG feature; it does not change the existing semantic-search configuration.
 
 Authenticated `GET /api/v1/rag/status` returns `enabled`, `available`, `database`
-and `reason`. The reason is `disabled`, `postgres_required`, `pgvector_required`
-or `available`. When available, `pgvectorVersion` reports the installed version.
+and `reason`. The reason is `disabled`, `postgres_required`, `pgvector_required`,
+`embedding_dimensions_unsupported` or `available`. When available,
+`pgvectorVersion` reports the installed version.
 Availability means prerequisites exist, not that records are indexed or evidence
 is complete. This response must not be used as indexing coverage.
 
@@ -23,6 +24,13 @@ Use a dedicated application PostgreSQL database with pgvector installed in its
 application schema. The application checks the live extension catalog on each
 enabled status request. It does not install extensions or provision services.
 Missing pgvector or SQLite selection leaves ordinary memory available.
+
+Passage RAG supports up to 16,000 embedding dimensions. The legacy embedding and
+semantic-search configuration still accepts up to 16,384. An incompatible passage
+configuration leaves captures, retries, metadata, audits and lexical retrieval
+available without enqueuing unusable passage work. Explicit passage indexing and
+coverage report `RAG_UNAVAILABLE`; retrieval returns lexical fallback. Restoring a
+compatible configuration allows preserved sources to be reconciled normally.
 
 The existing TypeScript application remains the supported runtime until full
 backend parity and delivery acceptance. This new route is Go-only during that

@@ -53,6 +53,9 @@ func (a *AI) queueCapturedRAG(ctx context.Context, conn *sql.Conn, project, reco
 	if err != nil {
 		return err
 	}
+	if !ragDimensionsAvailable(cfg) {
+		return nil
+	}
 	_, _, err = enqueueRAGRecord(ctx, conn, record, cfg, false, actor)
 	return err
 }
@@ -72,6 +75,9 @@ func (a *AI) backfillRAG(ctx context.Context) error {
 	cfg, err := aiConfig(row)
 	if err != nil {
 		return err
+	}
+	if !ragDimensionsAvailable(cfg) {
+		return nil
 	}
 	fingerprint, err := ragFingerprint(cfg)
 	if err != nil {
@@ -111,6 +117,9 @@ func (a *AI) backfillRAG(ctx context.Context) error {
 		currentConfig, err := aiConfig(current)
 		if err != nil {
 			return err
+		}
+		if !ragDimensionsAvailable(currentConfig) {
+			return nil
 		}
 		currentFingerprint, err := ragFingerprint(currentConfig)
 		if err != nil {

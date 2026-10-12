@@ -3185,8 +3185,8 @@ export interface operations {
                         /** @enum {string} */
                         database: "sqlite" | "postgres";
                         /** @enum {string} */
-                        reason: "disabled" | "postgres_required" | "pgvector_required" | "available";
-                        /** @description Present when pgvector is installed in the application schema and RAG is enabled */
+                        reason: "disabled" | "postgres_required" | "pgvector_required" | "embedding_dimensions_unsupported" | "available";
+                        /** @description Present when RAG prerequisites and passage dimensions are available */
                         pgvectorVersion?: string;
                     };
                 };

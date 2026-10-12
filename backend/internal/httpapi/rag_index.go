@@ -13,8 +13,14 @@ import (
 
 const ragProcessingVersion = "passage-v1"
 
+const ragMaximumDimensions = 16000
+
+func ragDimensionsAvailable(cfg AIConfig) bool {
+	return cfg.EmbeddingDimensions <= ragMaximumDimensions
+}
+
 func ragFingerprint(cfg AIConfig) (string, error) {
-	if cfg.EmbeddingDimensions > 16000 {
+	if !ragDimensionsAvailable(cfg) {
 		return "", &protocolError{"VALIDATION_FAILED", "Passage RAG supports at most 16000 embedding dimensions.", 400}
 	}
 	return aiHash(map[string]any{"provider": cfg.BaseURL, "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions, "processingVersion": ragProcessingVersion})
@@ -29,6 +35,17 @@ func (a *AI) ragAvailable(ctx context.Context, q entityReader) error {
 	}
 	if !installed {
 		return &protocolError{"RAG_UNAVAILABLE", "Install pgvector in the application schema before indexing passages.", 409}
+	}
+	row, err := readSettings(ctx, q, "ai_settings")
+	if err != nil {
+		return err
+	}
+	cfg, err := aiConfig(row)
+	if err != nil {
+		return err
+	}
+	if !ragDimensionsAvailable(cfg) {
+		return &protocolError{"RAG_UNAVAILABLE", "Configured embedding dimensions are unsupported by passage RAG; ordinary memory remains available.", 409}
 	}
 	return nil
 }

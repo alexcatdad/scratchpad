@@ -3352,12 +3352,13 @@
                         "disabled",
                         "postgres_required",
                         "pgvector_required",
+                        "embedding_dimensions_unsupported",
                         "available"
                       ]
                     },
                     "pgvectorVersion": {
                       "type": "string",
-                      "description": "Present when pgvector is installed in the application schema and RAG is enabled"
+                      "description": "Present when RAG prerequisites and passage dimensions are available"
                     }
                   }
                 }

@@ -30,7 +30,21 @@ func (s *SSH) RAGStatus(enabled bool) http.HandlerFunc {
 					return
 				}
 				if err == nil {
-					available, reason = true, "available"
+					row, err := readSettings(ctx, s.Store.DB, "ai_settings")
+					if err != nil {
+						s.fail(w, err)
+						return
+					}
+					cfg, err := aiConfig(row)
+					if err != nil {
+						s.fail(w, err)
+						return
+					}
+					if ragDimensionsAvailable(cfg) {
+						available, reason = true, "available"
+					} else {
+						reason = "embedding_dimensions_unsupported"
+					}
 				}
 			}
 		}
