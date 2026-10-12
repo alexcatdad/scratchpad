@@ -75,8 +75,15 @@ idempotent re-import, new historical JSONL import and API availability after
 renderer shutdown. It also saves a synthetic encrypted provider token, tests
 completion and embeddings against a local provider, verifies safe provider
 failure, removes the stored key and checks that UI/export outputs exclude its
-value. The renderer receives no installation key. It runs against SQLite and optional disposable PostgreSQL;
-the database connection needs permission to create and drop the fixture's own
+value. The renderer receives no installation key.
+
+Analysis queueing, source-linked suggestion acceptance and source inspection also
+use the actual UI and Go worker. The private handoff workflow downloads Markdown
+and verifies its server-added draft warning and source citations. These synthetic
+provider checks verify application wiring, not real model output quality.
+
+It runs against SQLite and optional disposable PostgreSQL. The database
+connection needs permission to create and drop the fixture's own
 database. PostgreSQL cases explicitly skip when the fixture is not configured.
 The HTTP test verifies credential
 isolation, session-cookie ownership and API route ownership. Fixtures use private

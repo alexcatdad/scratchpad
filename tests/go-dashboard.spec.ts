@@ -29,6 +29,8 @@ for (const engine of ["sqlite", "postgres"] as const) {
     let completionCalls = 0,
       embeddingCalls = 0;
     let providerUnavailable = false;
+    let analysisSourceId = "";
+    let generateDocument = false;
     const provider = createHTTPServer((request, response) => {
       request.resume();
       response.setHeader("Content-Type", "application/json");
@@ -53,7 +55,34 @@ for (const engine of ["sqlite", "postgres"] as const) {
         completionCalls++;
         response.end(
           JSON.stringify({
-            choices: [{ message: { content: '{"ok":true}' } }],
+            choices: [
+              {
+                message: {
+                  content: analysisSourceId
+                    ? JSON.stringify({
+                        artifacts: [
+                          {
+                            kind: generateDocument ? "export" : "summary",
+                            title: generateDocument
+                              ? "Dashboard private handoff"
+                              : "Dashboard source-backed interpretation",
+                            content: {
+                              text: "A provisional summary linked to the saved finding.",
+                              ...(generateDocument
+                                ? {
+                                    markdown:
+                                      "## Synthetic handoff\n\nPreserve the cited finding.",
+                                  }
+                                : {}),
+                            },
+                            sourceRecordIds: [analysisSourceId],
+                          },
+                        ],
+                      })
+                    : '{"ok":true}',
+                },
+              },
+            ],
           }),
         );
       } else {
@@ -200,6 +229,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Allow repository mirroring", { exact: true })
         .check();
+      await page
+        .getByLabel("Allow AI processing for this project", { exact: true })
+        .check();
       const savedProject = page.waitForResponse(
         (response) =>
           response.url().endsWith("/settings") &&
@@ -226,9 +258,17 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Finding", { exact: true })
         .fill("The retained dashboard uses the authoritative Go API.");
+      const savedRecord = page.waitForResponse(
+        (response) =>
+          response.url().endsWith("/api/v1/records") &&
+          response.request().method() === "POST",
+      );
       await page
         .getByRole("button", { name: "Save record", exact: true })
         .click();
+      const capturedRecord = (await (await savedRecord).json()) as {
+        record: { id: string };
+      };
       await page.getByRole("button", { name: /Go dashboard evidence/ }).click();
       await expect(
         page.getByRole("heading", {
@@ -299,6 +339,75 @@ for (const engine of ["sqlite", "postgres"] as const) {
       ).toBeVisible();
       expect(completionCalls).toBe(1);
       expect(embeddingCalls).toBe(1);
+      analysisSourceId = capturedRecord.record.id;
+      await page.getByRole("button", { name: "Insights", exact: true }).click();
+      await page
+        .getByLabel("Insight project", { exact: false })
+        .selectOption({ label: "Go dashboard project" });
+      await page
+        .getByRole("button", { name: "Analyze memory", exact: true })
+        .click();
+      const suggestion = page.locator("article").filter({
+        has: page.getByRole("heading", {
+          name: "Dashboard source-backed interpretation",
+          exact: true,
+        }),
+      });
+      await expect(suggestion).toBeVisible({ timeout: 20_000 });
+      await suggestion
+        .getByRole("button", { name: "Accept suggestion", exact: true })
+        .click();
+      await expect(
+        page.getByText("Suggestion accepted with an audit entry.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        suggestion.getByText("Accepted", { exact: true }),
+      ).toBeVisible();
+      await suggestion.getByRole("button", { name: /^Source / }).click();
+      await expect(
+        page.getByRole("heading", {
+          name: "Go dashboard evidence",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        page
+          .getByText("The retained dashboard uses the authoritative Go API.", {
+            exact: true,
+          })
+          .first(),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Insights", exact: true }).click();
+      await page
+        .getByLabel("Insight project", { exact: false })
+        .selectOption({ label: "Go dashboard project" });
+      generateDocument = true;
+      await page
+        .getByRole("button", { name: "Generate document", exact: true })
+        .click();
+      const document = page.locator("article").filter({
+        has: page.getByRole("heading", {
+          name: "Dashboard private handoff",
+          exact: true,
+        }),
+      });
+      await expect(document).toBeVisible({ timeout: 20_000 });
+      const markdownDownload = page.waitForEvent("download");
+      await document
+        .getByRole("button", { name: "Download Markdown", exact: true })
+        .click();
+      const markdownPath = await (await markdownDownload).path();
+      if (!markdownPath) throw new Error("Missing generated document");
+      const markdown = readFileSync(markdownPath, "utf8");
+      expect(markdown).toContain("AI-generated draft.");
+      expect(markdown).toContain("## Synthetic handoff");
+      expect(markdown).toContain("## Source records");
+      expect(markdown).toContain(capturedRecord.record.id);
+      expect(markdown).toContain("Go dashboard evidence");
+      expect(markdown).not.toContain("synthetic-dashboard-provider-token");
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
       providerUnavailable = true;
       await ai
         .getByRole("button", { name: "Test saved provider", exact: true })
