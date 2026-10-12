@@ -82,7 +82,7 @@ func (a *AI) aiScopedEntities(ctx context.Context, conn *sql.Conn, scope jobScop
 	}
 	return records, rows.Err()
 }
-func (a *AI) claimEmbedding(ctx context.Context, snapshot providerSnapshot) (map[string]any, error) {
+func (a *AI) claimAIJob(ctx context.Context, snapshot providerSnapshot) (map[string]any, error) {
 	var job map[string]any
 	err := a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		if err := a.providerCurrent(ctx, conn, nil, snapshot); err != nil {
@@ -93,7 +93,7 @@ func (a *AI) claimEmbedding(ctx context.Context, snapshot providerSnapshot) (map
 			status, runAfter, leaseUntil, typ = "data->>'status'", "data->>'runAfter'", "data->>'leaseUntil'", "data->>'type'"
 		}
 		var raw []byte
-		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+"='embed' AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
+		err := conn.QueryRowContext(ctx, "SELECT data FROM entities WHERE kind='ai_job' AND "+typ+" IN ('embed','analyze','export') AND (("+status+"='queued' AND "+runAfter+"<=$1) OR ("+status+"='running' AND "+leaseUntil+"<=$1)) ORDER BY created_at,id LIMIT 1", timestamp(time.Now())).Scan(&raw)
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
@@ -303,7 +303,7 @@ func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot 
 		return apiAudit(ctx, conn, "ai.job.completed", "ai_job", stringValue(job, "id"), aiWorkerActor, nil, current)
 	})
 }
-func (a *AI) failEmbedding(ctx context.Context, job map[string]any, cause error) error {
+func (a *AI) failAIJob(ctx context.Context, job map[string]any, cause error) error {
 	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		current, err := entityMap(ctx, conn, "ai_job", stringValue(job, "id"))
 		if err != nil {
@@ -335,22 +335,27 @@ func (a *AI) failEmbedding(ctx context.Context, job map[string]any, cause error)
 	})
 }
 
-// Each server processes one embedding job at a time; persisted leases coordinate
-// competing instances. Analysis/export and scheduling remain separate parity slices.
+// Each server processes one job at a time; persisted leases coordinate
+// competing instances. Scheduling remains a separate parity slice.
 func (a *AI) Run(ctx context.Context) {
 	tick := func() {
 		snapshot, err := a.provider(ctx)
 		if err != nil {
 			return
 		}
-		job, err := a.claimEmbedding(ctx, snapshot)
+		job, err := a.claimAIJob(ctx, snapshot)
 		if err != nil || job == nil {
 			return
 		}
-		if err = a.executeEmbedding(ctx, job, snapshot); err != nil && ctx.Err() == nil {
+		if job["type"] == "embed" {
+			err = a.executeEmbedding(ctx, job, snapshot)
+		} else {
+			err = a.executeCompletion(ctx, job, snapshot)
+		}
+		if err != nil && ctx.Err() == nil {
 			failureCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			_ = a.failEmbedding(failureCtx, job, err)
+			_ = a.failAIJob(failureCtx, job, err)
 		}
 	}
 	timer := time.NewTicker(time.Second)

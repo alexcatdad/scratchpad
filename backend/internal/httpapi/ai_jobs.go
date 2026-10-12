@@ -146,7 +146,11 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 		}
 		var scope jobScope
 		var err error
-		if operation == "enqueue" {
+		enqueue := operation == "enqueue" || operation == "document"
+		if operation == "document" {
+			body["type"] = "export"
+		}
+		if enqueue {
 			scope, err = parseJobScope(body)
 			if err != nil {
 				a.auth.fail(w, err)
@@ -172,7 +176,7 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 			if err = a.jobProvider(ctx, conn); err != nil {
 				return err
 			}
-			if operation == "enqueue" {
+			if enqueue {
 				ids, err := allowedJobs(ctx, conn, scope)
 				if err != nil {
 					return err

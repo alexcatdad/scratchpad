@@ -108,6 +108,7 @@ func run() error {
 	mux.HandleFunc("PATCH /api/v1/settings", ai.GlobalSettings(true))
 	mux.HandleFunc("GET /api/v1/ai/jobs", ai.Jobs("list"))
 	mux.HandleFunc("POST /api/v1/ai/jobs", ai.Jobs("enqueue"))
+	mux.HandleFunc("POST /api/v1/summaries/export", ai.Jobs("document"))
 	mux.HandleFunc("POST /api/v1/ai/jobs/{id}/retry", ai.Jobs("retry"))
 	mux.HandleFunc("POST /api/v1/search/semantic", ai.SemanticSearch())
 	mux.HandleFunc("GET /api/v1/suggestions", ai.Suggestions())
