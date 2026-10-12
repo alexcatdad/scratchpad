@@ -344,15 +344,45 @@ func TestLegacyShortIPv4GitHostRetainsProjectIdentity(t *testing.T) {
 }
 
 func TestSCPUnicodeHostRetainsLegacyEscapedSource(t *testing.T) {
-	path, _, _ := githubHistoricalBrowser(t, "sqlite")
-	origin := startServer(t, path, "")
-	status, _ := projectRequest(t, origin, "POST", "/resolve", map[string]any{"context": map[string]any{"git": map[string]any{"remote": "git@münich.example:team/repo.git"}}}, restoredToken)
-	if status != 200 {
-		t.Fatal("SCP Unicode remote rejected")
-	}
-	_, body := projectRequest(t, origin, "GET", "", nil, restoredToken)
-	sources := body["projects"].([]any)[0].(map[string]any)["sources"].([]any)
-	if sources[0].(map[string]any)["identity"] != "m%c3%bcnich.example/team/repo" {
-		t.Fatal("opaque SSH hostname changed its historical source identity")
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			path, databaseURL := portableInstance(t, engine)
+			origin := startServer(t, path, databaseURL)
+			var opaqueID string
+			for _, remote := range []string{"git@münich.example:team/repo.git", "ssh://git@münich.example/team/repo.git", "git://münich.example/team/repo.git"} {
+				status, body := projectRequest(t, origin, "POST", "/resolve", map[string]any{"context": map[string]any{"git": map[string]any{"remote": remote}}}, restoredToken)
+				if status != 200 {
+					t.Fatal("opaque Unicode remote rejected")
+				}
+				id := body["project"].(map[string]any)["id"].(string)
+				if opaqueID != "" && id != opaqueID {
+					t.Fatal("SCP, SSH and Git opaque identities differ")
+				}
+				opaqueID = id
+			}
+			status, body := projectRequest(t, origin, "GET", "", nil, restoredToken)
+			if status != 200 {
+				t.Fatal("source listing unavailable")
+			}
+			sources := body["projects"].([]any)[0].(map[string]any)["sources"].([]any)
+			if sources[0].(map[string]any)["identity"] != "m%c3%bcnich.example/team/repo" {
+				t.Fatal("opaque hostname changed its historical source identity")
+			}
+			var httpsID string
+			for _, remote := range []string{"https://münich.example/team/repo.git", "https://xn--mnich-kva.example/team/repo.git"} {
+				status, body := projectRequest(t, origin, "POST", "/resolve", map[string]any{"context": map[string]any{"git": map[string]any{"remote": remote}}}, restoredToken)
+				if status != 200 {
+					t.Fatal("HTTP Unicode remote rejected")
+				}
+				id := body["project"].(map[string]any)["id"].(string)
+				if httpsID != "" && id != httpsID {
+					t.Fatal("HTTP IDNA aliases changed project identity")
+				}
+				httpsID = id
+			}
+			if httpsID == opaqueID {
+				t.Fatal("import compatibility changed opaque URL identity to HTTP IDNA")
+			}
+		})
 	}
 }

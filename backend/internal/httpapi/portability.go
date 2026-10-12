@@ -456,6 +456,14 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if value["fromRecordId"] == value["toRecordId"] || !contains(relationshipTypes, stringValue(value, "type")) || !contains([]string{"suggested", "accepted", "rejected"}, stringValue(value, "status")) || !contains([]string{"explicit", "inferred", "suggested"}, stringValue(value, "authority")) {
 			return importInvalid()
 		}
+	case "audit":
+		for _, field := range []string{"action", "entityType"} {
+			if text, exists := value[field]; exists {
+				if _, ok := text.(string); !ok {
+					return importInvalid()
+				}
+			}
+		}
 	case "ai_artifact", "curated_artifact":
 		return validatePortableArtifact(ctx, conn, kind, value, sources)
 	}
