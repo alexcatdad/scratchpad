@@ -1835,7 +1835,9 @@ retain `score` for cosine and add `rankScore` and `retrieval: "hybrid"`.
 Provider/index failure or an empty incomplete semantic result returns cited native
 lexical source evidence when available, with `retrieval: "lexical"`,
 `semantic.available=false`, a fixed `reason`, and `indexCoverage` as assessed or
-`unavailable`. Authentication and consent failures remain errors. Fallback uses
+`unavailable`. Optional projection preparation failures use `RAG_UNAVAILABLE`;
+fallback still requires healthy core storage. Authentication and consent failures
+remain errors. Fallback uses
 immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
 When a healthy query returns indexed candidates with incomplete coverage, native
 raw-source lexical candidates join the indexed lexical list before rank fusion.

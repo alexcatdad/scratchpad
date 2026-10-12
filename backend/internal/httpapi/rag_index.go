@@ -63,7 +63,12 @@ func (a *AI) prepareRAG(ctx context.Context) error {
 	if ready {
 		return nil
 	}
-	return a.auth.Store.InitRAG(ctx)
+	if err := a.auth.Store.InitRAG(ctx); err != nil {
+		// Optional projection preparation must not hide healthy lexical sources.
+		// The fallback independently checks authentication, consent and core reads.
+		return &protocolError{"RAG_UNAVAILABLE", "Passage RAG projection is unavailable; ordinary memory remains available.", 409}
+	}
+	return nil
 }
 
 func (a *AI) ragSource(ctx context.Context, conn *sql.Conn, scope jobScope, id string) (map[string]any, error) {
