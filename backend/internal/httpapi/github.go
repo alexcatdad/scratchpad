@@ -22,13 +22,14 @@ type Github struct {
 	auth             *SSH
 	passkeys         *Passkeys
 	clientID, secret string
+	oauthAdmission   *SSH
 }
 
 func NewGithub(auth *SSH, passkeys *Passkeys, clientID, secret string) (*Github, error) {
 	if (clientID != "" || secret != "") && (strings.TrimSpace(clientID) == "" || strings.TrimSpace(secret) == "") {
 		return nil, errors.New("CONFIG_INVALID: both GitHub OAuth values are required")
 	}
-	return &Github{auth, passkeys, clientID, secret}, nil
+	return &Github{auth: auth, passkeys: passkeys, clientID: clientID, secret: secret, oauthAdmission: NewSSH(auth.Store, auth.Origin)}, nil
 }
 func (g *Github) Configured() bool { return g.clientID != "" && g.secret != "" }
 func (g *Github) stateCookie(w http.ResponseWriter, value string, age int) {
@@ -313,13 +314,18 @@ func (g *Github) Callback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		client, _, _ := net.SplitHostPort(r.RemoteAddr)
-		release, err := g.auth.admission(client, true)
+		release, err := g.auth.admission(client, false)
 		if err != nil {
 			g.auth.fail(w, err)
 			return
 		}
 		defer release()
 		token, err := g.callback(r)
+		var admission *protocolError
+		if errors.As(err, &admission) && admission.code == "RATE_LIMITED" {
+			g.auth.fail(w, err)
+			return
+		}
 		g.stateCookie(w, "", -1)
 		if err != nil {
 			code := "AUTH_INVALID"
@@ -355,6 +361,12 @@ func (g *Github) callback(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	client, _, _ := net.SplitHostPort(r.RemoteAddr)
+	release, err := g.oauthAdmission.admission(client, true)
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	verifier := stringValue(candidate, "verifier")
 	err = g.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		entry, err := g.loadState(ctx, conn, tokenID(state), cookie.Value)
