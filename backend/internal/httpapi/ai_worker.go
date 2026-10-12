@@ -336,11 +336,14 @@ func (a *AI) failAIJob(ctx context.Context, job map[string]any, cause error) err
 }
 
 // Each server processes one job at a time; persisted leases coordinate
-// competing instances. Scheduling remains a separate parity slice.
+// competing instances. Schedule deadlines and enqueueing persist across restart.
 func (a *AI) Run(ctx context.Context) {
 	tick := func() {
 		snapshot, err := a.provider(ctx)
 		if err != nil {
+			return
+		}
+		if err = a.schedule(ctx, snapshot); err != nil {
 			return
 		}
 		job, err := a.claimAIJob(ctx, snapshot)

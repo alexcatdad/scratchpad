@@ -120,6 +120,27 @@ func (a *AI) jobProvider(ctx context.Context, conn *sql.Conn) error {
 	}
 	return nil
 }
+func enqueueAIJob(ctx context.Context, conn *sql.Conn, typ string, scope jobScope, format string, actor map[string]any) (map[string]any, error) {
+	ids, err := allowedJobs(ctx, conn, scope)
+	if err != nil {
+		return nil, err
+	}
+	if format == "" {
+		format = "handoff"
+	}
+	id, err := entityID("job")
+	if err != nil {
+		return nil, err
+	}
+	job := map[string]any{"type": typ, "scope": map[string]any{"projectIds": ids, "crossProject": scope.CrossProject}, "format": format, "status": "queued", "attempts": 0, "runAfter": timestamp(time.Now())}
+	if err = insert(ctx, conn, "ai_job", id, job); err != nil {
+		return nil, err
+	}
+	if err = apiAudit(ctx, conn, "ai.job.queued", "ai_job", id, actor, nil, job); err != nil {
+		return nil, err
+	}
+	return job, nil
+}
 func (a *AI) Jobs(operation string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
@@ -177,27 +198,8 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 				return err
 			}
 			if enqueue {
-				ids, err := allowedJobs(ctx, conn, scope)
-				if err != nil {
-					return err
-				}
-				format := stringValue(body, "format")
-				if format == "" {
-					format = "handoff"
-				}
-				id, err := entityID("job")
-				if err != nil {
-					return err
-				}
-				job := map[string]any{"type": body["type"], "scope": map[string]any{"projectIds": ids, "crossProject": scope.CrossProject}, "format": format, "status": "queued", "attempts": 0, "runAfter": timestamp(time.Now())}
-				if err = insert(ctx, conn, "ai_job", id, job); err != nil {
-					return err
-				}
-				if err = apiAudit(ctx, conn, "ai.job.queued", "ai_job", id, actor, nil, job); err != nil {
-					return err
-				}
-				result = job
-				return nil
+				result, err = enqueueAIJob(ctx, conn, stringValue(body, "type"), scope, stringValue(body, "format"), actor)
+				return err
 			}
 			job, err := curationEntity(ctx, conn, "ai_job", r.PathValue("id"))
 			if err != nil {
