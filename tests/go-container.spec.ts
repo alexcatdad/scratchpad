@@ -486,7 +486,7 @@ for (const scenario of [
               "/data/checkpoint.sqlite",
             ),
           ),
-        ).toMatchObject({ database: "sqlite", schemaVersion: 2 });
+        ).toMatchObject({ database: "sqlite", schemaVersion: 3 });
       if (secretRestore) {
         if (postgresRestore)
           expect(

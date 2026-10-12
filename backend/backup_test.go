@@ -61,7 +61,7 @@ func TestSQLiteBackupRefusesUnsafeOrExistingPathsWithoutChangingFiles(t *testing
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err = db.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(3,'2026-10-01T00:00:00Z')`); err != nil {
+				if _, err = db.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(999,'2026-10-01T00:00:00Z')`); err != nil {
 					t.Fatal(err)
 				}
 				db.Close()
@@ -377,5 +377,12 @@ func TestSQLiteOnlineBackupRestoresWALRetryAndCurationState(t *testing.T) {
 	status, listing = searchRecords(t, restored, "q=Created%20after%20snapshot&projectId="+projectID)
 	if status != 200 || len(listing["records"].([]any)) != 0 {
 		t.Fatal("snapshot included later writes")
+	}
+	if projectMemory(t, restored, projectID)["counts"].(map[string]any)["total"] != float64(1) {
+		t.Fatal("restored snapshot lost its context projection or included later history")
+	}
+	curationCapture(t, restored, projectID, "Captured after fresh restoration")
+	if projectMemory(t, restored, projectID)["counts"].(map[string]any)["total"] != float64(2) {
+		t.Fatal("operational restore lost atomic context maintenance")
 	}
 }

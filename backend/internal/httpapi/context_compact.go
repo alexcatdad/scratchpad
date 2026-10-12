@@ -88,7 +88,11 @@ func compactContext(ctx context.Context, tx *sql.Tx, project map[string]any, eng
 		}
 	}
 	previews := []map[string]any{}
-	for _, record := range ordered[:min(limit, len(ordered))] {
+	selected := ordered[:min(limit, len(ordered))]
+	if err := hydrateContextRecords(ctx, tx, selected); err != nil {
+		return nil, err
+	}
+	for _, record := range selected {
 		title, titleCut := compactText(stringValue(record, "title"), 120)
 		content := stringValue(record, "content")
 		if content == "" {

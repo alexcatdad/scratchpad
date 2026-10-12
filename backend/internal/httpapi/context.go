@@ -150,6 +150,21 @@ func projectContextRecords(ctx context.Context, tx *sql.Tx, project map[string]a
 		record["applicability"], record["replacedBy"], record["historicalStatus"] = applicability, replacedBy, legacy
 		records = append(records, record)
 	}
+	answerIDs := map[string]bool{}
+	for _, link := range links {
+		if link["type"] == "answers" && link["status"] == "accepted" {
+			answerIDs[stringValue(link, "fromRecordId")] = true
+		}
+	}
+	answerSources := []map[string]any{}
+	for _, record := range records {
+		if answerIDs[stringValue(record, "id")] && record["type"] != "qa" && record["applicability"] == "current" && record["contextContentNonempty"] != true {
+			answerSources = append(answerSources, record)
+		}
+	}
+	if err := hydrateContextRecords(ctx, tx, answerSources); err != nil {
+		return nil, nil, err
+	}
 	ordering := collate.New(language.English)
 	sort.Slice(records, func(i, j int) bool {
 		left, right := records[i], records[j]
@@ -203,7 +218,7 @@ func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any, eng
 			}
 		}
 	}
-	return map[string]any{
+	result := map[string]any{
 		"project":         project,
 		"currentState":    current,
 		"state":           states,
@@ -226,5 +241,24 @@ func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any, eng
 		"relationships": relevant,
 		"counts":        map[string]any{"total": len(records), "current": currentCount},
 		"notice":        "Deterministic context reflects recorded provenance and accepted relationships. Imported lifecycle statements remain historical evidence until reviewed.",
-	}, nil
+	}
+	selected := []map[string]any{}
+	for _, value := range result {
+		switch section := value.(type) {
+		case []map[string]any:
+			for _, record := range section {
+				if record["projectId"] == project["id"] {
+					selected = append(selected, record)
+				}
+			}
+		case map[string]any:
+			if section["projectId"] == project["id"] {
+				selected = append(selected, section)
+			}
+		}
+	}
+	if err := hydrateContextRecords(ctx, tx, selected); err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -17,7 +17,7 @@ var postgresMigrations = []migration{{1, []string{
 	`CREATE TABLE retries(scope TEXT NOT NULL,key TEXT NOT NULL,request TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(scope,key))`,
 	`CREATE TABLE record_search(record_id TEXT PRIMARY KEY,title TEXT NOT NULL,content TEXT NOT NULL,document TSVECTOR GENERATED ALWAYS AS(to_tsvector('simple',title || ' ' || content)) STORED)`,
 	`CREATE INDEX record_search_document ON record_search USING GIN(document)`,
-}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}}
+}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}, {3, postgresContextHeaderStatements()}}
 
 func openPostgres(ctx context.Context, raw string) (*Store, error) {
 	u, err := url.Parse(raw)
@@ -43,7 +43,7 @@ func openPostgres(ctx context.Context, raw string) (*Store, error) {
 }
 
 func validatePostgresColumns(ctx context.Context, q queryer, version int) error {
-	for table, expected := range sqliteColumns {
+	for table, expected := range columnsForVersion(version) {
 		rows, err := q.QueryContext(ctx, `SELECT c.column_name,c.data_type,c.is_nullable,COALESCE((SELECT k.ordinal_position FROM information_schema.key_column_usage k JOIN information_schema.table_constraints t USING(constraint_catalog,constraint_schema,constraint_name) WHERE t.constraint_type='PRIMARY KEY' AND k.table_schema=c.table_schema AND k.table_name=c.table_name AND k.column_name=c.column_name),0) FROM information_schema.columns c WHERE c.table_schema=current_schema() AND c.table_name=$1 ORDER BY c.ordinal_position`, table)
 		if err != nil {
 			return err
@@ -61,7 +61,7 @@ func validatePostgresColumns(ctx context.Context, q queryer, version int) error 
 				return errors.New("unexpected columns")
 			}
 			wanted := strings.ToLower(expected[i].kind)
-			if table == "entities" && name == "data" {
+			if (table == "entities" || table == "context_headers") && name == "data" {
 				wanted = "jsonb"
 			}
 			if name != expected[i].name || kind != wanted || nullable != "NO" || key != expected[i].key {
@@ -82,6 +82,9 @@ func validatePostgresColumns(ctx context.Context, q queryer, version int) error 
 	indexes := map[string]string{"entities_kind": "USING btree (kind)", "record_search_document": "USING gin (document)"}
 	if version >= 2 {
 		indexes["entities_created"] = "USING btree (kind, created_at, id)"
+	}
+	if version >= 3 {
+		indexes["context_headers_project"] = "USING btree (project_id, record_id)"
 	}
 	for name, definition := range indexes {
 		rows, err := q.QueryContext(ctx, `SELECT indexdef FROM pg_indexes WHERE schemaname=current_schema() AND indexname=$1`, name)

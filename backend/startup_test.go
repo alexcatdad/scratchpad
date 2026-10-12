@@ -70,7 +70,7 @@ func TestFreshSQLiteMigrationIsRepeatable(t *testing.T) {
 		if err := json.Unmarshal(out, &report); err != nil {
 			t.Fatal(err)
 		}
-		if report.Database != "sqlite" || report.SchemaVersion != 2 {
+		if report.Database != "sqlite" || report.SchemaVersion != 3 {
 			t.Fatalf("unexpected report: %s", out)
 		}
 	}
@@ -89,7 +89,7 @@ func TestSchemaOneUpgrade(t *testing.T) {
 	if err := json.Unmarshal(out, &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.SchemaVersion != 2 {
+	if report.SchemaVersion != 3 {
 		t.Fatalf("supported schema 1 was not upgraded: %s", out)
 	}
 }
@@ -520,5 +520,80 @@ func TestStartupErrorsDoNotDiscloseDatabaseCredentials(t *testing.T) {
 	out, err := cmd.CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "DATABASE_NOT_READY") || strings.Contains(string(out), "synthetic_secret_must_not_leak") || strings.Contains(string(out), "postgres://") {
 		t.Fatalf("unsafe startup failure: %v %s", err, out)
+	}
+}
+
+func TestContextHeaderMigrationConflictRetriesAndPreservesHistory(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			path, databaseURL := legacyFixture(t), ""
+			driver, dsn := "sqlite", path
+			if engine == "postgres" {
+				path = ""
+				databaseURL = legacyPostgres(t)
+				driver, dsn = "pgx", databaseURL
+			}
+			db, err := sql.Open(driver, dsn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			seedRestoredHistory(t, db)
+			if _, err = db.Exec(`INSERT INTO entities(kind,id,data,version,created_at) VALUES('project','proj_restored','{"id":"proj_restored","name":"Historical context","settings":{"aiProcessing":false,"crossProjectAnalysis":false,"enabledRecordTypes":["finding"],"repoMirroring":{"enabled":false,"recordTypes":["finding"]}}}',1,'2026-10-01T00:00:00Z')`); err != nil {
+				t.Fatal(err)
+			}
+			// Historical schema 2 input, with an operator-created naming conflict.
+			if _, err = db.Exec(`CREATE INDEX entities_created ON entities(kind,created_at,id); INSERT INTO schema_migrations VALUES(2,'2026-10-02T00:00:00Z'); CREATE TABLE context_headers(id TEXT)`); err != nil {
+				t.Fatal(err)
+			}
+			command := func() *exec.Cmd {
+				if engine == "postgres" {
+					return postgresCommand(databaseURL)
+				}
+				return migrationCommand(path)
+			}
+			if out, err := command().CombinedOutput(); err == nil || !strings.Contains(string(out), "DATABASE_NOT_READY") {
+				t.Fatalf("conflicting projection migration accepted: %v %s", err, out)
+			}
+			// Removing only the synthetic conflict must permit a normal atomic retry.
+			if _, err = db.Exec(`DROP TABLE context_headers`); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				out, err := command().CombinedOutput()
+				if err != nil {
+					t.Fatalf("projection migration retry failed: %v %s", err, out)
+				}
+				var report map[string]any
+				if json.Unmarshal(out, &report) != nil || report["schemaVersion"] != float64(3) {
+					t.Fatalf("schema 2 did not advance sequentially to 3: %s", out)
+				}
+			}
+			for range 2 {
+				t.Run("restart", func(t *testing.T) {
+					origin := startServer(t, path, databaseURL)
+					status, detail := fetchRecord(t, origin, restoredToken)
+					var original map[string]any
+					json.Unmarshal([]byte(restoredRecord), &original)
+					if status != 200 || !reflect.DeepEqual(detail["record"], original) {
+						t.Fatal("projection upgrade changed original authenticated history")
+					}
+					status, response := curationRequest(t, origin, "GET", "/projects/proj_restored/context", nil)
+					if status != 200 || response["counts"].(map[string]any)["total"] != float64(1) {
+						t.Fatalf("upgraded historical record missing from context: status=%d counts=%v", status, response["counts"])
+					}
+				})
+			}
+			trigger := "context_headers_insert"
+			if engine == "postgres" {
+				trigger = "context_headers_write ON entities"
+			}
+			if _, err = db.Exec("DROP TRIGGER " + trigger); err != nil {
+				t.Fatal(err)
+			}
+			if out, err := command().CombinedOutput(); err == nil || !strings.Contains(string(out), "DATABASE_NOT_READY") {
+				t.Fatalf("missing projection maintenance was silently repaired: %v %s", err, out)
+			}
+		})
 	}
 }

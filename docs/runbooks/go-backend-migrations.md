@@ -12,6 +12,24 @@ Challenges last two minutes, are persisted across restart, and are consumed atom
 
 SQLite uses the existing schema-1 FTS5 layout; PostgreSQL uses the existing JSONB and generated lexical-search layout. Migration 2 adds `entities_created(kind, created_at, id)` for deterministic entity ordering. It does not rewrite entity JSON, identifiers, retries, identities, lexical data or optional vector tables. Existing databases must have contiguous supported markers, valid timestamps, required columns, primary keys and indexes. Malformed or newer schemas fail with a fixed safe `DATABASE_NOT_READY` message, without repair or provider-secret output.
 
+Migration 3 adds an indexed `context_headers` derivative on both engines. It
+backfills chronology, project/type and answer/import flags, then maintains them
+atomically with entity insert/update/delete triggers. Raw captures and earlier
+migration markers remain unchanged. Both schema 1 and schema 2 upgrade through the
+ordered sequence. Startup checks the projection table, index and maintenance
+definitions; a missing or modified object is refused without automatic repair.
+An operator naming conflict rolls back migration 3 and can be retried after the
+operator resolves it.
+
+Context selection reads the small indexed headers and lifecycle metadata before
+fetching selected immutable bodies. Current non-QA answer sources with existing
+rendered content need no additional body read. Historical accepted answer sources
+with missing/empty content retain their existing payload-rendering fallback.
+Unicode whitespace and SQLite NUL-bearing answers preserve the existing question
+semantics. The opt-in increasing-history HTTP regression uses 2,000 long records
+and the existing ten-second server deadline; it verifies current-state priority
+and exact omission counts without checking internal query counts.
+
 SQLite migration inspection and DDL run under `BEGIN IMMEDIATE`. PostgreSQL uses transaction advisory lock `1397772880`, matching the current backend. The migration and its marker commit together. Another startup inspects the committed schema after acquiring the lock. A failed migration rolls back; a startup interrupted while waiting for a lock can be retried. SQLite WAL activation retries transient lock contention for at most five seconds. Startup has a 30-second deadline.
 
 SQLite retains owner-only directories/files, regular files with one hard link, symlink refusal, sidecar checks and macOS ACL refusal. Existing files are never chmodded or opened/closed for permission inspection. An optional sidecar disappearing during inspection is allowed; an unsafe sidecar that remains present is refused. PostgreSQL connection pools are bounded to ten connections.
@@ -307,7 +325,7 @@ Chromium workflow above. The pre-upgrade rollback scenario is verified separatel
 
 ### Pre-upgrade PostgreSQL rollback verification
 
-The retained TypeScript API refuses a Go-upgraded schema-2 database. Rollback
+The retained TypeScript API refuses a Go-upgraded schema-2 or schema-3 database. Rollback
 restores the pre-upgrade schema-1 archive into a fresh database instead of editing
 migration markers or applying a destructive down migration. Native tests take
 that archive before Go starts, upgrade and write through Go, verify TypeScript
@@ -348,6 +366,6 @@ CLI/HTTP tests verify unchanged schema-1 source bytes, snapshot privacy, authent
 
 Keep backups private: they include hashed authentication/session state and may still contain legacy plaintext provider secrets. Schema migrations do not convert reusable secret values. Go server startup now converts legacy provider tokens separately when a usable retained key is supplied; pending or failed conversion does not block schema migration or ordinary memory. See the secret configuration runbook for encrypted settings, key retention and mounted-file deployment interfaces.
 
-The current TypeScript executable accepts schema 1 only. Once this Go executable commits schema 2, the TypeScript executable intentionally refuses that database. There is no automatic down migration. To roll back, stop the new runtime and restore the verified pre-upgrade schema-1 backup with the retained old runtime. Never delete migration markers to make an old runtime accept upgraded data. Restoring a pre-upgrade backup discards subsequent writes; plan the maintenance window accordingly. Do not run old and new runtimes against the same upgraded database.
+The current TypeScript executable accepts schema 1 only. Once this Go executable commits schema 2 or schema 3, the TypeScript executable intentionally refuses that database. There is no automatic down migration. To roll back, stop the new runtime and restore the verified pre-upgrade schema-1 backup with the retained old runtime. Never delete migration markers to make an old runtime accept upgraded data. Restoring a pre-upgrade backup discards subsequent writes; plan the maintenance window accordingly. Do not run old and new runtimes against the same upgraded database.
 
 On migration failure, preserve the original database and backup, report the safe startup error, and investigate using operator tools in a controlled environment. Do not modify schema markers or auto-repair incomplete objects. Schema changes, release, deployment and live-user acceptance require separate evidence.

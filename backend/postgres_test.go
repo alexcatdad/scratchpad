@@ -70,7 +70,7 @@ func TestFreshPostgresMigrationIsRepeatable(t *testing.T) {
 		if err := json.Unmarshal(out, &report); err != nil {
 			t.Fatal(err)
 		}
-		if report.Database != "postgres" || report.SchemaVersion != 2 {
+		if report.Database != "postgres" || report.SchemaVersion != 3 {
 			t.Fatalf("unexpected report: %s", out)
 		}
 	}

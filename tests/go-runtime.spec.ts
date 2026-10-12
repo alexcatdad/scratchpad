@@ -49,7 +49,7 @@ test("combined Go runtime forwards CLI commands and stops both HTTP processes", 
     );
     expect(JSON.parse(report)).toMatchObject({
       database: "sqlite",
-      schemaVersion: 2,
+      schemaVersion: 3,
     });
     child = spawn(process.execPath, [launcher, binary, "serve"], {
       env,
