@@ -107,6 +107,30 @@ func nullArgument(request *mcp.CallToolRequest, name string) bool {
 	return exists && strings.TrimSpace(string(value)) == "null"
 }
 
+func compactVersionTwo(value any) bool {
+	number, ok := value.(json.Number)
+	if !ok {
+		return false
+	}
+	text, exponent := string(number), 0
+	if at := strings.IndexAny(text, "eE"); at >= 0 {
+		var err error
+		exponent, err = strconv.Atoi(text[at+1:])
+		if err != nil {
+			return false
+		}
+		text = text[:at]
+	}
+	fraction := 0
+	if at := strings.IndexByte(text, '.'); at >= 0 {
+		fraction = len(text) - at - 1
+		text = text[:at] + text[at+1:]
+	}
+	text = strings.TrimLeft(text, "0")
+	coefficient := strings.TrimRight(text, "0")
+	return coefficient == "2" && exponent == fraction-(len(text)-len(coefficient))
+}
+
 func NewServerWithVersion(c *Client, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous. Record only secret references. Keep API tokens, passwords, private keys and installation encryption keys out of captures. Synthetic reference: secret://provider/main. Keep the value in owner-controlled secret configuration."})
 	registerCaptures(s, c)
@@ -143,7 +167,7 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 		err = c.request(ctx, "GET", path, nil, "", &out)
 		if err == nil && in.Version != nil && *in.Version == 2 {
 			view, ok := out.(map[string]any)
-			if !ok || view["version"] != float64(2) {
+			if !ok || !compactVersionTwo(view["version"]) {
 				return nil, nil, errors.New("COMPACT_CONTEXT_UNAVAILABLE: this server does not support version 2; request legacy context or use the Go backend")
 			}
 		}

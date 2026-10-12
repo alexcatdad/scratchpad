@@ -98,7 +98,15 @@ func (c *Client) raw(ctx context.Context, method, path string, body any, key, to
 		return fmt.Errorf("Scratchpad HTTP %d", res.StatusCode)
 	}
 	if out != nil && len(data) > 0 {
-		return json.Unmarshal(data, out)
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
+		if err := decoder.Decode(out); err != nil {
+			return err
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			return errors.New("Scratchpad returned more than one JSON value")
+		}
+		return nil
 	}
 	return nil
 }
