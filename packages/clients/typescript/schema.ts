@@ -939,8 +939,8 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Go backend bounded cited passage evidence using exact native semantic ranking
-         * @description First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+         * Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+         * @description Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
          */
         post: operations["post_rag_retrieve"];
         delete?: never;
@@ -3267,8 +3267,10 @@ export interface operations {
                         resultsOmitted: number;
                         semantic: {
                             available: boolean;
+                            /** @description Fixed fallback reason code when semantic retrieval is unavailable */
+                            reason?: string;
                             /** @enum {string} */
-                            indexCoverage: "complete" | "incomplete";
+                            indexCoverage: "complete" | "incomplete" | "unavailable";
                         };
                     };
                 };

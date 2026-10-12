@@ -76,12 +76,16 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			}
 		}
 		if err = a.ragAvailable(r.Context(), a.auth.Store.DB); err != nil {
-			a.auth.fail(w, err)
+			if a.rag && a.auth.Store.Engine == "postgres" {
+				a.lexicalFallback(w, r, scope, query, intent, limit, budget, err)
+			} else {
+				a.auth.fail(w, err)
+			}
 			return
 		}
 		snapshot, err := a.provider(r.Context())
 		if err != nil {
-			a.auth.fail(w, err)
+			a.lexicalFallback(w, r, scope, query, intent, limit, budget, err)
 			return
 		}
 		snapshot.passage = true
@@ -101,7 +105,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			return err
 		})
 		if err != nil {
-			a.auth.fail(w, err)
+			a.lexicalFallback(w, r, scope, query, intent, limit, budget, err)
 			return
 		}
 		vector, err := ragVector(vectors[0])
@@ -128,10 +132,10 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			if err != nil {
 				return err
 			}
-			args := []any{fingerprint, vector, snapshot.config.EmbeddingDimensions}
+			args := []any{fingerprint, vector, snapshot.config.EmbeddingDimensions, query, snapshot.config.SimilarityThreshold}
 			placeholders := make([]string, len(ids))
 			for i, id := range ids {
-				placeholders[i] = fmt.Sprintf("$%d", i+4)
+				placeholders[i] = fmt.Sprintf("$%d", i+6)
 				args = append(args, id)
 			}
 			selected := strings.Join(placeholders, ",")
@@ -139,7 +143,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			if intent == "current" {
 				filter = ` AND COALESCE(m.data->'archived','false'::jsonb) <> 'true'::jsonb AND COALESCE(m.data->>'legacyStatus','') NOT IN ('superseded','superseded_or_partial') AND NOT EXISTS(SELECT 1 FROM entities l WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'type'='replaces' AND l.data->>'toRecordId'=r.id)`
 			}
-			statement := `WITH eligible AS MATERIALIZED(SELECT p.*,r.data AS record,m.data AS metadata FROM rag_passages p JOIN entities r ON r.kind='record' AND r.id=p.record_id AND r.data->>'projectId'=p.project_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE p.fingerprint=$1 AND p.dimensions=$3 AND p.project_id IN (` + selected + `)` + filter + `) SELECT p.id,p.record_id,p.project_id,p.content_hash,p.processing_version,p.source_start,p.source_end,p.text,p.record,p.metadata,1-(p.embedding <=> $2::vector) AS score,EXISTS(SELECT 1 FROM entities replacement WHERE replacement.kind='relationship' AND replacement.data->>'status'='accepted' AND replacement.data->>'type'='replaces' AND replacement.data->>'toRecordId'=p.record_id),EXISTS(SELECT 1 FROM entities replacement WHERE replacement.kind='relationship' AND replacement.data->>'status'='accepted' AND replacement.data->>'type'='partially_replaces' AND replacement.data->>'toRecordId'=p.record_id),COALESCE((SELECT jsonb_agg(l.data) FROM (SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=p.record_id OR t.id=p.record_id) AND f.data->>'projectId' IN (` + selected + `) AND t.data->>'projectId' IN (` + selected + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) l),'[]'::jsonb) FROM eligible p ORDER BY score DESC,p.id LIMIT 100`
+			statement := `WITH eligible AS MATERIALIZED(SELECT p.*,r.data AS record,m.data AS metadata FROM rag_passages p JOIN entities r ON r.kind='record' AND r.id=p.record_id AND r.data->>'projectId'=p.project_id LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE p.fingerprint=$1 AND p.dimensions=$3 AND p.project_id IN (` + selected + `)` + filter + `), semantic_candidates AS MATERIALIZED(SELECT id,row_number() OVER(ORDER BY embedding <=> $2::vector,id) AS rank FROM eligible WHERE 1-(embedding <=> $2::vector)>=$5 ORDER BY embedding <=> $2::vector,id LIMIT 100), lexical_candidates AS MATERIALIZED(SELECT id,row_number() OVER(ORDER BY ts_rank_cd(to_tsvector('simple',COALESCE(record->>'title','') || ' ' || text),plainto_tsquery('simple',$4)) DESC,id) AS rank FROM eligible WHERE to_tsvector('simple',COALESCE(record->>'title','') || ' ' || text) @@ plainto_tsquery('simple',$4) ORDER BY ts_rank_cd(to_tsvector('simple',COALESCE(record->>'title','') || ' ' || text),plainto_tsquery('simple',$4)) DESC,id LIMIT 100), fused AS(SELECT id,sum(1.0/(60+rank)) AS rank_score,bool_or(method='lexical') AS lexical FROM(SELECT id,rank,'semantic' AS method FROM semantic_candidates UNION ALL SELECT id,rank,'lexical' AS method FROM lexical_candidates) candidates GROUP BY id) SELECT p.id,p.record_id,p.project_id,p.content_hash,p.processing_version,p.source_start,p.source_end,p.text,p.record,p.metadata,1-(p.embedding <=> $2::vector) AS score,EXISTS(SELECT 1 FROM entities replacement WHERE replacement.kind='relationship' AND replacement.data->>'status'='accepted' AND replacement.data->>'type'='replaces' AND replacement.data->>'toRecordId'=p.record_id),EXISTS(SELECT 1 FROM entities replacement WHERE replacement.kind='relationship' AND replacement.data->>'status'='accepted' AND replacement.data->>'type'='partially_replaces' AND replacement.data->>'toRecordId'=p.record_id),COALESCE((SELECT jsonb_agg(l.data) FROM (SELECT link.data FROM entities link JOIN entities f ON f.kind='record' AND f.id=link.data->>'fromRecordId' JOIN entities t ON t.kind='record' AND t.id=link.data->>'toRecordId' WHERE link.kind='relationship' AND link.data->>'status'='accepted' AND (f.id=p.record_id OR t.id=p.record_id) AND f.data->>'projectId' IN (` + selected + `) AND t.data->>'projectId' IN (` + selected + `) ORDER BY CASE link.data->>'type' WHEN 'replaces' THEN 0 WHEN 'partially_replaces' THEN 1 WHEN 'contradicts' THEN 2 ELSE 3 END,link.created_at,link.id LIMIT 10) l),'[]'::jsonb),f.rank_score,f.lexical FROM eligible p JOIN fused f ON f.id=p.id ORDER BY f.rank_score DESC,score DESC,p.id LIMIT 100`
 			rows, err := conn.QueryContext(ctx, statement, args...)
 			if err != nil {
 				return err
@@ -149,9 +153,11 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 				var id, recordID, projectID, hash, processing, text string
 				var start, end int
 				var score float64
+				var rankScore float64
+				var lexicalMatch bool
 				var fullReplacement, partialReplacement bool
 				var raw, meta, edges []byte
-				if err = rows.Scan(&id, &recordID, &projectID, &hash, &processing, &start, &end, &text, &raw, &meta, &score, &fullReplacement, &partialReplacement, &edges); err != nil {
+				if err = rows.Scan(&id, &recordID, &projectID, &hash, &processing, &start, &end, &text, &raw, &meta, &score, &fullReplacement, &partialReplacement, &edges, &rankScore, &lexicalMatch); err != nil {
 					return err
 				}
 				var record, metadata map[string]any
@@ -170,7 +176,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 				if currentHash != hash || processing != ragProcessingVersion || !portableID(recordID) || start < 0 || end < start || end > len(units) || string(utf16.Decode(units[start:end])) != text || record["authority"] == "derived" || math.IsNaN(score) || math.IsInf(score, 0) {
 					continue
 				}
-				if score < snapshot.config.SimilarityThreshold {
+				if score < snapshot.config.SimilarityThreshold && !lexicalMatch {
 					continue
 				}
 				if len(results) >= limit {
@@ -203,6 +209,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 					citations = append(citations, citation)
 				}
 				item := map[string]any{"id": id, "recordId": recordID, "projectId": projectID, "text": excerpt, "textTruncated": excerpt != text, "score": score, "sourceLocation": location, "sourceUrl": "/api/v1/records/" + recordID, "authority": record["authority"], "confidence": record["confidence"], "applicability": applicability, "contentHash": hash, "processingVersion": processing, "relationships": citations, "relationshipsOmitted": 0, "relationshipPreviewLimitReached": len(links) == 10}
+				item["rankScore"], item["retrieval"] = rankScore, "hybrid"
 				for {
 					candidate := append(append([]map[string]any{}, results...), item)
 					encoded, err := json.Marshal(map[string]any{"results": candidate, "resultsOmitted": omitted, "semantic": map[string]any{"available": true, "indexCoverage": "not_assessed"}})
@@ -237,6 +244,10 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 		})
 		if err != nil {
 			a.auth.fail(w, err)
+			return
+		}
+		if len(results) == 0 && coverageStatus == "incomplete" {
+			a.lexicalFallback(w, r, scope, query, intent, limit, budget, &protocolError{"RAG_INDEX_INCOMPLETE", "Semantic indexing is incomplete.", 503})
 			return
 		}
 		JSON(w, 200, map[string]any{"results": results, "resultsOmitted": omitted, "semantic": map[string]any{"available": true, "indexCoverage": coverageStatus}})

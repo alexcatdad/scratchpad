@@ -3432,8 +3432,8 @@
     "/api/v1/rag/retrieve": {
       "post": {
         "operationId": "post_rag_retrieve",
-        "summary": "Go backend bounded cited passage evidence using exact native semantic ranking",
-        "description": "First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.",
+        "summary": "Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback",
+        "description": "Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3504,9 +3504,13 @@
                         "available": {
                           "type": "boolean"
                         },
+                        "reason": {
+                          "type": "string",
+                          "description": "Fixed fallback reason code when semantic retrieval is unavailable"
+                        },
                         "indexCoverage": {
                           "type": "string",
-                          "enum": ["complete", "incomplete"]
+                          "enum": ["complete", "incomplete", "unavailable"]
                         }
                       }
                     }

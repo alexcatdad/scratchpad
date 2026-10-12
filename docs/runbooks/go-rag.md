@@ -4,8 +4,8 @@ Issue #36 introduces passage RAG separately from the existing whole-record
 semantic search. The Go development backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
-Hybrid ranking, lexical fallback and the RAG MCP tool remain
-required for the full feature.
+Partial-index raw-source merging, fallback relationship previews, retrieval
+evaluation and the RAG MCP tool remain required for the full feature.
 
 ## Configuration and availability
 
@@ -180,3 +180,29 @@ without letting it delay current indexing. Restoring compatible settings can
 resume that retained work. Legacy AI-job selection is unchanged. Coverage still
 processes eligible source history for exact hashes/counts; query/index performance
 and stronger projection integrity checks remain required delivery work.
+
+## Hybrid ranking and lexical fallback
+
+Compatible indexed passages now combine two separately bounded native candidate
+lists: at most 100 exact semantic candidates above the configured similarity
+threshold and at most 100 lexical candidates. Reciprocal-rank fusion sums
+`1 / (60 + rank)` and deduplicates passage IDs before selecting at most 100 fused
+candidates. `rankScore` reports fusion order; `score` retains cosine similarity.
+A lexical candidate can survive a low semantic score. Scores never confer authority.
+
+Provider disablement/outage, unavailable provider secrets, changed configuration,
+missing pgvector and an empty incomplete semantic result trigger immutable-source
+lexical fallback. Authentication/consent failures do not. Fallback rechecks current
+authentication and participation in a repeatable snapshot, applies lifecycle before
+its 100-source limit, chooses a matching Unicode-safe source passage, and centers
+its cited excerpt near the first matched term. It preserves exact source ranges
+and the response budget without inventing generated evidence.
+
+Fallback reports `semantic.available=false`, a fixed `reason` code and assessed
+coverage, or `indexCoverage=unavailable` when pgvector is absent. Index-unavailable
+lexical evidence can include sources that have never been embedded. A successful
+query with no results is not proof that incomplete or unavailable indexing has no
+evidence. The current fallback does not yet include relationship previews, and
+healthy partial-index retrieval does not yet merge unindexed raw lexical sources
+with nonempty semantic results. Those cases, broader dedup/recall evaluation and
+the real stdio RAG tool remain required before full acceptance.

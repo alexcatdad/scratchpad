@@ -1798,3 +1798,18 @@ and never calls the provider or decrypts its token. Source hashes, generation,
 completed jobs and activated passage counts must agree before a source counts
 as indexed. Retrieval now reports assessed current coverage. Old queued passage
 generations are retained and excluded from current worker selection.
+
+## Go replacement addition: hybrid evidence and lexical fallback
+
+`POST /rag/retrieve` now fuses bounded native lexical and exact semantic passage
+candidates using reciprocal rank with a constant of 60. Passage IDs deduplicate
+before the fused limit; lexical matches can survive a low cosine score. Results
+retain `score` for cosine and add `rankScore` and `retrieval: "hybrid"`.
+
+Provider/index failure or an empty incomplete semantic result returns cited native
+lexical source evidence when available, with `retrieval: "lexical"`,
+`semantic.available=false`, a fixed `reason`, and `indexCoverage` as assessed or
+`unavailable`. Authentication and consent failures remain errors. Fallback uses
+immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
+Partial-index raw-source merging, fallback relationship previews, broader
+retrieval evaluation and actual stdio RAG remain required acceptance work.

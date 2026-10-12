@@ -985,8 +985,9 @@ func (e PostRagRetrieveJSONBodyIntent) Valid() bool {
 
 // Defines values for PostRagRetrieve200JSONResponseBodySemanticIndexCoverage.
 const (
-	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete   PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "complete"
-	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "incomplete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete    PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "complete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete  PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "incomplete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageUnavailable PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "unavailable"
 )
 
 // Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodySemanticIndexCoverage enum.
@@ -995,6 +996,8 @@ func (e PostRagRetrieve200JSONResponseBodySemanticIndexCoverage) Valid() bool {
 	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete:
 		return true
 	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete:
+		return true
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageUnavailable:
 		return true
 	default:
 		return false
@@ -2937,18 +2940,18 @@ type ClientInterface interface {
 	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
 	PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
+	// PostRagRetrieveWithBody Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 	//
-	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
 	PostRagRetrieveWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
+	// PostRagRetrieve Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 	//
-	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -4321,9 +4324,9 @@ func (c *Client) PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestB
 	return c.Client.Do(req)
 }
 
-// PostRagRetrieveWithBody Go backend bounded cited passage evidence using exact native semantic ranking
+// PostRagRetrieveWithBody Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 //
-// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 //
 // Takes any type of body and a specified content type.
 //
@@ -4340,9 +4343,9 @@ func (c *Client) PostRagRetrieveWithBody(ctx context.Context, contentType string
 	return c.Client.Do(req)
 }
 
-// PostRagRetrieve Go backend bounded cited passage evidence using exact native semantic ranking
+// PostRagRetrieve Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 //
-// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -8437,18 +8440,18 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
 	PostRagIndexWithResponse(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error)
 
-	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 	//
-	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
 	PostRagRetrieveWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error)
 
-	// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+	// PostRagRetrieveWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 	//
-	// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -11013,6 +11016,9 @@ type PostRagRetrieveResponse struct {
 		Semantic       struct {
 			Available     bool                                                    `json:"available"`
 			IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+			// Reason Fixed fallback reason code when semantic retrieval is unavailable
+			Reason *string `json:"reason,omitempty"`
 		} `json:"semantic"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
@@ -11026,6 +11032,9 @@ func (r PostRagRetrieveResponse) GetJSON200() *struct {
 	Semantic       struct {
 		Available     bool                                                    `json:"available"`
 		IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+		// Reason Fixed fallback reason code when semantic retrieval is unavailable
+		Reason *string `json:"reason,omitempty"`
 	} `json:"semantic"`
 } {
 	return r.JSON200
@@ -13115,9 +13124,9 @@ func (c *ClientWithResponses) PostRagIndexWithResponse(ctx context.Context, body
 	return ParsePostRagIndexResponse(rsp)
 }
 
-// PostRagRetrieveWithBodyWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+// PostRagRetrieveWithBodyWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 //
-// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -13130,9 +13139,9 @@ func (c *ClientWithResponses) PostRagRetrieveWithBodyWithResponse(ctx context.Co
 	return ParsePostRagRetrieveResponse(rsp)
 }
 
-// PostRagRetrieveWithResponse Go backend bounded cited passage evidence using exact native semantic ranking
+// PostRagRetrieveWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
 //
-// First semantic retrieval slice. Hybrid rank fusion and lexical fallback remain subsequent implementation work.
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -15168,6 +15177,9 @@ func ParsePostRagRetrieveResponse(rsp *http.Response) (*PostRagRetrieveResponse,
 			Semantic       struct {
 				Available     bool                                                    `json:"available"`
 				IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+				// Reason Fixed fallback reason code when semantic retrieval is unavailable
+				Reason *string `json:"reason,omitempty"`
 			} `json:"semantic"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
