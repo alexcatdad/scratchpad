@@ -1,6 +1,6 @@
 # Go durable AI job controls
 
-The development Go backend implements `GET /api/v1/ai/jobs`, `POST /ai/jobs` and `POST /ai/jobs/{id}/retry`, plus embedding execution and `POST /search/semantic`. The TypeScript application remains the supported runtime until issue 36 passes full parity and delivery acceptance. Analysis/export execution, artifact review and automatic scheduling remain pending; those job types retain their durable queued state.
+The development Go backend implements `GET /api/v1/ai/jobs`, `POST /ai/jobs` and `POST /ai/jobs/{id}/retry`, plus embedding execution, `POST /search/semantic` and suggestion listing/review. The TypeScript application remains the supported runtime until issue 36 passes full parity and delivery acceptance. Analysis/export execution and automatic scheduling remain pending; those job types retain their durable queued state.
 
 Enqueue accepts `type: analyze | embed | export`, one `projectId` or explicit `projectIds`, optional `crossProject` and the existing export formats. It returns HTTP 202 with the persisted job. Jobs start queued with attempts zero, version one, a current run-after time and canonical selected project IDs. Default export format is `handoff`. Provider configuration must be enabled, and a configured token must be usable through the retained key; enqueue does not contact the provider or wait for model availability.
 
@@ -14,6 +14,14 @@ Consent, usable secret state, configuration generation and lease ownership are c
 
 This slice preserves the existing whole-record semantic projection on SQLite and PostgreSQL. It processes all content in bounded chunks, preserving Unicode characters at boundaries, and combines chunk vectors only for this legacy projection. Compatible fingerprints and canonical source hashes determine semantic eligibility. Query embeddings require current consent; results are revalidated after ranking. An absent compatible index returns `indexRequired: true`. The new PostgreSQL RAG projection still requires separate passages and embedding compatibility independent of completion-model selection; these legacy vectors do not fulfill that requirement.
 
+## Suggestions and review
+
+`GET /api/v1/suggestions` reads valid stored artifacts under current AI enablement and project consent. Optional `projectId`, repeated `projectIds` and `crossProject` constrain the view. Source citations and complete privacy dependencies are distinct: every input project must remain permitted and fit the requested scope, even when it was not cited in the displayed output. Invalid historical content, missing sources and unknown legacy privacy provenance remain preserved in knowledge archives but are hidden from suggestions. Selected project views filter candidates in SQL; source and project validation loads only referenced identities in batches.
+
+`POST /suggestions/{id}/accept` and `/reject` require the current version or `If-Match`. Review independently validates stored content, references and consent inside the serialized transaction. Acceptance records a separate private curated artifact retaining derived authority, generator, citations and complete dependencies. Original captures remain unchanged. When exactly one actual dependency project participates, classification can update audited metadata and eligible relationship candidates/contradictions create accepted edges with suggested authority and explicit AI derivation. Cross-project interpretations stay in curated artifacts without being copied into local metadata or relationships. A cross-project request involving one actual project still retains eligible local effects, subject to cross-project consent.
+
+Rejection records review status and actor without creating curated evidence. Both actions are single-use optimistic transitions, with all effects and audits committed atomically. Listing and review do not contact a provider or require decryption of its token; AI enablement and current consent still gate access. Historical missing citations return `AI_ARTIFACT_INVALID` during review, and unknown privacy provenance fails closed. Provider availability does not prevent reviewing valid historical suggestions.
+
 ## Verification
 
 ```sh
@@ -22,4 +30,6 @@ npm run test:backend
 
 Supply disposable `TEST_POSTGRES_URL` for PostgreSQL. Real-process HTTP tests cover durable enqueue/list/restart, failed-job optimistic retry, scope consent, provider-outage-independent enqueue and late audit rollback. Embedding workflows verify semantic retrieval across restart, abandoned-lease recovery with competing servers and consent revocation during provider waits on both engines. A long-record fixture verifies Unicode preservation. Operational SQLite backup/restore verifies queued state independently of the live source. Synthetic provider responses replace only the external network boundary. These checks do not establish PostgreSQL operational restore, analysis/export processing, new passage RAG or deployed acceptance.
 
-Next implement analysis/export execution, derived artifact review and scheduling, then extend the durable queue to PostgreSQL passage RAG. Verify interrupted execution, provider failure recovery, configuration changes and result-audit rollback further before full parity acceptance.
+Suggestion workflows use the real native import, HTTP listing/review, source detail and knowledge export boundaries. They verify immutable captures, derived provenance, classification and relationship effects, versioned rejection across restart, uncited input-project consent, cross-project isolation, malformed historical content and late audit rollback on both engines. SQL fault/corruption fixtures are inputs; verification reads the public API. No generated completion is claimed by these historical-artifact tests.
+
+Next implement analysis/export execution and scheduling, then extend the durable queue to PostgreSQL passage RAG. Verify interrupted execution, provider failure recovery, configuration changes and result-audit rollback further before full parity acceptance.
