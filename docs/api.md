@@ -1795,8 +1795,12 @@ returns snapshot-consistent eligible/indexed/queued/running/failed/unindexed and
 incompatible source counts, compatible `passageCount`, current `fingerprint` and
 `status` (`complete` or `incomplete`). It requires project participation consent
 and never calls the provider or decrypts its token. Source hashes, generation,
-completed jobs and activated passage counts must agree before a source counts
-as indexed. Retrieval now reports assessed current coverage. Old queued passage
+completed jobs and the exact source-faithful passage set must agree before a
+source counts as indexed. Current passage IDs, UTF-16 ranges, text, dimensions
+and nonzero vectors are checked; extra or corrupt passages make coverage
+incomplete. `passageCount` counts valid individual passages, including those from
+an incompletely indexed source. Retrieval independently validates passage IDs and
+reports assessed current coverage. Old queued passage
 generations are retained and excluded from current worker selection.
 
 ## Go replacement addition: hybrid evidence and lexical fallback

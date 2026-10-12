@@ -1,10 +1,102 @@
 package backend_test
 
 import (
+	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
+	"strings"
 	"testing"
 )
+
+func TestRAGCoverageRequiresSourceFaithfulPassagesAndRebuildRestoresCoverage(t *testing.T) {
+	path, databaseURL := ragInstance(t)
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+	}))
+	defer provider.Close()
+	origin := startServer(t, path, databaseURL)
+	status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "embeddingDimensions": 2})
+	if status != 200 {
+		t.Fatal("configuration failed")
+	}
+	projectID := jobProject(t, origin, "Projection integrity", true, false)
+	status, captured := captureRequest(t, origin, projectID, "", map[string]any{"type": "finding", "title": "Original integrity evidence", "authority": "observed", "payload": map[string]any{"finding": strings.Repeat("a", 5990) + "🙂 ORIGINAL_INTEGRITY_TOKEN belongs to immutable evidence."}})
+	if status != 201 {
+		t.Fatal("source capture failed")
+	}
+	record := captured["record"].(map[string]any)
+	jobs := waitRAGJobs(t, origin, 1)
+	job := waitAIJob(t, origin, jobs[0].(map[string]any)["id"].(string), "completed")
+	route := "/rag/coverage?projectId=" + projectID
+	status, coverage := curationRequest(t, origin, "GET", route, nil)
+	if status != 200 || coverage["status"] != "complete" || coverage["passageCount"] != float64(2) {
+		t.Fatalf("original two-passage projection not complete: %d %v", status, coverage)
+	}
+	db, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	// Corrupt only a rebuildable derivative; source and completed count stay intact.
+	if _, err = db.Exec(`UPDATE rag_passages SET text='CORRUPTED_SYNTHETIC_TEXT' WHERE record_id=$1 AND source_start>0`, record["id"]); err != nil {
+		t.Fatal(err)
+	}
+	status, coverage = curationRequest(t, origin, "GET", route, nil)
+	if status != 200 || coverage["status"] != "incomplete" || coverage["indexedSources"] != float64(0) || coverage["unindexedSources"] != float64(1) {
+		t.Fatalf("corrupted passage text was reported as complete evidence: %d %v", status, coverage)
+	}
+	status, response := curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "ORIGINAL_INTEGRITY_TOKEN"})
+	if status != 200 || response["semantic"].(map[string]any)["indexCoverage"] != "incomplete" {
+		t.Fatal("retrieval did not report corrupted indexing uncertainty")
+	}
+	for _, value := range response["results"].([]any) {
+		if strings.Contains(value.(map[string]any)["text"].(string), "CORRUPTED_SYNTHETIC_TEXT") {
+			t.Fatal("corrupted derivative became cited evidence")
+		}
+	}
+	status, response = curationRequest(t, origin, "POST", "/rag/index", map[string]any{"projectId": projectID, "recordId": record["id"], "rebuild": true, "expectedVersion": job["version"]})
+	if status != 202 {
+		t.Fatal("explicit rebuild failed")
+	}
+	waitAIJob(t, origin, response["job"].(map[string]any)["id"].(string), "completed")
+	status, coverage = curationRequest(t, origin, "GET", route, nil)
+	if status != 200 || coverage["status"] != "complete" || coverage["passageCount"] != float64(2) {
+		t.Fatalf("explicit rebuild did not restore complete coverage: %d %v", status, coverage)
+	}
+	if _, err = db.Exec(`INSERT INTO rag_passages SELECT 'passage_corrupted_synthetic_id',fingerprint,record_id,project_id,content_hash,processing_version,source_start,source_end,text,dimensions,embedding FROM rag_passages WHERE record_id=$1 AND source_start=0`, record["id"]); err != nil {
+		t.Fatal(err)
+	}
+	status, coverage = curationRequest(t, origin, "GET", route, nil)
+	if status != 200 || coverage["status"] != "incomplete" {
+		t.Fatalf("extra noncanonical passage was reported as complete coverage: %d %v", status, coverage)
+	}
+	status, response = curationRequest(t, origin, "POST", "/rag/retrieve", map[string]any{"projectId": projectID, "query": "integrity evidence"})
+	if status != 200 {
+		t.Fatal("retrieval failed after a corrupt projection")
+	}
+	for _, value := range response["results"].([]any) {
+		if value.(map[string]any)["id"] == "passage_corrupted_synthetic_id" {
+			t.Fatal("noncanonical duplicate passage became cited evidence")
+		}
+	}
+	if _, err = db.Exec(`DELETE FROM rag_passages WHERE id='passage_corrupted_synthetic_id'`); err != nil {
+		t.Fatal(err)
+	}
+	for _, fault := range []string{"embedding='[0,0]'::vector", "embedding='[1,0]'::vector,source_start=source_start-1"} {
+		if _, err = db.Exec(`UPDATE rag_passages SET `+fault+` WHERE record_id=$1 AND source_start>0`, record["id"]); err != nil {
+			t.Fatal(err)
+		}
+		status, coverage = curationRequest(t, origin, "GET", route, nil)
+		if status != 200 || coverage["status"] != "incomplete" || coverage["indexedSources"] != float64(0) {
+			t.Fatalf("unusable vector or overlapping range counted as coverage: %d %v", status, coverage)
+		}
+	}
+	status, detail := curationRequest(t, origin, "GET", "/records/"+record["id"].(string), nil)
+	if status != 200 || !reflect.DeepEqual(detail["record"], record) {
+		t.Fatal("projection corruption or rebuild rewrote immutable source evidence")
+	}
+}
 
 func TestRAGCoverageDistinguishesQueuedCompleteAndIncompatibleEvidence(t *testing.T) {
 	path, databaseURL := ragInstance(t)

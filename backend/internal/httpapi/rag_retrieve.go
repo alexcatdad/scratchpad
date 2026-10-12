@@ -177,6 +177,13 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 				if currentHash != hash || processing != ragProcessingVersion || !portableID(recordID) || start < 0 || end < start || end > len(units) || string(utf16.Decode(units[start:end])) != text || record["authority"] == "derived" || math.IsNaN(score) || math.IsInf(score, 0) {
 					continue
 				}
+				identity, err := aiHash(map[string]any{"recordId": recordID, "contentHash": hash, "processingVersion": processing, "start": start, "end": end})
+				if err != nil {
+					return err
+				}
+				if id != "passage_"+identity {
+					continue
+				}
 				if score < snapshot.config.SimilarityThreshold && !lexicalMatch {
 					continue
 				}

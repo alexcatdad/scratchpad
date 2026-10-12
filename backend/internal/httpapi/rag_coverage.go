@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf16"
 )
 
 type ragCoverage struct {
@@ -89,7 +90,7 @@ func (a *AI) ragCoverage(ctx context.Context, q scopeReader, scope jobScope) (ra
 		places[i] = fmt.Sprintf("$%d", i+1)
 		args = append(args, id)
 	}
-	statement := `SELECT r.data,COALESCE((SELECT jsonb_agg(j.data) FROM entities j WHERE j.kind='ai_job' AND j.data->>'type'='rag_index' AND j.data->>'recordId'=r.id),'[]'::jsonb),COALESCE((SELECT jsonb_agg(jsonb_build_object('fingerprint',p.fingerprint,'contentHash',p.content_hash,'processingVersion',p.processing_version,'dimensions',p.dimensions)) FROM rag_passages p WHERE p.record_id=r.id AND p.project_id=r.data->>'projectId'),'[]'::jsonb) FROM entities r WHERE r.kind='record' AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'`
+	statement := `SELECT r.data,COALESCE((SELECT jsonb_agg(j.data) FROM entities j WHERE j.kind='ai_job' AND j.data->>'type'='rag_index' AND j.data->>'recordId'=r.id),'[]'::jsonb),COALESCE((SELECT jsonb_agg(jsonb_build_object('fingerprint',p.fingerprint,'contentHash',p.content_hash,'processingVersion',p.processing_version,'dimensions',p.dimensions,'id',p.id,'start',p.source_start,'end',p.source_end,'text',p.text,'vectorUsable',vector_dims(p.embedding)=p.dimensions AND vector_norm(p.embedding)>0)) FROM rag_passages p WHERE p.record_id=r.id AND p.project_id=r.data->>'projectId'),'[]'::jsonb) FROM entities r WHERE r.kind='record' AND r.data->>'projectId' IN (` + strings.Join(places, ",") + `) AND COALESCE(r.data->>'authority','')<>'derived'`
 	rows, err := q.QueryContext(ctx, statement, args...)
 	if err != nil {
 		return result, err
@@ -119,10 +120,41 @@ func (a *AI) ragCoverage(ctx context.Context, q scopeReader, scope jobScope) (ra
 				incompatible = true
 			}
 		}
+		// A completed count alone cannot establish faithful source coverage.
+		units := utf16.Encode([]rune(stringValue(record, "content")))
+		expected := map[string]struct {
+			start, end int
+			text       string
+		}{}
+		for start := 0; start < len(units) || len(expected) == 0; {
+			end := min(start+6000, len(units))
+			if end < len(units) && units[end-1] >= 0xd800 && units[end-1] <= 0xdbff {
+				end--
+			}
+			identity, err := aiHash(map[string]any{"recordId": record["id"], "contentHash": hash, "processingVersion": ragProcessingVersion, "start": start, "end": end})
+			if err != nil {
+				return result, err
+			}
+			expected["passage_"+identity] = struct {
+				start, end int
+				text       string
+			}{start, end, string(utf16.Decode(units[start:end]))}
+			start = end
+			if start == len(units) {
+				break
+			}
+		}
 		compatiblePassages := 0
+		generationPassages := 0
 		for _, passage := range passages {
+			if passage["fingerprint"] == result.Fingerprint {
+				generationPassages++
+			}
 			if passage["fingerprint"] == result.Fingerprint && passage["contentHash"] == hash && passage["processingVersion"] == ragProcessingVersion && passage["dimensions"] == float64(cfg.EmbeddingDimensions) {
-				compatiblePassages++
+				wanted, exists := expected[stringValue(passage, "id")]
+				if exists && passage["start"] == float64(wanted.start) && passage["end"] == float64(wanted.end) && passage["text"] == wanted.text && passage["vectorUsable"] == true {
+					compatiblePassages++
+				}
 			} else {
 				incompatible = true
 			}
@@ -131,7 +163,7 @@ func (a *AI) ragCoverage(ctx context.Context, q scopeReader, scope jobScope) (ra
 		if incompatible {
 			result.Incompatible++
 		}
-		if current != nil && current["status"] == "completed" && compatiblePassages > 0 && current["passageCount"] == float64(compatiblePassages) {
+		if current != nil && current["status"] == "completed" && generationPassages == len(expected) && compatiblePassages == len(expected) && current["passageCount"] == float64(compatiblePassages) {
 			result.Indexed++
 			continue
 		}

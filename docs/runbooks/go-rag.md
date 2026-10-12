@@ -106,7 +106,8 @@ The response includes `results`, `resultsOmitted` and
 `semantic: {available: true, indexCoverage: "complete" | "incomplete"}`. Scores express
 similarity, not decision authority. Coverage is assessed separately from provider availability. No lexical
 fallback is implemented in this slice. Missing results or a provider failure
-must not be treated as proof that source evidence is absent. Full hybrid retrieval and explicit assessed uncertainty remain required work.
+must not be treated as proof that source evidence is absent. Hybrid retrieval and
+assessed uncertainty are described below.
 
 ## Verify with an isolated database
 
@@ -179,7 +180,20 @@ Workers select only the current passage generation, preserving older queued work
 without letting it delay current indexing. Restoring compatible settings can
 resume that retained work. Legacy AI-job selection is unchanged. Coverage still
 processes eligible source history for exact hashes/counts; query/index performance
-and stronger projection integrity checks remain required delivery work.
+remains required delivery work.
+
+Coverage validates the exact current source passage set: deterministic IDs,
+Unicode-safe UTF-16 ranges, original text, dimensions and nonzero vectors. The
+current generation must contain exactly the expected passages and match the
+completed job count. Missing, overlapping, corrupt or extra passages leave the
+source unindexed, even if a completed job remains. `passageCount` counts valid
+individual passages; a partially valid source does not count as indexed.
+Retrieval independently checks passage identity before returning citations.
+
+An explicit version-checked rebuild can restore corrupted derivatives without
+rewriting immutable sources. Coverage reads never repair projections. HTTP
+regressions exercise corrupt text, noncanonical duplicates, zero vectors,
+overlapping ranges, rebuild recovery and unchanged original record details.
 
 ## Hybrid ranking and lexical fallback
 
