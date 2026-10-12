@@ -225,7 +225,7 @@ HTTP tests cover capture/detail, provenance overrides, payload rendering, valida
 
 ## Lexical listing and search
 
-`GET /api/v1/records` and `POST /api/v1/search` implement the existing lexical retrieval shapes with metadata and nullable `nextCursor`. SQLite uses FTS5 and PostgreSQL uses its generated simple-language tsvector. Queries extract at most thirty Unicode letter/number/underscore terms and combine them as literal AND conditions, without executing caller-supplied query operators. POST search retains its query, repeated project/type lists, limit and cursor contract; authenticated browser POST requires the configured Origin.
+`GET /api/v1/records` and `POST /api/v1/search` implement the existing lexical retrieval shapes with metadata and nullable `nextCursor`. SQLite uses FTS5 and PostgreSQL uses its generated simple-language tsvector. Queries extract at most thirty Unicode letter/number/underscore terms and combine them as literal AND conditions, without executing caller-supplied query operators. POST search retains its query, repeated project/type lists, limit and cursor contract; its valid numeric zero limit uses the default page size, while GET zero remains invalid. Authenticated browser POST requires the configured Origin.
 
 Ordinary listing and lexical search apply metadata, lifecycle, relationship,
 provenance and full-text admission in SQL before selecting the page. Duplicate

@@ -61,7 +61,9 @@ func (s *SSH) Search(post bool) http.HandlerFunc {
 				}
 			}
 			if value, exists := body["limit"]; exists {
-				params.Set("limit", fmt.Sprint(value))
+				if number, numeric := value.(float64); !numeric || number != 0 {
+					params.Set("limit", fmt.Sprint(value))
+				}
 			}
 			if value, exists := body["cursor"]; exists {
 				text, ok := value.(string)
