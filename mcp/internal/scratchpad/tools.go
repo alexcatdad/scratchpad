@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,14 +102,37 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous. Record only secret references. Keep API tokens, passwords, private keys and installation encryption keys out of captures. Synthetic reference: secret://provider/main. Keep the value in owner-controlled secret configuration."})
 	registerCaptures(s, c)
 	registerAI(s, c)
-	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory"}, func(ctx context.Context, _ *mcp.CallToolRequest, in Scope) (*mcp.CallToolResult, any, error) {
-		p, _, err := c.resolve(ctx, in)
+	type ContextInput struct {
+		Scope
+		Version      int `json:"version,omitempty" jsonschema:"Omit for legacy context; version 2 requests bounded compact context on the Go backend"`
+		Limit        int `json:"limit,omitempty" jsonschema:"Compact source record limit, 1 to 100"`
+		MaxChars     int `json:"maxChars,omitempty" jsonschema:"Compact serialized response budget, 4096 to 64000 bytes"`
+		PreviewChars int `json:"previewChars,omitempty" jsonschema:"Compact preview limit, 32 to 2000 UTF-16 units"`
+	}
+	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory; explicitly request version 2 for compact bounded previews"}, func(ctx context.Context, _ *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, any, error) {
+		p, _, err := c.resolve(ctx, in.Scope)
 		if err != nil {
 			return nil, nil, err
 		}
 		var out any
 		id, _ := p["id"].(string)
-		err = c.request(ctx, "GET", "/projects/"+url.PathEscape(id)+"/context", nil, "", &out)
+		path := "/projects/" + url.PathEscape(id) + "/context"
+		params := url.Values{}
+		for key, value := range map[string]int{"version": in.Version, "limit": in.Limit, "maxChars": in.MaxChars, "previewChars": in.PreviewChars} {
+			if value != 0 {
+				params.Set(key, strconv.Itoa(value))
+			}
+		}
+		if len(params) > 0 {
+			path += "?" + params.Encode()
+		}
+		err = c.request(ctx, "GET", path, nil, "", &out)
+		if err == nil && in.Version == 2 {
+			view, ok := out.(map[string]any)
+			if !ok || view["version"] != float64(2) {
+				return nil, nil, errors.New("COMPACT_CONTEXT_UNAVAILABLE: this server does not support version 2; request legacy context or use the Go backend")
+			}
+		}
 		return nil, out, err
 	})
 	type Search struct {

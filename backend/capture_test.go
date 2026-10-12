@@ -220,12 +220,12 @@ func TestInvalidCaptureDoesNotReserveRetryIdentity(t *testing.T) {
 	origin := startServer(t, path, "")
 	_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Validation"}, restoredToken)
 	id := project["project"].(map[string]any)["id"].(string)
-	record := map[string]any{"type": "qa", "title": "Question", "authority": "observed", "payload": map[string]any{"question": "What changed?"}}
+	record := map[string]any{"type": "qa", "title": "Question", "authority": "observed", "payload": map[string]any{"answer": "The owner chose Go."}}
 	status, _ := captureRequest(t, origin, id, "corrected-request", record)
 	if status != 400 {
 		t.Fatal("missing required payload was accepted")
 	}
-	record["payload"].(map[string]any)["answer"] = "The owner chose Go."
+	record["payload"].(map[string]any)["question"] = "What changed?"
 	status, body := captureRequest(t, origin, id, "corrected-request", record)
 	if status != 201 || body["record"] == nil {
 		t.Fatal("failed validation reserved the retry identity")

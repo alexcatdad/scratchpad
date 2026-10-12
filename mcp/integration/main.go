@@ -45,16 +45,17 @@ func run() error {
 	workspace := flag.String("workspace", "", "Existing disposable Git repository with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
 	statePath := flag.String("state", "", "Capture-state file retained across server restart")
-	phase := flag.String("phase", "capture", "capture, records-only, projects, read-only context, detail, or verify after server restart")
+	phase := flag.String("phase", "capture", "capture, records-only, projects, read-only context, detail, questions, or verify after server restart")
 	recordID := flag.String("record-id", "", "Existing disposable record ID for detail phase")
+	questionProjectID := flag.String("project-id", "", "Explicit disposable project for question phase")
 	restrictedProject := flag.String("restricted-project", "", "Disposable external project ID for projects phase")
 	mirror := flag.Bool("mirror", false, "Require successful central and local mirroring for decisions (enable server project setting first)")
 	flag.Parse()
-	if *publicKey == "" || *workspace == "" || *binary == "" || (*statePath == "" && *phase != "detail") {
+	if *publicKey == "" || *workspace == "" || *binary == "" || (*statePath == "" && *phase != "detail" && *phase != "questions") {
 		return errors.New("public-key, workspace, binary, and state flags are required")
 	}
-	if *phase != "capture" && *phase != "records" && *phase != "projects" && *phase != "verify" && *phase != "read" && *phase != "detail" {
-		return errors.New("phase must be capture, records, projects, read, detail, or verify")
+	if *phase != "capture" && *phase != "records" && *phase != "projects" && *phase != "verify" && *phase != "read" && *phase != "detail" && *phase != "questions" {
+		return errors.New("phase must be capture, records, projects, read, detail, questions, or verify")
 	}
 	absWorkspace, err := filepath.Abs(*workspace)
 	if err != nil {
@@ -81,6 +82,52 @@ func run() error {
 	}
 	if len(listed.Tools) != 19 {
 		return fmt.Errorf("expected 19 tools, got %d", len(listed.Tools))
+	}
+	if *phase == "questions" {
+		if *questionProjectID == "" {
+			return errors.New("project-id is required for question phase")
+		}
+		input := map[string]any{"projectId": *questionProjectID, "title": "Unanswered integration question", "authority": "explicit", "confidence": "high", "question": "Which database supports optional RAG?", "requestId": "question-only-integration"}
+		out, err := call(ctx, session, "record_qa", input)
+		if err != nil {
+			return err
+		}
+		record, _ := out["record"].(map[string]any)
+		id, _ := record["id"].(string)
+		if id == "" {
+			return errors.New("question capture omitted its identity")
+		}
+		retried, err := call(ctx, session, "record_qa", input)
+		if err != nil {
+			return err
+		}
+		if retried["record"].(map[string]any)["id"] != id {
+			return errors.New("question retry duplicated capture")
+		}
+		detail, err := call(ctx, session, "get_record", map[string]any{"id": id})
+		if err != nil {
+			return err
+		}
+		payload := detail["record"].(map[string]any)["payload"].(map[string]any)
+		if _, exists := payload["answer"]; exists {
+			return errors.New("question capture invented an answer")
+		}
+		memory, err := call(ctx, session, "get_project_context", map[string]any{"projectId": *questionProjectID})
+		if err != nil {
+			return err
+		}
+		if questions, _ := memory["openQuestions"].([]any); len(questions) != 1 || questions[0].(map[string]any)["id"] != id {
+			return errors.New("unresolved question missing from context")
+		}
+		compact, err := call(ctx, session, "get_project_context", map[string]any{"projectId": *questionProjectID, "version": 2, "limit": 3, "maxChars": 4096})
+		if err != nil {
+			return err
+		}
+		if compact["version"] != float64(2) || compact["counts"].(map[string]any)["openQuestions"] != float64(1) || compact["records"].([]any)[0].(map[string]any)["id"] != id {
+			return errors.New("compact question context lost version, source or unresolved status")
+		}
+		fmt.Println("PASS questions: question-only real stdio capture, retry and scoped context")
+		return nil
 	}
 	if *phase == "detail" {
 		if *recordID == "" {

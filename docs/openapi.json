@@ -3257,6 +3257,71 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{id}/context/compact": {
+      "get": {
+        "operationId": "get_projects_id_context_compact",
+        "summary": "Go backend compact version-2 context; legacy context route remains unchanged",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum distinct source previews",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "maxChars",
+            "in": "query",
+            "required": false,
+            "description": "Maximum serialized UTF-8 response bytes, including newline",
+            "schema": {
+              "type": "integer",
+              "minimum": 4096,
+              "maximum": 64000
+            }
+          },
+          {
+            "name": "previewChars",
+            "in": "query",
+            "required": false,
+            "description": "Maximum preview UTF-16 units",
+            "schema": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 2000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {

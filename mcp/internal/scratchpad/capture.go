@@ -52,7 +52,7 @@ type FindingInput struct {
 }
 type QAPayload struct {
 	Question    string   `json:"question"`
-	Answer      string   `json:"answer"`
+	Answer      string   `json:"answer,omitempty" jsonschema:"Optional answer; omit it to preserve an unresolved question, then capture and link an answer separately"`
 	Limitations []string `json:"limitations,omitempty"`
 }
 type QAInput struct {

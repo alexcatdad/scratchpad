@@ -163,7 +163,7 @@ func payloadFields(raw json.RawMessage) ([]payloadField, error) {
 	return fields, nil
 }
 func renderCapture(kind string, raw json.RawMessage) (string, error) {
-	required := map[string][]string{"decision": {"decision"}, "adr": {"decision"}, "business_decision": {"decision"}, "finding": {"finding"}, "qa": {"question", "answer"}, "failure": {"observed"}, "constraint": {"constraint"}, "project_state": {"state"}}
+	required := map[string][]string{"decision": {"decision"}, "adr": {"decision"}, "business_decision": {"decision"}, "finding": {"finding"}, "qa": {"question"}, "failure": {"observed"}, "constraint": {"constraint"}, "project_state": {"state"}}
 	fields, err := payloadFields(raw)
 	if err != nil {
 		return "", err
@@ -176,6 +176,14 @@ func renderCapture(kind string, raw json.RawMessage) (string, error) {
 		var text string
 		if json.Unmarshal(values[key], &text) != nil || strings.TrimSpace(text) == "" {
 			return "", &protocolError{"VALIDATION_FAILED", "payload." + key + " is required.", 400}
+		}
+	}
+	if kind == "qa" {
+		if raw, exists := values["answer"]; exists {
+			var answer string
+			if json.Unmarshal(raw, &answer) != nil || strings.TrimSpace(answer) == "" {
+				return "", &protocolError{"VALIDATION_FAILED", "payload.answer must be nonempty when supplied.", 400}
+			}
 		}
 	}
 	parts := []string{}

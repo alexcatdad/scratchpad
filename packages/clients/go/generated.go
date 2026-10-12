@@ -1639,6 +1639,18 @@ type PatchProjectsIdParams struct {
 // PatchProjectsIdJSONBodyKind defines parameters for PatchProjectsId.
 type PatchProjectsIdJSONBodyKind string
 
+// GetProjectsIdContextCompactParams defines parameters for GetProjectsIdContextCompact.
+type GetProjectsIdContextCompactParams struct {
+	// Limit Maximum distinct source previews
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// MaxChars Maximum serialized UTF-8 response bytes, including newline
+	MaxChars *int `form:"maxChars,omitempty" json:"maxChars,omitempty"`
+
+	// PreviewChars Maximum preview UTF-16 units
+	PreviewChars *int `form:"previewChars,omitempty" json:"previewChars,omitempty"`
+}
+
 // PatchProjectsIdSettingsJSONBody defines parameters for PatchProjectsIdSettings.
 type PatchProjectsIdSettingsJSONBody struct {
 	ExpectedVersion *int            `json:"expectedVersion,omitempty"`
@@ -2723,6 +2735,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/projects/{id}/context (the `GetProjectsIdContext` operationId).
 	GetProjectsIdContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetProjectsIdContextCompact Go backend compact version-2 context; legacy context route remains unchanged
+	//
+	// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+	GetProjectsIdContextCompact(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetProjectsIdSettings Read project policy
 	//
@@ -3981,6 +3998,21 @@ func (c *Client) PatchProjectsId(ctx context.Context, id string, params *PatchPr
 // Corresponds with GET /api/v1/projects/{id}/context (the `GetProjectsIdContext` operationId).
 func (c *Client) GetProjectsIdContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetProjectsIdContextRequest(c.Server, id)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetProjectsIdContextCompact Go backend compact version-2 context; legacy context route remains unchanged
+//
+// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+func (c *Client) GetProjectsIdContextCompact(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProjectsIdContextCompactRequest(c.Server, id, params)
 	if err != nil {
 		return nil, err
 	}
@@ -6007,6 +6039,91 @@ func NewGetProjectsIdContextRequest(server string, id string) (*http.Request, er
 	return req, nil
 }
 
+// NewGetProjectsIdContextCompactRequest constructs an http.Request for the GetProjectsIdContextCompact method
+func NewGetProjectsIdContextCompactRequest(server string, id string, params *GetProjectsIdContextCompactParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/projects/%s/context/compact", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MaxChars != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "maxChars", *params.MaxChars, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PreviewChars != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "previewChars", *params.PreviewChars, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetProjectsIdSettingsRequest constructs an http.Request for the GetProjectsIdSettings method
 func NewGetProjectsIdSettingsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -7783,6 +7900,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /api/v1/projects/{id}/context (the `GetProjectsIdContext` operationId).
 	GetProjectsIdContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetProjectsIdContextResponse, error)
+
+	// GetProjectsIdContextCompactWithResponse Go backend compact version-2 context; legacy context route remains unchanged
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+	GetProjectsIdContextCompactWithResponse(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*GetProjectsIdContextCompactResponse, error)
 
 	// GetProjectsIdSettingsWithResponse Read project policy
 	//
@@ -10068,6 +10192,54 @@ func (r GetProjectsIdContextResponse) ContentType() string {
 	return ""
 }
 
+type GetProjectsIdContextCompactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProjectsIdContextCompactResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetProjectsIdContextCompactResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProjectsIdContextCompactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProjectsIdContextCompactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProjectsIdContextCompactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProjectsIdContextCompactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetProjectsIdSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12071,6 +12243,19 @@ func (c *ClientWithResponses) GetProjectsIdContextWithResponse(ctx context.Conte
 	return ParseGetProjectsIdContextResponse(rsp)
 }
 
+// GetProjectsIdContextCompactWithResponse Go backend compact version-2 context; legacy context route remains unchanged
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+func (c *ClientWithResponses) GetProjectsIdContextCompactWithResponse(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*GetProjectsIdContextCompactResponse, error) {
+	rsp, err := c.GetProjectsIdContextCompact(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProjectsIdContextCompactResponse(rsp)
+}
+
 // GetProjectsIdSettingsWithResponse Read project policy
 //
 // Returns a wrapper object for the known response body format(s).
@@ -13891,6 +14076,39 @@ func ParseGetProjectsIdContextResponse(rsp *http.Response) (*GetProjectsIdContex
 	}
 
 	response := &GetProjectsIdContextResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetProjectsIdContextCompactResponse parses an HTTP response from a GetProjectsIdContextCompactWithResponse call
+func ParseGetProjectsIdContextCompactResponse(rsp *http.Response) (*GetProjectsIdContextCompactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProjectsIdContextCompactResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}

@@ -11,11 +11,35 @@ import (
 	"golang.org/x/text/language"
 )
 
+func (s *SSH) CompactProjectContext() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
+		defer cancel()
+		r = r.WithContext(ctx)
+		if _, err := apiActor(ctx, s.Store.DB, r, s.Origin); err != nil {
+			s.fail(w, err)
+			return
+		}
+		params := r.URL.Query()
+		if values, exists := params["version"]; exists && (len(values) != 1 || values[0] != "2") {
+			s.fail(w, validationProject())
+			return
+		}
+		params.Set("version", "2")
+		r.URL.RawQuery = params.Encode()
+		s.ProjectContext()(w, r)
+	}
+}
+
 func (s *SSH) ProjectContext() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 		defer cancel()
-		tx, err := s.Store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
+		options := &sql.TxOptions{ReadOnly: true}
+		if s.Store.Engine == "postgres" {
+			options.Isolation = sql.LevelRepeatableRead
+		}
+		tx, err := s.Store.DB.BeginTx(ctx, options)
 		if err != nil {
 			s.fail(w, err)
 			return
@@ -30,7 +54,20 @@ func (s *SSH) ProjectContext() http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
-		result, err := projectContext(ctx, tx, project)
+		var result map[string]any
+		version := r.URL.Query().Get("version")
+		if values := r.URL.Query()["version"]; len(values) > 1 {
+			s.fail(w, validationProject())
+			return
+		}
+		switch version {
+		case "", "1":
+			result, err = projectContext(ctx, tx, project, s.Store.Engine)
+		case "2":
+			result, err = compactContext(ctx, tx, project, s.Store.Engine, r.URL.Query())
+		default:
+			err = validationProject()
+		}
 		if err != nil {
 			s.fail(w, err)
 			return
@@ -58,22 +95,10 @@ func contextSelect(records []map[string]any, limit int, predicate func(map[strin
 	}
 	return selected
 }
-func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any) (map[string]any, error) {
-	all, err := entityList(ctx, tx, "record")
+func projectContextRecords(ctx context.Context, tx *sql.Tx, project map[string]any, engine string) ([]map[string]any, []map[string]any, error) {
+	all, byID, links, err := contextInputs(ctx, tx, engine, project["id"])
 	if err != nil {
-		return nil, err
-	}
-	metadata, err := entityList(ctx, tx, "metadata")
-	if err != nil {
-		return nil, err
-	}
-	byID := map[string]map[string]any{}
-	for _, row := range metadata {
-		byID[stringValue(row, "id")] = row
-	}
-	links, err := entityList(ctx, tx, "relationship")
-	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	incoming := map[string][]map[string]any{}
 	for _, link := range links {
@@ -136,17 +161,25 @@ func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any) (ma
 		}
 		return ordering.CompareString(stringValue(left, "id"), stringValue(right, "id")) > 0
 	})
+	return records, links, nil
+}
+func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any, engine string) (map[string]any, error) {
+	records, links, err := projectContextRecords(ctx, tx, project, engine)
+	if err != nil {
+		return nil, err
+	}
 	available := contextSelect(records, len(records)+1, func(record map[string]any) bool {
 		return record["applicability"] == "current" || record["applicability"] == "unverified" || record["applicability"] == "partially_superseded"
 	})
+	answered := answeredQuestions(records, links)
 	types := func(kinds ...string) []map[string]any {
 		return contextSelect(available, 20, func(record map[string]any) bool { return containsString(kinds, record["type"]) })
 	}
 	states := types("project_state")
 	var current any
-	for _, state := range states {
-		if state["applicability"] == "current" {
-			current = state
+	for _, record := range records {
+		if record["type"] == "project_state" && record["applicability"] == "current" {
+			current = record
 			break
 		}
 	}
@@ -171,15 +204,17 @@ func projectContext(ctx context.Context, tx *sql.Tx, project map[string]any) (ma
 		}
 	}
 	return map[string]any{
-		"project":             project,
-		"currentState":        current,
-		"state":               states,
-		"stateHistory":        contextSelect(records, 20, func(record map[string]any) bool { return record["type"] == "project_state" }),
-		"recentDecisions":     types("decision", "adr", "business_decision"),
-		"constraints":         types("constraint"),
-		"openFindings":        types("finding"),
-		"failures":            types("failure"),
-		"openQuestions":       contextSelect(types("qa"), 21, func(record map[string]any) bool { return !truthy(objectValue(record, "payload")["answer"]) }),
+		"project":         project,
+		"currentState":    current,
+		"state":           states,
+		"stateHistory":    contextSelect(records, 20, func(record map[string]any) bool { return record["type"] == "project_state" }),
+		"recentDecisions": types("decision", "adr", "business_decision"),
+		"constraints":     types("constraint"),
+		"openFindings":    types("finding"),
+		"failures":        types("failure"),
+		"openQuestions": contextSelect(available, 20, func(record map[string]any) bool {
+			return record["type"] == "qa" && !hasInlineAnswer(record) && !answered[stringValue(record, "id")]
+		}),
 		"applicableRecords":   applicable,
 		"partiallySuperseded": contextSelect(records, 20, func(record map[string]any) bool { return record["applicability"] == "partially_superseded" }),
 		"historicalRecords": contextSelect(records, 20, func(record map[string]any) bool {

@@ -361,7 +361,30 @@ func TestStdioProtocol(t *testing.T) {
 	if err != nil || len(tools.Tools) != 19 {
 		t.Fatalf("%v %v", tools, err)
 	}
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_qa", Arguments: map[string]any{"question": "incomplete"}})
+	for _, tool := range tools.Tools {
+		if tool.Name == "record_qa" {
+			encoded, _ := json.Marshal(tool.InputSchema)
+			var schema struct {
+				Required []string `json:"required"`
+			}
+			if json.Unmarshal(encoded, &schema) != nil {
+				t.Fatal("invalid capture schema")
+			}
+			question := false
+			for _, field := range schema.Required {
+				if field == "answer" {
+					t.Fatal("answer remains required for question-only capture")
+				}
+				if field == "question" {
+					question = true
+				}
+			}
+			if !question {
+				t.Fatal("question is no longer required")
+			}
+		}
+	}
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_qa", Arguments: map[string]any{"answer": "missing required question"}})
 	if err == nil && (result == nil || !result.IsError) {
 		t.Fatal("invalid typed input unexpectedly accepted")
 	}
