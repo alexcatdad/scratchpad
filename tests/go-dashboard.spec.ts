@@ -271,7 +271,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         .getByRole("button", { name: "Save record", exact: true })
         .click();
       const capturedRecord = (await (await savedRecord).json()) as {
-        record: { id: string };
+        record: { id: string; projectId: string };
       };
       await page.getByRole("button", { name: /Go dashboard evidence/ }).click();
       await expect(
