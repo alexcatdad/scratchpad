@@ -117,7 +117,9 @@ jobs:
         env:
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
       - name: Build opt-in Go runtime image
-        run: docker --context default build --target go-runtime -t scratchpad-go:ci .
+        run: |
+          docker --context default build --target go-runtime -t scratchpad-go:ci .
+          docker --context default build -t scratchpad-retained:ci .
         working-directory: .
       - name: Verify Go image browser access and operational restore
         run: npx playwright test tests/go-container.spec.ts
@@ -125,6 +127,7 @@ jobs:
         env:
           TEST_DOCKER_CONTEXT: default
           TEST_GO_IMAGE: scratchpad-go:ci
+          TEST_RETAINED_IMAGE: scratchpad-retained:ci
   postgres:
     runs-on: ubuntu-latest
     services:

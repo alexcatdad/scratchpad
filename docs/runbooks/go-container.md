@@ -12,7 +12,9 @@ first; do not rely on the current context, which may target a live remote host.
 ```sh
 docker context inspect LOCAL_CONTEXT --format '{{.Endpoints.docker.Host}}'
 docker --context LOCAL_CONTEXT build --target go-runtime -t scratchpad-go:local .
+docker --context LOCAL_CONTEXT build -t scratchpad-retained:local .
 TEST_DOCKER_CONTEXT=LOCAL_CONTEXT TEST_GO_IMAGE=scratchpad-go:local \
+TEST_RETAINED_IMAGE=scratchpad-retained:local \
   npx playwright test tests/go-container.spec.ts
 ```
 
@@ -73,10 +75,25 @@ dashboard, creates a project and capture, takes a live Go SQLite backup, stops
 the source container cleanly, restores the completed snapshot into a fresh
 volume, and verifies fresh passkey login, immutable record detail and exclusion
 of a post-backup capture at the same
-public origin. Both container stops must exit successfully. Test-owned resources
-are removed afterward. Neither this operational restore nor local image creation
-establishes rollback to the retained TypeScript image, PostgreSQL image acceptance
-or deployed acceptance.
+public origin. Go container stops must exit successfully. Test-owned resources
+are removed afterward.
+
+With `TEST_RETAINED_IMAGE`, a second browser scenario starts the actual retained
+TypeScript image, enrolls and captures, then takes its online schema-1 snapshot
+before Go starts. It upgrades the source volume with Go, proves fresh passkey
+login and a new Go capture, and verifies TypeScript readiness and API refusal on
+the upgraded volume. Restarting Go proves refusal did not damage the source.
+Restoring the pre-upgrade snapshot into a fresh volume recovers independent
+browser login and the original capture through TypeScript, while excluding later
+writes. No migration marker editing or destructive down migration is used.
+
+The retained npm wrapper can report exit 1 when Docker sends SIGTERM. The fixture
+accepts that status only with the wrapper's explicit `signal SIGTERM` log; Go
+still requires exit 0. This verifies the selected images' data/authentication
+behavior, not a new termination guarantee for the retained wrapper. Missing
+explicit image/context configuration skips the corresponding fixture. Local
+image verification does not establish published-release compatibility,
+PostgreSQL image acceptance or deployed rollback.
 
 Before any real upgrade, retain the pre-upgrade operational backup, exact old
 image and configuration, and the installation key. Go upgrades schema 1 to 2;
