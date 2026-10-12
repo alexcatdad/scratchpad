@@ -145,11 +145,15 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 			if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
 				return err
 			}
-			if _, err := allowedJobs(ctx, conn, scope); err != nil {
+			allowed, err := allowedJobs(ctx, conn, scope)
+			if err != nil {
 				return err
 			}
 			for _, result := range results {
 				record := result["record"].(map[string]any)
+				if !contains(allowed, stringValue(record, "projectId")) {
+					return &protocolError{"AI_NOT_ALLOWED", "Current consent does not permit these semantic results.", 403}
+				}
 				current, err := entityMap(ctx, conn, "record", stringValue(record, "id"))
 				if err != nil {
 					return err
