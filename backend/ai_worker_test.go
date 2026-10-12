@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -165,7 +166,7 @@ func waitAIJob(t *testing.T, origin, id, state string) map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(12 * time.Second)
 	for {
-		status, result := curationRequest(t, origin, "GET", "/ai/jobs", nil)
+		status, result := curationRequest(t, origin, "GET", "/ai/jobs?jobId="+url.QueryEscape(id), nil)
 		if status != 200 {
 			t.Fatal("job listing failed")
 		}

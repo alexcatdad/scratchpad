@@ -96,8 +96,7 @@ func TestRAGRepresentativeEvaluation(t *testing.T) {
 						t.Fatal("real-provider corpus indexing exceeded three minutes")
 					}
 					time.Sleep(100 * time.Millisecond)
-					_, response := curationRequest(t, origin, "GET", "/ai/jobs", nil)
-					jobs = response["jobs"].([]any)
+					jobs = allAIJobs(t, origin)
 				}
 			}
 			cases := []struct {

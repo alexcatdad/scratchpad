@@ -91,11 +91,7 @@ func waitRAGJobs(t *testing.T, origin string, count int) []any {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for {
-		status, response := curationRequest(t, origin, "GET", "/ai/jobs", nil)
-		if status != 200 {
-			t.Fatal("jobs unavailable")
-		}
-		jobs := response["jobs"].([]any)
+		jobs := allAIJobs(t, origin)
 		if len(jobs) == count {
 			return jobs
 		}

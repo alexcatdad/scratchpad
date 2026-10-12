@@ -162,6 +162,12 @@ func TestAIJobListingBoundsHistoryAndKeepsOldActiveJobsReachable(t *testing.T) {
 			if len(seen) != 205 {
 				t.Fatalf("pagination lost retained history: %d", len(seen))
 			}
+			if len(waitRAGJobs(t, origin, 205)) != 205 || len(scheduledJobs(t, origin, 205)) != 205 {
+				t.Fatal("inventory polling helpers truncated retained job history")
+			}
+			if waitAIJob(t, origin, "job_204", "queued")["id"] != "job_204" || waitProviderReviewJob(t, origin, "job_203")["id"] != "job_203" {
+				t.Fatal("identity polling helpers lost jobs outside the default page")
+			}
 			status, result = curationRequest(t, origin, "GET", "/ai/jobs?jobId=job_204", nil)
 			if status != 200 || len(result["jobs"].([]any)) != 1 || result["jobs"].([]any)[0].(map[string]any)["status"] != "queued" {
 				t.Fatal("old active job cannot be polled by identity")

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -73,7 +74,7 @@ func waitProviderReviewJob(t *testing.T, origin, id string) map[string]any {
 	t.Helper()
 	deadline := time.Now().Add(6 * time.Second)
 	for {
-		status, response := curationRequest(t, origin, "GET", "/ai/jobs", nil)
+		status, response := curationRequest(t, origin, "GET", "/ai/jobs?jobId="+url.QueryEscape(id), nil)
 		if status != 200 {
 			t.Fatal("job status unavailable")
 		}
