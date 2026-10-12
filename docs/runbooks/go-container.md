@@ -104,9 +104,21 @@ source, acknowledges a later capture, stops Go, restores the archive into a fres
 database and restarts the actual Go image at the same public origin. Native
 browser login, exact original record-response equality and exclusion of the
 post-backup capture must pass. The source database and archive are not rewritten
-to downgrade a schema. This verifies ordinary PostgreSQL image recovery; optional
-pgvector/RAG, encrypted PostgreSQL provider recovery and deployed acceptance
+to downgrade a schema. This verifies ordinary PostgreSQL image recovery;
+encrypted PostgreSQL provider recovery and deployed acceptance
 remain separate.
+
+The pgvector scenario uses the same pinned pgvector 0.8.7/PostgreSQL 18 image as
+canonical CI and installs the extension in its owned source database before Go
+starts. An unpublished synthetic provider returns one fixed vector per requested
+input. The workflow opts the project into AI, enables the Go RAG runtime, waits
+for complete passage coverage, and records the cited passage identity before
+dumping. External provider counters must show no re-embedding during restoration.
+Native restore must retain complete semantic coverage, the same passage
+identity and immutable source URL/text. An explicit crash of the provider must report semantic
+unavailability while retaining cited lexical evidence. These checks prove actual
+image/extension/index/archive wiring, not representative retrieval quality or
+real embedding-model interoperability.
 
 The encrypted-provider image scenario uses a private Docker network and a
 synthetic provider without published ports. Correct and wrong installation keys

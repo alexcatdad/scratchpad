@@ -8,6 +8,7 @@ for (const scenario of [
   "typescript-rollback",
   "go-secret-restore",
   "go-postgres-restore",
+  "go-pgvector-restore",
 ] as const) {
   test(`actual images preserve browser access through ${scenario}`, async ({
     page,
@@ -16,7 +17,8 @@ for (const scenario of [
     const image = process.env.TEST_GO_IMAGE;
     const retainedImage = process.env.TEST_RETAINED_IMAGE;
     let databaseURL = "";
-    const postgresRestore = scenario === "go-postgres-restore";
+    const ragRestore = scenario === "go-pgvector-restore";
+    const postgresRestore = scenario === "go-postgres-restore" || ragRestore;
     test.skip(
       !context ||
         !image ||
@@ -55,7 +57,20 @@ for (const scenario of [
     let selectedKeyVolume = correctKeyVolume;
     let networkCreated = false;
     let databaseContainer = "";
+    let providerContainer = "";
     let archive: Buffer | undefined;
+    let sourcePassageId = "";
+    let sourceProviderCalls = 0;
+    const providerCalls = () =>
+      JSON.parse(
+        docker(
+          "exec",
+          providerContainer,
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/stats').then(r=>r.text()).then(console.log)",
+        ),
+      ).calls as number;
     const sourceVolume = `scratchpad-go-source-${suffix}`,
       restoredVolume = `scratchpad-go-restore-${suffix}`;
     const containers: string[] = [],
@@ -80,6 +95,7 @@ for (const scenario of [
         `127.0.0.1:${port}:3000`,
         "-e",
         `SCRATCHPAD_PUBLIC_URL=${origin}`,
+        ...(ragRestore ? ["-e", "SCRATCHPAD_RAG_ENABLED=true"] : []),
         ...(postgresRestore
           ? ["--network", network, "-e", "SCRATCHPAD_DATABASE_URL"]
           : []),
@@ -140,7 +156,9 @@ for (const scenario of [
           "POSTGRES_PASSWORD",
           "-e",
           "POSTGRES_DB=source",
-          "postgres:18.6",
+          ragRestore
+            ? "pgvector/pgvector:0.8.7-pg18-trixie@sha256:9d9c930220cb9bf2f956d10a8f909cf9973d9672ca0278aef2c1e6facccad2e0"
+            : "postgres:18.6",
         );
         containers.push(databaseContainer);
         await expect
@@ -154,6 +172,8 @@ for (const scenario of [
                   "exec",
                   databaseContainer,
                   "pg_isready",
+                  "-h",
+                  "127.0.0.1",
                   "-U",
                   "scratchpad",
                   "-d",
@@ -166,14 +186,31 @@ for (const scenario of [
           .toBe(0);
         databaseURL =
           "postgres://scratchpad:synthetic-container-database-password@database:5432/source?sslmode=disable";
+        if (ragRestore)
+          docker(
+            "exec",
+            databaseContainer,
+            "psql",
+            "-U",
+            "scratchpad",
+            "-d",
+            "source",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            "CREATE EXTENSION vector",
+          );
       }
-      if (secretRestore) {
-        docker("network", "create", network);
-        networkCreated = true;
+      if (secretRestore || ragRestore) {
+        if (!networkCreated) {
+          docker("network", "create", network);
+          networkCreated = true;
+        }
         for (const [volume, value] of [
           [correctKeyVolume, 44],
           [wrongKeyVolume, 45],
         ] as const) {
+          if (!secretRestore) continue;
           docker("volume", "create", volume);
           volumes.push(volume);
           docker(
@@ -199,9 +236,10 @@ for (const scenario of [
           "node",
           image ?? "",
           "-e",
-          "let calls=0,anonymousCalls=0;require('node:http').createServer((req,res)=>{req.resume();res.setHeader('Content-Type','application/json');if(req.url==='/stats'){res.end(JSON.stringify({calls,anonymousCalls}));return}if(req.headers.authorization&&req.headers.authorization!=='Bearer synthetic-container-provider-token'){res.writeHead(401).end();return}calls++;if(!req.headers.authorization)anonymousCalls++;res.end(JSON.stringify(req.url==='/v1/embeddings'?{data:[{index:0,embedding:[1,0]}]}:{choices:[{message:{content:'{\"ok\":true}'}}]}))}).listen(8080,'0.0.0.0')",
+          "let calls=0,anonymousCalls=0;require('node:http').createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{res.setHeader('Content-Type','application/json');if(req.url==='/stats'){res.end(JSON.stringify({calls,anonymousCalls}));return}if(req.headers.authorization&&req.headers.authorization!=='Bearer synthetic-container-provider-token'){res.writeHead(401).end();return}calls++;if(!req.headers.authorization)anonymousCalls++;const body=JSON.parse(raw||'{}');const count=Array.isArray(body.input)?body.input.length:1;res.end(JSON.stringify(req.url==='/v1/embeddings'?{data:Array.from({length:count},(_,index)=>({index,embedding:[1,0]}))}:{choices:[{message:{content:'{\"ok\":true}'}}]}))})}).listen(8080,'0.0.0.0')",
         );
         containers.push(provider);
+        providerContainer = provider;
       }
       docker("volume", "create", sourceVolume);
       volumes.push(sourceVolume);
@@ -287,6 +325,83 @@ for (const scenario of [
       const original = (await (await captureResponse).json()) as {
         record: { id: string; projectId: string };
       };
+      if (ragRestore) {
+        const project = await (
+          await page.request.get(
+            `${origin}/api/v1/projects/${encodeURIComponent(original.record.projectId)}`,
+          )
+        ).json();
+        expect(
+          (
+            await page.request.patch(
+              `${origin}/api/v1/projects/${encodeURIComponent(original.record.projectId)}/settings`,
+              {
+                headers: { Origin: origin },
+                data: {
+                  expectedVersion: project.project.version,
+                  settings: {
+                    ...project.project.settings,
+                    aiProcessing: true,
+                    crossProjectAnalysis: false,
+                  },
+                },
+              },
+            )
+          ).status(),
+        ).toBe(200);
+        expect(
+          (
+            await page.request.patch(`${origin}/api/v1/ai/settings`, {
+              headers: { Origin: origin },
+              data: {
+                expectedVersion: 0,
+                enabled: true,
+                scheduleMinutes: 0,
+                baseUrl: "http://provider:8080/v1",
+                model: "synthetic-completion",
+                embeddingModel: "synthetic-embedding",
+                embeddingDimensions: 2,
+                requestTimeoutSeconds: 5,
+              },
+            })
+          ).status(),
+        ).toBe(200);
+        await expect
+          .poll(
+            async () =>
+              (
+                await (
+                  await page.request.get(
+                    `${origin}/api/v1/rag/coverage?projectId=${encodeURIComponent(original.record.projectId)}`,
+                  )
+                ).json()
+              ).status,
+            { timeout: 30_000 },
+          )
+          .toBe("complete");
+        const coverage = await (
+          await page.request.get(
+            `${origin}/api/v1/rag/coverage?projectId=${encodeURIComponent(original.record.projectId)}`,
+          )
+        ).json();
+        expect(coverage.indexedSources).toBe(1);
+        expect(coverage.passageCount).toBeGreaterThan(0);
+        const evidence = await (
+          await page.request.post(`${origin}/api/v1/rag/retrieve`, {
+            headers: { Origin: origin },
+            data: {
+              projectId: original.record.projectId,
+              query: "operational snapshot",
+            },
+          })
+        ).json();
+        expect(evidence.semantic).toMatchObject({
+          available: true,
+          indexCoverage: "complete",
+        });
+        sourcePassageId = evidence.results[0].id;
+        expect(sourcePassageId).toMatch(/^passage_/);
+      }
       if (secretRestore) {
         const configured = await page.request.patch(
           `${origin}/api/v1/ai/settings`,
@@ -299,6 +414,7 @@ for (const scenario of [
               model: "synthetic-completion",
               embeddingModel: "synthetic-embedding",
               embeddingDimensions: 2,
+              requestTimeoutSeconds: 5,
               scheduleMinutes: 0,
               apiKey: "synthetic-container-provider-token",
             },
@@ -394,6 +510,7 @@ for (const scenario of [
         page.getByRole("button", { name: /After snapshot capture/ }),
       ).toBeVisible();
       stop(source, scenario !== "typescript-rollback");
+      if (ragRestore) sourceProviderCalls = providerCalls();
       if (scenario === "typescript-rollback") {
         const upgraded = await start(sourceVolume);
         await page.goto(origin);
@@ -547,6 +664,63 @@ for (const scenario of [
         )
       ).json();
       expect(recovered.record).toEqual(original.record);
+      if (ragRestore) {
+        expect(providerCalls()).toBe(sourceProviderCalls);
+        const retrieved = await page.request.post(
+          `${origin}/api/v1/rag/retrieve`,
+          {
+            headers: { Origin: origin },
+            data: {
+              projectId: original.record.projectId,
+              query: "operational snapshot",
+            },
+          },
+        );
+        expect(retrieved.status()).toBe(200);
+        const evidence = await retrieved.json();
+        expect(evidence.semantic).toMatchObject({
+          available: true,
+          indexCoverage: "complete",
+        });
+        expect(evidence.results.length).toBeGreaterThan(0);
+        expect(evidence.results[0]).toMatchObject({
+          recordId: original.record.id,
+          sourceUrl: `/api/v1/records/${original.record.id}`,
+        });
+        expect(evidence.results[0].id).toBe(sourcePassageId);
+        expect(evidence.results[0].text).toContain(
+          "The operational snapshot retains this immutable capture.",
+        );
+        docker("kill", providerContainer);
+        expect(
+          docker(
+            "inspect",
+            "--format",
+            "{{.State.ExitCode}}",
+            providerContainer,
+          ),
+        ).toBe("137");
+        const fallback = await (
+          await page.request.post(`${origin}/api/v1/rag/retrieve`, {
+            headers: { Origin: origin },
+            data: {
+              projectId: original.record.projectId,
+              query: "operational snapshot",
+            },
+          })
+        ).json();
+        expect(fallback.semantic).toMatchObject({
+          available: false,
+          reason: "AI_UNAVAILABLE",
+        });
+        expect(fallback.results[0]).toMatchObject({
+          recordId: original.record.id,
+          sourceUrl: `/api/v1/records/${original.record.id}`,
+        });
+        expect(fallback.results[0].text).toContain(
+          "The operational snapshot retains this immutable capture.",
+        );
+      }
       if (secretRestore) {
         expect(
           (
