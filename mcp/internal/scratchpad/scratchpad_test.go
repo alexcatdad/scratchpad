@@ -335,9 +335,17 @@ func TestCaptureMirrorGatesAndPartialSuccess(t *testing.T) {
 
 func TestStdioProtocol(t *testing.T) {
 	if os.Getenv("SCRATCHPAD_TEST_HELPER") == "1" {
-		c, err := NewClient(Config{URL: "http://localhost:1"})
+		origin := os.Getenv("SCRATCHPAD_TEST_API_URL")
+		if origin == "" {
+			origin = "http://localhost:1"
+		}
+		c, err := NewClient(Config{URL: origin})
 		if err != nil {
 			os.Exit(2)
+		}
+		if os.Getenv("SCRATCHPAD_TEST_API_URL") != "" {
+			c.token = "synthetic-presence-token"
+			c.expires = time.Now().Add(time.Hour)
 		}
 		if err = NewServer(c).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			os.Exit(3)

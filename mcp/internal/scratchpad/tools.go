@@ -98,18 +98,32 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 }
 func NewServer(c *Client) *mcp.Server { return NewServerWithVersion(c, "dev") }
 
+func nullArgument(request *mcp.CallToolRequest, name string) bool {
+	var arguments map[string]json.RawMessage
+	if json.Unmarshal(request.Params.Arguments, &arguments) != nil {
+		return false
+	}
+	value, exists := arguments[name]
+	return exists && strings.TrimSpace(string(value)) == "null"
+}
+
 func NewServerWithVersion(c *Client, version string) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous. Record only secret references. Keep API tokens, passwords, private keys and installation encryption keys out of captures. Synthetic reference: secret://provider/main. Keep the value in owner-controlled secret configuration."})
 	registerCaptures(s, c)
 	registerAI(s, c)
 	type ContextInput struct {
 		Scope
-		Version      int `json:"version,omitempty" jsonschema:"Omit for legacy context; version 2 requests bounded compact context on the Go backend"`
-		Limit        int `json:"limit,omitempty" jsonschema:"Compact source record limit, 1 to 100"`
-		MaxChars     int `json:"maxChars,omitempty" jsonschema:"Compact serialized response budget, 4096 to 64000 bytes"`
-		PreviewChars int `json:"previewChars,omitempty" jsonschema:"Compact preview limit, 32 to 2000 UTF-16 units"`
+		Version      *int `json:"version,omitempty" jsonschema:"Omit for legacy context; version 2 requests bounded compact context on the Go backend"`
+		Limit        *int `json:"limit,omitempty" jsonschema:"Compact source record limit, 1 to 100"`
+		MaxChars     *int `json:"maxChars,omitempty" jsonschema:"Compact serialized response budget, 4096 to 64000 bytes"`
+		PreviewChars *int `json:"previewChars,omitempty" jsonschema:"Compact preview limit, 32 to 2000 UTF-16 units"`
 	}
-	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory; explicitly request version 2 for compact bounded previews"}, func(ctx context.Context, _ *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory; explicitly request version 2 for compact bounded previews"}, func(ctx context.Context, request *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, any, error) {
+		for _, field := range []string{"version", "limit", "maxChars", "previewChars"} {
+			if nullArgument(request, field) {
+				return nil, nil, &APIError{Code: "VALIDATION_FAILED", Message: field + " must be an integer when supplied."}
+			}
+		}
 		p, _, err := c.resolve(ctx, in.Scope)
 		if err != nil {
 			return nil, nil, err
@@ -118,16 +132,16 @@ func NewServerWithVersion(c *Client, version string) *mcp.Server {
 		id, _ := p["id"].(string)
 		path := "/projects/" + url.PathEscape(id) + "/context"
 		params := url.Values{}
-		for key, value := range map[string]int{"version": in.Version, "limit": in.Limit, "maxChars": in.MaxChars, "previewChars": in.PreviewChars} {
-			if value != 0 {
-				params.Set(key, strconv.Itoa(value))
+		for key, value := range map[string]*int{"version": in.Version, "limit": in.Limit, "maxChars": in.MaxChars, "previewChars": in.PreviewChars} {
+			if value != nil {
+				params.Set(key, strconv.Itoa(*value))
 			}
 		}
 		if len(params) > 0 {
 			path += "?" + params.Encode()
 		}
 		err = c.request(ctx, "GET", path, nil, "", &out)
-		if err == nil && in.Version == 2 {
+		if err == nil && in.Version != nil && *in.Version == 2 {
 			view, ok := out.(map[string]any)
 			if !ok || view["version"] != float64(2) {
 				return nil, nil, errors.New("COMPACT_CONTEXT_UNAVAILABLE: this server does not support version 2; request legacy context or use the Go backend")

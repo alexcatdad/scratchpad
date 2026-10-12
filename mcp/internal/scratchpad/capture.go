@@ -52,7 +52,7 @@ type FindingInput struct {
 }
 type QAPayload struct {
 	Question    string   `json:"question"`
-	Answer      string   `json:"answer,omitempty" jsonschema:"Optional answer; omit it to preserve an unresolved question, then capture and link an answer separately"`
+	Answer      *string  `json:"answer,omitempty" jsonschema:"Optional answer; omit it to preserve an unresolved question, then capture and link an answer separately"`
 	Limitations []string `json:"limitations,omitempty"`
 }
 type QAInput struct {
@@ -103,7 +103,10 @@ func registerCaptures(s *mcp.Server, c *Client) {
 	mcp.AddTool(s, &mcp.Tool{Name: "record_finding", Description: "Capture an immutable finding with provenance; reuse requestId on retries"}, func(ctx context.Context, _ *mcp.CallToolRequest, in FindingInput) (*mcp.CallToolResult, CaptureResult, error) {
 		return c.capture(ctx, "finding", in.Common, in.FindingPayload)
 	})
-	mcp.AddTool(s, &mcp.Tool{Name: "record_qa", Description: "Capture an immutable qa with provenance; reuse requestId on retries"}, func(ctx context.Context, _ *mcp.CallToolRequest, in QAInput) (*mcp.CallToolResult, CaptureResult, error) {
+	mcp.AddTool(s, &mcp.Tool{Name: "record_qa", Description: "Capture an immutable qa with provenance; reuse requestId on retries"}, func(ctx context.Context, request *mcp.CallToolRequest, in QAInput) (*mcp.CallToolResult, CaptureResult, error) {
+		if in.Answer == nil && nullArgument(request, "answer") {
+			return nil, CaptureResult{}, &APIError{Code: "VALIDATION_FAILED", Message: "A supplied answer must be a nonempty string."}
+		}
 		return c.capture(ctx, "qa", in.Common, in.QAPayload)
 	})
 	mcp.AddTool(s, &mcp.Tool{Name: "record_failure", Description: "Capture an immutable failure with provenance; reuse requestId on retries"}, func(ctx context.Context, _ *mcp.CallToolRequest, in FailureInput) (*mcp.CallToolResult, CaptureResult, error) {
