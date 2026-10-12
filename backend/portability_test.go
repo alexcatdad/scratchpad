@@ -274,7 +274,7 @@ func portableArchive() map[string]any {
 		"metadata": []any{entity("rec:portable", map[string]any{"recordId": "rec:portable", "tags": []any{"portable"}, "archived": false, "displayTitle": "Reviewed presentation"})},
 		"revision": []any{entity("rev_portable", map[string]any{"recordId": "rec:portable", "previous": map[string]any{"tags": []any{}}, "changes": map[string]any{"tags": []any{"portable"}}})},
 		"evidence": []any{entity("ev_portable", map[string]any{"recordId": "rec:portable", "kind": "url", "reference": "https://example.com/evidence"})},
-		"mirror":   []any{entity("mirror_portable", map[string]any{"recordId": "rec:portable", "attempted": true, "succeeded": false, "error": "Synthetic historical mirror failure"})},
+		"mirror":   []any{entity("rec:portable", map[string]any{"recordId": "rec:portable", "attempted": true, "succeeded": false, "error": "Synthetic historical mirror failure"})},
 		"audit":    []any{entity("audit_portable", map[string]any{"entityId": "rec:portable", "entityType": "record", "action": "record.created", "actor": map[string]any{"kind": "user"}})},
 		"profile":  []any{entity("owner-profile", map[string]any{"displayName": "Portable owner"})},
 	}}

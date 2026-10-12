@@ -307,6 +307,9 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 			return importInvalid()
 		}
 	case "settings":
+		if value["id"] != "global" {
+			return importInvalid()
+		}
 		for field := range value {
 			if !contains([]string{"id", "version", "createdAt", "updatedAt", "aiEnabled", "defaultProjectSettings"}, field) {
 				return importInvalid()
@@ -366,10 +369,10 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if err := portableEntity(ctx, conn, "record", value["recordId"]); err != nil {
 			return err
 		}
+		if (kind == "metadata" || kind == "mirror") && value["id"] != value["recordId"] {
+			return importInvalid()
+		}
 		if kind == "metadata" {
-			if value["id"] != value["recordId"] {
-				return importInvalid()
-			}
 			tags, ok := value["tags"].([]any)
 			if !ok {
 				return importInvalid()
