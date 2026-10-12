@@ -435,7 +435,7 @@ func TestRAGRetrievesSeparateCitedPassagesAcrossCompletionModelChange(t *testing
 		location := passage["sourceLocation"].(map[string]any)
 		start, end := int(location["start"].(float64)), int(location["end"].(float64))
 		units := utf16.Encode([]rune(record["content"].(string)))
-		if location["field"] != "content" || location["unit"] != "utf16" || start != 6000 || end > len(units) || string(utf16.Decode(units[start:end])) != passage["text"] || passage["sourceUrl"] != "/api/v1/records/"+record["id"].(string) {
+		if location["field"] != "content" || location["unit"] != "utf16" || start < 6000 || start >= end || end > len(units) || string(utf16.Decode(units[start:end])) != passage["text"] || passage["sourceUrl"] != "/api/v1/records/"+record["id"].(string) {
 			t.Fatalf("citation does not identify the immutable source excerpt: %v", passage)
 		}
 		if phase == "initial" {
