@@ -377,6 +377,22 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if (kind == "metadata" || kind == "mirror") && value["id"] != value["recordId"] {
 			return importInvalid()
 		}
+		if kind == "evidence" {
+			if _, err := captureEnum(value["kind"], []string{"url", "git_commit", "pull_request", "issue", "file", "conversation", "test", "deployment", "other"}); err != nil {
+				return importInvalid()
+			}
+			reference, err := curationText(value["reference"], 4000)
+			if err != nil || reference == "" {
+				return importInvalid()
+			}
+			for field, limit := range map[string]int{"revision": 500, "description": 10000} {
+				if text, exists := value[field]; exists {
+					if _, err := curationText(text, limit); err != nil {
+						return importInvalid()
+					}
+				}
+			}
+		}
 		if kind == "metadata" {
 			tags, ok := value["tags"].([]any)
 			if !ok {
