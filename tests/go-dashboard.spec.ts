@@ -13,6 +13,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
+import { sshProof } from "../apps/web/src/lib/ssh-proof";
 
 for (const engine of ["sqlite", "postgres"] as const) {
   test(`retained React dashboard captures and configures through Go on ${engine}`, async ({
@@ -31,6 +32,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
     let providerUnavailable = false;
     let analysisSourceId = "";
     let generateDocument = false;
+    let rejectableAnalysis = false;
     const provider = createHTTPServer((request, response) => {
       request.resume();
       response.setHeader("Content-Type", "application/json");
@@ -65,7 +67,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
                             kind: generateDocument ? "export" : "summary",
                             title: generateDocument
                               ? "Dashboard private handoff"
-                              : "Dashboard source-backed interpretation",
+                              : rejectableAnalysis
+                                ? "Dashboard interpretation to reject"
+                                : "Dashboard source-backed interpretation",
                             content: {
                               text: "A provisional summary linked to the saved finding.",
                               ...(generateDocument
@@ -292,6 +296,126 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByText("Profile saved.", { exact: true }),
       ).toBeVisible();
+      const signingKey = join(dir, "dashboard-ssh-key");
+      execFileSync("ssh-keygen", [
+        "-q",
+        "-t",
+        "ed25519",
+        "-N",
+        "",
+        "-f",
+        signingKey,
+      ]);
+      const publicKey = readFileSync(`${signingKey}.pub`, "utf8")
+        .trim()
+        .split(/\s+/)
+        .slice(0, 2)
+        .join(" ");
+      const enrollment = page.locator("section").filter({
+        has: page.getByRole("heading", {
+          name: "Connect an MCP key",
+          exact: true,
+        }),
+      });
+      await enrollment
+        .getByLabel("Public key", { exact: true })
+        .fill(publicKey);
+      await enrollment
+        .getByRole("button", {
+          name: "Create enrollment challenge",
+          exact: true,
+        })
+        .click();
+      const transcript = enrollment.locator("pre");
+      await expect(transcript).toBeVisible();
+      const enrollmentSignature = execFileSync(
+        "ssh-keygen",
+        [
+          "-Y",
+          "sign",
+          "-f",
+          signingKey,
+          "-n",
+          await enrollment.locator("code").innerText(),
+        ],
+        {
+          encoding: "utf8",
+          input: await transcript.innerText(),
+          stdio: ["pipe", "pipe", "ignore"],
+        },
+      );
+      await enrollment
+        .getByLabel("Armored SSH signature", { exact: true })
+        .fill(enrollmentSignature);
+      await enrollment
+        .getByRole("button", { name: "Verify and enroll key", exact: true })
+        .click();
+      await expect(
+        page.getByText("MCP key enrolled.", { exact: true }),
+      ).toBeVisible();
+      const credential = page.locator("li").filter({
+        has: page.getByText("MCP key", { exact: true }),
+      });
+      await expect(
+        credential.getByText("ssh · Independent local credential", {
+          exact: true,
+        }),
+      ).toBeVisible();
+      const challengeResponse = await fetch(
+        `${origin}/api/v1/auth/mcp/challenge`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ publicKey }),
+        },
+      );
+      expect(challengeResponse.status).toBe(200);
+      const challenge = (await challengeResponse.json()) as {
+        namespace: string;
+        challengeId: string;
+      };
+      const signature = execFileSync(
+        "ssh-keygen",
+        ["-Y", "sign", "-f", signingKey, "-n", challenge.namespace],
+        {
+          encoding: "utf8",
+          input: sshProof(challenge, publicKey, origin, "ssh_login"),
+          stdio: ["pipe", "pipe", "ignore"],
+        },
+      );
+      const verified = await fetch(`${origin}/api/v1/auth/mcp/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          challengeId: challenge.challengeId,
+          publicKey,
+          signature,
+        }),
+      });
+      expect(verified.status).toBe(200);
+      const session = (await verified.json()) as { accessToken: string };
+      const machineRecord = () =>
+        fetch(`${origin}/api/v1/records/${capturedRecord.record.id}`, {
+          headers: { Authorization: `Bearer ${session.accessToken}` },
+        });
+      const authorizedRecord = await machineRecord();
+      expect(authorizedRecord.status).toBe(200);
+      expect((await authorizedRecord.json()).record.title).toBe(
+        "Go dashboard evidence",
+      );
+      await credential
+        .getByRole("button", { name: "Revoke", exact: true })
+        .click();
+      await expect(credential.getByText(/Revoked/)).toBeVisible();
+      const deniedRecord = await machineRecord();
+      expect(deniedRecord.status).toBe(401);
+      expect((await deniedRecord.json()).error.code).toBe("AUTH_INVALID");
+      await page.reload();
+      await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await expect(credential.getByText(/Revoked/)).toBeVisible();
+      await expect(
+        credential.getByRole("button", { name: "Revoke", exact: true }),
+      ).toHaveCount(0);
       const ai = page.getByRole("region", {
         name: "AI provider settings",
         exact: true,
@@ -383,6 +507,34 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page
         .getByLabel("Insight project", { exact: false })
         .selectOption({ label: "Go dashboard project" });
+      rejectableAnalysis = true;
+      await page
+        .getByRole("button", { name: "Analyze memory", exact: true })
+        .click();
+      const rejectedSuggestion = page.locator("article").filter({
+        has: page.getByRole("heading", {
+          name: "Dashboard interpretation to reject",
+          exact: true,
+        }),
+      });
+      await expect(rejectedSuggestion).toBeVisible({ timeout: 20_000 });
+      await rejectedSuggestion
+        .getByRole("button", { name: "Reject suggestion", exact: true })
+        .click();
+      await expect(
+        page.getByText("Suggestion rejected.", { exact: true }),
+      ).toBeVisible();
+      await page.reload();
+      await page.getByRole("button", { name: "Insights", exact: true }).click();
+      await page
+        .getByLabel("Insight project", { exact: false })
+        .selectOption({ label: "Go dashboard project" });
+      await expect(
+        rejectedSuggestion.getByText("Rejected", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        rejectedSuggestion.getByRole("button", { name: "Accept suggestion" }),
+      ).toHaveCount(0);
       providerUnavailable = true;
       await page
         .getByRole("button", { name: "Build embeddings", exact: true })
@@ -457,6 +609,46 @@ for (const engine of ["sqlite", "postgres"] as const) {
       expect(markdown).toContain(capturedRecord.record.id);
       expect(markdown).toContain("Go dashboard evidence");
       expect(markdown).not.toContain("synthetic-dashboard-provider-token");
+      await page.getByRole("button", { name: "Projects", exact: true }).click();
+      await page.getByText("Project settings", { exact: true }).click();
+      await page
+        .getByLabel("Allow AI processing for this project", { exact: true })
+        .uncheck();
+      await page
+        .getByRole("button", { name: "Save project settings", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Insights", exact: true }).click();
+      await page
+        .getByLabel("Insight project", { exact: false })
+        .selectOption({ label: "Go dashboard project" });
+      await expect(suggestion).toHaveCount(0);
+      await expect(rejectedSuggestion).toHaveCount(0);
+      await expect(document).toHaveCount(0);
+      await expect(
+        page.getByText(
+          "This project must allow AI processing in its project settings.",
+          { exact: false },
+        ),
+      ).toBeVisible();
+      await page.getByRole("button", { name: "Projects", exact: true }).click();
+      await page.getByText("Project settings", { exact: true }).click();
+      await page
+        .getByLabel("Allow AI processing for this project", { exact: true })
+        .check();
+      await page
+        .getByRole("button", { name: "Save project settings", exact: true })
+        .click();
+      await page.getByRole("button", { name: "Insights", exact: true }).click();
+      await page
+        .getByLabel("Insight project", { exact: false })
+        .selectOption({ label: "Go dashboard project" });
+      await expect(
+        suggestion.getByText("Accepted", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        rejectedSuggestion.getByText("Rejected", { exact: true }),
+      ).toBeVisible();
+      await expect(document).toBeVisible();
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       providerUnavailable = true;
       await ai
