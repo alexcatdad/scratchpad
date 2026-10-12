@@ -284,7 +284,11 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 					}
 				}
 			}
-			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE kind='ai_job' AND ("+statusField+"='running' OR ("+statusField+"='queued' AND ("+queued+"))))", activeArgs...).Scan(&hasActive); err != nil {
+			lease := searchText(a.auth.Store.Engine, "data", "leaseUntil")
+			activeArgs = append(activeArgs, timestamp(time.Now()))
+			now := "$" + strconv.Itoa(len(activeArgs))
+			running := searchCanonicalUTC(a.auth.Store.Engine, lease) + " IS NOT NULL AND (" + lease + ">" + now + " OR (" + lease + "<=" + now + " AND (" + queued + ")))"
+			if err = tx.QueryRowContext(ctx, "SELECT EXISTS(SELECT 1 FROM entities WHERE kind='ai_job' AND (("+statusField+"='running' AND ("+running+")) OR ("+statusField+"='queued' AND ("+queued+"))))", activeArgs...).Scan(&hasActive); err != nil {
 				a.auth.fail(w, err)
 				return
 			}

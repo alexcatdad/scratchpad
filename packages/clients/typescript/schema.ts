@@ -2584,7 +2584,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         jobs?: components["schemas"]["Job"][];
-                        /** @description Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work. */
+                        /** @description Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work. */
                         hasActive?: boolean;
                         /** @description Present only when another page exists. */
                         nextCursor?: string;

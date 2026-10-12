@@ -8883,7 +8883,7 @@ type GetAiJobsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
+		// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
 		HasActive *bool  `json:"hasActive,omitempty"`
 		Jobs      *[]Job `json:"jobs,omitempty"`
 
@@ -8896,7 +8896,7 @@ type GetAiJobsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAiJobsResponse) GetJSON200() *struct {
-	// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
+	// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
 	HasActive *bool  `json:"hasActive,omitempty"`
 	Jobs      *[]Job `json:"jobs,omitempty"`
 
@@ -13811,7 +13811,7 @@ func ParseGetAiJobsResponse(rsp *http.Response) (*GetAiJobsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			// HasActive Running or eligible queued work exists, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued work.
+			// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
 			HasActive *bool  `json:"hasActive,omitempty"`
 			Jobs      *[]Job `json:"jobs,omitempty"`
 
