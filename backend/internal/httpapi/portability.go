@@ -1,15 +1,19 @@
 package httpapi
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"net/http"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -496,7 +500,7 @@ func portableTimestamp(value any) bool {
 // provider configuration. Full operational backups have a separate boundary.
 func (s *SSH) Export() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Minute)
 		defer cancel()
 		options := &sql.TxOptions{ReadOnly: true}
 		if s.Store.Engine == "postgres" {
@@ -512,39 +516,102 @@ func (s *SSH) Export() http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
-		data := map[string][]json.RawMessage{}
-		for _, kind := range knowledgeKinds {
-			values, err := exportSection(ctx, tx, kind)
+		controller := http.NewResponseController(w)
+		if err := controller.SetWriteDeadline(time.Now().Add(5 * time.Minute)); err != nil {
+			s.fail(w, err)
+			return
+		}
+		// Validate one snapshot before sending headers, without retaining the
+		// complete archive in RAM. CreateTemp uses owner-only file permissions.
+		spool, err := os.CreateTemp("", "scratchpad-export-*.json")
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		defer func() { spool.Close(); os.Remove(spool.Name()) }()
+		buffer := bufio.NewWriterSize(spool, 64*1024)
+		if _, err = buffer.WriteString(`{"data":{`); err != nil {
+			s.fail(w, err)
+			return
+		}
+		for i, kind := range knowledgeKinds {
+			if i > 0 {
+				_, err = buffer.WriteString(",")
+			}
+			if err == nil {
+				_, err = fmt.Fprintf(buffer, "%q:[", kind)
+			}
+			if err == nil {
+				err = exportSection(ctx, tx, kind, buffer)
+			}
+			if err == nil {
+				_, err = buffer.WriteString("]")
+			}
 			if err != nil {
 				s.fail(w, err)
 				return
 			}
-			data[kind] = values
+		}
+		if _, err = fmt.Fprintf(buffer, `},"exportedAt":%q,"format":"scratchpad","version":1}`+"\n", timestamp(time.Now())); err == nil {
+			err = buffer.Flush()
+		}
+		if err == nil {
+			err = tx.Commit()
+		}
+		if err == nil {
+			_, err = spool.Seek(0, io.SeekStart)
+		}
+		if err != nil {
+			s.fail(w, err)
+			return
+		}
+		cancel()
+		info, err := spool.Stat()
+		if err == nil {
+			err = controller.SetWriteDeadline(time.Now().Add(5 * time.Minute))
+		}
+		if err != nil {
+			s.fail(w, err)
+			return
 		}
 		w.Header().Set("Content-Disposition", `attachment; filename="scratchpad-export.json"`)
-		JSON(w, 200, map[string]any{"format": "scratchpad", "version": 1, "exportedAt": timestamp(time.Now()), "data": data})
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("Content-Length", strconv.FormatInt(info.Size(), 10))
+		w.WriteHeader(http.StatusOK)
+		_, _ = io.Copy(w, spool)
 	}
 }
 
-func exportSection(ctx context.Context, tx *sql.Tx, kind string) ([]json.RawMessage, error) {
+func exportSection(ctx context.Context, tx *sql.Tx, kind string, writer io.Writer) error {
 	rows, err := tx.QueryContext(ctx, `SELECT data FROM entities WHERE kind=$1 ORDER BY created_at,id`, kind)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
-	values := []json.RawMessage{}
+	encoder := json.NewEncoder(writer)
+	first := true
 	for rows.Next() {
 		var raw []byte
 		if err := rows.Scan(&raw); err != nil {
-			return nil, err
+			return err
 		}
 		raw, err = portableEntityJSON(kind, raw)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		values = append(values, raw)
+		if !first {
+			if _, err = io.WriteString(writer, ","); err != nil {
+				return err
+			}
+		}
+		if err = encoder.Encode(json.RawMessage(raw)); err != nil {
+			return err
+		}
+		first = false
 	}
-	return values, rows.Err()
+	return rows.Err()
 }
 
 // Export and replay share one lossless projection of portable entity fields.
