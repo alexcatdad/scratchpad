@@ -100,6 +100,26 @@ func (s *SSH) Search(post bool) http.HandlerFunc {
 	}
 }
 func search(ctx context.Context, tx *sql.Tx, engine string, params url.Values) (map[string]any, error) {
+	// Reserve headroom below SQLite's 32766 bind limit for ordinary filters,
+	// date bounds and cursor predicates. Repeated selectors consume no budget.
+	remainingSelectors := 32700
+	for _, field := range []string{"projectIds", "types"} {
+		if values, exists := params[field]; exists {
+			seen := map[string]bool{}
+			unique := []string{}
+			for _, value := range values {
+				if !seen[value] {
+					if remainingSelectors == 0 {
+						return nil, validationProject()
+					}
+					remainingSelectors--
+					seen[value] = true
+					unique = append(unique, value)
+				}
+			}
+			params[field] = unique
+		}
+	}
 	limit := 30
 	if raw, exists := params["limit"]; exists {
 		value, err := strconv.ParseFloat(raw[0], 64)
