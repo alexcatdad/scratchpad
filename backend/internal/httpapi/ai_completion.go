@@ -403,7 +403,7 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 			content["markdown"] = markdown + "\n\n## Source records\n\n" + strings.Join(citations, "\n") + "\n"
 		}
 	}
-	if generatedCount > 0 && len(artifacts) == 0 {
+	if generatedCount > 0 && len(artifacts) == 0 && (export || len(warnings) == 0) {
 		return aiUnavailable()
 	}
 	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
