@@ -15,6 +15,9 @@ import (
 
 func TestPublicHostnameMatchesBrowserOriginAndTrustedSSHRecipient(t *testing.T) {
 	for _, config := range []struct{ input, canonical, hostname string }{
+		{"https://127.0.0.1:0443", "https://127.0.0.1", "127.0.0.1"},
+		{"https://123.example", "https://123.example", "123.example"},
+		{"https://api.0xz", "https://api.0xz", "api.0xz"},
 		{"https://[::ffff:127.0.0.1]", "https://[::ffff:7f00:1]", "::ffff:7f00:1"},
 		{"https://[::FFFF:192.0.2.128]:08443/", "https://[::ffff:c000:280]:8443", "::ffff:c000:280"},
 		{"https://[2001:0db8:0000:0000:0000:0000:0000:0001]:0443", "https://[2001:db8::1]", "2001:db8::1"},

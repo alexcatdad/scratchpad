@@ -98,6 +98,20 @@ func run() error {
 	} else {
 		hostname = strings.ToLower(hostname)
 	}
+	// WHATWG treats a numeric final label (including empty hexadecimal 0x)
+	// as IPv4. Require its canonical spelling instead of a legacy alias.
+	lastLabel := strings.TrimSuffix(hostname, ".")
+	lastLabel = lastLabel[strings.LastIndex(lastLabel, ".")+1:]
+	numeric := lastLabel != "" && strings.Trim(lastLabel, "0123456789") == ""
+	if strings.HasPrefix(lastLabel, "0x") && strings.Trim(lastLabel[2:], "0123456789abcdef") == "" {
+		numeric = true
+	}
+	if numeric {
+		address, err := netip.ParseAddr(hostname)
+		if err != nil || !address.Is4() || address.String() != hostname {
+			return errors.New("CONFIG_INVALID: public URL must use canonical IPv4 spelling.")
+		}
+	}
 	port := public.Port()
 	if strings.HasSuffix(public.Host, ":") {
 		return errors.New("CONFIG_INVALID: public URL must be an HTTPS origin or a loopback HTTP origin.")
