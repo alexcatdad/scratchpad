@@ -467,7 +467,7 @@ func TestAnalysisWorkerValidatesMandatoryFieldsBeforeModeFiltering(t *testing.T)
 func TestAnalysisWorkerSupportsExistingKindsAndReportsInsufficientEvidence(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
-			kinds := []string{"summary", "classification", "duplicate_candidate", "relationship_candidate", "contradiction", "cluster", "pattern", "recommendation", "export"}
+			kinds := []string{"summary", "classification", "duplicate_candidate", "relationship_candidate", "contradiction", "cluster", "pattern", "recommendation"}
 			provider := completionService(t, func(input map[string]any) any {
 				records := input["records"].([]any)
 				first := records[0].(map[string]any)["id"]

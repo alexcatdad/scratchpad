@@ -1076,7 +1076,7 @@ export interface components {
             /** @enum {string} */
             reasoningEffort?: "default" | "none" | "low" | "medium" | "high" | "xhigh";
             similarityThreshold?: number;
-            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation" | "export")[];
+            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation")[];
             apiKeyConfigured?: boolean;
             version?: number;
             /** @default 4096 */
@@ -1095,7 +1095,7 @@ export interface components {
             /** @enum {string} */
             reasoningEffort?: "default" | "none" | "low" | "medium" | "high" | "xhigh";
             similarityThreshold?: number;
-            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation" | "export")[];
+            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation")[];
             /** @description Omit to preserve the stored key; empty string removes it. */
             apiKey?: string;
             /** @default 4096 */

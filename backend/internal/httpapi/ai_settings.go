@@ -76,11 +76,18 @@ func aiConfig(row map[string]any) (AIConfig, error) {
 	if !contains([]string{"default", "none", "low", "medium", "high", "xhigh"}, cfg.ReasoningEffort) {
 		return cfg, aiInvalid()
 	}
+	modes := []string{}
 	for _, mode := range cfg.AnalysisModes {
 		if !contains(artifactKinds, mode) {
 			return cfg, aiInvalid()
 		}
+		// Historical export entries remain stored, but never enable documents
+		// through ordinary analysis or scheduling.
+		if mode != "export" {
+			modes = append(modes, mode)
+		}
 	}
+	cfg.AnalysisModes = modes
 	return cfg, nil
 }
 func aiConfigMap(cfg AIConfig) map[string]any {
@@ -204,6 +211,18 @@ func (a *AI) configure(ctx context.Context, conn *sql.Conn, body, actor map[stri
 	}
 	if version != expected {
 		return nil, &protocolError{"CONFLICT", "AI configuration changed. Read it again.", 409}
+	}
+	if supplied, exists := body["analysisModes"]; exists {
+		modes, ok := supplied.([]any)
+		if !ok {
+			return nil, aiInvalid()
+		}
+		for _, value := range modes {
+			mode, ok := value.(string)
+			if !ok || mode == "export" || !contains(artifactKinds, mode) {
+				return nil, aiInvalid()
+			}
+		}
 	}
 	cfg, err := aiConfig(previous)
 	if err != nil {

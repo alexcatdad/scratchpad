@@ -23,7 +23,6 @@ const (
 	AiSettingsAnalysisModesCluster               AiSettingsAnalysisModes = "cluster"
 	AiSettingsAnalysisModesContradiction         AiSettingsAnalysisModes = "contradiction"
 	AiSettingsAnalysisModesDuplicateCandidate    AiSettingsAnalysisModes = "duplicate_candidate"
-	AiSettingsAnalysisModesExport                AiSettingsAnalysisModes = "export"
 	AiSettingsAnalysisModesPattern               AiSettingsAnalysisModes = "pattern"
 	AiSettingsAnalysisModesRecommendation        AiSettingsAnalysisModes = "recommendation"
 	AiSettingsAnalysisModesRelationshipCandidate AiSettingsAnalysisModes = "relationship_candidate"
@@ -40,8 +39,6 @@ func (e AiSettingsAnalysisModes) Valid() bool {
 	case AiSettingsAnalysisModesContradiction:
 		return true
 	case AiSettingsAnalysisModesDuplicateCandidate:
-		return true
-	case AiSettingsAnalysisModesExport:
 		return true
 	case AiSettingsAnalysisModesPattern:
 		return true
@@ -92,7 +89,6 @@ const (
 	AiSettingsPatchAnalysisModesCluster               AiSettingsPatchAnalysisModes = "cluster"
 	AiSettingsPatchAnalysisModesContradiction         AiSettingsPatchAnalysisModes = "contradiction"
 	AiSettingsPatchAnalysisModesDuplicateCandidate    AiSettingsPatchAnalysisModes = "duplicate_candidate"
-	AiSettingsPatchAnalysisModesExport                AiSettingsPatchAnalysisModes = "export"
 	AiSettingsPatchAnalysisModesPattern               AiSettingsPatchAnalysisModes = "pattern"
 	AiSettingsPatchAnalysisModesRecommendation        AiSettingsPatchAnalysisModes = "recommendation"
 	AiSettingsPatchAnalysisModesRelationshipCandidate AiSettingsPatchAnalysisModes = "relationship_candidate"
@@ -109,8 +105,6 @@ func (e AiSettingsPatchAnalysisModes) Valid() bool {
 	case AiSettingsPatchAnalysisModesContradiction:
 		return true
 	case AiSettingsPatchAnalysisModesDuplicateCandidate:
-		return true
-	case AiSettingsPatchAnalysisModesExport:
 		return true
 	case AiSettingsPatchAnalysisModesPattern:
 		return true
