@@ -67,8 +67,21 @@ func validatePortableArtifact(ctx context.Context, conn *sql.Conn, section strin
 	if value["authority"] != "derived" || !contains(artifactKinds, stringValue(value, "kind")) {
 		return artifactInvalid()
 	}
-	if _, ok := value["generator"].(map[string]any); !ok {
+	generator, ok := value["generator"].(map[string]any)
+	if !ok {
 		return artifactInvalid()
+	}
+	if model, exists := generator["model"]; exists {
+		if _, err := curationText(model, 200); err != nil {
+			return artifactInvalid()
+		}
+	}
+	for _, field := range []string{"provider", "version"} {
+		if value, exists := generator[field]; exists {
+			if _, ok := value.(string); !ok {
+				return artifactInvalid()
+			}
+		}
 	}
 	sources, ok := portableIDs(value["sourceRecordIds"])
 	if !ok || !uniqueStrings(sources) {
