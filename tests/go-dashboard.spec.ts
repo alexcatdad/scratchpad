@@ -106,20 +106,30 @@ for (const engine of ["sqlite", "postgres"] as const) {
           listener.close(() => done(address.port));
         });
       });
-    const uiPort = await port(),
-      apiPort = await port();
+    const uiPort = await port();
+    let apiPort = await port();
+    while (apiPort === uiPort) apiPort = await port();
     const origin = `http://localhost:${apiPort}`;
     const uiOrigin = `http://127.0.0.1:${uiPort}`;
-    const start = (file: string, args: string[], env: NodeJS.ProcessEnv) => {
+    const start = (
+      label: string,
+      file: string,
+      args: string[],
+      env: NodeJS.ProcessEnv,
+    ) => {
       const child = spawn(file, args, { env, stdio: "ignore" });
       children.push(child);
       exits.push(
         new Promise<void>((done, fail) => {
           child.once("error", fail);
-          child.once("exit", (code) =>
+          child.once("exit", (code, signal) =>
             code === 0
               ? done()
-              : fail(new Error("Dashboard fixture exited unsuccessfully")),
+              : fail(
+                  new Error(
+                    `${label} fixture exited: code=${code}, signal=${signal}, UI port=${uiPort}, API port=${apiPort}`,
+                  ),
+                ),
           );
         }),
       );
@@ -167,7 +177,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
           .trim()
           .split("\n")
           .at(-1) ?? "";
-      start(process.execPath, [resolve("apps/web/server.mjs")], {
+      start("Dashboard", process.execPath, [resolve("apps/web/server.mjs")], {
         ...env,
         PORT: String(uiPort),
         HOST: "127.0.0.1",
@@ -175,7 +185,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         SCRATCHPAD_ENCRYPTION_KEY_FILE: "",
         SCRATCHPAD_DATABASE_PATH: join(dir, "unused-ui.sqlite"),
       });
-      start(binary, ["serve"], env);
+      start("Go API", binary, ["serve"], env);
       await expect
         .poll(async () => {
           try {
