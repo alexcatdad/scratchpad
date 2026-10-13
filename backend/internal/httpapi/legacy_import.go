@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"math"
 	"regexp"
 	"sort"
 	"strconv"
@@ -40,6 +41,16 @@ func legacyReadable(value any) string {
 // Match the established canonical JSON identity, including locale sorting and
 // JavaScript property enumeration. Raw lines remain separately immutable.
 func legacyCanonical(raw json.RawMessage, order *collate.Collator) (string, error) {
+	return legacyCanonicalJSON(raw, order, false)
+}
+
+// Legacy identities retain JavaScript Number spelling; immutable numerical
+// evidence and AI source hashes continue using the exact serializer above.
+func legacyIdentityCanonical(raw json.RawMessage, order *collate.Collator) (string, error) {
+	return legacyCanonicalJSON(raw, order, true)
+}
+
+func legacyCanonicalJSON(raw json.RawMessage, order *collate.Collator, numericIdentity bool) (string, error) {
 	raw = json.RawMessage(strings.TrimSpace(string(raw)))
 	if len(raw) == 0 {
 		return "", importInvalid()
@@ -53,7 +64,7 @@ func legacyCanonical(raw json.RawMessage, order *collate.Collator) (string, erro
 		sort.SliceStable(fields, func(i, j int) bool { return order.CompareString(fields[i].key, fields[j].key) < 0 })
 		parts := []string{}
 		for _, field := range fields {
-			value, err := legacyCanonical(field.raw, order)
+			value, err := legacyCanonicalJSON(field.raw, order, numericIdentity)
 			if err != nil {
 				return "", err
 			}
@@ -67,7 +78,7 @@ func legacyCanonical(raw json.RawMessage, order *collate.Collator) (string, erro
 		}
 		parts := []string{}
 		for _, entry := range array {
-			value, err := legacyCanonical(entry, order)
+			value, err := legacyCanonicalJSON(entry, order, numericIdentity)
 			if err != nil {
 				return "", err
 			}
@@ -75,6 +86,20 @@ func legacyCanonical(raw json.RawMessage, order *collate.Collator) (string, erro
 		}
 		return "[" + strings.Join(parts, ",") + "]", nil
 	default:
+		if numericIdentity && (raw[0] == '-' || raw[0] >= '0' && raw[0] <= '9') {
+			number, err := strconv.ParseFloat(string(raw), 64)
+			if math.IsInf(number, 0) {
+				return "null", nil
+			}
+			if err != nil {
+				return "", err
+			}
+			if number == 0 {
+				return "0", nil
+			}
+			encoded, err := json.Marshal(number)
+			return string(encoded), err
+		}
 		return compactCaptureJSON(raw)
 	}
 }
@@ -125,10 +150,21 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 	}
 	pending := []pendingRecord{}
 	order := collate.New(language.English)
-	lines := strings.Split(text, "\n")
-	for offset, rawLine := range lines {
+	for offset, start := 0, 0; start <= len(text); offset++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		end := strings.IndexByte(text[start:], '\n')
+		terminated := end >= 0
+		if terminated {
+			end += start
+		} else {
+			end = len(text)
+		}
+		rawLine := text[start:end]
+		start = end + 1
 		line := offset + 1
-		if offset < len(lines)-1 {
+		if terminated {
 			rawLine = strings.TrimSuffix(rawLine, "\r")
 		}
 		if strings.TrimSpace(rawLine) == "" {
@@ -141,7 +177,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 			skipped++
 			continue
 		}
-		canonical, err := legacyCanonical(json.RawMessage(rawLine), order)
+		canonical, err := legacyIdentityCanonical(json.RawMessage(rawLine), order)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +194,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 			occurrence = 0
 		}
 		encoded, _ := json.Marshal(map[string]any{"projectId": projectID, "sourceName": name, "identity": identity, "occurrence": occurrence})
-		identityJSON, err := legacyCanonical(encoded, order)
+		identityJSON, err := legacyIdentityCanonical(encoded, order)
 		if err != nil {
 			return nil, err
 		}
@@ -197,18 +233,17 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 		}
 		if existing != nil {
 			legacy := objectValue(existing, "payload")["legacyOriginal"]
-			matches := false
-			if legacy != nil {
-				encoded, err := json.Marshal(legacy)
-				if err != nil {
-					return nil, err
+			// Retained TypeScript payloads may have rounded Number values, while
+			// rawLine still preserves the source. Compare exact source meaning so
+			// alternate spelling replays but distinct large numbers still conflict.
+			provenance := objectValue(objectValue(existing, "provenance"), "import")
+			if line := stringValue(provenance, "rawLine"); line != "" {
+				var source map[string]any
+				if DecodeJSONNumbers([]byte(line), &source) == nil && source != nil {
+					legacy = source
 				}
-				prior, err := legacyCanonical(encoded, order)
-				if err != nil {
-					return nil, err
-				}
-				matches = prior == canonical
 			}
+			matches := legacy != nil && EqualJSONNumbers(legacy, original)
 			status := "skipped"
 			if !matches {
 				status = "conflict"
