@@ -75,13 +75,14 @@ func completionParts(text string) []string {
 }
 func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 	ordered := append([]map[string]any{}, records...)
-	sort.SliceStable(ordered, func(i, j int) bool {
-		left, right := stringValue(ordered[i], "recordedAt"), stringValue(ordered[j], "recordedAt")
+	chronological := func(first, second map[string]any) bool {
+		left, right := stringValue(first, "recordedAt"), stringValue(second, "recordedAt")
 		if order, err := compareInstants(left, right); err == nil {
 			return order < 0
 		}
 		return left < right
-	})
+	}
+	sort.SliceStable(ordered, func(i, j int) bool { return chronological(ordered[i], ordered[j]) })
 	groups := map[string][]map[string]any{}
 	projects := []string{}
 	for _, record := range ordered {
@@ -105,6 +106,12 @@ func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 	batches := [][]map[string]any{}
 	batch := []map[string]any{}
 	size := 0
+	appendBatch := func() {
+		// Select fair cross-project membership first. Present that fixed batch
+		// chronologically, preserving equivalent-time and within-record ties.
+		sort.SliceStable(batch, func(i, j int) bool { return chronological(batch[i], batch[j]) })
+		batches = append(batches, batch)
+	}
 	for _, record := range interleaved {
 		parts := completionParts(stringValue(record, "content"))
 		for part, text := range parts {
@@ -115,7 +122,7 @@ func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 			}
 			length := len(utf16.Encode([]rune(string(encoded))))
 			if len(batch) > 0 && (size+length > 14000 || len(batch) >= 40) {
-				batches = append(batches, batch)
+				appendBatch()
 				batch = []map[string]any{}
 				size = 0
 			}
@@ -124,7 +131,7 @@ func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 		}
 	}
 	if len(batch) > 0 {
-		batches = append(batches, batch)
+		appendBatch()
 	}
 	return batches, nil
 }
