@@ -34,6 +34,127 @@ func ragExcerpt(text string, limit int) string {
 	}
 	return string(utf16.Decode(units[:limit]))
 }
+
+func (a *AI) readRAGSnapshot(ctx context.Context, read func(scopeReader) error) error {
+	tx, err := a.auth.Store.DB.BeginTx(ctx, &sql.TxOptions{ReadOnly: true, Isolation: sql.LevelRepeatableRead})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	return read(tx)
+}
+
+func (a *AI) currentRAGAdmission(ctx context.Context, r *http.Request, snapshot providerSnapshot, scope jobScope, projects []string) error {
+	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+		if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
+			return err
+		}
+		if err := a.ragAvailable(ctx, conn); err != nil {
+			return err
+		}
+		// Scope governs coverage, replacement and relationship citations as well
+		// as returned passages. Historical unscoped requests cannot silently drop
+		// a withdrawn participant while retaining that snapshot's evidence.
+		scope.ProjectID, scope.ProjectIDs = "", projects
+		_, err := allowedJobs(ctx, conn, scope)
+		return err
+	})
+}
+
+// Recheck only evidence that survived response bounding. Immutable source hashes,
+// governing lifecycle and actually cited edges use a fresh read snapshot; no
+// coverage or full source corpus is loaded in the final writer admission fence.
+func ragCurrentEvidence(ctx context.Context, q scopeReader, projects []string, items []map[string]any) error {
+	places := make([]string, len(projects))
+	projectArgs := []any{}
+	for i, id := range projects {
+		places[i] = fmt.Sprintf("$%d", i+2)
+		projectArgs = append(projectArgs, id)
+	}
+	replacing := `SELECT 1 FROM entities l JOIN entities f ON f.kind='record' AND f.id=l.data->>'fromRecordId' WHERE l.kind='relationship' AND l.data->>'status'='accepted' AND l.data->>'toRecordId'=r.id AND f.data->>'projectId' IN (` + strings.Join(places, ",") + `)`
+	statement := `SELECT r.data,m.data,EXISTS(` + replacing + ` AND l.data->>'type'='replaces'),EXISTS(` + replacing + ` AND l.data->>'type'='partially_replaces') FROM entities r LEFT JOIN entities m ON m.kind='metadata' AND m.id=r.id WHERE r.kind='record' AND r.id=$1`
+	sources := map[string]map[string]any{}
+	edges := map[string]map[string]any{}
+	endpoints := map[string]string{}
+	for _, item := range items {
+		id := stringValue(item, "recordId")
+		current := sources[id]
+		if current == nil {
+			var raw, meta []byte
+			var full, partial bool
+			args := append([]any{id}, projectArgs...)
+			if err := q.QueryRowContext(ctx, statement, args...).Scan(&raw, &meta, &full, &partial); err != nil {
+				if err == sql.ErrNoRows {
+					return aiChanged()
+				}
+				return err
+			}
+			var record, metadata map[string]any
+			if json.Unmarshal(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
+				return aiUnavailable()
+			}
+			hash, err := aiHash(record)
+			if err != nil {
+				return err
+			}
+			applicability := lifecycle(record, metadata, nil)
+			if !truthy(metadata["archived"]) {
+				if full {
+					applicability = "superseded"
+				} else if partial {
+					applicability = "partially_superseded"
+				}
+			}
+			if applicability == "active" {
+				applicability = "current"
+			}
+			if applicability == "current" && truthy(objectValue(record, "provenance")["import"]) {
+				applicability = "unverified"
+			}
+			current = map[string]any{"hash": hash, "applicability": applicability}
+			sources[id] = current
+		}
+		if current["hash"] != item["contentHash"] || !EqualJSONNumbers(current["applicability"], item["applicability"]) {
+			return aiChanged()
+		}
+		for _, citation := range item["relationships"].([]map[string]any) {
+			edgeID := stringValue(citation, "id")
+			edge := edges[edgeID]
+			if edge == nil {
+				var err error
+				edge, err = entityMap(ctx, q, "relationship", edgeID)
+				if err != nil {
+					if err == sql.ErrNoRows {
+						return aiChanged()
+					}
+					return err
+				}
+				edges[edgeID] = edge
+			}
+			if edge["status"] != "accepted" || !EqualJSONNumbers(edge["type"], citation["type"]) || !EqualJSONNumbers(edge["fromRecordId"], citation["fromRecordId"]) || !EqualJSONNumbers(edge["toRecordId"], citation["toRecordId"]) || ragExcerpt(stringValue(edge, "note"), 128) != stringValue(citation, "note") {
+				return aiChanged()
+			}
+			for _, field := range []string{"fromRecordId", "toRecordId"} {
+				endpoint := stringValue(edge, field)
+				project, ok := endpoints[endpoint]
+				if !ok {
+					if err := q.QueryRowContext(ctx, `SELECT data->>'projectId' FROM entities WHERE kind='record' AND id=$1`, endpoint).Scan(&project); err != nil {
+						if err == sql.ErrNoRows {
+							return aiChanged()
+						}
+						return err
+					}
+					endpoints[endpoint] = project
+				}
+				if !contains(projects, project) {
+					return aiChanged()
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (a *AI) RAGRetrieve() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, err := apiActor(r.Context(), a.auth.Store.DB, r, a.auth.Origin); err != nil {
@@ -116,11 +237,25 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 		results := []map[string]any{}
 		coverageStatus := "incomplete"
 		candidates := []ragCandidate{}
+		eligibleProjects := []string{}
 		err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 			if err := a.providerCurrent(ctx, conn, r, snapshot); err != nil {
 				return err
 			}
 			if err := a.ragAvailable(ctx, conn); err != nil {
+				return err
+			}
+			_, err := allowedJobs(ctx, conn, scope)
+			return err
+		})
+		if err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		// Coverage, source hashing and hybrid candidate queries share a read-only
+		// snapshot rather than holding the serialized writer admission boundary.
+		err = a.readRAGSnapshot(ctx, func(conn scopeReader) error {
+			if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
 				return err
 			}
 			coverage, err := a.ragCoverage(ctx, conn, scope)
@@ -132,6 +267,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			if err != nil {
 				return err
 			}
+			eligibleProjects = ids
 			args := []any{fingerprint, vector, snapshot.config.EmbeddingDimensions, query, snapshot.config.SimilarityThreshold}
 			placeholders := make([]string, len(ids))
 			for i, id := range ids {
@@ -254,11 +390,24 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 			return
 		}
 		if len(results) == 0 && coverageStatus == "incomplete" {
+			if err := a.currentRAGAdmission(ctx, r, snapshot, scope, eligibleProjects); err != nil {
+				a.auth.fail(w, err)
+				return
+			}
 			a.lexicalFallback(w, r, scope, query, intent, limit, budget, &protocolError{"RAG_INDEX_INCOMPLETE", "Semantic indexing is incomplete.", 503})
 			return
 		}
 		response, err := ragBoundEvidence(results, map[string]any{"available": true, "indexCoverage": coverageStatus}, limit, budget)
 		if err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		selected := response["results"].([]map[string]any)
+		if err := a.readRAGSnapshot(ctx, func(q scopeReader) error { return ragCurrentEvidence(ctx, q, eligibleProjects, selected) }); err != nil {
+			a.auth.fail(w, err)
+			return
+		}
+		if err := a.currentRAGAdmission(ctx, r, snapshot, scope, eligibleProjects); err != nil {
 			a.auth.fail(w, err)
 			return
 		}
