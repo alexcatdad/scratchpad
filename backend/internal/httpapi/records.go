@@ -9,7 +9,6 @@ import (
 	"errors"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -231,13 +230,15 @@ func recordDetail(ctx context.Context, tx *sql.Tx, engine, id string) (detail, e
 	if engine == "postgres" {
 		field = "data->>'entityId'"
 	}
-	args := []any{"audit"}
-	placeholders := []string{}
-	for _, id := range ids {
-		args = append(args, id)
-		placeholders = append(placeholders, "$"+strconv.Itoa(len(args)))
+	encodedIDs, err := json.Marshal(ids)
+	if err != nil {
+		return d, err
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT data FROM entities WHERE kind=$1 AND `+field+` IN (`+strings.Join(placeholders, ",")+`) ORDER BY created_at,id`, args...)
+	identitySet := `SELECT value FROM json_each($2)`
+	if engine == "postgres" {
+		identitySet = `SELECT jsonb_array_elements_text($2::jsonb)`
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT data FROM entities WHERE kind=$1 AND `+field+` IN (`+identitySet+`) ORDER BY created_at,id`, "audit", string(encodedIDs))
 	if err != nil {
 		return d, err
 	}
