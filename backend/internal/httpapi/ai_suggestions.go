@@ -126,6 +126,73 @@ type suggestionRow struct {
 	key  []string
 }
 
+// suggestionInstant separates whole seconds from arbitrary fractional digits,
+// including historical offsets whose UTC instant falls outside years 0000–9999.
+func suggestionInstant(value string) (int64, string, error) {
+	base, fraction := value, ""
+	if len(value) > 19 && (value[19] == '.' || value[19] == ',') {
+		end := 20
+		for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+			end++
+		}
+		if end == 20 {
+			return 0, "", strconv.ErrSyntax
+		}
+		fraction = strings.TrimRight(value[20:end], "0")
+		base = value[:19] + value[end:]
+	}
+	at, err := time.Parse(time.RFC3339Nano, base)
+	if err != nil {
+		at, err = time.Parse("2006-01-02T15:04Z", base)
+	}
+	return at.Unix(), fraction, err
+}
+
+func suggestionTimestamp(value string) string {
+	seconds, fraction, err := suggestionInstant(value)
+	at := time.Unix(seconds, 0).UTC()
+	if err != nil || at.Year() < 0 || at.Year() > 9999 {
+		return value
+	}
+	key := at.Format("2006-01-02T15:04:05")
+	if fraction != "" {
+		key += "." + fraction
+	}
+	return key + "Z"
+}
+
+func compareSuggestionKeys(left, right []string, scoped bool) int {
+	leftSeconds, leftFraction, leftErr := suggestionInstant(left[0])
+	rightSeconds, rightFraction, rightErr := suggestionInstant(right[0])
+	order := 0
+	if leftErr != nil || rightErr != nil {
+		if leftErr == nil && rightErr != nil {
+			order = 1
+		} else if leftErr != nil && rightErr == nil {
+			order = -1
+		} else {
+			order = strings.Compare(left[0], right[0])
+		}
+	} else if leftSeconds < rightSeconds {
+		order = -1
+	} else if leftSeconds > rightSeconds {
+		order = 1
+	} else {
+		width := max(len(leftFraction), len(rightFraction))
+		order = strings.Compare(leftFraction+strings.Repeat("0", width-len(leftFraction)), rightFraction+strings.Repeat("0", width-len(rightFraction)))
+	}
+	if order != 0 {
+		return -order
+	}
+	if order = strings.Compare(left[1], right[1]); order != 0 {
+		if scoped {
+			return -order
+		}
+		return order
+	}
+	return strings.Compare(left[2], right[2])
+}
+
 func (a *AI) suggestionWindow(ctx context.Context, conn *sql.Conn, scope jobScope, after []string) ([]suggestionRow, error) {
 	ids := scope.ProjectIDs
 	if ids == nil && scope.ProjectID != "" {
@@ -141,37 +208,98 @@ func (a *AI) suggestionWindow(ctx context.Context, conn *sql.Conn, scope jobScop
 	if ids != nil {
 		membership = "EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(entities.data) THEN entities.data ELSE '{}' END,'$.projectIds') WHERE value IN (" + strings.Join(marks, ",") + "))"
 	}
-	ordering := "CASE WHEN json_valid(data) THEN CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END ELSE '' END COLLATE BINARY"
-	if a.auth.Store.Engine == "postgres" {
-		ordering = "(CASE WHEN jsonb_typeof(data->'createdAt')='string' THEN data->>'createdAt' ELSE '' END) COLLATE \"C\""
-		if ids != nil {
-			membership = "EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(data->'projectIds')='array' THEN data->'projectIds' ELSE '[]'::jsonb END) AS projects(value) WHERE value IN (" + strings.Join(marks, ",") + "))"
-		}
+	engine := a.auth.Store.Engine
+	if engine == "postgres" && ids != nil {
+		membership = "EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(data->'projectIds')='array' THEN data->'projectIds' ELSE '[]'::jsonb END) AS projects(value) WHERE value IN (" + strings.Join(marks, ",") + "))"
 	}
 	storedOrder, storedCompare := "ASC", ">"
 	if ids != nil {
 		storedOrder, storedCompare = "DESC", "<"
 	}
-	where := "kind='ai_artifact' AND " + membership
-	if after != nil {
-		base := len(args)
-		args = append(args, after[0], after[1], after[2])
-		first, second, third := fmt.Sprintf("$%d", base+1), fmt.Sprintf("$%d", base+2), fmt.Sprintf("$%d", base+3)
-		where += " AND (" + ordering + "<" + first + " OR (" + ordering + "=" + first + " AND (created_at" + storedCompare + second + " OR (created_at=" + second + " AND id>" + third + "))))"
+	collation := "BINARY"
+	if engine == "postgres" {
+		collation = `"C"`
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT data,"+ordering+",created_at,id FROM entities WHERE "+where+" ORDER BY "+ordering+" DESC,created_at "+storedOrder+",id LIMIT 64", args...)
+	statement := "WITH admitted AS(SELECT id COLLATE " + collation + " AS id,created_at COLLATE " + collation + " AS stored_at,COALESCE((" + searchText(engine, "data", "createdAt") + "),'') AS timestamp FROM entities WHERE kind='ai_artifact' AND " + membership + "), ordered AS(SELECT id,stored_at,timestamp," + searchCanonicalUTC(engine, "timestamp") + " AS sort_key FROM admitted) SELECT timestamp,stored_at,id FROM ordered WHERE "
+	results := []suggestionRow{}
+	if after != nil {
+		after = append([]string{}, after...)
+		after[0] = suggestionTimestamp(after[0])
+	}
+	read := func(query string, arguments []any) error {
+		rows, err := conn.QueryContext(ctx, query, arguments...)
+		if err != nil {
+			return err
+		}
+		defer rows.Close()
+		for rows.Next() {
+			key := make([]string, 3)
+			if err = rows.Scan(&key[0], &key[1], &key[2]); err != nil {
+				return err
+			}
+			key[0] = suggestionTimestamp(key[0])
+			if after != nil && compareSuggestionKeys(key, after, ids != nil) <= 0 {
+				continue
+			}
+			index := sort.Search(len(results), func(i int) bool { return compareSuggestionKeys(results[i].key, key, ids != nil) >= 0 })
+			if index < 64 {
+				results = append(results, suggestionRow{})
+				copy(results[index+1:], results[index:])
+				results[index] = suggestionRow{key: key}
+				if len(results) > 64 {
+					results = results[:64]
+				}
+			}
+		}
+		return rows.Err()
+	}
+	// Only historical/noncanonical headers require a streaming comparison.
+	// Native canonical timestamps use exact keyset ordering and a bounded limit.
+	if err := read(statement+"sort_key IS NULL", args); err != nil {
+		return nil, err
+	}
+	canonical := "sort_key IS NOT NULL"
+	canonicalArgs := append([]any{}, args...)
+	bounded := after == nil
+	if after != nil {
+		if key := searchChronologicalKey(after[0]); key != "" {
+			base := len(canonicalArgs)
+			canonicalArgs = append(canonicalArgs, key, after[1], after[2])
+			first, second, third := fmt.Sprintf("$%d", base+1), fmt.Sprintf("$%d", base+2), fmt.Sprintf("$%d", base+3)
+			canonical += " AND (sort_key<" + first + " OR (sort_key=" + first + " AND (stored_at" + storedCompare + second + " OR (stored_at=" + second + " AND id>" + third + "))))"
+			bounded = true
+		}
+	}
+	canonical += " ORDER BY sort_key DESC,stored_at " + storedOrder + ",id"
+	if bounded {
+		canonical += " LIMIT 64"
+	}
+	if err := read(statement+canonical, canonicalArgs); err != nil {
+		return nil, err
+	}
+	if len(results) == 0 {
+		return results, nil
+	}
+	// Hydrate only the selected window, preserving malformed off-page isolation.
+	marks, args = make([]string, len(results)), []any{}
+	byID := map[string]int{}
+	for i, row := range results {
+		marks[i] = fmt.Sprintf("$%d", i+1)
+		args = append(args, row.key[2])
+		byID[row.key[2]] = i
+	}
+	rows, err := conn.QueryContext(ctx, "SELECT id,data FROM entities WHERE kind='ai_artifact' AND id IN ("+strings.Join(marks, ",")+")", args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	results := []suggestionRow{}
 	for rows.Next() {
+		var id string
 		var raw []byte
-		var created, stored, id string
-		if err = rows.Scan(&raw, &created, &stored, &id); err != nil {
+		if err = rows.Scan(&id, &raw); err != nil {
 			return nil, err
 		}
-		results = append(results, suggestionRow{raw, []string{created, stored, id}})
+		results[byID[id]].data = raw
 	}
 	return results, rows.Err()
 }
