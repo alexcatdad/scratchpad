@@ -50,11 +50,12 @@ func (s *SSH) Import() http.HandlerFunc {
 		// Bound the stream before parsing. JSON decoding must not postpone the
 		// byte-limit error while scanning a large string or whitespace suffix.
 		payload, readErr := io.ReadAll(io.LimitReader(r.Body, 64*1024*1024+1))
-		if controller.SetReadDeadline(time.Time{}) != nil || controller.SetWriteDeadline(time.Now().Add(30*time.Second)) != nil {
+		processingDeadline := time.Now().Add(5 * time.Minute)
+		if controller.SetReadDeadline(time.Time{}) != nil || controller.SetWriteDeadline(processingDeadline.Add(30*time.Second)) != nil {
 			s.fail(w, importInvalid())
 			return
 		}
-		ctx, cancel = context.WithTimeout(r.Context(), 25*time.Second)
+		ctx, cancel = context.WithDeadline(r.Context(), processingDeadline)
 		defer cancel()
 		if readErr != nil {
 			s.fail(w, importInvalid())

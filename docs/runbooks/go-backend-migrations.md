@@ -50,7 +50,7 @@ colon-containing IDs remain reachable; malformed historical IDs remain available
 through recovery export. Authenticated import bodies retain the 64 MiB cap and
 have a five-minute upload deadline, separate from the ordinary fifteen-second
 request read deadline. Parsing and transactional import then receive their own
-twenty-five-second deadline; authorization is rechecked in the write transaction.
+five-minute deadline; authorization is rechecked in the write transaction.
 
 `serve` writes request metadata to stderr as JSON: method, pathname, status and
 elapsed milliseconds (`durationMs`). Queries, headers and bodies are excluded;
@@ -282,7 +282,7 @@ HTTP tests cover name/version defaults and restart on both engines, public linki
 
 `POST /api/v1/export` returns the existing version-one Scratchpad archive and attachment filename. It reads all knowledge sections from one database snapshot, preserving captures, metadata, revisions, source identities, relationships, evidence, mirror history, audits, profiles and derived artifacts. Authentication, retries, provider configuration, jobs and embeddings are excluded. Global settings carry only entity metadata and the documented `aiEnabled` and `defaultProjectSettings` policy fields; legacy provider-secret fields never enter a portable archive.
 
-`POST /api/v1/import` currently accepts native `format: "scratchpad"`, version-one archives up to 64 MiB. It validates safe IDs and references, historical versions and UTC timestamps, project/record/metadata/relationship shapes and source identity ownership. Identical entities are skipped; differing existing entities conflict. Restored records regain their lexical index and restored sources regain project resolution identities. Every restored record requires metadata, and accepted replacement/dependency graphs must remain acyclic. Entity writes, indexes, identities and the final actor audit commit in one serialized transaction; late failure leaves no partial knowledge.
+`POST /api/v1/import` currently accepts native `format: "scratchpad"`, version-one archives up to 64 MiB. Upload and processing each have a separate five-minute deadline; cancellation or a processing failure rolls back the transaction. It validates safe IDs and references, historical versions and UTC timestamps, project/record/metadata/relationship shapes and source identity ownership. Identical entities are skipped; differing existing entities conflict. Restored records regain their lexical index and restored sources regain project resolution identities. Every restored record requires metadata, and accepted replacement/dependency graphs must remain acyclic. Entity writes, indexes, identities and the final actor audit commit in one serialized transaction; late failure leaves no partial knowledge.
 
 Derived artifacts retain source citations, generator metadata and privacy dependencies. Import validates kind-specific content, unique source/project scope and privacy references against shared batched source snapshots. Curated artifacts must match their accepted suggestion, including privacy dependencies. Historical artifacts lacking privacy provenance remain historical; import does not reconstruct it or enable AI processing. These archives may be restored while project AI consent is disabled. The global-settings import section rejects provider configuration fields.
 
