@@ -58,6 +58,8 @@ export function Insights({
 }) {
   const [projectId, setProjectId] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionCursor, setSuggestionCursor] = useState("");
+  const [nextSuggestionCursor, setNextSuggestionCursor] = useState<string>();
   const [jobs, setJobs] = useState<Job[]>([]);
   const [jobCursor, setJobCursor] = useState("");
   const [nextJobCursor, setNextJobCursor] = useState<string>();
@@ -81,18 +83,27 @@ export function Insights({
     const params = new URLSearchParams(
       projectId ? { projectId } : { crossProject: "true" },
     );
+    params.set("limit", "100");
+    if (suggestionCursor) params.set("cursor", suggestionCursor);
     const jobParams = new URLSearchParams({ limit: "100" });
     if (jobCursor) jobParams.set("cursor", jobCursor);
     setJobsLoading(true);
     try {
       const [artifacts, queued] = await Promise.all([
-        api<{ suggestions: Suggestion[] }>(`/suggestions?${params}`),
+        api<{
+          suggestions: Suggestion[];
+          nextCursor?: string;
+          hasMore?: boolean;
+        }>(`/suggestions?${params}`),
         api<{ jobs: Job[]; nextCursor?: string; hasActive?: boolean }>(
           `/ai/jobs?${jobParams}`,
         ),
       ]);
       if (sequence !== requestSequence.current) return;
       setSuggestions(artifacts.suggestions);
+      setNextSuggestionCursor(
+        artifacts.hasMore === true ? artifacts.nextCursor : undefined,
+      );
       setJobs(queued.jobs);
       setNextJobCursor(queued.nextCursor);
       setHasActiveJobs(
@@ -102,7 +113,7 @@ export function Insights({
     } finally {
       if (sequence === requestSequence.current) setJobsLoading(false);
     }
-  }, [projectId, jobCursor]);
+  }, [projectId, jobCursor, suggestionCursor]);
   useEffect(() => {
     void refresh().catch((reason: Error) => setError(reason.message));
     return () => {
@@ -174,6 +185,9 @@ export function Insights({
             value={projectId}
             onChange={(event) => {
               setProjectId(event.target.value);
+              setSuggestionCursor("");
+              setNextSuggestionCursor(undefined);
+              setSuggestions([]);
               setResults([]);
             }}
           >
@@ -316,6 +330,28 @@ export function Insights({
             No derived artifacts for this scope yet. Enable AI for a project and
             run analysis to get started.
           </p>
+        )}
+        {(suggestionCursor || nextSuggestionCursor) && (
+          <nav className="action-row" aria-label="Suggestion pages">
+            {suggestionCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setSuggestionCursor("")}
+              >
+                Latest suggestions
+              </button>
+            )}
+            {nextSuggestionCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setSuggestionCursor(nextSuggestionCursor)}
+              >
+                Older suggestions
+              </button>
+            )}
+          </nav>
         )}
         {suggestions.map((suggestion) => (
           <article className="insight-card" key={suggestion.id}>

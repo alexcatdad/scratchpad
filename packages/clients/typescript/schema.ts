@@ -647,7 +647,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve currently permitted derived artifacts */
+        /**
+         * Retrieve a bounded page of currently permitted derived artifacts
+         * @description Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
+         */
         get: operations["get_suggestions"];
         put?: never;
         post?: never;
@@ -2662,6 +2665,9 @@ export interface operations {
                 projectIds?: string[];
                 /** @description Optional filter. */
                 crossProject?: boolean;
+                limit?: number;
+                /** @description Opaque continuation from the previous suggestion page in the same scope. */
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -2677,6 +2683,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         suggestions?: components["schemas"]["Artifact"][];
+                        /** @description Another currently readable artifact exists; hidden artifacts do not create continuation hints. */
+                        hasMore?: boolean;
+                        /** @description Opaque continuation in the same scope, present only when hasMore is true. */
+                        nextCursor?: string;
                     };
                 };
             };

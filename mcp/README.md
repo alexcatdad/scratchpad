@@ -66,6 +66,14 @@ Local builds identify as `dev`. Release builds inject the tag with `go build -ld
 context; `limit`, `maxChars` and `previewChars` require that version. Other
 combinations fail instead of silently ignoring the supplied limits.
 
+## Suggestion pages
+
+`get_suggestions` accepts optional `limit` (1–200, Go default 100) and an opaque
+`cursor` from the previous page in the same scope. Follow `nextCursor` only when
+`hasMore` is true; hidden artifacts do not create continuation hints. Omitting
+pagination preserves legacy response compatibility. Explicit pagination requires
+a supporting backend and returns a clear error when unsupported.
+
 ## Cited RAG evidence
 
 `retrieve_evidence` forwards a question or identifier to the Go PostgreSQL RAG

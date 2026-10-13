@@ -88,8 +88,16 @@ func registerAI(server *mcp.Server, client *Client) {
 		err = client.request(ctx, "POST", "/search/semantic", body, "", &result)
 		return nil, result, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "get_suggestions", Description: "Read optional AI summaries, patterns and reviewable suggestions for the resolved project or permitted cross-project scope. Derived output is not approved human policy."}, func(ctx context.Context, _ *mcp.CallToolRequest, input AIScope) (*mcp.CallToolResult, any, error) {
-		body, err := client.aiScope(ctx, input)
+	type Suggestions struct {
+		AIScope
+		Limit  *int    `json:"limit,omitempty" jsonschema:"Readable page size, 1 to 200; backend default 100"`
+		Cursor *string `json:"cursor,omitempty" jsonschema:"Opaque continuation from a previous suggestion page in the same scope"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "get_suggestions", Description: "Read a bounded page of optional AI summaries, patterns and reviewable suggestions for the resolved project or permitted cross-project scope. Follow nextCursor in the same scope for older readable artifacts. Derived output is not approved human policy."}, func(ctx context.Context, request *mcp.CallToolRequest, input Suggestions) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || nullArgument(request, "cursor") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 200)) || (input.Cursor != nil && *input.Cursor == "") {
+			return nil, nil, errors.New("invalid suggestion pagination")
+		}
+		body, err := client.aiScope(ctx, input.AIScope)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -102,8 +110,20 @@ func registerAI(server *mcp.Server, client *Client) {
 		} else {
 			query.Set("projectId", body["projectId"].(string))
 		}
+		if input.Limit != nil {
+			query.Set("limit", strconv.Itoa(*input.Limit))
+		}
+		if input.Cursor != nil {
+			query.Set("cursor", *input.Cursor)
+		}
 		var result any
 		err = client.request(ctx, "GET", "/suggestions?"+query.Encode(), nil, "", &result)
+		if err == nil && (input.Limit != nil || input.Cursor != nil) {
+			response, _ := result.(map[string]any)
+			if _, supported := response["hasMore"].(bool); !supported {
+				return nil, nil, errors.New("backend does not support suggestion pagination; update the backend or omit pagination arguments")
+			}
+		}
 		return nil, result, err
 	})
 	type Analyze struct {

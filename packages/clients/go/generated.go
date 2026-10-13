@@ -2037,6 +2037,10 @@ type GetSuggestionsParams struct {
 
 	// CrossProject Optional filter.
 	CrossProject *bool `form:"crossProject,omitempty" json:"crossProject,omitempty"`
+	Limit        *int  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque continuation from the previous suggestion page in the same scope.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // PostSuggestionsIdAcceptParams defines parameters for PostSuggestionsIdAccept.
@@ -3251,7 +3255,9 @@ type ClientInterface interface {
 	// Corresponds with PATCH /api/v1/settings (the `PatchSettings` operationId).
 	PatchSettings(ctx context.Context, params *PatchSettingsParams, body PatchSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSuggestions Retrieve currently permitted derived artifacts
+	// GetSuggestions Retrieve a bounded page of currently permitted derived artifacts
+	//
+	// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 	//
 	// Corresponds with GET /api/v1/suggestions (the `GetSuggestions` operationId).
 	GetSuggestions(ctx context.Context, params *GetSuggestionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -4917,7 +4923,9 @@ func (c *Client) PatchSettings(ctx context.Context, params *PatchSettingsParams,
 	return c.Client.Do(req)
 }
 
-// GetSuggestions Retrieve currently permitted derived artifacts
+// GetSuggestions Retrieve a bounded page of currently permitted derived artifacts
+//
+// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 //
 // Corresponds with GET /api/v1/suggestions (the `GetSuggestions` operationId).
 func (c *Client) GetSuggestions(ctx context.Context, params *GetSuggestionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -7830,6 +7838,30 @@ func NewGetSuggestionsRequest(server string, params *GetSuggestionsParams) (*htt
 
 		}
 
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -8814,7 +8846,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /api/v1/settings (the `PatchSettings` operationId).
 	PatchSettingsWithResponse(ctx context.Context, params *PatchSettingsParams, body PatchSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchSettingsResponse, error)
 
-	// GetSuggestionsWithResponse Retrieve currently permitted derived artifacts
+	// GetSuggestionsWithResponse Retrieve a bounded page of currently permitted derived artifacts
+	//
+	// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12097,6 +12131,11 @@ type GetSuggestionsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
+		// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+		HasMore *bool `json:"hasMore,omitempty"`
+
+		// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+		NextCursor  *string     `json:"nextCursor,omitempty"`
 		Suggestions *[]Artifact `json:"suggestions,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
@@ -12105,6 +12144,11 @@ type GetSuggestionsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetSuggestionsResponse) GetJSON200() *struct {
+	// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+	HasMore *bool `json:"hasMore,omitempty"`
+
+	// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+	NextCursor  *string     `json:"nextCursor,omitempty"`
 	Suggestions *[]Artifact `json:"suggestions,omitempty"`
 } {
 	return r.JSON200
@@ -13678,7 +13722,9 @@ func (c *ClientWithResponses) PatchSettingsWithResponse(ctx context.Context, par
 	return ParsePatchSettingsResponse(rsp)
 }
 
-// GetSuggestionsWithResponse Retrieve currently permitted derived artifacts
+// GetSuggestionsWithResponse Retrieve a bounded page of currently permitted derived artifacts
+//
+// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -15956,6 +16002,11 @@ func ParseGetSuggestionsResponse(rsp *http.Response) (*GetSuggestionsResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
+			// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+			HasMore *bool `json:"hasMore,omitempty"`
+
+			// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+			NextCursor  *string     `json:"nextCursor,omitempty"`
 			Suggestions *[]Artifact `json:"suggestions,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

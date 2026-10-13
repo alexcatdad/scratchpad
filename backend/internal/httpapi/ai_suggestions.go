@@ -3,12 +3,14 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -118,13 +120,16 @@ func artifactAllowed(artifact map[string]any, snapshot *artifactSnapshot, scope 
 	}
 	return true
 }
-func (a *AI) suggestionCandidates(ctx context.Context, conn *sql.Conn, scope jobScope) ([]map[string]any, error) {
+
+type suggestionRow struct {
+	data []byte
+	key  []string
+}
+
+func (a *AI) suggestionWindow(ctx context.Context, conn *sql.Conn, scope jobScope, after []string) ([]suggestionRow, error) {
 	ids := scope.ProjectIDs
 	if ids == nil && scope.ProjectID != "" {
 		ids = []string{scope.ProjectID}
-	}
-	if ids == nil {
-		return entityList(ctx, conn, "ai_artifact")
 	}
 	args := []any{}
 	marks := make([]string, len(ids))
@@ -132,26 +137,41 @@ func (a *AI) suggestionCandidates(ctx context.Context, conn *sql.Conn, scope job
 		args = append(args, id)
 		marks[i] = fmt.Sprintf("$%d", i+1)
 	}
-	membership := "EXISTS(SELECT 1 FROM json_each(entities.data,'$.projectIds') WHERE value IN (" + strings.Join(marks, ",") + "))"
-	if a.auth.Store.Engine == "postgres" {
-		membership = "EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(data->'projectIds')='array' THEN data->'projectIds' ELSE '[]'::jsonb END) AS projects(value) WHERE value IN (" + strings.Join(marks, ",") + "))"
+	membership := "1=1"
+	if ids != nil {
+		membership = "EXISTS(SELECT 1 FROM json_each(CASE WHEN json_valid(entities.data) THEN entities.data ELSE '{}' END,'$.projectIds') WHERE value IN (" + strings.Join(marks, ",") + "))"
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT data FROM entities WHERE kind='ai_artifact' AND "+membership+" ORDER BY created_at DESC,id", args...)
+	ordering := "CASE WHEN json_valid(data) THEN CASE WHEN json_type(data,'$.createdAt')='text' THEN json_extract(data,'$.createdAt') ELSE '' END ELSE '' END COLLATE BINARY"
+	if a.auth.Store.Engine == "postgres" {
+		ordering = "(CASE WHEN jsonb_typeof(data->'createdAt')='string' THEN data->>'createdAt' ELSE '' END) COLLATE \"C\""
+		if ids != nil {
+			membership = "EXISTS(SELECT 1 FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(data->'projectIds')='array' THEN data->'projectIds' ELSE '[]'::jsonb END) AS projects(value) WHERE value IN (" + strings.Join(marks, ",") + "))"
+		}
+	}
+	storedOrder, storedCompare := "ASC", ">"
+	if ids != nil {
+		storedOrder, storedCompare = "DESC", "<"
+	}
+	where := "kind='ai_artifact' AND " + membership
+	if after != nil {
+		base := len(args)
+		args = append(args, after[0], after[1], after[2])
+		first, second, third := fmt.Sprintf("$%d", base+1), fmt.Sprintf("$%d", base+2), fmt.Sprintf("$%d", base+3)
+		where += " AND (" + ordering + "<" + first + " OR (" + ordering + "=" + first + " AND (created_at" + storedCompare + second + " OR (created_at=" + second + " AND id>" + third + "))))"
+	}
+	rows, err := conn.QueryContext(ctx, "SELECT data,"+ordering+",created_at,id FROM entities WHERE "+where+" ORDER BY "+ordering+" DESC,created_at "+storedOrder+",id LIMIT 64", args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	results := []map[string]any{}
+	results := []suggestionRow{}
 	for rows.Next() {
 		var raw []byte
-		if err = rows.Scan(&raw); err != nil {
+		var created, stored, id string
+		if err = rows.Scan(&raw, &created, &stored, &id); err != nil {
 			return nil, err
 		}
-		var row map[string]any
-		if err = json.Unmarshal(raw, &row); err != nil {
-			return nil, err
-		}
-		results = append(results, row)
+		results = append(results, suggestionRow{raw, []string{created, stored, id}})
 	}
 	return results, rows.Err()
 }
@@ -187,8 +207,46 @@ func (a *AI) Suggestions() http.HandlerFunc {
 			a.auth.fail(w, err)
 			return
 		}
+		limit := 100
+		if params.Has("limit") {
+			limit, err = strconv.Atoi(params.Get("limit"))
+			if err != nil || limit < 1 || limit > 200 {
+				a.auth.fail(w, aiInvalid())
+				return
+			}
+		}
+		boundScope := scope
+		if scope.ProjectIDs != nil {
+			boundScope.ProjectIDs = uniqueIDs(scope.ProjectIDs)
+			sort.Strings(boundScope.ProjectIDs)
+		}
+		scopeRaw, _ := json.Marshal(boundScope)
+		scopeKey := legacyDigest(string(scopeRaw))
+		var after []string
+		if params.Has("cursor") {
+			raw, decodeErr := base64.RawURLEncoding.DecodeString(params.Get("cursor"))
+			if decodeErr != nil || len(raw) > 8192 || json.Unmarshal(raw, &after) != nil || len(after) != 4 || after[2] == "" || after[3] != scopeKey {
+				a.auth.fail(w, aiInvalid())
+				return
+			}
+			after = after[:3]
+		}
 		results := []map[string]any{}
-		err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+		keys := [][]string{}
+		err = func() error {
+			conn, err := a.auth.Store.DB.Conn(ctx)
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+			begin := "BEGIN"
+			if a.auth.Store.Engine == "postgres" {
+				begin = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+			}
+			if _, err = conn.ExecContext(ctx, begin); err != nil {
+				return err
+			}
+			defer conn.ExecContext(context.Background(), "ROLLBACK")
 			if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
 				return err
 			}
@@ -203,29 +261,89 @@ func (a *AI) Suggestions() http.HandlerFunc {
 			if !cfg.Enabled {
 				return nil
 			}
-			candidates, err := a.suggestionCandidates(ctx, conn, scope)
-			if err != nil {
-				return err
-			}
-			snapshot, err := loadArtifactSnapshot(ctx, conn, candidates)
-			if err != nil {
-				return err
-			}
-			for _, candidate := range candidates {
-				if validatePortableArtifact(ctx, conn, "ai_artifact", candidate, snapshot.sources) == nil && artifactAllowed(candidate, snapshot, scope) {
-					results = append(results, candidate)
+			for len(results) <= limit {
+				window, err := a.suggestionWindow(ctx, conn, scope, after)
+				if err != nil {
+					return err
+				}
+				for _, row := range window {
+					after = row.key
+					var candidate map[string]any
+					if err = json.Unmarshal(row.data, &candidate); err != nil {
+						return err
+					}
+					snapshot, err := loadArtifactSnapshot(ctx, conn, []map[string]any{candidate})
+					if err != nil {
+						return err
+					}
+					if validatePortableArtifact(ctx, conn, "ai_artifact", candidate, snapshot.sources) == nil && artifactAllowed(candidate, snapshot, scope) {
+						results = append(results, candidate)
+						keys = append(keys, row.key)
+						if len(results) > limit {
+							break
+						}
+					}
+				}
+				if len(window) < 64 {
+					break
 				}
 			}
-			sort.SliceStable(results, func(i, j int) bool {
-				return stringValue(results[i], "createdAt") > stringValue(results[j], "createdAt")
-			})
 			return nil
-		})
+		}()
+		if err == nil {
+			// Fresh authorization and dependency-project consent are bounded by
+			// this page plus its readable lookahead. Immutable source bodies stay
+			// in the read snapshot rather than being decoded under the writer lock.
+			err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+				if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
+					return err
+				}
+				row, err := readSettings(ctx, conn, "ai_settings")
+				if err != nil {
+					return err
+				}
+				cfg, err := aiConfig(row)
+				if err != nil {
+					return err
+				}
+				if !cfg.Enabled {
+					results = []map[string]any{}
+					return nil
+				}
+				ids := map[string]bool{}
+				for _, artifact := range results {
+					deps := artifact["privacyDependencies"].(map[string]any)
+					projects, _ := portableIDs(deps["projectIds"])
+					for _, id := range projects {
+						ids[id] = true
+					}
+				}
+				projects, err := referencedEntities(ctx, conn, "project", ids)
+				if err != nil {
+					return err
+				}
+				fresh := &artifactSnapshot{projects: projects}
+				for _, artifact := range results {
+					if !artifactAllowed(artifact, fresh, scope) {
+						return &protocolError{"AI_NOT_ALLOWED", "Current consent does not permit this suggestion page.", 403}
+					}
+				}
+				return nil
+			})
+		}
 		if err != nil {
 			a.auth.fail(w, err)
 			return
 		}
-		JSON(w, 200, map[string]any{"suggestions": results})
+		hasMore := len(results) > limit
+		response := map[string]any{"suggestions": results, "hasMore": hasMore}
+		if hasMore {
+			response["suggestions"] = results[:limit]
+			key := append(append([]string{}, keys[limit-1]...), scopeKey)
+			raw, _ := json.Marshal(key)
+			response["nextCursor"] = base64.RawURLEncoding.EncodeToString(raw)
+		}
+		JSON(w, 200, response)
 	}
 }
 func (a *AI) ReviewSuggestion(accept bool) http.HandlerFunc {

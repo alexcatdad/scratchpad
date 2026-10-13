@@ -2384,7 +2384,7 @@
     "/api/v1/suggestions": {
       "get": {
         "operationId": "get_suggestions",
-        "summary": "Retrieve currently permitted derived artifacts",
+        "summary": "Retrieve a bounded page of currently permitted derived artifacts",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2398,6 +2398,14 @@
                       "items": {
                         "$ref": "#/components/schemas/Artifact"
                       }
+                    },
+                    "hasMore": {
+                      "type": "boolean",
+                      "description": "Another currently readable artifact exists; hidden artifacts do not create continuation hints."
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "description": "Opaque continuation in the same scope, present only when hasMore is true."
                     }
                   }
                 }
@@ -2435,8 +2443,28 @@
               "type": "boolean"
             },
             "description": "Optional filter."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Opaque continuation from the previous suggestion page in the same scope."
           }
-        ]
+        ],
+        "description": "Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata."
       }
     },
     "/api/v1/suggestions/{id}/accept": {

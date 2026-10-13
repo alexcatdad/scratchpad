@@ -10,6 +10,145 @@ test.afterAll(async () => {
   rmSync(harness.temporary, { recursive: true, force: true });
 });
 
+test("suggestion pages replace history, reset scope and preserve legacy responses", async ({
+  page,
+}) => {
+  const requests: { project: string; cursor: string; limit: string }[] = [];
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") errors.push(message.text());
+  });
+  await page.route("**/api/v1/**", async (route) => {
+    const url = new URL(route.request().url());
+    let body: unknown = {};
+    if (url.pathname.endsWith("/auth/status"))
+      body = {
+        initialized: true,
+        authenticated: true,
+        githubConfigured: false,
+      };
+    else if (url.pathname.endsWith("/projects"))
+      body = {
+        projects: ["alpha", "beta"].map((id) => ({
+          id: `proj_${id}`,
+          name: id === "alpha" ? "Alpha" : "Beta",
+          version: 1,
+          settings: { aiProcessing: true, crossProjectAnalysis: true },
+        })),
+      };
+    else if (url.pathname.endsWith("/records"))
+      body = { records: [], nextCursor: null };
+    else if (url.pathname.endsWith("/ai/jobs"))
+      body = { jobs: [], hasActive: false };
+    else if (url.pathname.endsWith("/suggestions")) {
+      const project = url.searchParams.get("projectId") ?? "";
+      const cursor = url.searchParams.get("cursor") ?? "";
+      requests.push({
+        project,
+        cursor,
+        limit: url.searchParams.get("limit") ?? "",
+      });
+      const title =
+        project === "proj_alpha"
+          ? "Legacy suggestion"
+          : project === "proj_beta"
+            ? "Beta suggestion"
+            : cursor
+              ? "Older suggestion"
+              : "Recent suggestion";
+      body = {
+        suggestions: [
+          {
+            id: title.replaceAll(" ", "_"),
+            title,
+            kind: "summary",
+            status: "accepted",
+            version: 1,
+            sourceRecordIds: ["rec_source"],
+            content: { text: "Cited provisional interpretation" },
+            createdAt: "2026-10-01T00:00:00Z",
+          },
+        ],
+        ...(project === "proj_alpha"
+          ? {}
+          : {
+              hasMore: !project && !cursor,
+              ...(!project && !cursor
+                ? { nextCursor: "older-suggestions" }
+                : {}),
+            }),
+      };
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+  await page.goto(harness.origin);
+  await expect(page).toHaveTitle(/Scratchpad/);
+  await page.getByRole("button", { name: "Insights", exact: true }).click();
+  const suggestions = page
+    .getByRole("region", { name: "AI suggestions" })
+    .locator(".insight-card");
+  await expect(suggestions).toContainText("Recent suggestion");
+  await page
+    .getByRole("button", { name: "Older suggestions", exact: true })
+    .click();
+  await expect(suggestions).toContainText("Older suggestion");
+  await expect(suggestions).not.toContainText("Recent suggestion");
+  await suggestions.scrollIntoViewIfNeeded();
+  await page.screenshot({
+    path: "/private/tmp/scratchpad-suggestions-desktop.png",
+  });
+  await expect(
+    page.getByRole("button", { name: "Older suggestions", exact: true }),
+  ).toHaveCount(0);
+  await page
+    .getByRole("button", { name: "Latest suggestions", exact: true })
+    .click();
+  await expect(suggestions).toContainText("Recent suggestion");
+  await expect(suggestions).not.toContainText("Older suggestion");
+  await page
+    .getByRole("button", { name: "Older suggestions", exact: true })
+    .click();
+  await expect(suggestions).toContainText("Older suggestion");
+  await page.getByLabel("Insight project").selectOption("proj_beta");
+  await expect(suggestions).toContainText("Beta suggestion");
+  await expect(suggestions).not.toContainText("Older suggestion");
+  await expect(
+    page.getByRole("button", { name: "Latest suggestions", exact: true }),
+  ).toHaveCount(0);
+  await expect
+    .poll(() =>
+      requests.some(
+        (r) =>
+          r.project === "proj_beta" && r.cursor === "" && r.limit === "100",
+      ),
+    )
+    .toBe(true);
+  await page.getByLabel("Insight project").selectOption("proj_alpha");
+  await expect(suggestions).toContainText("Legacy suggestion");
+  await expect(
+    page.getByRole("button", { name: "Older suggestions", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Latest suggestions", exact: true }),
+  ).toHaveCount(0);
+  await page.getByLabel("Insight project").selectOption("");
+  await expect(suggestions).toContainText("Recent suggestion");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await suggestions.scrollIntoViewIfNeeded();
+  await expect(
+    page.getByRole("button", { name: "Older suggestions", exact: true }),
+  ).toBeVisible();
+  await page.screenshot({
+    path: "/private/tmp/scratchpad-suggestions-mobile.png",
+  });
+  expect(errors).toEqual([]);
+});
+
 test("legacy job responses still poll visible active work without page controls", async ({
   page,
 }) => {
