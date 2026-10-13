@@ -130,8 +130,20 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 		return nil, importInvalid()
 	}
 	text, ok := body["jsonl"].(string)
-	if !ok || len(text) > 32*1024*1024 {
+	if !ok {
 		return nil, importInvalid()
+	}
+	// Preserve the retained TypeScript string.length limit without allocating
+	// rune/UTF16 copies of the entire request. The outer byte cap is separate.
+	units := 0
+	for _, r := range text {
+		units++
+		if r > 0xffff {
+			units++
+		}
+		if units > 32*1024*1024 {
+			return nil, importInvalid()
+		}
 	}
 	warnings, results := []any{}, []any{}
 	warn := func(line int, code string, details map[string]any) {
