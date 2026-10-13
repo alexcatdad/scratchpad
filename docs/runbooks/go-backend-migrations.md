@@ -286,6 +286,10 @@ HTTP tests cover name/version defaults and restart on both engines, public linki
 
 Derived artifacts retain source citations, generator metadata and privacy dependencies. Import validates kind-specific content, unique source/project scope and privacy references against shared batched source snapshots. Curated artifacts must match their accepted suggestion, including privacy dependencies. Historical artifacts lacking privacy provenance remain historical; import does not reconstruct it or enable AI processing. These archives may be restored while project AI consent is disabled. The global-settings import section rejects provider configuration fields.
 
+Native metadata retains historical string tags without applying ordinary edit-only
+count or per-tag length limits. Import, export and identical replay preserve these
+tags; ordinary metadata edits continue enforcing their existing limits.
+
 HTTP regression tests exercise literal historical archives, live export/import between SQLite and PostgreSQL in both directions, immutable replay and version preservation, source resolution, lexical retrieval, malformed references, content/identity conflicts, graph cycles, derived/privacy/curated validation and rollback on a late audit failure. They use real processes and synthetic fixtures. Run `npm run test:backend` with disposable `TEST_POSTGRES_URL` to include PostgreSQL. Full operational backup/restore, remaining configuration and workers, secret encryption and PostgreSQL RAG are subsequent issue-36 slices; native knowledge portability does not prove supported-runtime cutover or operational restore.
 
 ## Legacy JSONL history

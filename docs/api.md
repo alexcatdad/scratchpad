@@ -1114,6 +1114,11 @@ Request:
 
 Core search remains deterministic.
 
+The Go backend deduplicates each `projectIds` and `types` selector list before
+query construction. Their combined distinct count must not exceed 32,700;
+larger selections return HTTP 400 `VALIDATION_FAILED`. This applies to both
+`POST /search` and the corresponding `GET /records` filters.
+
 Semantic search may augment this later.
 
 ---
@@ -1578,7 +1583,7 @@ These additions document the current wire behavior while preserving the accepted
 - `PATCH /projects/:id` accepts `name`, `kind`, and optimistic version information (`If-Match` or `expectedVersion`). Switching to external disables mirroring and cross-project analysis; the owner can explicitly reenable either afterward.
 - Legacy imported records may have `authority: null` when the source does not establish authority. New captures still require an explicit authority vocabulary value. The importer preserves original source claims without treating them as verified identity or current policy.
 - JSONL import accepts `{format: "jsonl", projectId, jsonl, source: {filename}}` or `sourceName`. Results include `imported`, `skipped`, per-line `warnings`, and `records` entries containing `line`, `recordId` where available, and `status`. Safe historical IDs survive; fallback IDs retain their original value in provenance.
-- Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 MiB. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
+- Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 Mi UTF-16 code units within that body limit. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
 - Project context retains its original arrays and adds `currentState`, `stateHistory`, `applicableRecords`, `partiallySuperseded`, `historicalRecords`, and `requiresReview`. Contextual records include `applicability`, `replacedBy`, and historical-status annotations. Imported claims remain visibly unverified.
 - Record detail includes audit events for associated relationships and evidence as well as record mutations. Metadata revisions retain before/after snapshots.
 - `GET /ready` returns `503 DATABASE_NOT_READY` if the schema-1 marker or required persistence objects are unavailable or unsupported. Startup validates existing databases before applying configuration or DDL; unsupported or incomplete existing schemas are refused rather than silently repaired.
