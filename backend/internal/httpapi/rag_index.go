@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -71,12 +72,26 @@ func (a *AI) prepareRAG(ctx context.Context) error {
 	return nil
 }
 
+// RAG hashes the exact persisted immutable source, including arbitrary JSON numbers.
+func ragRecord(ctx context.Context, q entityReader, id string) (map[string]any, error) {
+	raw, err := get(ctx, q, "record", id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, &protocolError{"NOT_FOUND", "record not found.", 404}
+	}
+	if err != nil {
+		return nil, err
+	}
+	var record map[string]any
+	err = DecodeJSONNumbers(raw, &record)
+	return record, err
+}
+
 func (a *AI) ragSource(ctx context.Context, conn *sql.Conn, scope jobScope, id string) (map[string]any, error) {
 	ids, err := allowedJobs(ctx, conn, scope)
 	if err != nil {
 		return nil, err
 	}
-	record, err := curationEntity(ctx, conn, "record", id)
+	record, err := ragRecord(ctx, conn, id)
 	if err != nil {
 		return nil, err
 	}

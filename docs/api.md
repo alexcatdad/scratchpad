@@ -1650,7 +1650,7 @@ Go analysis completes with `artifactIds: []` and persisted `AI_INSUFFICIENT_EVID
 
 ### Suggestions and documents
 
-`GET /suggestions` returns `{suggestions}` and accepts `projectId`, repeated `projectIds`, and `crossProject=true` filters. On the Go backend, `limit` defaults to 100 readable artifacts and accepts 1–200. Follow the optional opaque `nextCursor` with `cursor` in the same scope; `hasMore` is true only when another currently readable artifact exists. Invalid limits, empty or malformed cursors, and scope changes with a cursor return HTTP 400. Ordering preserves creation time descending and the existing stored-time/ID tie order. Privacy filtering precedes page completion; hidden artifacts do not produce continuation or count hints. Bulk validation uses a consistent read-only snapshot, with current authorization, global AI enablement and selected dependency-project consent rechecked before response. MCP `get_suggestions` forwards optional `limit` and `cursor`, preserving continuation metadata; explicit pagination against a legacy response fails clearly. Insights replaces bounded pages with Latest/Older controls and resets continuation when its scope changes. Artifact kinds are `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, `recommendation`, and `export`. Artifacts retain source IDs, participating project IDs, generator metadata, creation/generation timestamps, derived authority, and review status `pending`, `accepted`, or `rejected`.
+`GET /suggestions` returns `{suggestions}` and accepts `projectId`, repeated `projectIds`, and `crossProject=true` filters. On the Go backend, `limit` defaults to 100 readable artifacts and accepts 1–200. Follow the optional opaque `nextCursor` with `cursor` in the same scope; `hasMore` is true only when another currently readable artifact exists. Invalid limits, empty or malformed cursors, and scope changes with a cursor return HTTP 400. Ordering compares creation timestamp instants descending and the existing stored-time/ID tie order. Privacy filtering precedes page completion; hidden artifacts do not produce continuation or count hints. Bulk validation uses a consistent read-only snapshot, with current authorization, global AI enablement and selected dependency-project consent rechecked before response. MCP `get_suggestions` forwards optional `limit` and `cursor`, preserving continuation metadata; explicit pagination against a legacy response fails clearly. Insights replaces bounded pages with Latest/Older controls and resets continuation when its scope changes. Artifact kinds are `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, `recommendation`, and `export`. Artifacts retain source IDs, participating project IDs, generator metadata, creation/generation timestamps, derived authority, and review status `pending`, `accepted`, or `rejected`.
 
 `POST /suggestions/:id/accept` and `/reject` require `{expectedVersion}` and return `{suggestion}`. Acceptance creates an audited curated artifact. Classification can update audited curated tags/summary; an explicitly scoped relationship candidate can create a relationship while preserving AI derivation. No review action changes original captures, deletes source records, silently supersedes decisions, or turns AI interpretation into an explicit human decision. Current consent gates access to older artifacts as well as new analysis.
 
@@ -1775,6 +1775,12 @@ requires the current `expectedVersion` and a completed or failed job; active job
 return a conflict. Indexing is asynchronous and per-record, reusing durable jobs,
 leases, retries and the existing job listing/retry interfaces. Completed jobs
 report `passageCount` and `sourceCount`. Derived generated records are excluded.
+
+RAG source-generation hashes preserve exact JSON numbers from the persisted
+immutable record. Historical failed jobs hashed before PostgreSQL normalized
+exponent spelling remain unchanged; enqueue the source with ordinary
+`POST /rag/index` (without `rebuild`) to create its current stored-source
+generation, rather than retrying the obsolete hash.
 
 Authenticated `POST /rag/retrieve` accepts project scope, `query`, `intent`
 (`current` by default or `history`), `limit` (1–100, default 20) and `maxChars`

@@ -115,7 +115,7 @@ func (a *AI) ragCoverage(ctx context.Context, q scopeReader, scope jobScope) (ra
 		}
 		var record map[string]any
 		var jobs, passages []map[string]any
-		if json.Unmarshal(raw, &record) != nil || json.Unmarshal(jobsRaw, &jobs) != nil || json.Unmarshal(passagesRaw, &passages) != nil {
+		if DecodeJSONNumbers(raw, &record) != nil || json.Unmarshal(jobsRaw, &jobs) != nil || json.Unmarshal(passagesRaw, &passages) != nil {
 			return result, aiUnavailable()
 		}
 		hash, err := aiHash(record)

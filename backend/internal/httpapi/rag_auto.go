@@ -13,6 +13,12 @@ func enqueueRAGRecord(ctx context.Context, conn *sql.Conn, record map[string]any
 	if err != nil {
 		return nil, false, err
 	}
+	// PostgreSQL JSONB normalizes numeric spelling; generation identity follows
+	// the stored source rather than the incoming capture representation.
+	record, err = ragRecord(ctx, conn, stringValue(record, "id"))
+	if err != nil {
+		return nil, false, err
+	}
 	hash, err := aiHash(record)
 	if err != nil {
 		return nil, false, err
@@ -95,7 +101,7 @@ func (a *AI) backfillRAG(ctx context.Context) error {
 			return err
 		}
 		var record map[string]any
-		if err = json.Unmarshal(raw, &record); err != nil {
+		if err = DecodeJSONNumbers(raw, &record); err != nil {
 			rows.Close()
 			return err
 		}

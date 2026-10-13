@@ -90,7 +90,7 @@ func ragCurrentEvidence(ctx context.Context, q scopeReader, projects []string, i
 				return err
 			}
 			var record, metadata map[string]any
-			if json.Unmarshal(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
+			if DecodeJSONNumbers(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
 				return aiUnavailable()
 			}
 			hash, err := aiHash(record)
@@ -299,7 +299,7 @@ func (a *AI) RAGRetrieve() http.HandlerFunc {
 				}
 				var record, metadata map[string]any
 				var links []map[string]any
-				if json.Unmarshal(raw, &record) != nil || json.Unmarshal(edges, &links) != nil {
+				if DecodeJSONNumbers(raw, &record) != nil || json.Unmarshal(edges, &links) != nil {
 					return aiUnavailable()
 				}
 				if meta != nil && json.Unmarshal(meta, &metadata) != nil {

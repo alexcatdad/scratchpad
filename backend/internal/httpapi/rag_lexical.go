@@ -102,7 +102,7 @@ func ragLexicalEvidenceFor(ctx context.Context, q scopeReader, ids []string, que
 		if json.Unmarshal(edges, &links) != nil {
 			return nil, aiUnavailable()
 		}
-		if json.Unmarshal(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
+		if DecodeJSONNumbers(raw, &record) != nil || (meta != nil && json.Unmarshal(meta, &metadata) != nil) {
 			return nil, aiUnavailable()
 		}
 		id := stringValue(record, "id")
