@@ -1853,6 +1853,9 @@ lexical source evidence when available, with `retrieval: "lexical"`,
 fallback still requires healthy core storage. Authentication and consent failures
 remain errors. Fallback uses
 immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
+After the bulk snapshot ends, fallback rechecks selected source hashes, lifecycle
+and cited relationships against fresh data, then rechecks authentication and all
+snapshot participants' consent before responding.
 When a healthy query returns indexed candidates with incomplete coverage, native
 raw-source lexical candidates join the indexed lexical list before rank fusion.
 The lexical union is deduplicated and limited to 100 before fusion with the 100

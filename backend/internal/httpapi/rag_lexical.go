@@ -56,6 +56,21 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 		a.auth.fail(w, err)
 		return
 	}
+	// Release the bulk snapshot before fresh selected-evidence reads and the
+	// short serialized admission fence. No coverage/corpus work holds Write.
+	if err = tx.Rollback(); err != nil {
+		a.auth.fail(w, err)
+		return
+	}
+	selected := response["results"].([]map[string]any)
+	if err = a.readRAGSnapshot(ctx, func(q scopeReader) error { return ragCurrentEvidence(ctx, q, ids, selected) }); err != nil {
+		a.auth.fail(w, err)
+		return
+	}
+	if err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error { return a.currentRAGScope(ctx, conn, r, scope, ids) }); err != nil {
+		a.auth.fail(w, err)
+		return
+	}
 	JSON(w, 200, response)
 }
 

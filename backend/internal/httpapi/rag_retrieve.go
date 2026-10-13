@@ -52,13 +52,22 @@ func (a *AI) currentRAGAdmission(ctx context.Context, r *http.Request, snapshot 
 		if err := a.ragAvailable(ctx, conn); err != nil {
 			return err
 		}
-		// Scope governs coverage, replacement and relationship citations as well
-		// as returned passages. Historical unscoped requests cannot silently drop
-		// a withdrawn participant while retaining that snapshot's evidence.
-		scope.ProjectID, scope.ProjectIDs = "", projects
-		_, err := allowedJobs(ctx, conn, scope)
-		return err
+		return a.currentRAGScope(ctx, conn, r, scope, projects)
 	})
+}
+
+// Fallback evidence remains available without a provider or optional projection,
+// but never bypasses current authentication or any snapshot participant's consent.
+func (a *AI) currentRAGScope(ctx context.Context, q scopeReader, r *http.Request, scope jobScope, projects []string) error {
+	if _, err := apiActor(ctx, q, r, a.auth.Origin); err != nil {
+		return err
+	}
+	// Scope governs coverage, replacement and relationship citations as well
+	// as returned passages. Historical unscoped requests cannot silently drop
+	// a withdrawn participant while retaining that snapshot's evidence.
+	scope.ProjectID, scope.ProjectIDs = "", projects
+	_, err := allowedJobs(ctx, q, scope)
+	return err
 }
 
 // Recheck only evidence that survived response bounding. Immutable source hashes,
