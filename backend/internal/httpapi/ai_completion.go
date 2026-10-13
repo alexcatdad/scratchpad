@@ -128,7 +128,7 @@ func completionBatches(records []map[string]any) ([][]map[string]any, error) {
 	}
 	return batches, nil
 }
-func (a *AI) completeBatch(ctx context.Context, job map[string]any, snapshot providerSnapshot, input map[string]any) (generatedCompletion, error) {
+func (a *AI) completeBatch(ctx context.Context, job map[string]any, snapshot providerSnapshot, input map[string]any, inputProjects []string) (generatedCompletion, error) {
 	encoded, err := json.Marshal(input)
 	if err != nil {
 		return generatedCompletion{}, err
@@ -142,7 +142,10 @@ func (a *AI) completeBatch(ctx context.Context, job map[string]any, snapshot pro
 	if snapshot.config.ReasoningEffort != "default" {
 		body["reasoning_effort"] = snapshot.config.ReasoningEffort
 	}
-	data, err := a.postProviderGuarded(ctx, nil, snapshot, "chat/completions", body, func(conn *sql.Conn) error { _, err := a.workerCurrent(ctx, conn, job, snapshot, true); return err })
+	data, err := a.postProviderGuarded(ctx, nil, snapshot, "chat/completions", body, func(conn *sql.Conn) error {
+		_, err := a.workerInputsCurrent(ctx, conn, job, snapshot, true, inputProjects)
+		return err
+	})
 	if err != nil {
 		return generatedCompletion{}, err
 	}
@@ -226,27 +229,24 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 	}
 	var records []map[string]any
 	projects := []map[string]any{}
-	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
-		if _, err := a.workerCurrent(ctx, conn, job, snapshot, false); err != nil {
-			return err
-		}
+	inputProjects, err := a.readWorkerInputs(ctx, job, snapshot, func(conn *sql.Conn) ([]string, error) {
 		var err error
 		records, err = a.aiRecords(ctx, conn, scope)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ids, err := allowedJobs(ctx, conn, scope)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		for _, id := range ids {
 			project, err := projectEntity(ctx, conn, id)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			projects = append(projects, map[string]any{"id": id, "name": project["name"]})
 		}
-		return nil
+		return ids, nil
 	})
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 	export := job["type"] == "export"
 	if export || len(snapshot.config.AnalysisModes) > 0 {
 		for _, batch := range batches {
-			response, err := a.completeBatch(ctx, job, snapshot, map[string]any{"records": batch, "analysisModes": snapshot.config.AnalysisModes, "projects": projects, "requestedFormat": job["format"]})
+			response, err := a.completeBatch(ctx, job, snapshot, map[string]any{"records": batch, "analysisModes": snapshot.config.AnalysisModes, "projects": projects, "requestedFormat": job["format"]}, inputProjects)
 			if err != nil {
 				return err
 			}
@@ -407,7 +407,7 @@ func (a *AI) executeCompletion(ctx context.Context, job map[string]any, snapshot
 		return aiUnavailable()
 	}
 	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
-		current, err := a.workerCurrent(ctx, conn, job, snapshot, false)
+		current, err := a.workerInputsCurrent(ctx, conn, job, snapshot, false, inputProjects)
 		if err != nil {
 			return err
 		}

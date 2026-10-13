@@ -239,19 +239,78 @@ func (a *AI) embedInputs(ctx context.Context, r *http.Request, snapshot provider
 	return decodeEmbeddings(data, len(input), snapshot.config.EmbeddingDimensions)
 }
 
+// Read worker inputs consistently without serializing bulk source decoding
+// against ordinary writes. Admission checks bracket the snapshot, and provider
+// dispatch and activation retain their own current lease/consent checks.
+func (a *AI) readWorkerInputs(ctx context.Context, job map[string]any, snapshot providerSnapshot, read func(*sql.Conn) ([]string, error)) ([]string, error) {
+	admit := func(conn *sql.Conn) error {
+		_, err := a.workerCurrent(ctx, conn, job, snapshot, false)
+		return err
+	}
+	if err := a.auth.Store.Write(ctx, admit); err != nil {
+		return nil, err
+	}
+	projects, err := func() ([]string, error) {
+		conn, err := a.auth.Store.DB.Conn(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer conn.Close()
+		begin := "BEGIN"
+		if a.auth.Store.Engine == "postgres" {
+			begin = "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
+		}
+		if _, err = conn.ExecContext(ctx, begin); err != nil {
+			return nil, err
+		}
+		defer conn.ExecContext(context.Background(), "ROLLBACK")
+		return read(conn)
+	}()
+	if err != nil {
+		return nil, err
+	}
+	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
+		_, err := a.workerInputsCurrent(ctx, conn, job, snapshot, false, projects)
+		return err
+	})
+	return projects, err
+}
+
+func (a *AI) workerInputsCurrent(ctx context.Context, conn *sql.Conn, job map[string]any, snapshot providerSnapshot, renew bool, projects []string) (map[string]any, error) {
+	current, err := a.workerCurrent(ctx, conn, job, snapshot, renew)
+	if err != nil || len(projects) == 0 {
+		return current, err
+	}
+	scope, err := aiScope(job)
+	if err != nil {
+		return nil, err
+	}
+	// Historical all-project scopes can drop withdrawn projects silently.
+	// Loaded inputs must remain eligible as an explicit selected scope.
+	scope.ProjectID, scope.ProjectIDs = "", uniqueIDs(projects)
+	if _, err = allowedJobs(ctx, conn, scope); err != nil {
+		return nil, err
+	}
+	return current, nil
+}
+
 func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot providerSnapshot) error {
 	scope, err := aiScope(job)
 	if err != nil {
 		return err
 	}
 	var records []map[string]any
-	err = a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
-		if _, err := a.workerCurrent(ctx, conn, job, snapshot, false); err != nil {
-			return err
-		}
+	inputProjects, err := a.readWorkerInputs(ctx, job, snapshot, func(conn *sql.Conn) ([]string, error) {
 		var err error
 		records, err = a.aiRecords(ctx, conn, scope)
-		return err
+		if err != nil {
+			return nil, err
+		}
+		projects := []string{}
+		for _, record := range records {
+			projects = append(projects, stringValue(record, "projectId"))
+		}
+		return uniqueIDs(projects), nil
 	})
 	if err != nil {
 		return err
@@ -278,7 +337,10 @@ func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot 
 		pieces := len(chunks)
 		vector := make([]float64, snapshot.config.EmbeddingDimensions)
 		for _, text := range chunks {
-			result, err := a.embedInputs(ctx, nil, snapshot, []string{stringValue(record, "title") + "\n" + text}, func(conn *sql.Conn) error { _, err := a.workerCurrent(ctx, conn, job, snapshot, true); return err })
+			result, err := a.embedInputs(ctx, nil, snapshot, []string{stringValue(record, "title") + "\n" + text}, func(conn *sql.Conn) error {
+				_, err := a.workerInputsCurrent(ctx, conn, job, snapshot, true, inputProjects)
+				return err
+			})
 			if err != nil {
 				return err
 			}
@@ -303,7 +365,7 @@ func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot 
 		embeddings = append(embeddings, map[string]any{"recordId": record["id"], "projectId": record["projectId"], "vector": vector, "chunkCount": pieces, "model": snapshot.config.EmbeddingModel, "dimensions": snapshot.config.EmbeddingDimensions, "fingerprint": signature, "contentHash": hash, "generator": map[string]any{"provider": snapshot.config.BaseURL, "model": snapshot.config.EmbeddingModel, "version": signature}, "generatedAt": timestamp(time.Now())})
 	}
 	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
-		current, err := a.workerCurrent(ctx, conn, job, snapshot, false)
+		current, err := a.workerInputsCurrent(ctx, conn, job, snapshot, false, inputProjects)
 		if err != nil {
 			return err
 		}
