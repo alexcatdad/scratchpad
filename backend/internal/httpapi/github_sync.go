@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -330,7 +329,7 @@ func (g *Github) ManualSync() http.HandlerFunc {
 			g.auth.fail(w, err)
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := g.auth.requestClient(r)
 		release, err := g.auth.admission(client, true)
 		if err != nil {
 			g.auth.fail(w, err)

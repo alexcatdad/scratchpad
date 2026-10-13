@@ -11,7 +11,6 @@ import (
 	"errors"
 	"io"
 	"math"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -138,7 +137,7 @@ func (p *Passkeys) Handler(operation string) http.HandlerFunc {
 			Error(w, 503, "CONFIG_INVALID", "Passkeys require a public hostname; use localhost for local development.")
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := p.auth.requestClient(r)
 		release, err := p.auth.admission(client, strings.HasSuffix(operation, "verify"))
 		if err != nil {
 			p.auth.fail(w, err)

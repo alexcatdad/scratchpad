@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -69,10 +68,11 @@ func insert(ctx context.Context, conn *sql.Conn, kind, id string, value map[stri
 }
 
 type SSH struct {
-	Store    *persistence.Store
-	Origin   string
-	mu       sync.Mutex
-	attempts map[string]struct {
+	trustedProxies proxyClients
+	Store          *persistence.Store
+	Origin         string
+	mu             sync.Mutex
+	attempts       map[string]struct {
 		minute int64
 		count  int
 	}
@@ -80,8 +80,8 @@ type SSH struct {
 	verifications int
 }
 
-func NewSSH(store *persistence.Store, origin string) *SSH {
-	return &SSH{Store: store, Origin: origin, attempts: make(map[string]struct {
+func NewSSH(store *persistence.Store, origin string, proxies ...string) *SSH {
+	return &SSH{Store: store, Origin: origin, trustedProxies: trustedProxyClients(proxies), attempts: make(map[string]struct {
 		minute int64
 		count  int
 	}), active: make(map[string]int)}
@@ -129,10 +129,7 @@ func (s *SSH) admission(client string, verification bool) (func(), error) {
 }
 func (s *SSH) Handler(verify bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		client, _, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			client = r.RemoteAddr
-		}
+		client := s.requestClient(r)
 		release, err := s.admission(client, verify)
 		if err != nil {
 			s.fail(w, err)

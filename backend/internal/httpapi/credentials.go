@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"net"
 	"net/http"
 	"time"
 	"unicode/utf8"
@@ -18,7 +17,7 @@ func (s *SSH) Enrollment(verify bool) http.HandlerFunc {
 			Error(w, 403, "AUTH_INVALID", "Invalid request origin.")
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := s.requestClient(r)
 		release, err := s.admission(client, verify)
 		if err != nil {
 			s.fail(w, err)
@@ -180,7 +179,7 @@ func (s *SSH) Revoke(configured bool) http.HandlerFunc {
 			Error(w, 403, "AUTH_INVALID", "Invalid request origin.")
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := s.requestClient(r)
 		release, err := s.admission(client, false)
 		if err != nil {
 			s.fail(w, err)

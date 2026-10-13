@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 	"time"
 )
@@ -16,7 +15,7 @@ func (g *Github) Management(unlink bool) http.HandlerFunc {
 			Error(w, 403, "AUTH_INVALID", "Invalid request origin.")
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := g.auth.requestClient(r)
 		release, err := g.auth.admission(client, false)
 		if err != nil {
 			g.auth.fail(w, err)

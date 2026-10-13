@@ -118,7 +118,7 @@ func run() error {
 	} else if strings.Contains(hostname, ":") {
 		public.Host = "[" + hostname + "]"
 	}
-	auth := httpapi.NewSSH(store, public.Scheme+"://"+public.Host)
+	auth := httpapi.NewSSH(store, public.Scheme+"://"+public.Host, strings.Split(os.Getenv("SCRATCHPAD_TRUSTED_PROXIES"), ",")...)
 	passkeys, err := httpapi.NewPasskeys(auth, hostname)
 	if err != nil && net.ParseIP(hostname) == nil {
 		return errors.New("CONFIG_INVALID: passkey relying party configuration is invalid.")

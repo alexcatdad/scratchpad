@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -73,7 +72,7 @@ func (g *Github) Options() http.HandlerFunc {
 			Error(w, 403, "AUTH_INVALID", "Invalid request origin.")
 			return
 		}
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := g.auth.requestClient(r)
 		release, err := g.auth.admission(client, false)
 		if err != nil {
 			g.auth.fail(w, err)
@@ -313,7 +312,7 @@ func (g *Github) loadState(ctx context.Context, q entityReader, id, nonce string
 func (g *Github) Callback() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		client, _, _ := net.SplitHostPort(r.RemoteAddr)
+		client := g.auth.requestClient(r)
 		release, err := g.auth.admission(client, false)
 		if err != nil {
 			g.auth.fail(w, err)
@@ -361,7 +360,7 @@ func (g *Github) callback(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	client, _, _ := net.SplitHostPort(r.RemoteAddr)
+	client := g.auth.requestClient(r)
 	release, err := g.oauthAdmission.admission(client, true)
 	if err != nil {
 		return "", err
