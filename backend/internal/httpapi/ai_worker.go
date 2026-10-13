@@ -30,6 +30,44 @@ func aiHash(value any) (string, error) {
 	}
 	return legacyDigest(canonical), nil
 }
+
+const exactSourceHashVersion = "exact-json-v1"
+
+func aiRecord(ctx context.Context, q entityReader, id string) (map[string]any, error) {
+	raw, err := get(ctx, q, "record", id)
+	if err != nil {
+		return nil, err
+	}
+	var record map[string]any
+	err = DecodeJSONNumbers(raw, &record)
+	return record, err
+}
+
+func embeddingSourceMatches(record, embedding map[string]any) (bool, error) {
+	hash, err := aiHash(record)
+	if err != nil {
+		return false, err
+	}
+	if embedding["contentHash"] == hash {
+		return true, nil
+	}
+	// Old embeddings bound their record ID to a float64-decoded source hash.
+	// Sources are immutable; retain that compatibility without altering either
+	// the stored embedding or the exact source returned to the caller.
+	if _, exists := embedding["sourceHashVersion"]; exists {
+		return false, nil
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return false, err
+	}
+	var historical map[string]any
+	if json.Unmarshal(raw, &historical) != nil {
+		return false, nil
+	}
+	hash, err = aiHash(historical)
+	return embedding["contentHash"] == hash, err
+}
 func aiFingerprint(cfg AIConfig) (string, error) {
 	return aiHash(map[string]any{"baseUrl": cfg.BaseURL, "model": cfg.Model, "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions})
 }
@@ -87,7 +125,12 @@ func (a *AI) aiScopedEntities(ctx context.Context, conn *sql.Conn, scope jobScop
 			return nil, err
 		}
 		var record map[string]any
-		if err = json.Unmarshal(raw, &record); err != nil {
+		if kind == "record" {
+			err = DecodeJSONNumbers(raw, &record)
+		} else {
+			err = json.Unmarshal(raw, &record)
+		}
+		if err != nil {
 			return nil, err
 		}
 		records = append(records, record)
@@ -362,7 +405,7 @@ func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot 
 		if err != nil {
 			return err
 		}
-		embeddings = append(embeddings, map[string]any{"recordId": record["id"], "projectId": record["projectId"], "vector": vector, "chunkCount": pieces, "model": snapshot.config.EmbeddingModel, "dimensions": snapshot.config.EmbeddingDimensions, "fingerprint": signature, "contentHash": hash, "generator": map[string]any{"provider": snapshot.config.BaseURL, "model": snapshot.config.EmbeddingModel, "version": signature}, "generatedAt": timestamp(time.Now())})
+		embeddings = append(embeddings, map[string]any{"recordId": record["id"], "projectId": record["projectId"], "vector": vector, "chunkCount": pieces, "model": snapshot.config.EmbeddingModel, "dimensions": snapshot.config.EmbeddingDimensions, "fingerprint": signature, "contentHash": hash, "sourceHashVersion": exactSourceHashVersion, "generator": map[string]any{"provider": snapshot.config.BaseURL, "model": snapshot.config.EmbeddingModel, "version": signature}, "generatedAt": timestamp(time.Now())})
 	}
 	return a.auth.Store.Write(ctx, func(conn *sql.Conn) error {
 		current, err := a.workerInputsCurrent(ctx, conn, job, snapshot, false, inputProjects)
@@ -370,7 +413,7 @@ func (a *AI) executeEmbedding(ctx context.Context, job map[string]any, snapshot 
 			return err
 		}
 		for _, item := range embeddings {
-			source, err := entityMap(ctx, conn, "record", stringValue(item, "recordId"))
+			source, err := aiRecord(ctx, conn, stringValue(item, "recordId"))
 			if err != nil {
 				return err
 			}

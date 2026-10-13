@@ -46,7 +46,12 @@ func referencedEntities(ctx context.Context, conn *sql.Conn, kind string, ids ma
 				return nil, err
 			}
 			var row map[string]any
-			if err = json.Unmarshal(raw, &row); err != nil {
+			if kind == "record" {
+				err = DecodeJSONNumbers(raw, &row)
+			} else {
+				err = json.Unmarshal(raw, &row)
+			}
+			if err != nil {
 				rows.Close()
 				return nil, err
 			}

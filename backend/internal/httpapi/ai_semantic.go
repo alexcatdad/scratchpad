@@ -124,11 +124,11 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 				if record == nil {
 					continue
 				}
-				hash, err := aiHash(record)
+				matches, err := embeddingSourceMatches(record, item)
 				if err != nil {
 					return err
 				}
-				if item["fingerprint"] == signature && item["model"] == snapshot.config.EmbeddingModel && item["dimensions"] == float64(snapshot.config.EmbeddingDimensions) && item["contentHash"] == hash {
+				if item["fingerprint"] == signature && item["model"] == snapshot.config.EmbeddingModel && item["dimensions"] == float64(snapshot.config.EmbeddingDimensions) && matches {
 					eligible = append(eligible, item)
 				}
 			}
@@ -190,7 +190,7 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 				if !contains(allowed, stringValue(record, "projectId")) {
 					return &protocolError{"AI_NOT_ALLOWED", "Current consent does not permit these semantic results.", 403}
 				}
-				current, err := entityMap(ctx, conn, "record", stringValue(record, "id"))
+				current, err := aiRecord(ctx, conn, stringValue(record, "id"))
 				if err != nil {
 					return err
 				}
