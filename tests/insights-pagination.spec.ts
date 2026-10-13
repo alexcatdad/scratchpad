@@ -12,7 +12,7 @@ test.afterAll(async () => {
 
 test("suggestion pages replace history, reset scope and preserve legacy responses", async ({
   page,
-}) => {
+}, testInfo) => {
   const requests: { project: string; cursor: string; limit: string }[] = [];
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -100,7 +100,7 @@ test("suggestion pages replace history, reset scope and preserve legacy response
   await expect(suggestions).not.toContainText("Recent suggestion");
   await suggestions.scrollIntoViewIfNeeded();
   await page.screenshot({
-    path: "/private/tmp/scratchpad-suggestions-desktop.png",
+    path: testInfo.outputPath("suggestions-desktop.png"),
   });
   await expect(
     page.getByRole("button", { name: "Older suggestions", exact: true }),
@@ -144,7 +144,7 @@ test("suggestion pages replace history, reset scope and preserve legacy response
     page.getByRole("button", { name: "Older suggestions", exact: true }),
   ).toBeVisible();
   await page.screenshot({
-    path: "/private/tmp/scratchpad-suggestions-mobile.png",
+    path: testInfo.outputPath("suggestions-mobile.png"),
   });
   expect(errors).toEqual([]);
 });
