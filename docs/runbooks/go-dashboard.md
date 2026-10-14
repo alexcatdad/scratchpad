@@ -3,8 +3,8 @@
 This optional local integration keeps Go as the public HTTP listener and sole
 backend. The existing Node process renders the React dashboard on a private
 loopback port. Browser API requests use the public Go origin, including passkey
-enrollment and GitHub OAuth callbacks. This does not establish full dashboard
-parity, container packaging or a supported installation cutover.
+enrollment and GitHub OAuth callbacks. The default Docker image uses this
+arrangement.
 
 ## Build and start
 

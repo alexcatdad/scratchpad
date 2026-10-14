@@ -81,7 +81,7 @@ Use the same database path for the administrative command and the running server
 
 ```sh
 docker compose up --build -d
-docker compose exec scratchpad npm run admin -- setup
+docker compose exec scratchpad scratchpad-server setup
 ```
 
 The local Compose configuration serves the dashboard on port 3000 and stores SQLite in a persistent volume. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before moving beyond localhost: remote instances require HTTPS and a matching `SCRATCHPAD_PUBLIC_URL`.
@@ -94,11 +94,13 @@ A server administrator can authorize replacement-passkey registration:
 npm run admin -- recover
 ```
 
-For Docker:
+For a Compose service built from source:
 
 ```sh
-docker compose exec scratchpad npm run admin -- recover
+docker compose exec scratchpad scratchpad-server recover
 ```
+
+With the released v0.3.0 image, use `docker compose exec scratchpad npm run admin -- recover` instead.
 
 Use the dashboard recovery flow with the resulting token. Recovery preserves records and invalidates existing sessions; it does not reopen ordinary first-time setup.
 

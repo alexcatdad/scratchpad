@@ -1,10 +1,14 @@
-# Opt-in Go runtime image
+# Go runtime image
 
-The Dockerfile supplies an experimental `go-runtime` target containing the Go
-backend and retained React renderer. The default final `runtime` target continues
-to run TypeScript. Existing Compose installations do not switch runtimes.
-Full parity, canonical CI, actual release artifacts and rollback verification
-remain prerequisites for supported installation cutover.
+The Dockerfile's default final stage, `go-runtime`, contains the Go backend and
+the retained React renderer. Compose builds and published releases use it. The
+retained TypeScript backend is available only as the explicit
+`typescript-runtime` target while its remaining tests move to Go.
+
+Starting this image on an existing schema-1 installation migrates it one way; take
+and verify a backup first (see [backend migrations](go-backend-migrations.md)).
+If the database role that the server connects as does not own the tables, run
+`scratchpad-server migrate` once as the owning role before serving.
 
 Use an explicitly selected local disposable Docker context. Inspect its endpoint
 first; do not rely on the current context, which may target a live remote host.

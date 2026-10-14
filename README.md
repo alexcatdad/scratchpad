@@ -47,7 +47,7 @@ Lost-credential recovery is an explicit administrator action:
 docker exec scratchpad npm run admin -- recover
 ```
 
-For a source checkout, the repository's `docker compose up --build -d` builds the current source instead of pulling the release image.
+For a source checkout, the repository's `docker compose up --build -d` builds the current source instead of pulling the release image. Source builds run the Go backend, the supported runtime; use `docker compose exec scratchpad scratchpad-server setup` (or `recover`, or `backup <absolute-path>`) instead of `npm run admin`. Starting a Go build on an existing installation upgrades its database one way, so take a backup first. The released v0.3.0 image still runs the earlier TypeScript backend and its `npm run admin` commands.
 
 ## Develop
 

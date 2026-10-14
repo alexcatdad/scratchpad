@@ -40,7 +40,7 @@ Native exports preserve knowledge, project configuration, provenance, and audit 
 Create a consistent backup while the service is running:
 
 ```sh
-docker compose exec scratchpad npm run admin -- backup /data/backup-2026-09-29.sqlite
+docker compose exec scratchpad scratchpad-server backup /data/backup-2026-09-29.sqlite
 ```
 
 The destination must be an absolute new path distinct from the live database. The command uses SQLite's online backup API, refuses existing destinations, waits until the snapshot completes, and creates mode-0600 output. It does not print credentials or session values.

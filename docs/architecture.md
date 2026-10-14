@@ -10,10 +10,14 @@
 
 This document defines the initial technical architecture for Scratchpad.
 
-The supported TypeScript runtime below is being replaced under issue #36. The
-accepted Go direction is consolidated in PRD §46 and the implementation boundary
-in this document's “Go backend replacement in progress” section. Go builds remain
-opt-in until parity, recovery and delivery acceptance pass.
+The Go backend in `backend/` is the supported central runtime. The owner's
+production instance switched to it on 14 October 2026, and the default Docker
+image and published releases build it. The TypeScript backend that earlier
+sections describe is retained only as the explicit `typescript-runtime` build
+target while its remaining test coverage moves to Go; it will then be removed.
+It is not a rollback path for a Go-migrated database. The accepted Go direction
+is consolidated in PRD §46 and the implementation boundary in this document's
+“Go backend replacement in progress” section.
 
 Scratchpad is a private, self-hosted developer-memory system with:
 
@@ -1057,10 +1061,11 @@ creation, capture, record inspection and API availability after renderer shutdow
 This same-host integration does not establish full dashboard parity or container
 cutover. See the [dashboard runbook](runbooks/go-dashboard.md).
 
-An opt-in Docker `go-runtime` target packages Go with the retained renderer and a
-launcher that forwards administrative commands, drains both serving processes on
-termination and stops the companion on child failure. The final default image
-continues to run TypeScript. Actual locally built image verification covers
+The default Docker image, the final `go-runtime` stage, packages Go with the
+retained renderer and a launcher that forwards administrative commands, drains
+both serving processes on termination and stops the companion on child failure.
+The TypeScript backend is built only on request as `typescript-runtime`. Actual
+locally built image verification covers
 browser enrollment, capture, online SQLite backup and fresh-volume restoration;
 full release and rollback acceptance remains separate. See the
 [Go container runbook](runbooks/go-container.md).

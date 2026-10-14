@@ -413,8 +413,8 @@ type QAPayload = {
 };
 ```
 
-This is the supported TypeScript full-pair shape. The opt-in Go backend also
-accepts an omitted `answer` for unresolved questions; a supplied answer must be
+Both runtimes accept this full-pair shape. The Go backend, the supported
+runtime, also accepts an omitted `answer` for unresolved questions; a supplied answer must be
 nonempty. Applicable accepted `answers` relationships resolve separately captured
 answers without editing the question. See the compact-context contract below.
 
@@ -1518,7 +1518,7 @@ Everything else can build on this stable core.
 ## 58. Compatibility Rule
 
 The HTTP API is the contract between the local Go MCP, generated clients and the
-central application, including the opt-in Go replacement.
+central application.
 
 Neither implementation may rely on internal types from the other language/runtime.
 
@@ -1627,7 +1627,7 @@ type AiSettings = {
 
 Go `analysisModes` accepts `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, and `recommendation`; an empty array disables analysis modes. Supplied `export` modes return HTTP 400 because documents require an explicit document job. Historical stored `export` entries are ignored in effective analysis settings without rewriting configuration at startup; ordinary memory, embedding and explicit document jobs remain available.
 
-The opt-in Go backend encrypts persisted reusable provider tokens and adds safe
+The Go backend encrypts persisted reusable provider tokens and adds safe
 `secretProtection.status` metadata: `protected`, `pending_conversion`,
 `unavailable`, or `not_required`. Secret-dependent calls with a missing/wrong key
 or invalid ciphertext return `SECRET_UNAVAILABLE` without provider dispatch or

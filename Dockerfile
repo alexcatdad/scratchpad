@@ -1,9 +1,13 @@
-FROM golang:1.27.2-bookworm AS go-build
+# The server is pure Go (CGO disabled), so multi-platform builds cross-compile
+# on the build platform instead of emulating the target.
+FROM --platform=$BUILDPLATFORM golang:1.27.2-bookworm AS go-build
+ARG TARGETOS
+ARG TARGETARCH
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 COPY backend ./
-RUN CGO_ENABLED=0 go build -trimpath -buildvcs=false -ldflags="-s -w" -o /scratchpad-server ./cmd/scratchpad-server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -buildvcs=false -ldflags="-s -w" -o /scratchpad-server ./cmd/scratchpad-server
 
 FROM node:24.21.0-bookworm-slim AS build
 WORKDIR /app
@@ -30,6 +34,12 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD ["node", "-e", "fetch('http://localhost:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["npm", "run", "start", "-w", "@scratchpad/web"]
 
+# Retained TypeScript backend, built only on request (--target
+# typescript-runtime) until its remaining test coverage moves to Go.
+FROM runtime-base AS typescript-runtime
+
+# Default image: the Go server with the React dashboard renderer. The homelab
+# rollout and its runtime contract build this stage by name.
 FROM runtime-base AS go-runtime
 USER 0:0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u1 && rm -rf /var/lib/apt/lists/*
@@ -39,5 +49,3 @@ COPY --from=go-build --chown=node:node /scratchpad-server /usr/local/bin/scratch
 COPY --chown=node:node scripts/go-dashboard-runtime.mjs ./scripts/go-dashboard-runtime.mjs
 ENTRYPOINT ["node", "/app/scripts/go-dashboard-runtime.mjs", "/usr/local/bin/scratchpad-server"]
 CMD ["serve"]
-
-FROM runtime-base AS runtime

@@ -12,7 +12,7 @@ Run from the repository root:
 
 ```sh
 docker compose up --build -d
-docker compose exec scratchpad npm run admin -- setup
+docker compose exec scratchpad scratchpad-server setup
 ```
 
 Open <http://localhost:3000>, enter the one-use token, and register a passkey. Generate the token against the running service so it uses the same volume and public URL. The token expires after 15 minutes; generating a replacement invalidates the previous token.
@@ -69,7 +69,7 @@ From the repository root:
 umask 077
 mkdir -p backups
 backup_name="scratchpad-$(date -u +%Y%m%dT%H%M%SZ).sqlite"
-docker compose exec -T scratchpad npm run admin -- backup "/data/backups/$backup_name"
+docker compose exec -T scratchpad scratchpad-server backup "/data/backups/$backup_name"
 docker compose cp "scratchpad:/data/backups/$backup_name" "./backups/$backup_name"
 chmod 600 "./backups/$backup_name"
 ```
@@ -119,7 +119,7 @@ curl --fail http://localhost:3000/ready
 
 Continue using **both Compose files** for all commands against the restored instance, including `exec`, `stop`, backups, and upgrades. Record this selection in the deployment configuration. Running default `docker compose up` without the override would reconnect the original volume; that is a rollback action, not a routine restart. The backup is a self-contained SQLite database; do not copy old `-wal` or `-shm` files into the fresh volume.
 
-Verify browser sign-in, project/record counts, a known decision chain, and real MCP retrieval. A restored backup also restores the authentication state at its snapshot time: review credentials and revoke anything that should no longer be valid. Administrator recovery (`npm run admin -- recover`) can replace a lost passkey and invalidate current sessions without deleting records.
+Verify browser sign-in, project/record counts, a known decision chain, and real MCP retrieval. A restored backup also restores the authentication state at its snapshot time: review credentials and revoke anything that should no longer be valid. Administrator recovery (`docker compose exec scratchpad scratchpad-server recover`) can replace a lost passkey and invalidate current sessions without deleting records.
 
 The application must own both the restored database file and its volume directory. SQLite creates WAL and shared-memory files beside the database; assigning ownership only to the database file can cause `SQLITE_READONLY_DIRECTORY` even when the file itself is writable.
 
@@ -132,6 +132,8 @@ Native JSON import/export is a separate knowledge migration feature. Importing a
 3. Review the target version's release notes and migration requirements. Build the target source with `docker compose build` before stopping the running service.
 4. Run `docker compose up -d` to apply the new image, then check readiness, browser sign-in, a known record, MCP capture/retrieval, and restart persistence.
 5. If rollback is needed, stop the new service, return to the recorded source/image, and restore the pre-upgrade database snapshot offline. Preserve the failed instance data for diagnosis before replacement.
+
+Upgrading from the TypeScript backend (v0.3.0 and earlier) to the Go backend is one-way: Go migrates schema 1 to its current version at startup and the TypeScript backend refuses the result, so step 5 always needs the pre-upgrade backup. If the database role that the server connects as does not own the tables, run `scratchpad-server migrate` once as the owning role before starting the service (see [backend migrations](go-backend-migrations.md)).
 
 Do not assume an older server understands a database migrated by a newer server. Restoring the earlier code alone is insufficient; retain the matching pre-upgrade database. Keep the same Compose project name or explicit volume identity so an upgrade does not appear to lose data by attaching a new empty volume. `docker compose down --volumes` destroys the named data volume and is not part of normal upgrade, restart, or rollback.
 

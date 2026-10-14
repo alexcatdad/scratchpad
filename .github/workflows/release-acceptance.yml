@@ -110,10 +110,11 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Verify published image and binary through backup restore
-        run: npm run test:e2e
+      - name: Verify published Go image through browser access and backup restore
+        run: npx playwright test tests/go-container.spec.ts
         env:
-          SCRATCHPAD_E2E_DOCKER: "1"
+          TEST_DOCKER_CONTEXT: default
+          TEST_GO_IMAGE: ${{ env.SCRATCHPAD_E2E_IMAGE }}
   clients:
     runs-on: ubuntu-latest
     timeout-minutes: 15

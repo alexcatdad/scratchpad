@@ -9,10 +9,10 @@ repository, not here.
 
 ## What one deployment does
 
-1. Builds the `go-runtime` target of the merged commit's `Dockerfile` with
-   the homelab's shared BuildKit and pushes it to the homelab registry by
-   digest. The image contains both the Go server and the retained TypeScript
-   runtime; the operator-owned Deployment command decides which one runs.
+1. Builds the `go-runtime` stage (the default image) of the merged commit's
+   `Dockerfile` with the homelab's shared BuildKit and pushes it to the homelab
+   registry by digest. Production runs it with the operator-owned Go command;
+   the homelab runtime contract refuses rollouts that would leave Go.
 2. Waits for a host-side logical dump of the production PostgreSQL database.
    The runner has no database credential; if the dump is refused (for example
    during the nightly backup window) nothing is changed and the run fails.

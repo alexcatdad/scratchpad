@@ -18,7 +18,7 @@ URL-encode reserved characters in credentials. Use the appropriate PostgreSQL TL
 ```sh
 docker compose up -d
 curl --fail https://scratchpad.example.com/ready
-docker compose exec scratchpad npm run admin -- setup
+docker compose exec scratchpad scratchpad-server setup
 ```
 
 Complete browser passkey enrollment, then enroll the MCP public key as described in the server runbook. Readiness confirms storage and schema validity; an unavailable AI provider does not make core storage unready.
