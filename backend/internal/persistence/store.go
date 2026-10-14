@@ -243,6 +243,24 @@ var sqliteColumns = map[string][]column{
 }
 
 func validateSQLiteColumns(ctx context.Context, q queryer, version int) error {
+	rows, err := q.QueryContext(ctx, `SELECT sql FROM sqlite_schema WHERE type='table' AND name='record_search'`)
+	if err != nil {
+		return err
+	}
+	var definition string
+	if !rows.Next() {
+		rows.Close()
+		return errors.New("missing search projection")
+	}
+	err = rows.Scan(&definition)
+	rows.Close()
+	if err != nil {
+		return err
+	}
+	normalized := strings.ToLower(strings.Join(strings.Fields(definition), ""))
+	if normalized != "createvirtualtablerecord_searchusingfts5(record_idunindexed,title,content)" && normalized != "createvirtualtableifnotexistsrecord_searchusingfts5(record_idunindexed,title,content)" {
+		return errors.New("malformed search projection")
+	}
 	for table, expected := range columnsForVersion(version) {
 		rows, err := q.QueryContext(ctx, `PRAGMA table_info(`+table+`)`)
 		if err != nil {
