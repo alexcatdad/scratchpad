@@ -9,8 +9,10 @@ repository, not here.
 
 ## What one deployment does
 
-1. Builds the merged commit from `Dockerfile` with the homelab's shared
-   BuildKit and pushes it to the homelab registry by digest.
+1. Builds the `go-runtime` target of the merged commit's `Dockerfile` with
+   the homelab's shared BuildKit and pushes it to the homelab registry by
+   digest. The image contains both the Go server and the retained TypeScript
+   runtime; the operator-owned Deployment command decides which one runs.
 2. Waits for a host-side logical dump of the production PostgreSQL database.
    The runner has no database credential; if the dump is refused (for example
    during the nightly backup window) nothing is changed and the run fails.
@@ -36,10 +38,19 @@ rebuilds `main`. Only the repository owner can dispatch it.
 
 ## Compatibility notes for each release
 
-- Schema changes run at startup (`store.ts`). A rollback runs the previous
-  image against the current schema, so keep schema changes additive or ship
-  them with an explicit down path; otherwise the database restore in the
-  homelab runbook is the recovery.
+- Schema changes run at startup (`store.ts` for the TypeScript runtime,
+  `backend/internal/persistence` for Go). A rollback runs the previous image
+  against the current schema, so keep schema changes additive or ship them
+  with an explicit down path; otherwise the database restore in the homelab
+  runbook is the recovery.
+- Switching the Deployment command from the TypeScript runtime to the Go
+  runtime is an operator step, not a CI deploy. It is one-way: Go migrates the
+  schema past version 1, which the TypeScript runtime refuses, and converts
+  stored provider secrets with the installation key. After the switch, the
+  automatic rollback only helps between Go images; returning to TypeScript
+  needs the pre-switch database dump. See
+  [go-backend-migrations.md](go-backend-migrations.md) and
+  [go-secret-configuration.md](go-secret-configuration.md).
 - Releases that change the MCP or SSH proof protocol (for example security
   ticket 13, proof v2) need the matching MCP client installed by the owner at
   the same time.
