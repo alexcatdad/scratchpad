@@ -37,8 +37,9 @@ on the server only; the MCP does not use GitHub OAuth tokens or PATs.
 
 ## Establish the owner
 
-For a fresh instance, generate the usual setup token with `npm run admin -- setup`
-(or the container equivalent in the server runbook). Supply the single-use token
+For a fresh instance, generate the usual setup token with
+`scratchpad-server setup` (in a container: `docker compose exec scratchpad
+scratchpad-server setup`). Supply the single-use token
 and choose GitHub on the setup page. Confirm the intended GitHub account before
 authorizing. For an initialized instance, sign into the existing owner dashboard
 and link through Settings. A descriptive username/profile is insufficient.
@@ -77,7 +78,7 @@ explicit unblock restores eligibility.
 Before replacement, perform fresh authentication with an existing credential.
 Before unlinking, authenticate with an independent local credential. The freshness
 window is five minutes from proof, not renewal. Add a passkey first if needed.
-Use `npm run admin -- recover` if all access is lost. Authorized recovery can
+Use `scratchpad-server recover` if all access is lost. Authorized recovery can
 establish independent passkey access or replace the GitHub account. Unlinking and
 replacement preserve knowledge/local credentials and invalidate GitHub-derived
 access. They never convert synchronized credentials into independent keys.

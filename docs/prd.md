@@ -1436,9 +1436,11 @@ Supported installations must retain authentication and recovery, credential
 provenance and revocation, GitHub cache freshness and local blocks, immutable
 captures, retries, optimistic edits, audit atomicity, imports/exports, optional AI
 behavior and source/privacy validation. Keep HTTP, generated-client and MCP
-contracts compatible through documented transitions. The TypeScript runtime
-remains supported until parity, operational recovery and delivery gates pass;
-an opt-in Go build or local passing test does not establish cutover or deployment.
+contracts compatible through documented transitions. Go is the supported
+runtime: the owner's production instance completed the cutover on 14 October 2026
+after a pre-switch backup, an owner-role migration and browser, passkey and MCP
+acceptance. The TypeScript runtime is retained only as an explicit build target
+until its remaining tests move to Go, and it cannot serve a Go-migrated database.
 
 Recognize schema-version-one installations and apply ordered, serialized
 migrations on SQLite and PostgreSQL before serving or starting workers. Reject
@@ -1455,7 +1457,7 @@ versioned compact context with distinct previews, source IDs, response limits an
 omission counts. Select current state before limiting history. The Go backend
 accepts question-only captures and separate answers connected through accepted
 `answers` relationships; unanswered status follows applicable current evidence.
-The TypeScript validator remains unchanged until cutover. See the
+The retained TypeScript validator remains unchanged until its removal. See the
 [context contract](runbooks/go-context.md).
 
 Encrypt persisted reusable provider secrets with versioned standard authenticated
