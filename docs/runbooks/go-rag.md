@@ -82,8 +82,10 @@ transaction. `rag_projection_migrations` versions the optional `rag_passages`
 table independently of core schema 2. The marker and table creation commit
 together; competing instances use the existing PostgreSQL advisory lock.
 
-Unknown versions, malformed timestamps and missing required projection objects
-are refused without automatic repair. Disable the optional RAG feature to access
+Unknown versions, malformed timestamps and altered projection definitions
+are refused without automatic repair. Startup checks both tables’ column types,
+required values and primary keys, the unbounded vector column, enforced source
+and dimension constraints, and the complete scope index. Disable the optional RAG feature to access
 ordinary memory while preparing an authorized projection recovery. Retain the
 database for operational restore; knowledge exports contain original knowledge,
 not vector projections or operational jobs. Native PostgreSQL dump/restore tests
