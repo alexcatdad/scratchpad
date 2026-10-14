@@ -18,11 +18,25 @@ type Credential = {
 };
 export function Settings({
   projects,
+  section,
+  onSectionChange,
   onImported,
 }: {
   projects: Project[];
+  section?: string;
+  onSectionChange: (section: string) => void;
   onImported: () => void;
 }) {
+  const sections = [
+    ["profile", "Profile"],
+    ["ai", "AI provider"],
+    ["defaults", "Project defaults"],
+    ["access", "Access & MCP"],
+    ["data", "Import & export"],
+  ] as const;
+  const selected = sections.some(([key]) => key === section)
+    ? section
+    : "profile";
   const [importProject, setImportProject] = useState(projects[0]?.id ?? "");
   const [importWarnings, setImportWarnings] = useState<
     { record?: number; code: string }[]
@@ -101,129 +115,153 @@ export function Settings({
         </p>
       )}
       {notice && <p role="status">{notice}</p>}
-      <OwnerSettings />
-      <AiSettings />
-      <ProjectDefaults />
-      <GithubAccess onChanged={refresh} />
-      <section className="settings-section">
-        <h2>Passkeys and identities</h2>
-        <p>Revoking a credential ends its sessions immediately.</p>
-        <button type="button" onClick={() => void perform(enrollPasskey)}>
-          Add passkey
-        </button>
-        <ul className="credential-list">
-          {credentials.map((c) => (
-            <li key={c.id}>
-              <div>
-                <strong>{c.label ?? c.kind}</strong>
-                <small>
-                  {c.kind}
-                  {c.source === "github"
-                    ? " · GitHub-managed"
-                    : " · Independent local credential"}
-                  {c.revokedAt ? " · Revoked" : ""}
-                </small>
-              </div>
-              {!c.revokedAt && c.source !== "github" && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void perform(async () => {
-                      await api(`/auth/credentials/${encodedId(c.id)}`, {
-                        method: "DELETE",
-                      });
-                      await refresh();
-                    })
-                  }
-                >
-                  Revoke
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="settings-section">
-        <h2>Connect an MCP key</h2>
-        <p>
-          Enroll a public SSH key and prove possession. Your private key stays
-          on your machine.
-        </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void perform(async () => {
-              const incoming = await api<{
-                challengeId: string;
-                namespace: string;
-              }>(
-                "/auth/credentials/challenge",
-                post({ publicKey, label: "MCP key" }),
-              );
-              setChallenge({
-                ...incoming,
-                message: sshProof(
-                  incoming,
-                  publicKey,
-                  window.location.origin,
-                  "ssh_enroll",
-                ),
-              });
-            });
-          }}
-        >
-          <label>
-            Public key
-            <textarea
-              value={publicKey}
-              onChange={(e) => setPublicKey(e.target.value)}
-              placeholder="ssh-ed25519 …"
-              required
-            />
-          </label>
-          <button type="submit">Create enrollment challenge</button>
-        </form>
-        {challenge && (
+      <nav className="section-nav" aria-label="Settings sections">
+        {sections.map(([key, name]) => (
+          <button
+            type="button"
+            key={key}
+            aria-current={selected === key ? "page" : undefined}
+            onClick={() => {
+              setError("");
+              setNotice("");
+              onSectionChange(key);
+            }}
+          >
+            {name}
+          </button>
+        ))}
+      </nav>
+      <div hidden={selected !== "profile"}>
+        <OwnerSettings />
+      </div>
+      <div hidden={selected !== "ai"}>
+        <AiSettings />
+      </div>
+      <div hidden={selected !== "defaults"}>
+        <ProjectDefaults />
+      </div>
+      <div hidden={selected !== "access"}>
+        <GithubAccess onChanged={refresh} />
+        <section className="settings-section">
+          <h2>Passkeys and identities</h2>
+          <p>Revoking a credential ends its sessions immediately.</p>
+          <button type="button" onClick={() => void perform(enrollPasskey)}>
+            Add passkey
+          </button>
+          <ul className="credential-list">
+            {credentials.map((c) => (
+              <li key={c.id}>
+                <div>
+                  <strong>{c.label ?? c.kind}</strong>
+                  <small>
+                    {c.kind}
+                    {c.source === "github"
+                      ? " · GitHub-managed"
+                      : " · Independent local credential"}
+                    {c.revokedAt ? " · Revoked" : ""}
+                  </small>
+                </div>
+                {!c.revokedAt && c.source !== "github" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void perform(async () => {
+                        await api(`/auth/credentials/${encodedId(c.id)}`, {
+                          method: "DELETE",
+                        });
+                        await refresh();
+                      })
+                    }
+                  >
+                    Revoke
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="settings-section">
+          <h2>Connect an MCP key</h2>
+          <p>
+            Enroll a public SSH key and prove possession. Your private key stays
+            on your machine.
+          </p>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void perform(async () => {
-                await api(
-                  "/auth/credentials/verify",
-                  post({
-                    challengeId: challenge.challengeId,
-                    publicKey,
-                    signature,
-                  }),
+                const incoming = await api<{
+                  challengeId: string;
+                  namespace: string;
+                }>(
+                  "/auth/credentials/challenge",
+                  post({ publicKey, label: "MCP key" }),
                 );
-                setChallenge(null);
-                setSignature("");
-                setPublicKey("");
-                await refresh();
-                setNotice("MCP key enrolled.");
+                setChallenge({
+                  ...incoming,
+                  message: sshProof(
+                    incoming,
+                    publicKey,
+                    window.location.origin,
+                    "ssh_enroll",
+                  ),
+                });
               });
             }}
           >
-            <p>
-              Sign this exact challenge using your key with namespace{" "}
-              <code>{challenge.namespace}</code>.
-            </p>
-            <pre>{challenge.message}</pre>
             <label>
-              Armored SSH signature
+              Public key
               <textarea
-                value={signature}
-                onChange={(e) => setSignature(e.target.value)}
+                value={publicKey}
+                onChange={(e) => setPublicKey(e.target.value)}
+                placeholder="ssh-ed25519 …"
                 required
               />
             </label>
-            <button type="submit" className="primary">
-              Verify and enroll key
-            </button>
+            <button type="submit">Create enrollment challenge</button>
           </form>
-        )}
-      </section>
-      <section className="settings-section">
+          {challenge && (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                void perform(async () => {
+                  await api(
+                    "/auth/credentials/verify",
+                    post({
+                      challengeId: challenge.challengeId,
+                      publicKey,
+                      signature,
+                    }),
+                  );
+                  setChallenge(null);
+                  setSignature("");
+                  setPublicKey("");
+                  await refresh();
+                  setNotice("MCP key enrolled.");
+                });
+              }}
+            >
+              <p>
+                Sign this exact challenge using your key with namespace{" "}
+                <code>{challenge.namespace}</code>.
+              </p>
+              <pre>{challenge.message}</pre>
+              <label>
+                Armored SSH signature
+                <textarea
+                  value={signature}
+                  onChange={(e) => setSignature(e.target.value)}
+                  required
+                />
+              </label>
+              <button type="submit" className="primary">
+                Verify and enroll key
+              </button>
+            </form>
+          )}
+        </section>
+      </div>
+      <section className="settings-section" hidden={selected !== "data"}>
         <h2>Portable memory</h2>
         <p>
           Export records and audit history. Credentials stay on this instance.
