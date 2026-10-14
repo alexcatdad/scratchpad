@@ -4,6 +4,7 @@
   "repository": "alexcatdad/scratchpad",
   "port": 3000,
   "dockerfile": "Dockerfile",
+  "target": "go-runtime",
   "deployment": {
     "namespace": "app-scratchpad",
     "name": "scratchpad",
