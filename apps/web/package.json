@@ -19,6 +19,8 @@
     "postgres": "3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
     "srvx": "1.0.5",
     "tsx": "4.23.15",
     "undici": "8.11.2",
