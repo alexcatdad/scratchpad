@@ -41,7 +41,7 @@ func run() error {
 	store, err := persistence.Open(ctx, os.Getenv("SCRATCHPAD_DATABASE_PATH"), os.Getenv("SCRATCHPAD_DATABASE_URL"))
 	cancel()
 	if err != nil {
-		return errors.New("DATABASE_NOT_READY: persistence is unavailable, unsafe, or its schema is unsupported.")
+		return fmt.Errorf("DATABASE_NOT_READY (%s): persistence is unavailable, unsafe, or its schema is unsupported.", persistence.FailureClass(err))
 	}
 	defer store.Close()
 	if os.Args[1] == "setup" || os.Args[1] == "recover" {

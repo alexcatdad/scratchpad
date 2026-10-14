@@ -51,6 +51,17 @@ rebuilds `main`. Only the repository owner can dispatch it.
   needs the pre-switch database dump. See
   [go-backend-migrations.md](go-backend-migrations.md) and
   [go-secret-configuration.md](go-secret-configuration.md).
+- Production connects as an application role that reads and writes data but
+  does not own the tables, so the Go server cannot apply schema migrations at
+  startup. Before CI deploys a release that adds a Go migration, the homelab
+  operator runs `scratchpad-server migrate` from that image on the host as the
+  table-owning role. Without that step the new pod fails readiness with
+  `DATABASE_NOT_READY (permission, SQLSTATE 42501)`, the migration rolls back
+  and CI restores the previous Go image. Startup failures name a class
+  (`permission`, `authentication`, `connection`, `schema`, `storage`,
+  `database` or `unknown`, with the PostgreSQL SQLSTATE when there is one) and
+  never the database URL or credentials. PostgreSQL URL `options` keep their
+  spaces, so `options=-c role=<owner>` selects the owning role.
 - Releases that change the MCP or SSH proof protocol (for example security
   ticket 13, proof v2) need the matching MCP client installed by the owner at
   the same time.

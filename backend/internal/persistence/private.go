@@ -2,6 +2,7 @@ package persistence
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -43,6 +44,12 @@ func inspectPrivate(path string, directory bool) error {
 	return nil
 }
 func privateSQLite(path string) error {
+	if err := checkPrivateSQLite(path); err != nil {
+		return fmt.Errorf("%w: %w", errUnsafeStorage, err)
+	}
+	return nil
+}
+func checkPrivateSQLite(path string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err

@@ -26,7 +26,10 @@ func openPostgres(ctx context.Context, raw string) (*Store, error) {
 	}
 	values := u.Query()
 	values.Set("connect_timeout", "10")
-	u.RawQuery = values.Encode()
+	// Encode writes spaces as "+", which the driver passes through literally,
+	// turning options=-c role=x into "-c+role=x". Encode keeps a literal plus
+	// as %2B, so every remaining "+" is a space.
+	u.RawQuery = strings.ReplaceAll(values.Encode(), "+", "%20")
 	db, err := sql.Open("pgx", u.String())
 	if err != nil {
 		return nil, err
