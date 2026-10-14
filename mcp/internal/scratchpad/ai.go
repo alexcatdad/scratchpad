@@ -73,16 +73,19 @@ func registerAI(server *mcp.Server, client *Client) {
 	type SemanticSearch struct {
 		AIScope
 		Query string `json:"query" jsonschema:"Meaning to search for; requires compatible built embeddings and project consent"`
-		Limit int    `json:"limit,omitempty"`
+		Limit *int   `json:"limit,omitempty" jsonschema:"Maximum semantic results, 1 to 100; omitted uses the server default"`
 	}
-	mcp.AddTool(server, &mcp.Tool{Name: "semantic_search", Description: "Optional search by meaning in the resolved project or explicitly permitted cross-project scope. Returns derived similarity scores and source records; exact search_memory remains independent of AI."}, func(ctx context.Context, _ *mcp.CallToolRequest, input SemanticSearch) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "semantic_search", Description: "Optional search by meaning in the resolved project or explicitly permitted cross-project scope. Returns derived similarity scores and source records; exact search_memory remains independent of AI."}, func(ctx context.Context, request *mcp.CallToolRequest, input SemanticSearch) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 100)) {
+			return nil, nil, errors.New("invalid semantic result limit")
+		}
 		body, err := client.aiScope(ctx, input.AIScope)
 		if err != nil {
 			return nil, nil, err
 		}
 		body["query"] = input.Query
-		if input.Limit > 0 {
-			body["limit"] = input.Limit
+		if input.Limit != nil {
+			body["limit"] = *input.Limit
 		}
 		var result any
 		err = client.request(ctx, "POST", "/search/semantic", body, "", &result)
