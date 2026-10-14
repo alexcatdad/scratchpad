@@ -11,7 +11,7 @@ The application server uses Node 24, SQLite, Drizzle, SimpleWebAuthn, and the sy
 
 ## Protocol decisions
 
-MCP signs the exact UTF-8 `nonce` returned by the challenge API, without a newline, using OpenSSH SSHSIG namespace `scratchpad-auth`. Challenges last two minutes; both browser and MCP sessions last at most 24 hours. Tokens are random and stored only as hashes on the server. Every request checks credential revocation.
+MCP signs the canonical version 2 JSON proof described in [the API contract](../api.md#accepted-clarification-recipient-bound-ssh-proof-2026-10-09), without a newline, using OpenSSH SSHSIG namespace `scratchpad-auth-v2`. The proof binds the locally trusted recipient origin, login/enrollment purpose, challenge ID, nonce, normalized public key and exact returned expiry string. Upgrade server and signing clients together; legacy nonce-only signatures are rejected without fallback. Challenges last two minutes; both browser and MCP sessions last at most 24 hours. Tokens are random and stored only as hashes on the server. Every request checks credential revocation.
 
 Browser writes require the configured Origin and an HttpOnly, SameSite=Strict cookie. HTTPS instances additionally set Secure. MCP bearer credentials cannot enroll or revoke other credentials.
 

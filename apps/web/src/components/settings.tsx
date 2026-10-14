@@ -2,12 +2,16 @@ import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/bro
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
 import { api, type Project, post } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
+import { sshProof } from "../lib/ssh-proof";
 import { AiSettings, OwnerSettings } from "./ai-settings";
+import { GithubAccess } from "./github-access";
 import { ProjectDefaults } from "./project-defaults";
 
 type Credential = {
   id: string;
   kind: string;
+  source?: string;
   label?: string;
   revokedAt?: string;
   createdAt: string;
@@ -53,7 +57,7 @@ export function Settings({
   const [publicKey, setPublicKey] = useState("");
   const [challenge, setChallenge] = useState<{
     challengeId: string;
-    nonce: string;
+    message: string;
     namespace: string;
   } | null>(null);
   const [signature, setSignature] = useState("");
@@ -137,6 +141,7 @@ export function Settings({
         <ProjectDefaults />
       </div>
       <div hidden={selected !== "access"}>
+        <GithubAccess onChanged={refresh} />
         <section className="settings-section">
           <h2>Passkeys and identities</h2>
           <p>Revoking a credential ends its sessions immediately.</p>
@@ -150,15 +155,18 @@ export function Settings({
                   <strong>{c.label ?? c.kind}</strong>
                   <small>
                     {c.kind}
+                    {c.source === "github"
+                      ? " · GitHub-managed"
+                      : " · Independent local credential"}
                     {c.revokedAt ? " · Revoked" : ""}
                   </small>
                 </div>
-                {!c.revokedAt && (
+                {!c.revokedAt && c.source !== "github" && (
                   <button
                     type="button"
                     onClick={() =>
                       void perform(async () => {
-                        await api(`/auth/credentials/${c.id}`, {
+                        await api(`/auth/credentials/${encodedId(c.id)}`, {
                           method: "DELETE",
                         });
                         await refresh();
@@ -182,12 +190,22 @@ export function Settings({
             onSubmit={(e) => {
               e.preventDefault();
               void perform(async () => {
-                setChallenge(
-                  await api(
-                    "/auth/credentials/challenge",
-                    post({ publicKey, label: "MCP key" }),
-                  ),
+                const incoming = await api<{
+                  challengeId: string;
+                  namespace: string;
+                }>(
+                  "/auth/credentials/challenge",
+                  post({ publicKey, label: "MCP key" }),
                 );
+                setChallenge({
+                  ...incoming,
+                  message: sshProof(
+                    incoming,
+                    publicKey,
+                    window.location.origin,
+                    "ssh_enroll",
+                  ),
+                });
               });
             }}
           >
@@ -227,7 +245,7 @@ export function Settings({
                 Sign this exact challenge using your key with namespace{" "}
                 <code>{challenge.namespace}</code>.
               </p>
-              <pre>{challenge.nonce}</pre>
+              <pre>{challenge.message}</pre>
               <label>
                 Armored SSH signature
                 <textarea

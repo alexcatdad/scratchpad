@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { sshNamespace, sshProof } from "../../apps/web/src/lib/ssh-proof.ts";
 import { createApi } from "../../apps/web/src/server/api.ts";
 import { createScratchpadClient as sourceClient } from "./typescript/index.ts";
 
@@ -54,14 +55,17 @@ try {
   });
   assert(challenge.data?.nonce && challenge.data.challengeId);
   const message = join(directory, "challenge");
-  writeFileSync(message, challenge.data.nonce);
+  writeFileSync(
+    message,
+    sshProof(challenge.data, publicKey, "http://localhost:3000", "ssh_login"),
+  );
   execFileSync("ssh-keygen", [
     "-Y",
     "sign",
     "-f",
     keyPath,
     "-n",
-    "scratchpad-auth",
+    sshNamespace,
     message,
   ]);
   const verified = await anonymous.POST("/api/v1/auth/mcp/verify", {

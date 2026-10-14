@@ -28,10 +28,16 @@ Invoke it explicitly with `$scratchpad-memory` in Codex, or let the client selec
 
 The skill follows existing task authorization and project instructions. Core capture and retrieval still work in clients without skill support. See [official skill guidance](https://learn.chatgpt.com/docs/build-skills) for Codex discovery and invocation. Source availability, client installation, and published documentation are separate steps; use the checked-out skill until the corresponding source revision has been published.
 
+## Connect with an agent
+
+The optional [`scratchpad-connect` skill](https://github.com/alexcatdad/scratchpad/tree/main/skills/scratchpad-connect) handles first-time connection and authentication troubleshooting using existing Git/SSH tooling. Install its complete folder in your client’s supported skill location as above, preserving any existing installation, then invoke `$scratchpad-connect` with your server origin and checkout. It discovers a usable public key, configures the local stdio MCP and verifies a real authenticated read in the intended project. It does not publish keys, copy private material or change server identity. Installation and tool discovery alone do not prove access.
+
+A key synchronized from your verified GitHub account needs no separate dashboard approval; each machine proves possession automatically. GitHub integration is in current server source and requires operator OAuth configuration. Released v0.3.0 servers predate it. See [Security & recovery](/scratchpad/reference/security/) for outage, revocation and independent-key behavior.
+
 ## Connect once
 
 1. Install `scratchpad-mcp` using the [installation guide](/scratchpad/guides/installation/). Homebrew installs the local binary; it does not start the server.
-2. Enroll your OpenSSH public key in the authenticated dashboard under **Settings → Connect an MCP key**. Sign the enrollment challenge locally with the matching key. Never upload a private key.
+2. Choose an eligible SSH key synchronized from the owner’s verified GitHub account, or enroll an independent OpenSSH public key in the authenticated dashboard under **Settings → Connect an MCP key**. Sign the enrollment challenge locally with the matching key. Never upload a private key.
 3. Configure your client's stdio command with the absolute binary path. Set `SCRATCHPAD_URL` to the server origin and `SCRATCHPAD_PUBLIC_KEY` to the absolute enrolled public-key path. Make the matching private key available through `ssh-agent`, or set `SCRATCHPAD_SIGNING_KEY` to its local path.
 4. Follow [Codex setup](/scratchpad/guides/codex/) or [ChatGPT macOS setup](/scratchpad/guides/chatgpt/), restart the connection, and discover tools with MCP `tools/list`.
 
@@ -101,7 +107,7 @@ Repository mirroring is off by default. It requires both local `SCRATCHPAD_MIRRO
 ## Diagnose a connection
 
 - No tools: check the configured executable path, restart the client and inspect MCP stderr diagnostics. Stdout carries the MCP protocol.
-- Authentication failure: check enrollment, key availability and the configured origin. HTTP is permitted only on loopback.
+- Authentication failure: check local enrollment or GitHub key eligibility, last successful synchronization, local blocks, key availability and the configured origin. HTTP is permitted only on loopback.
 - Wrong or missing project: pass an explicit absolute `workingDirectory` or confirmed `projectId`.
 - Missing AI tools: check the installed binary version with `scratchpad-mcp --version` and inspect its discovered tools.
 - AI unavailable: inspect project participation, provider configuration and persisted job errors. Core capture and retrieval remain available independently of AI.

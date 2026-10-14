@@ -1,3 +1,5 @@
+import { decodedId } from "./opaque-id";
+
 export type Project = {
   id: string;
   name: string;
@@ -52,6 +54,20 @@ export const label = (value: string | null | undefined): string =>
         ? "ADR"
         : value.replaceAll("_", " ").replace(/^./, (c) => c.toUpperCase());
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const segments = path.split("?")[0]?.split("/") ?? [];
+  const index = [
+    "projects",
+    "records",
+    "relationships",
+    "suggestions",
+  ].includes(segments[1] ?? "")
+    ? 2
+    : segments[1] === "auth" && segments[2] === "credentials"
+      ? 3
+      : segments[1] === "ai" && segments[2] === "jobs"
+        ? 3
+        : undefined;
+  if (index !== undefined && segments[index]) decodedId(segments[index]);
   const response = await fetch(`/api/v1${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init.headers },
@@ -65,4 +81,34 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 export function post(body: unknown): RequestInit {
   return { method: "POST", body: JSON.stringify(body) };
+}
+export function githubSignInError(
+  code: string | undefined,
+): string | undefined {
+  if (!code) return undefined;
+  const messages: Record<string, string> = {
+    AUTH_INVALID:
+      "GitHub sign-in was denied, expired, or used a different owner's account. Start again, or recover access with an administrator token.",
+    AUTH_FRESH_REQUIRED: "Sign in again before replacing the GitHub account.",
+    CONFLICT: "Account access changed during sign-in. Start again.",
+    GITHUB_NOT_CONFIGURED:
+      "Ask the administrator to configure GitHub sign-in, or use a passkey.",
+    GITHUB_UNAVAILABLE:
+      "GitHub is unavailable. Use an independent passkey or try again later. Cached machine access follows its existing expiry.",
+    GITHUB_RATE_LIMITED:
+      "GitHub is limiting requests. Use a passkey or try again later.",
+  };
+  return (
+    messages[code] ?? "GitHub sign-in could not be completed. Please try again."
+  );
+}
+export async function signInWithGithub(
+  intent: "setup" | "login" | "link" | "replace" | "recover",
+  setupToken?: string,
+): Promise<void> {
+  const result = await api<{ authorizationUrl: string }>(
+    "/auth/github/options",
+    post({ intent, ...(setupToken ? { setupToken } : {}) }),
+  );
+  window.location.assign(result.authorizationUrl);
 }

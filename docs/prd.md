@@ -825,6 +825,8 @@ Authentication mechanisms are intentionally different for browser and MCP usage.
 
 ### 27.1 Browser
 
+The baseline below is expanded by the accepted GitHub owner-access clarification in §45.
+
 Browser authentication uses **WebAuthn/passkeys**.
 
 Passwords are not required.
@@ -1401,3 +1403,15 @@ PostgreSQL may opt into native vector similarity while SQLite keeps its existing
 Public GitHub profile linkage is an owner-controlled presentation feature with link, refresh and unlink behavior. It never enrolls an authentication credential, establishes an authenticated identity, or changes the passkey/SSH root of trust.
 
 Generate consumable TypeScript and Go clients from the HTTP contract. Verify deterministic regeneration, compilation, authenticated requests and typed failure handling. Generated clients do not introduce direct cross-runtime dependencies between the central API and MCP implementations.
+
+## 45. Accepted clarification — GitHub owner access
+
+Accepted on 8 October 2026; see the accepted [GitHub owner-access ADR](adr/0001-github-owner-access.md) and issue #3. This supersedes the presentation-only authentication restriction in §§27–28 and §44 without automatically promoting existing descriptive profile linkage into verified identity.
+
+One owner may choose GitHub browser sign-in and automatic machine authentication through synchronized published SSH authentication and signing keys. First-owner setup still requires the administrator's single-use token; existing owners link through authenticated Settings. The binding uses GitHub's stable account ID. Every machine proves possession locally using the existing SSH challenge; no separate dashboard approval is required for an eligible GitHub-managed key. GPG support remains deferred.
+
+Synchronize both complete key sets every five minutes. Failed, malformed or incomplete synchronization retains the previous set and its original freshness timestamp. GitHub-managed keys can renew machine sessions and authorize requests for up to 24 hours after the last successful synchronization. Beyond that limit, deny GitHub-managed machine access until synchronization succeeds. Detected removal invalidates associated sessions; persistent local blocking overrides GitHub even after removal/re-addition. This is an explicit bounded revocation-delay tradeoff during outages. A valid browser session continues locally; an expired GitHub browser session requires GitHub availability or independent authentication.
+
+Passkey-only setup, optional passkeys, independent manual SSH enrollment and administrator recovery remain available. Unlinking requires fresh independent local authentication or recovery. Account replacement requires fresh existing authentication or recovery. Both preserve knowledge and independent local credentials while invalidating GitHub-derived access; neither converts synchronized keys into local credentials.
+
+A portable onboarding skill discovers a usable existing key through the agent's preferred Git/SSH tooling, configures the existing MCP connection and verifies a scoped authenticated read. It does not introduce a setup command, publish keys or copy private material. The operator configures one OAuth app per instance; client machines share that server configuration. Source implementation, release publication and live acceptance remain separate.

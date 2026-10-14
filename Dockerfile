@@ -14,7 +14,7 @@ FROM node:24.21.0-bookworm-slim AS runtime
 ENV NODE_ENV=production PORT=3000 SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends openssh-client && rm -rf /var/lib/apt/lists/* \
-    && mkdir /data && chown node:node /data
+    && mkdir -m 0700 /data && chown node:node /data
 COPY --from=build --chown=node:node /app/node_modules ./node_modules
 COPY --from=build --chown=node:node /app/apps/web ./apps/web
 COPY --from=build --chown=node:node /app/package.json ./package.json

@@ -53,3 +53,14 @@ Context opens records in the existing reader after closing its dialog.
 Verify settings persistence, cancelled edit isolation, mobile overflow, keyboard
 closure and context-to-reader navigation in the authenticated workflow before
 repeating the same PR-check, image rollout and recovery-inventory procedure.
+
+## Reconciling with main before merge
+
+The owner requested merging this PR into `main`. Merge `origin/main` into
+`codex/dashboard-ux` without rebasing or force-pushing, because the branch records
+what production runs. Main's security semantics win: opaque route identifiers,
+GitHub owner access, SSH proof binding, source-bound AI suggestions and private
+access logs. Keep the dashboard UX on top of them. GitHub access lives in Settings
+under Access & MCP, and GitHub sign-in errors are part of URL search state. Keep
+`decisions.jsonl` append-only with entries from both sides. Run the CI checks
+locally, push, and merge only after PR checks pass.

@@ -8,13 +8,18 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/net/idna"
 )
 
 type Config struct {
@@ -111,19 +116,77 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 		ChallengeID string `json:"challengeId"`
 		Nonce       string `json:"nonce"`
 		Namespace   string `json:"namespace"`
+		Version     int    `json:"version"`
+		Recipient   string `json:"recipient"`
+		Purpose     string `json:"purpose"`
+		ExpiresAt   string `json:"expiresAt"`
 	}
 	if err = c.raw(ctx, "POST", "/auth/mcp/challenge", map[string]string{"publicKey": strings.TrimSpace(string(pub))}, "", "", &challenge); err != nil {
 		return "", err
 	}
-	if challenge.Namespace != "scratchpad-auth" || challenge.Nonce == "" {
+	configured, err := url.Parse(c.Config.URL)
+	if err != nil {
+		return "", errors.New("invalid local recipient configuration")
+	}
+	hostname := configured.Hostname()
+	if address, err := netip.ParseAddr(hostname); err == nil {
+		hostname = address.String()
+		if address.Is4In6() {
+			// WHATWG serializes mapped IPv6 tails as hex, not dotted IPv4.
+			pieces := address.As16()
+			hostname = fmt.Sprintf("::ffff:%x:%x", uint16(pieces[12])<<8|uint16(pieces[13]), uint16(pieces[14])<<8|uint16(pieces[15]))
+		}
+	} else if strings.IndexFunc(hostname, func(r rune) bool { return r > 127 }) >= 0 {
+		hostname, err = idna.Lookup.ToASCII(hostname)
+		if err != nil {
+			return "", errors.New("invalid local recipient hostname")
+		}
+	} else {
+		// WHATWG permits ASCII internal names such as scratch_pad; DNS IDNA
+		// label validation is stricter. Reject forbidden host code points instead.
+		if strings.IndexFunc(hostname, func(r rune) bool {
+			return r <= 32 || r == 127 || strings.ContainsRune("#%/:<>?@[\\]^|", r)
+		}) >= 0 {
+			return "", errors.New("invalid local recipient hostname")
+		}
+		hostname = strings.ToLower(hostname)
+	}
+	port := configured.Port()
+	if port != "" {
+		value, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return "", errors.New("invalid local recipient port")
+		}
+		port = strconv.FormatUint(value, 10)
+	}
+	if (configured.Scheme == "https" && port == "443") || (configured.Scheme == "http" && port == "80") {
+		port = ""
+	}
+	host := hostname
+	if port != "" {
+		host = net.JoinHostPort(hostname, port)
+	} else if strings.Contains(hostname, ":") {
+		host = "[" + hostname + "]"
+	}
+	recipient := strings.ToLower(configured.Scheme) + "://" + host
+	expiry, expiryErr := time.Parse(time.RFC3339Nano, challenge.ExpiresAt)
+	if challenge.Version != 2 || challenge.Namespace != "scratchpad-auth-v2" || challenge.Purpose != "ssh_login" || challenge.Recipient != recipient || challenge.ChallengeID == "" || challenge.Nonce == "" || expiryErr != nil || !expiry.After(time.Now()) {
 		return "", errors.New("invalid signing challenge")
+	}
+	publicFields := strings.Fields(string(pub))
+	if len(publicFields) < 2 {
+		return "", errors.New("invalid local public key")
+	}
+	proof, err := json.Marshal([]any{"scratchpad-ssh-proof", 2, recipient, "ssh_login", challenge.ChallengeID, challenge.Nonce, strings.Join(publicFields[:2], " "), challenge.ExpiresAt})
+	if err != nil {
+		return "", errors.New("invalid signing proof")
 	}
 	key := c.Config.SigningKeyPath
 	if key == "" {
 		key = c.Config.PublicKeyPath
 	}
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", key, "-n", "scratchpad-auth")
-	cmd.Stdin = strings.NewReader(challenge.Nonce)
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", key, "-n", "scratchpad-auth-v2")
+	cmd.Stdin = bytes.NewReader(proof)
 	signature, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("sign challenge (unlock your SSH agent/key): %w", err)

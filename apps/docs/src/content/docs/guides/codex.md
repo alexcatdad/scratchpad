@@ -8,7 +8,7 @@ Codex runs `scratchpad-mcp` on your computer. The binary connects to your Scratc
 ## Before you connect
 
 1. [Install Scratchpad MCP](/scratchpad/guides/installation/).
-2. Sign into your dashboard and [enroll an SSH public key](/scratchpad/guides/mcp/#build-and-enroll).
+2. Sign into your dashboard and [select a synchronized GitHub SSH key or enroll an independent SSH public key](/scratchpad/guides/mcp/#build-and-enroll).
 3. Make the matching signing key available locally. If using `ssh-agent`, check `ssh-add -l` in the environment that launches Codex.
 4. Confirm this computer can reach your server. A private server may require your VPN connection.
 
@@ -68,12 +68,12 @@ Clients may launch a globally configured MCP outside the checkout. Pass `working
 
 ## Troubleshooting
 
-| Symptom                             | Check                                                                                                                                                                                   |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Executable cannot start             | Use an existing absolute executable path; confirm the installed version.                                                                                                                |
-| Signing fails                       | Confirm the public key is enrolled and the matching private key is unlocked and available to this process. A desktop app may have a different SSH agent environment from your terminal. |
-| Cannot reach the server             | Check the origin, HTTPS certificate, server availability, and VPN access from this computer.                                                                                            |
-| Project discovery fails             | Supply the checkout's absolute `workingDirectory`, or an explicit project identity for non-Git work.                                                                                    |
-| Tools are absent after registration | Restart the connection or client, then inspect `/mcp`. Existing chats may still have their earlier tool catalog.                                                                        |
+| Symptom                             | Check                                                                                                                                                                                                                                          |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Executable cannot start             | Use an existing absolute executable path; confirm the installed version.                                                                                                                                                                       |
+| Signing fails                       | Confirm the public key is locally enrolled or eligible in the synchronized GitHub key set and the matching private key is unlocked and available to this process. A desktop app may have a different SSH agent environment from your terminal. |
+| Cannot reach the server             | Check the origin, HTTPS certificate, server availability, and VPN access from this computer.                                                                                                                                                   |
+| Project discovery fails             | Supply the checkout's absolute `workingDirectory`, or an explicit project identity for non-Git work.                                                                                                                                           |
+| Tools are absent after registration | Restart the connection or client, then inspect `/mcp`. Existing chats may still have their earlier tool catalog.                                                                                                                               |
 
 Configuration on your Mac does not install the executable or provide signing credentials inside a Codex cloud container. Verify those separately before using a remote execution environment.

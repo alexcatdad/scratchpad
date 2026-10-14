@@ -14,13 +14,21 @@ export const filterNames = [
   "authority",
 ] as const;
 export type DashboardSearch = Partial<
-  Record<(typeof filterNames)[number] | "recordId" | "section", string>
+  Record<
+    (typeof filterNames)[number] | "recordId" | "section" | "authError",
+    string
+  >
 > & { view?: View };
 export function dashboardSearch(
   input: Record<string, unknown>,
 ): DashboardSearch {
   const result: DashboardSearch = {};
-  for (const key of [...filterNames, "recordId", "section"] as const) {
+  for (const key of [
+    ...filterNames,
+    "recordId",
+    "section",
+    "authError",
+  ] as const) {
     if (typeof input[key] === "string" && input[key].trim())
       result[key] = input[key].trim();
   }

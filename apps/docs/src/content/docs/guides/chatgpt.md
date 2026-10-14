@@ -3,11 +3,11 @@ title: Connect ChatGPT on macOS
 description: Use Scratchpad through the desktop app's local MCP connection, and understand web compatibility.
 ---
 
-The ChatGPT desktop app supports local STDIO MCP connections on its Codex host. Scratchpad uses this path: the app starts `scratchpad-mcp` locally, and the binary talks to your server using your enrolled SSH key.
+The ChatGPT desktop app supports local STDIO MCP connections on its Codex host. Scratchpad uses this path: the app starts `scratchpad-mcp` locally, and the binary talks to your server using your eligible synchronized GitHub SSH key or independent enrolled SSH key.
 
 ## Add the local server
 
-First [install the binary](/scratchpad/guides/installation/) and [enroll your public key](/scratchpad/guides/mcp/#build-and-enroll). Have these values ready:
+First [install the binary](/scratchpad/guides/installation/) and [select a synchronized GitHub SSH key or enroll an independent public key](/scratchpad/guides/mcp/#build-and-enroll). Have these values ready:
 
 | Field                   | Value                                                               |
 | ----------------------- | ------------------------------------------------------------------- |

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, label, type MemoryRecord, post } from "../lib/api";
+import { encodedId } from "../lib/opaque-id";
 
 import { RecordContent, safeReference } from "./record-content";
 
@@ -223,10 +224,13 @@ export function RecordDetail({
                       disabled={busy}
                       onClick={() =>
                         void perform(() =>
-                          api(`/relationships/${link.id}/${action}`, {
-                            ...post({}),
-                            headers: { "If-Match": String(link.version) },
-                          }),
+                          api(
+                            `/relationships/${encodedId(link.id)}/${action}`,
+                            {
+                              ...post({}),
+                              headers: { "If-Match": String(link.version) },
+                            },
+                          ),
                         )
                       }
                     >
@@ -341,7 +345,7 @@ export function RecordDetail({
               e.preventDefault();
               const form = new FormData(e.currentTarget);
               void perform(() =>
-                api(`/records/${record.id}/revisions`, {
+                api(`/records/${encodedId(record.id)}/revisions`, {
                   ...post({
                     changes: {
                       displayTitle: form.get("displayTitle"),
@@ -430,7 +434,7 @@ export function RecordDetail({
               const form = new FormData(e.currentTarget);
               void perform(() =>
                 api(
-                  `/records/${record.id}/evidence`,
+                  `/records/${encodedId(record.id)}/evidence`,
                   post(Object.fromEntries(form)),
                 ),
               );

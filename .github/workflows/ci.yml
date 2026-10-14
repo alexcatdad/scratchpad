@@ -86,7 +86,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: npm run build -w @scratchpad/web
       - name: Verify authenticated PostgreSQL browser and stdio MCP persistence
-        run: npx playwright test tests/workflow.spec.ts
+        run: npx playwright test tests/workflow.spec.ts tests/github-workflow.spec.ts tests/workflow-harness.spec.ts
         env:
           SCRATCHPAD_E2E_DATABASE_URL: ${{ env.TEST_POSTGRES_URL }}
       - name: Verify PostgreSQL AI workflow and consent boundaries

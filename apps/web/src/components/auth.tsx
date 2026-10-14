@@ -9,17 +9,32 @@ import {
   startRegistration,
 } from "@simplewebauthn/browser";
 import { useState } from "react";
-import { api, post } from "../lib/api";
+import { api, post, signInWithGithub } from "../lib/api";
+export async function authenticatePasskey(): Promise<void> {
+  const result = await api<{
+    challengeId: string;
+    options: PublicKeyCredentialRequestOptionsJSON;
+  }>("/auth/login/options", post({}));
+  const response = await startAuthentication({ optionsJSON: result.options });
+  await api(
+    "/auth/login/verify",
+    post({ challengeId: result.challengeId, response }),
+  );
+}
 export function AuthScreen({
   initialized,
+  githubConfigured,
+  initialError,
   onAuthenticated,
 }: {
   initialized: boolean;
+  githubConfigured: boolean;
+  initialError?: string;
   onAuthenticated: () => void;
 }) {
   const [token, setToken] = useState("");
   const [recovery, setRecovery] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState(initialError ?? "");
   const [busy, setBusy] = useState(false);
   const enroll = !initialized || recovery;
   async function authenticate() {
@@ -45,20 +60,28 @@ export function AuthScreen({
           }),
         );
       } else {
-        const result = await api<{
-          challengeId: string;
-          options: PublicKeyCredentialRequestOptionsJSON;
-        }>("/auth/login/options", post({}));
-        response = await startAuthentication({ optionsJSON: result.options });
-        await api(
-          "/auth/login/verify",
-          post({ challengeId: result.challengeId, response }),
-        );
+        await authenticatePasskey();
       }
       onAuthenticated();
     } catch (reason) {
       setError(
         reason instanceof Error ? reason.message : "Authentication failed.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function githubSignIn() {
+    setBusy(true);
+    setError("");
+    try {
+      await signInWithGithub(
+        recovery ? "recover" : initialized ? "login" : "setup",
+        enroll ? token : undefined,
+      );
+    } catch (reason) {
+      setError(
+        reason instanceof Error ? reason.message : "GitHub sign-in failed.",
       );
     } finally {
       setBusy(false);
@@ -73,8 +96,8 @@ export function AuthScreen({
         <h1>{enroll ? "Make room for your memory." : "Welcome back."}</h1>
         <p>
           {enroll
-            ? "Connect a passkey to your private Scratchpad. Your project history stays on your server."
-            : "Sign in with your passkey to pick up where you left off."}
+            ? "Use your administrator token to set up access. Your project history stays on your server."
+            : "Sign in to pick up where you left off."}
         </p>
         <form
           onSubmit={(event) => {
@@ -103,9 +126,29 @@ export function AuthScreen({
               {error}
             </p>
           )}
+          {githubConfigured && (
+            <>
+              <button
+                type="button"
+                className="primary"
+                disabled={busy || (enroll && !token.trim())}
+                onClick={() => void githubSignIn()}
+              >
+                {recovery ? "Recover with GitHub" : "Sign in with GitHub"}
+              </button>
+              {recovery && (
+                <p>
+                  Recovery replaces the linked GitHub account and ends its
+                  existing access. Project data and independent credentials are
+                  preserved.
+                </p>
+              )}
+              {enroll && <p>Passkeys are optional when using GitHub.</p>}
+            </>
+          )}
           <button type="submit" className="primary" disabled={busy}>
             {busy
-              ? "Waiting for your passkey…"
+              ? "Authenticating…"
               : enroll
                 ? "Register passkey"
                 : "Sign in with passkey"}

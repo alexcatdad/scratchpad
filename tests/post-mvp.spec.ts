@@ -127,11 +127,12 @@ async function startProvider() {
         ...(kind === "classification"
           ? { tags: ["synthetic", "ci"], classification: "CI trade-off" }
           : {}),
-        ...(kind === "relationship_candidate"
+        ...(["relationship_candidate", "contradiction"].includes(kind)
           ? {
               fromRecordId: ids[0],
               toRecordId: ids[1],
-              relationshipType: "related_to",
+              relationshipType:
+                kind === "contradiction" ? "contradicts" : "related_to",
             }
           : {}),
       },
@@ -268,14 +269,7 @@ async function startApplication() {
   } else
     application = spawn(
       process.execPath,
-      [
-        resolve(root, "node_modules/srvx/bin/srvx.mjs"),
-        "--prod",
-        "--entry",
-        "dist/server/server.js",
-        "--static",
-        "../client",
-      ],
+      [resolve(root, "apps/web/server.mjs")],
       {
         cwd: resolve(root, "apps/web"),
         env: environment,

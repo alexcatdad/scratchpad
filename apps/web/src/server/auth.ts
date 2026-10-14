@@ -12,13 +12,13 @@ import {
   verifyRegistrationResponse,
 } from "@simplewebauthn/server";
 import { z } from "zod";
+import { sshNamespace, sshProof } from "../lib/ssh-proof";
 import {
   type Actor,
   ApiError,
   type Entity,
   id,
   type JsonObject,
-  now,
   requireValue,
 } from "./domain";
 import type { Store } from "./store";
@@ -28,8 +28,7 @@ const challengeLifetime = 2 * 60 * 1000;
 const hash = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 const random = () => randomBytes(32).toString("base64url");
-const expiry = (ms: number) => new Date(Date.now() + ms).toISOString();
-const keySchema = z
+export const keySchema = z
   .string()
   .trim()
   .min(20)
@@ -49,11 +48,29 @@ export type Identity = {
 };
 
 export class Auth {
+  private readonly allowances = new Map<
+    string,
+    { bucket: number; count: number }
+  >();
+  private activeVerifications = { proof: 0, oauth: 0, anonymous: 0 };
+  private readonly anonymousVerifications = new Map<string, number>();
   readonly origin: string;
   readonly rpID: string;
+  github?: {
+    readonly configured: boolean;
+    eligible(key: string): Promise<boolean>;
+    check(credential: Entity): Promise<void>;
+  };
+  now() {
+    return new Date(this.clock()).toISOString();
+  }
+  expiry(ms: number) {
+    return new Date(this.clock() + ms).toISOString();
+  }
   constructor(
     readonly store: Store,
     origin: string,
+    readonly clock: () => number = Date.now,
   ) {
     const url = new URL(origin);
     this.origin = url.origin;
@@ -66,25 +83,69 @@ export class Auth {
       "Public URL must use HTTPS, except localhost.",
     );
   }
-  async throttle(): Promise<void> {
-    await this.store.atomic(async () => {
-      const bucket = Math.floor(Date.now() / 60000);
-      const current = await this.store.get("rate", "auth");
-      const count = current?.bucket === bucket ? Number(current.count) : 0;
+  throttle(client: string): void {
+    const bucket = Math.floor(this.clock() / 60000);
+    const current = this.allowances.get(client);
+    const count = current?.bucket === bucket ? Number(current.count) : 0;
+    requireValue(
+      count < 120,
+      "RATE_LIMITED",
+      "Too many authentication attempts. Try again in a minute.",
+      429,
+    );
+    // Expire old counters; overflow must never reset an active allowance.
+    if (!current && this.allowances.size >= 4096) {
+      for (const [key, entry] of this.allowances)
+        if (entry.bucket !== bucket) this.allowances.delete(key);
       requireValue(
-        count < 120,
+        this.allowances.size < 4096,
         "RATE_LIMITED",
-        "Too many authentication attempts. Try again in a minute.",
+        "Authentication admission is busy. Try again in a minute.",
         429,
       );
-      if (current)
-        await this.store.update("rate", {
-          ...current,
-          bucket,
-          count: count + 1,
-        });
-      else await this.store.insert("rate", { id: "auth", bucket, count: 1 });
-    });
+    }
+    this.allowances.set(client, { bucket, count: count + 1 });
+  }
+  reserveVerification(
+    kind: "proof" | "oauth" | "anonymous" = "proof",
+    client = "unknown",
+  ): () => void {
+    const count = this.anonymousVerifications.get(client) ?? 0;
+    if (kind === "anonymous")
+      requireValue(
+        count < 2,
+        "RATE_LIMITED",
+        "Authentication verification is busy. Try again shortly.",
+        429,
+      );
+    requireValue(
+      this.activeVerifications[kind] < (kind === "oauth" ? 4 : 8),
+      "RATE_LIMITED",
+      "Authentication verification is busy. Try again shortly.",
+      429,
+    );
+    this.activeVerifications[kind]++;
+    if (kind === "anonymous")
+      this.anonymousVerifications.set(client, count + 1);
+    return () => {
+      this.activeVerifications[kind]--;
+      if (kind === "anonymous") {
+        const remaining = (this.anonymousVerifications.get(client) ?? 1) - 1;
+        if (remaining) this.anonymousVerifications.set(client, remaining);
+        else this.anonymousVerifications.delete(client);
+      }
+    };
+  }
+  async verify<T>(operation: () => Promise<T>, client?: string): Promise<T> {
+    const release = this.reserveVerification(
+      client === undefined ? "proof" : "anonymous",
+      client,
+    );
+    try {
+      return await operation();
+    } finally {
+      release();
+    }
   }
   async initialized(): Promise<boolean> {
     return (await this.store.list("owner")).length > 0;
@@ -105,7 +166,7 @@ export class Auth {
       await this.store.insert("setup_token", {
         id: hash(token),
         recovery,
-        expiresAt: expiry(15 * 60 * 1000),
+        expiresAt: this.expiry(15 * 60 * 1000),
       });
       await this.store.audit(
         recovery ? "owner.recovery_authorized" : "owner.setup_authorized",
@@ -116,7 +177,7 @@ export class Auth {
       return token;
     });
   }
-  private async setup(token: unknown): Promise<Entity> {
+  async setup(token: unknown): Promise<Entity> {
     requireValue(
       typeof token === "string",
       "AUTH_REQUIRED",
@@ -125,7 +186,7 @@ export class Auth {
     );
     const entry = await this.store.get("setup_token", hash(token));
     requireValue(
-      entry && String(entry.expiresAt) > now(),
+      entry && String(entry.expiresAt) > this.now(),
       "AUTH_INVALID",
       "Invalid or expired setup token.",
       401,
@@ -143,13 +204,13 @@ export class Auth {
     details: JsonObject = {},
   ): Promise<Entity> {
     for (const item of await this.store.list("challenge"))
-      if (String(item.expiresAt) < now())
+      if (String(item.expiresAt) < this.now())
         await this.store.remove("challenge", item.id);
     return await this.store.insert("challenge", {
       id: id("challenge"),
       kind,
       nonce: random(),
-      expiresAt: expiry(challengeLifetime),
+      expiresAt: this.expiry(challengeLifetime),
       ...details,
     });
   }
@@ -174,7 +235,7 @@ export class Auth {
       401,
     );
     requireValue(
-      String(entry.expiresAt) > now(),
+      String(entry.expiresAt) > this.now(),
       "AUTH_CHALLENGE_EXPIRED",
       "Challenge expired.",
       401,
@@ -183,21 +244,25 @@ export class Auth {
   }
   private async consume(challenge: Entity): Promise<void> {
     const fresh = await this.getChallenge(challenge.id, String(challenge.kind));
-    await this.store.update("challenge", { ...fresh, consumedAt: now() });
+    await this.store.update("challenge", { ...fresh, consumedAt: this.now() });
   }
-  private async session(
+  async session(
     credential: Entity,
     browser: boolean,
   ): Promise<{ accessToken: string; expiresAt: string }> {
     const accessToken = random(),
-      expiresAt = expiry(lifetime);
+      expiresAt = this.expiry(lifetime);
     await this.store.insert("session", {
       id: hash(accessToken),
       credentialId: credential.id,
       expiresAt,
       browser,
+      authenticatedAt: this.now(),
     });
-    await this.store.update("credential", { ...credential, lastUsedAt: now() });
+    await this.store.update("credential", {
+      ...credential,
+      lastUsedAt: this.now(),
+    });
     return { accessToken, expiresAt };
   }
   cookie(token: string): string {
@@ -220,7 +285,7 @@ export class Auth {
     requireValue(token, "AUTH_REQUIRED", "Sign in to Scratchpad.", 401);
     const session = await this.store.get("session", hash(token));
     requireValue(
-      session && !session.revokedAt && String(session.expiresAt) > now(),
+      session && !session.revokedAt && String(session.expiresAt) > this.now(),
       "AUTH_INVALID",
       "Session expired or revoked.",
       401,
@@ -235,6 +300,7 @@ export class Auth {
       "Credential revoked.",
       401,
     );
+    await this.github?.check(credential);
     requireValue(
       Boolean(session.browser) === !bearer,
       "AUTH_INVALID",
@@ -264,12 +330,12 @@ export class Auth {
   async logout(identity: Identity): Promise<void> {
     await this.store.update("session", {
       ...identity.session,
-      revokedAt: now(),
+      revokedAt: this.now(),
     });
   }
   async publicCredentials(): Promise<JsonObject[]> {
     return (await this.store.list("credential")).map(
-      ({ id, kind, label, fingerprint, createdAt, lastUsedAt, revokedAt }) => ({
+      ({
         id,
         kind,
         label,
@@ -277,6 +343,16 @@ export class Auth {
         createdAt,
         lastUsedAt,
         revokedAt,
+        source,
+      }) => ({
+        id,
+        kind,
+        label,
+        fingerprint,
+        createdAt,
+        lastUsedAt,
+        revokedAt,
+        source: source ?? "local",
       }),
     );
   }
@@ -284,7 +360,15 @@ export class Auth {
     const credential = await this.store.get("credential", credentialId);
     requireValue(credential, "NOT_FOUND", "Credential not found.", 404);
     requireValue(
+      credential.source !== "github",
+      "CONFLICT",
+      "Use GitHub key blocking or unlink GitHub to revoke managed access.",
+      409,
+    );
+    requireValue(
       credential.kind !== "webauthn" ||
+        (this.github?.configured &&
+          (await this.store.get("github_binding", "owner")) !== undefined) ||
         (await this.store.list("credential")).some(
           (c) => c.kind === "webauthn" && !c.revokedAt && c.id !== credentialId,
         ),
@@ -295,7 +379,7 @@ export class Auth {
     await this.store.atomic(async () => {
       await this.store.update("credential", {
         ...credential,
-        revokedAt: now(),
+        revokedAt: this.now(),
       });
       await this.store.audit(
         "credential.revoked",
@@ -397,7 +481,10 @@ export class Auth {
         });
       if (token?.recovery)
         for (const session of await this.store.list("session"))
-          await this.store.update("session", { ...session, revokedAt: now() });
+          await this.store.update("session", {
+            ...session,
+            revokedAt: this.now(),
+          });
       const credential = await this.store.insert("credential", {
         id: id("credential"),
         kind: "webauthn",
@@ -491,12 +578,21 @@ export class Auth {
       requireValue(
         (await this.store.list("credential")).some(
           (c) => c.publicKey === publicKey && c.kind === "ssh" && !c.revokedAt,
-        ),
+        ) || (await this.github?.eligible(publicKey)),
         "AUTH_INVALID",
         "Public key is not enrolled.",
         401,
       );
+    const existing = (await this.store.list("credential")).find(
+      (c) => c.kind === "ssh" && c.publicKey === publicKey && !c.revokedAt,
+    );
+    if (existing && !enrollment) await this.github?.check(existing);
+    const binding = await this.store.get("github_binding", "owner");
     const challenge = await this.challenge(enrollment ? "ssh_enroll" : "ssh", {
+      proofVersion: 2,
+      recipient: this.origin,
+      bindingGeneration: binding?.generation,
+
       publicKey,
       enrolledBy: enrollment?.credential.id,
       label:
@@ -504,8 +600,11 @@ export class Auth {
     });
     return {
       challengeId: challenge.id,
+      version: 2,
+      recipient: this.origin,
+      purpose: enrollment ? "ssh_enroll" : "ssh_login",
       nonce: challenge.nonce,
-      namespace: "scratchpad-auth",
+      namespace: sshNamespace,
       expiresAt: challenge.expiresAt,
     };
   }
@@ -522,6 +621,27 @@ export class Auth {
       .split(/\s+/)
       .slice(0, 2)
       .join(" ");
+    requireValue(
+      challenge.proofVersion === 2 && challenge.recipient === this.origin,
+      "AUTH_INVALID",
+      "Request a new SSH challenge after the protocol upgrade.",
+      401,
+    );
+    const proof = sshProof(
+      {
+        version: 2,
+        namespace: sshNamespace,
+        recipient: this.origin,
+        purpose: enrollment ? "ssh_enroll" : "ssh_login",
+        challengeId: challenge.id,
+        nonce: challenge.nonce,
+        expiresAt: challenge.expiresAt,
+      },
+      publicKey,
+      this.origin,
+      enrollment ? "ssh_enroll" : "ssh_login",
+      this.clock(),
+    );
     requireValue(
       publicKey === challenge.publicKey &&
         (!enrollment || enrollment.credential.id === challenge.enrolledBy),
@@ -546,11 +666,11 @@ export class Auth {
           "-I",
           "owner",
           "-n",
-          "scratchpad-auth",
+          sshNamespace,
           "-s",
           join(directory, "signature"),
         ],
-        { input: String(challenge.nonce), timeout: 5000, maxBuffer: 65536 },
+        { input: proof, timeout: 5000, maxBuffer: 65536 },
       );
       requireValue(
         result.status === 0,
@@ -567,6 +687,16 @@ export class Auth {
         (c) => c.kind === "ssh" && c.publicKey === publicKey && !c.revokedAt,
       );
       if (enrollment) {
+        const binding = await this.store.get("github_binding", "owner");
+        const publishedKeys = (binding?.keys ?? []) as { publicKey: string }[];
+        requireValue(
+          !(await this.store.list("credential")).some(
+            (c) => c.source === "github" && c.publicKey === publicKey,
+          ) && !publishedKeys.some((key) => key.publicKey === publicKey),
+          "CONFLICT",
+          "GitHub-managed keys cannot be converted into local credentials.",
+          409,
+        );
         requireValue(!credential, "CONFLICT", "Key is already enrolled.", 409);
         credential = await this.store.insert("credential", {
           id: id("credential"),
@@ -589,8 +719,35 @@ export class Auth {
           fingerprint: credential.fingerprint,
         };
       }
+      if (!enrollment && (!credential || credential.source === "github"))
+        requireValue(
+          challenge.bindingGeneration ===
+            (await this.store.get("github_binding", "owner"))?.generation,
+          "AUTH_INVALID",
+          "GitHub authorization changed during key proof.",
+          401,
+        );
+      if (!credential && (await this.github?.eligible(publicKey)))
+        credential = await this.store.insert("credential", {
+          id: id("credential"),
+          kind: "ssh",
+          source: "github",
+          generation: (await this.store.get("github_binding", "owner"))
+            ?.generation,
+          publicKey,
+          label: "GitHub-managed key",
+          fingerprint: fingerprint(publicKey),
+        });
       requireValue(credential, "AUTH_INVALID", "Key is not enrolled.", 401);
+      await this.github?.check(credential);
       return await this.session(credential, false);
     });
   }
+}
+
+export function fingerprint(publicKey: string): string {
+  return `SHA256:${createHash("sha256")
+    .update(Buffer.from(publicKey.split(" ")[1] ?? "", "base64"))
+    .digest("base64")
+    .replace(/=+$/, "")}`;
 }

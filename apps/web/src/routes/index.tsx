@@ -8,7 +8,14 @@ import { NavIcon } from "../components/nav-icon";
 import { Projects } from "../components/projects";
 import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
-import { api, label, type MemoryRecord, type Project, post } from "../lib/api";
+import {
+  api,
+  githubSignInError,
+  label,
+  type MemoryRecord,
+  type Project,
+  post,
+} from "../lib/api";
 import {
   type DashboardSearch,
   dashboardSearch,
@@ -18,7 +25,7 @@ import {
   type View,
   views,
 } from "../lib/dashboard";
-
+import { encodedId } from "../lib/opaque-id";
 export const Route = createFileRoute("/")({
   component: Dashboard,
   validateSearch: dashboardSearch,
@@ -28,9 +35,11 @@ function Dashboard() {
   const navigate = Route.useNavigate();
   const tab = search.view ?? "Memory";
   const recordId = search.recordId;
+  const authenticationError = githubSignInError(search.authError);
   const [status, setStatus] = useState<{
     initialized: boolean;
     authenticated: boolean;
+    githubConfigured: boolean;
   } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [records, setRecords] = useState<MemoryRecord[]>([]);
@@ -92,9 +101,7 @@ function Dashboard() {
     }
     setDetailError("");
     try {
-      const data = await api<Detail>(
-        `/records/${encodeURIComponent(recordId)}`,
-      );
+      const data = await api<Detail>(`/records/${encodedId(recordId)}`);
       if (request === detailRequest.current) setDetail(data);
     } catch (reason) {
       if (request === detailRequest.current)
@@ -181,6 +188,8 @@ function Dashboard() {
     return (
       <AuthScreen
         initialized={status.initialized}
+        githubConfigured={status.githubConfigured}
+        initialError={authenticationError}
         onAuthenticated={() => void authenticate()}
       />
     );
@@ -230,6 +239,11 @@ function Dashboard() {
         </div>
       </aside>
       <main className="main-pane" id="main-content">
+        {authenticationError && (
+          <p role="alert" className="error">
+            {authenticationError}
+          </p>
+        )}
         {notice && (
           <p role="status" className="notice">
             {notice}
