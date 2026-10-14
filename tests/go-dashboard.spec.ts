@@ -261,6 +261,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByLabel("Allow repository mirroring", { exact: true }),
       ).toBeChecked();
+      await page.getByRole("dialog").press("Escape");
       await page.getByRole("button", { name: "Memory", exact: true }).click();
       await page
         .getByRole("button", { name: "New record", exact: true })
@@ -306,6 +307,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByText("Profile saved.", { exact: true }),
       ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Access & MCP", exact: true })
+        .click();
       const signingKey = join(dir, "dashboard-ssh-key");
       execFileSync("ssh-keygen", [
         "-q",
@@ -422,10 +426,16 @@ for (const engine of ["sqlite", "postgres"] as const) {
       expect((await deniedRecord.json()).error.code).toBe("AUTH_INVALID");
       await page.reload();
       await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Access & MCP", exact: true })
+        .click();
       await expect(credential.getByText(/Revoked/)).toBeVisible();
       await expect(
         credential.getByRole("button", { name: "Revoke", exact: true }),
       ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "AI provider", exact: true })
+        .click();
       const ai = page.getByRole("region", {
         name: "AI provider settings",
         exact: true,
@@ -545,9 +555,16 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         rejectedSuggestion.getByRole("button", { name: "Accept suggestion" }),
       ).toHaveCount(0);
+      await page
+        .getByRole("button", { name: "Meaning search", exact: true })
+        .click();
+      await page.getByText("Search index", { exact: true }).click();
       providerUnavailable = true;
       await page
         .getByRole("button", { name: "Build embeddings", exact: true })
+        .click();
+      await page
+        .getByRole("button", { name: "Background jobs", exact: true })
         .click();
       const embeddingJob = page
         .locator("li")
@@ -574,6 +591,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
         embeddingJob.getByText("Completed · Attempt 1", { exact: true }),
       ).toBeVisible({ timeout: 20_000 });
       await page
+        .getByRole("button", { name: "Meaning search", exact: true })
+        .click();
+      await page
         .getByLabel("Meaning to search for", { exact: true })
         .fill("Which finding preserves authoritative project memory?");
       await page
@@ -595,6 +615,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
         ),
       ).toBeVisible();
       await expect(match.getByText(/Similarity 1\.000/)).toBeVisible();
+      await page
+        .getByRole("button", { name: "Documents", exact: true })
+        .click();
       generateDocument = true;
       await page
         .getByRole("button", { name: "Generate document", exact: true })
@@ -696,6 +719,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       ).toBeVisible();
       await expect(document).toBeVisible();
       await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page
+        .getByRole("button", { name: "AI provider", exact: true })
+        .click();
       providerUnavailable = true;
       await ai
         .getByRole("button", { name: "Test saved provider", exact: true })
@@ -703,6 +729,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(ai.getByRole("alert")).toHaveText(
         "AI provider is unavailable or returned invalid output.",
       );
+      await page
+        .getByRole("button", { name: "Import & export", exact: true })
+        .click();
       const downloaded = page.waitForEvent("download");
       await page
         .getByRole("button", { name: "Download export", exact: true })
@@ -718,6 +747,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       expect(await page.locator("body").innerText()).not.toContain(
         "synthetic-dashboard-provider-token",
       );
+      await page
+        .getByRole("button", { name: "AI provider", exact: true })
+        .click();
       await ai
         .getByRole("button", { name: "Remove provider key", exact: true })
         .click();
@@ -727,6 +759,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         ai.getByPlaceholder("Optional for local providers", { exact: true }),
       ).toBeVisible();
+      await page
+        .getByRole("button", { name: "Import & export", exact: true })
+        .click();
       await page
         .getByLabel("Import Scratchpad export", { exact: true })
         .setInputFiles({
@@ -774,6 +809,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByLabel("Owner display name", { exact: true }),
       ).toHaveValue("Dashboard test owner");
+      await page
+        .getByRole("button", { name: "AI provider", exact: true })
+        .click();
       await expect(
         ai.getByRole("button", { name: "Remove provider key", exact: true }),
       ).toHaveCount(0);

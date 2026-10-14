@@ -186,6 +186,9 @@ test("legacy job responses still poll visible active work without page controls"
   });
   await page.goto(harness.origin);
   await page.getByRole("button", { name: "Insights", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Background jobs", exact: true })
+    .click();
   await expect(page.locator(".job-list")).toContainText("Queued");
   await expect(
     page.getByRole("button", { name: "Older jobs", exact: true }),
@@ -244,6 +247,9 @@ test("job pages replace history and keep polling active work outside the page", 
   });
   await page.goto(harness.origin);
   await page.getByRole("button", { name: "Insights", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Background jobs", exact: true })
+    .click();
   const jobs = page.locator(".job-list");
   await expect(jobs).toContainText("Analyze");
   await expect

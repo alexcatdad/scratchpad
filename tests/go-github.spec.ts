@@ -293,6 +293,9 @@ for (const engine of ["sqlite", "postgres"] as const) {
         keys: [{ categories: ["authentication", "signing"], blocked: false }],
       });
       await page.getByRole("button", { name: "Settings", exact: true }).click();
+      await page
+        .getByRole("button", { name: "Access & MCP", exact: true })
+        .click();
       const access = page.getByRole("region", {
         name: "GitHub access",
         exact: true,

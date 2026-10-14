@@ -586,6 +586,9 @@ test("private AI settings, evidence review, semantic search and document downloa
   ).toBeVisible();
   await page.unroute(githubRoute);
   await page.unroute(profileRoute);
+  await page
+    .getByRole("button", { name: "Project defaults", exact: true })
+    .click();
   const defaults = page.getByRole("region", { name: "New project defaults" });
   await defaults
     .getByLabel("Allow repository mirroring by default", { exact: true })
@@ -652,6 +655,9 @@ test("private AI settings, evidence review, semantic search and document downloa
   expect(staleDefaults.body.error.code).toBe("CONFLICT");
   await page.reload();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Project defaults", exact: true })
+    .click();
   await expect(
     defaults.getByLabel("Allow repository mirroring by default", {
       exact: true,
@@ -666,6 +672,7 @@ test("private AI settings, evidence review, semantic search and document downloa
       .getByLabel("Question & answer", { exact: true }),
   ).not.toBeChecked();
 
+  await page.getByRole("button", { name: "AI provider", exact: true }).click();
   const aiSettings = page.getByRole("region", { name: "AI provider settings" });
   await aiSettings.getByLabel("Enable AI processing", { exact: true }).check();
   await aiSettings
@@ -779,6 +786,10 @@ test("private AI settings, evidence review, semantic search and document downloa
   ).toBe("rejected");
 
   await page
+    .getByRole("button", { name: "Meaning search", exact: true })
+    .click();
+  await page.getByText("Search index", { exact: true }).click();
+  await page
     .getByRole("button", { name: "Build embeddings", exact: true })
     .click();
   await awaitJobs(page);
@@ -810,6 +821,7 @@ test("private AI settings, evidence review, semantic search and document downloa
   await page
     .getByLabel("Insight project", { exact: false })
     .selectOption(projects[0]?.id ?? "");
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
   for (const format of [
     "handoff",
     "architecture",
@@ -898,6 +910,7 @@ test("private AI settings, evidence review, semantic search and document downloa
   await stopProvider();
   expect((await fetch(`${origin}/ready`)).status).toBe(200);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "AI provider", exact: true }).click();
   await page
     .getByRole("button", { name: "Test saved provider", exact: true })
     .click();
@@ -942,6 +955,9 @@ test("private AI settings, evidence review, semantic search and document downloa
       (job) => job.id === failedJob.id,
     )?.status;
   await expect.poll(jobStatus, { timeout: 30000 }).toBe("failed");
+  await page
+    .getByRole("button", { name: "Background jobs", exact: true })
+    .click();
   const retry = page.getByRole("button", { name: "Retry job", exact: true });
   await expect(retry).toBeVisible();
   await startProvider();
@@ -959,6 +975,7 @@ test("private AI settings, evidence review, semantic search and document downloa
   ).toBeVisible();
   await expect.poll(jobStatus, { timeout: 30000 }).toBe("completed");
   await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "AI provider", exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
@@ -991,9 +1008,13 @@ test("private AI settings, evidence review, semantic search and document downloa
   await expect(
     page.getByLabel("Insight project", { exact: false }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Background jobs", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "Background jobs", exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Documents", exact: true }).click();
   await expect(
     page.getByLabel("Document kind", { exact: false }),
   ).toBeVisible();
