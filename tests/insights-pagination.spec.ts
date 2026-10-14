@@ -116,6 +116,9 @@ test("suggestion pages replace history, reset scope and preserve legacy response
   await expect(suggestions).toContainText("Older suggestion");
   await page.getByLabel("Insight project").selectOption("proj_beta");
   await expect(suggestions).toContainText("Beta suggestion");
+  // Selecting the current scope must preserve its already loaded artifacts.
+  await page.getByLabel("Insight project").selectOption("proj_beta");
+  await expect(suggestions).toContainText("Beta suggestion");
   await expect(suggestions).not.toContainText("Older suggestion");
   await expect(
     page.getByRole("button", { name: "Latest suggestions", exact: true }),

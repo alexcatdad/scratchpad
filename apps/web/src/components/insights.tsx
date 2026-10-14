@@ -233,10 +233,6 @@ export function Insights({
             onChange={(event) => {
               setNotice("");
               setError("");
-              setSuggestionCursor("");
-              setNextSuggestionCursor(undefined);
-              setSuggestions([]);
-              setResults([]);
               onProjectChange(event.target.value);
             }}
           >
