@@ -1,0 +1,37 @@
+# Production deployment to the owner's homelab after CI passes on main.
+# The image build, the pre-deploy database dump, the rollout, the smoke check
+# and the automatic rollback run on the homelab through the reusable
+# alexcatdad/ci-actions rollout workflow, pinned by commit, on a dedicated
+# runner that refuses every other workflow. No credential is stored in GitHub.
+# See docs/runbooks/homelab-deploy.md.
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image:
+        description: Digest-pinned image to roll out instead of building main (redeploy or manual rollback)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.repository == 'alexcatdad/scratchpad' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    uses: alexcatdad/ci-actions/.github/workflows/rollout.yml@c48d881fbbdaa8a7a1577505199b8e7c9e4b74ea
+    with:
+      image: ${{ inputs.image || '' }}
+      ref: ${{ github.event.workflow_run.head_sha || github.sha }}

@@ -1,0 +1,19 @@
+{
+  "name": "scratchpad",
+  "kind": "deployment",
+  "repository": "alexcatdad/scratchpad",
+  "port": 3000,
+  "dockerfile": "Dockerfile",
+  "deployment": {
+    "namespace": "app-scratchpad",
+    "name": "scratchpad",
+    "container": "scratchpad",
+    "service": "scratchpad",
+    "smokePath": "/ready",
+    "smokeJSON": {
+      "database": "postgres"
+    },
+    "predeployDump": true,
+    "rolloutTimeoutSeconds": 660
+  }
+}
