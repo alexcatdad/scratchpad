@@ -134,7 +134,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if count > 0 {
 		version, err = validate(ctx, conn, s.Engine)
 		if err != nil {
-			return err
+			return fmt.Errorf("%w: %w", errSchema, err)
 		}
 	}
 	for _, m := range migrations {
@@ -142,7 +142,7 @@ func (s *Store) migrate(ctx context.Context) error {
 			continue
 		}
 		if m.version != version+1 {
-			return errors.New("migration sequence")
+			return fmt.Errorf("%w: migration sequence", errSchema)
 		}
 		for _, statement := range m.statements {
 			if _, err := conn.ExecContext(ctx, statement); err != nil {
@@ -155,7 +155,7 @@ func (s *Store) migrate(ctx context.Context) error {
 		version = m.version
 	}
 	if _, err := validate(ctx, conn, s.Engine); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", errSchema, err)
 	}
 	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
 		return err
