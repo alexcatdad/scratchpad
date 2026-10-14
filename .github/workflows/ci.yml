@@ -36,7 +36,7 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
-      - run: npm run test:e2e
+      - run: npm run test:e2e -- --project=retained
       - name: Retain concurrent-agent workload measurements
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -45,6 +45,24 @@ jobs:
           path: test-results/**/concurrent-agent-baseline.json
           if-no-files-found: ignore
   go:
+    # Keep the existing required check and fail closed if any Go lane is skipped,
+    # cancelled or unsuccessful. No branch-protection migration is needed.
+    if: ${{ always() }}
+    needs: [go-mcp, go-backend, go-browser, go-container]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every Go lane to succeed
+        env:
+          MCP: ${{ needs.go-mcp.result }}
+          BACKEND: ${{ needs.go-backend.result }}
+          BROWSER: ${{ needs.go-browser.result }}
+          CONTAINER: ${{ needs.go-container.result }}
+        run: |
+          test "$MCP" = success
+          test "$BACKEND" = success
+          test "$BROWSER" = success
+          test "$CONTAINER" = success
+  go-mcp:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -104,29 +122,73 @@ jobs:
         run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM,DOM.Iterable --strict --esModuleInterop --skipLibCheck --allowImportingTsExtensions packages/clients/test.ts
         working-directory: .
       - name: Verify Go backend, PostgreSQL restore and retained-runtime rollback
-        run: go test -race -count=1 -timeout 30m ./...
+        shell: bash
+        run: go test -json -race -count=1 -timeout 30m ./... | tee "$RUNNER_TEMP/go-backend-tests.jsonl"
         env:
+          # Fixtures await shutdown; remove only the race runtime's exit sleep.
+          GORACE: atexit_sleep_ms=0
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+      - name: Retain backend test timings and outcomes
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-backend-tests
+          path: ${{ runner.temp }}/go-backend-tests.jsonl
+          if-no-files-found: ignore
+  go-browser:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.6
+        env:
+          POSTGRES_USER: scratchpad
+          POSTGRES_PASSWORD: scratchpad-test
+          POSTGRES_DB: scratchpad_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U scratchpad -d scratchpad_test"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      TEST_POSTGRES_URL: postgres://scratchpad:scratchpad-test@localhost:5432/scratchpad_test
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            mcp/go.sum
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
       - run: npx playwright install --with-deps chromium
-        working-directory: .
       - name: Typecheck the Go authentication browser seams
         run: npx tsc --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck tests/go-passkeys.spec.ts tests/go-github.spec.ts tests/go-dashboard.spec.ts tests/go-runtime.spec.ts tests/go-container.spec.ts
-        working-directory: .
       - name: Verify Go passkeys, GitHub OAuth and retained dashboard
         run: |
           npm run build -w @scratchpad/web
-          npx playwright test tests/go-passkeys.spec.ts tests/go-github.spec.ts tests/go-dashboard.spec.ts tests/go-runtime.spec.ts
-        working-directory: .
+          npx playwright test --project=go-native
         env:
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+  go-container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
       - name: Build opt-in Go runtime image
         run: |
           docker --context default build --target go-runtime -t scratchpad-go:ci .
           docker --context default build -t scratchpad-retained:ci .
-        working-directory: .
       - name: Verify Go image browser access and operational restore
-        run: npx playwright test tests/go-container.spec.ts
-        working-directory: .
+        run: npx playwright test --project=go-container
         env:
           TEST_DOCKER_CONTEXT: default
           TEST_GO_IMAGE: scratchpad-go:ci
@@ -212,10 +274,19 @@ jobs:
             backend/go.sum
             mcp/go.sum
       - name: Verify Go RAG availability with native pgvector
-        run: go -C backend test -race -count=1 -run TestRAG ./...
+        shell: bash
+        run: go -C backend test -json -race -count=1 -run TestRAG ./... | tee "$RUNNER_TEMP/go-pgvector-tests.jsonl"
         env:
+          GORACE: atexit_sleep_ms=0
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
           TEST_POSTGRES_URL: postgres://postgres:scratchpad-test@localhost:5432/postgres
+      - name: Retain pgvector test timings and outcomes
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: go-pgvector-tests
+          path: ${{ runner.temp }}/go-pgvector-tests.jsonl
+          if-no-files-found: ignore
   infrastructure:
     runs-on: ubuntu-latest
     steps:
@@ -248,10 +319,8 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Build retained renderer for native Go browser fixtures
-        run: npm run build -w @scratchpad/web
       - name: Verify browser and MCP against container backup restore
-        run: npm run test:e2e
+        run: npm run test:e2e -- --project=retained
         env:
           SCRATCHPAD_E2E_DOCKER: "1"
       - name: Retain concurrent-agent container measurements
