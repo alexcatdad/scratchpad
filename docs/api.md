@@ -413,6 +413,11 @@ type QAPayload = {
 };
 ```
 
+This is the supported TypeScript full-pair shape. The opt-in Go backend also
+accepts an omitted `answer` for unresolved questions; a supplied answer must be
+nonempty. Applicable accepted `answers` relationships resolve separately captured
+answers without editing the question. See the compact-context contract below.
+
 ---
 
 ## 18. Failure Payload
@@ -1109,6 +1114,11 @@ Request:
 
 Core search remains deterministic.
 
+The Go backend deduplicates each `projectIds` and `types` selector list before
+query construction. Their combined distinct count must not exceed 32,700;
+larger selections return HTTP 400 `VALIDATION_FAILED`. This applies to both
+`POST /search` and the corresponding `GET /records` filters.
+
 Semantic search may augment this later.
 
 ---
@@ -1507,15 +1517,17 @@ Everything else can build on this stable core.
 
 ## 58. Compatibility Rule
 
-The HTTP API is the contract between the Go MCP and TypeScript application.
+The HTTP API is the contract between the local Go MCP, generated clients and the
+central application, including the opt-in Go replacement.
 
 Neither implementation may rely on internal types from the other language/runtime.
 
-The contract should eventually be published as OpenAPI.
-
-Generated TypeScript and Go clients may be introduced if useful.
-
-OpenAPI becomes documentation and validation, not a requirement for the first scaffold commit.
+The implemented [OpenAPI 3.1 contract](openapi.json) drives deterministic
+TypeScript and Go clients. Preserve their wire behavior during backend replacement;
+new compact context is explicitly versioned and does not silently replace legacy
+context. See §67 and [the client runbook](runbooks/api-clients.md) for consumption
+and verification. Generated interfaces do not replace server-side runtime
+validation, authorization or consent checks.
 
 ## 59. Accepted clarification — enrollment contract requirements
 
@@ -1571,13 +1583,13 @@ These additions document the current wire behavior while preserving the accepted
 - `PATCH /projects/:id` accepts `name`, `kind`, and optimistic version information (`If-Match` or `expectedVersion`). Switching to external disables mirroring and cross-project analysis; the owner can explicitly reenable either afterward.
 - Legacy imported records may have `authority: null` when the source does not establish authority. New captures still require an explicit authority vocabulary value. The importer preserves original source claims without treating them as verified identity or current policy.
 - JSONL import accepts `{format: "jsonl", projectId, jsonl, source: {filename}}` or `sourceName`. Results include `imported`, `skipped`, per-line `warnings`, and `records` entries containing `line`, `recordId` where available, and `status`. Safe historical IDs survive; fallback IDs retain their original value in provenance.
-- Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 MiB. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
+- Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 Mi UTF-16 code units within that body limit. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
 - Project context retains its original arrays and adds `currentState`, `stateHistory`, `applicableRecords`, `partiallySuperseded`, `historicalRecords`, and `requiresReview`. Contextual records include `applicability`, `replacedBy`, and historical-status annotations. Imported claims remain visibly unverified.
 - Record detail includes audit events for associated relationships and evidence as well as record mutations. Metadata revisions retain before/after snapshots.
 - `GET /ready` returns `503 DATABASE_NOT_READY` if the schema-1 marker or required persistence objects are unavailable or unsupported. Startup validates existing databases before applying configuration or DDL; unsupported or incomplete existing schemas are refused rather than silently repaired.
 - Date bounds and context ordering compare timestamp instants, preserving user-supplied fractional-second precision. Bounds are inclusive; equivalent representations denote the same instant.
 
-Native export is a portable knowledge archive, excluding authentication state. The administrator's `backup <absolute-destination>` command creates a consistent full SQLite snapshot, including credential/session/retry state. Operational restore requires a stopped service and a fresh destination volume; see the server and deployment runbooks.
+Native export is a portable knowledge archive, excluding authentication state. Exported AI configuration audits omit previous and next snapshots; global-policy audit snapshots include only recognized policy fields. Stored audit history remains unchanged. The administrator's `backup <absolute-destination>` command creates a consistent full SQLite snapshot, including credential/session/retry state. Operational restore requires a stopped service and a fresh destination volume; see the server and deployment runbooks.
 
 ## 66. Remaining-product implementation extensions
 
@@ -1613,31 +1625,49 @@ type AiSettings = {
 
 `apiKey` is a write-only optional field: omitting it preserves a stored key; an empty string removes it. Responses and audit configuration snapshots expose only whether a key is configured. Provider URLs must be HTTP(S), without embedded credentials, a query, or a fragment. `enabled` defaults to false. A schedule of `0` means manual processing only. The API accepts similarity thresholds from `-1` to `1`; the dashboard presents the usual nonnegative range. Provider request timeouts are configurable from 5 to 3,600 seconds, default 600. Reasoning effort defaults to `none`; `default` omits the provider-specific override. Choose a supported effort for the configured model. `maxOutputTokens` limits generated output (256–32,768; default 4,096). Size the timeout to the model and hardware: a large local model may require more than 180 seconds.
 
+Go `analysisModes` accepts `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, and `recommendation`; an empty array disables analysis modes. Supplied `export` modes return HTTP 400 because documents require an explicit document job. Historical stored `export` entries are ignored in effective analysis settings without rewriting configuration at startup; ordinary memory, embedding and explicit document jobs remain available.
+
+The opt-in Go backend encrypts persisted reusable provider tokens and adds safe
+`secretProtection.status` metadata: `protected`, `pending_conversion`,
+`unavailable`, or `not_required`. Secret-dependent calls with a missing/wrong key
+or invalid ciphertext return `SECRET_UNAVAILABLE` without provider dispatch or
+plaintext fallback. A separately supplied retained key file permits unattended
+restarts and legacy conversion, independently of ordinary schema upgrades.
+Ordinary memory and providers requiring no token remain available. Responses,
+audits and knowledge exports never include the token or ciphertext. See the
+[secret configuration and recovery contract](runbooks/go-secret-configuration.md).
+
 `GET /settings` and optimistic `PATCH /settings` additionally control `defaultProjectSettings` for new normal/internal projects. Existing projects retain their settings; external projects use conservative defaults regardless of normal-project defaults.
 
 `POST /ai/test` uses synthetic completion and embedding input and returns `{ok, model, embeddingModel, dimensions}`. It does not process project history. The completion provider uses OpenAI-compatible chat completions; embedding requests use the compatible embeddings endpoint. Model output is schema-validated and cannot supply arbitrary source IDs.
 
 ### Jobs, scope and semantic retrieval
 
-`GET /ai/jobs` returns `{jobs}`. `POST /ai/jobs` accepts `{type: "analyze" | "embed" | "export", projectId?, projectIds?, crossProject?, format?}` and returns HTTP 202 `{job}`. Choose one project for ordinary operations or explicitly request `crossProject: true`. Every selected project must permit the operation; explicitly selecting a denied project returns `AI_NOT_ALLOWED`. Unspecified cross-project scope includes only participating projects.
+`GET /ai/jobs` returns `{jobs}`. On the Go backend, listing defaults to 100 retained jobs and accepts `limit` from 1 to 200. Follow the optional `nextCursor` with `cursor` for older history; a final page omits `nextCursor`. Ordering retains creation time descending, followed by stored creation time and ID ascending for ties. The additive `hasActive` flag reports live running attempts or eligible work independently of the selected page. Queued work counts while AI is enabled, including future-due legacy jobs and passage jobs matching the current fingerprint and processing version when PostgreSQL RAG is available. Disabled admission and incompatible or unavailable queued passage generations do not keep polling active. Running attempts with valid unexpired UTC leases remain active while settling, including after admission is disabled or the generation changes. Expired running attempts count only when currently eligible for worker recovery; missing or malformed leases do not count. Listing does not contact providers or decrypt tokens; transient provider/key availability is not an activity guarantee. Dormant job status and provenance remain unchanged, and compatible settings can resume retained work. The page and active flag share one read snapshot. Poll one returned portable entity identity with `jobId`, which returns at most one job (an empty array when absent). `jobId` cannot be combined with `cursor`. Invalid limits, empty query values, malformed cursors and invalid portable job IDs return HTTP 400. Pagination preserves database history. The dashboard replaces bounded pages and uses `hasActive` to continue polling even when active jobs are outside the page; it retains the original response fallback on the TypeScript runtime. MCP `get_ai_jobs` accepts these optional query fields and preserves continuation metadata.
 
-`POST /ai/jobs/:id/retry` accepts `{expectedVersion}` and returns HTTP 202 `{job}` for a failed job. Jobs retain status, attempts, due time, last error and lease state in the database. The worker recovers expired leases and bounds automatic attempts; retry is a separate audited action. Scheduling and worker execution remain independent of core readiness.
+`POST /ai/jobs` accepts `{type: "analyze" | "embed" | "export", projectId?, projectIds?, crossProject?, format?}` and returns HTTP 202 `{job}`. Choose one project for ordinary operations or explicitly request `crossProject: true`. Every selected project must permit the operation; explicitly selecting a denied project returns `AI_NOT_ALLOWED`. Unspecified cross-project scope includes only participating projects.
+
+Go analysis completes with `artifactIds: []` and persisted `AI_INSUFFICIENT_EVIDENCE` warnings when all structurally valid selected suggestions are intentionally filtered for insufficient support; malformed provider output and empty requested documents remain errors.
+
+`POST /ai/jobs/:id/retry` accepts `{expectedVersion}` and returns HTTP 202 `{job}` for a failed job. Jobs retain status, attempts, due time, last error and lease state in the database. The worker recovers expired leases and bounds automatic attempts; retry is a separate audited action. A failed passage-indexing job can be explicitly retried only when PostgreSQL RAG is available and its retained fingerprint and processing version match current settings. Otherwise the request returns HTTP 409 without changing its failed status, version or source provenance; restore compatible settings before retrying. Scheduling and worker execution remain independent of core readiness.
 
 `POST /search/semantic` accepts `{query, projectId?, projectIds?, crossProject?, limit?}` and returns `{results: [{record, score}], model}`. An absent compatible index returns an empty result with `indexRequired: true`. Embeddings are compared only when provider/model/dimension fingerprint and source-content identity match. Changing the embedding configuration requires rebuilding the compatible index. Consent is evaluated before provider calls and before returning results; deterministic `/search` and `/records` remain independent of embeddings.
 
+New ordinary embeddings mark exact persisted-source hashes with `sourceHashVersion: "exact-json-v1"`. Historical unmarked embeddings retain compatibility with their previous float64 source hash, while semantic responses and current-source fences preserve exact immutable JSON numbers. Provider input remains title plus rendered content; this hash transition does not require rebuilding vectors.
+
 ### Suggestions and documents
 
-`GET /suggestions` returns `{suggestions}` and accepts `projectId`, repeated `projectIds`, and `crossProject=true` filters. Artifact kinds are `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, `recommendation`, and `export`. Artifacts retain source IDs, participating project IDs, generator metadata, creation/generation timestamps, derived authority, and review status `pending`, `accepted`, or `rejected`.
+`GET /suggestions` returns `{suggestions}` and accepts `projectId`, repeated `projectIds`, and `crossProject=true` filters. On the Go backend, `limit` defaults to 100 readable artifacts and accepts 1–200. Follow the optional opaque `nextCursor` with `cursor` in the same scope; `hasMore` is true only when another currently readable artifact exists. Invalid limits, empty or malformed cursors, and scope changes with a cursor return HTTP 400. Ordering compares creation timestamp instants descending and the existing stored-time/ID tie order. Privacy filtering precedes page completion; hidden artifacts do not produce continuation or count hints. Bulk validation uses a consistent read-only snapshot, with current authorization, global AI enablement and selected dependency-project consent rechecked before response. MCP `get_suggestions` forwards optional `limit` and `cursor`, preserving continuation metadata; explicit pagination against a legacy response fails clearly. Insights replaces bounded pages with Latest/Older controls and resets continuation when its scope changes. Artifact kinds are `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, `recommendation`, and `export`. Artifacts retain source IDs, participating project IDs, generator metadata, creation/generation timestamps, derived authority, and review status `pending`, `accepted`, or `rejected`.
 
 `POST /suggestions/:id/accept` and `/reject` require `{expectedVersion}` and return `{suggestion}`. Acceptance creates an audited curated artifact. Classification can update audited curated tags/summary; an explicitly scoped relationship candidate can create a relationship while preserving AI derivation. No review action changes original captures, deletes source records, silently supersedes decisions, or turns AI interpretation into an explicit human decision. Current consent gates access to older artifacts as well as new analysis.
 
-`POST /summaries/export` accepts `{projectId, format}` and returns HTTP 202 `{job}`. Formats are `handoff`, `architecture`, `decisions`, `client_history`, and `adr`. The generated `export` artifact contains private Markdown and server-added source citations. Downloading/sharing a document is a separate owner action; generation does not publish it or grant access to the instance.
+`POST /summaries/export` accepts `{projectId, format}` and returns HTTP 202 `{job}`. Formats are `handoff`, `architecture`, `decisions`, `client_history`, and `adr`. The generated `export` artifact contains private Markdown and server-added source citations. A requested document with no source records fails terminally on its first attempt with a clear no-sources message, without contacting the provider or inventing an artifact. Single-project completion inputs use ascending timestamp instants across batches with stable equivalent-time ties. Cross-project completions retain round-robin batch membership for fair independent-project coverage, then present each selected batch chronologically with stable ties; separate cross-project batches do not promise global chronological order. The complete generated document is limited to 50000 UTF-16 units, including combined sections, the draft label and source citations. Oversized documents fail terminally with a clear limit message before any artifact is activated; generation stops once accumulated sections exceed the limit. Downloading/sharing a document is a separate owner action; generation does not publish it or grant access to the instance.
 
 Native knowledge exports now also preserve owner presentation profiles, AI artifacts and curated artifacts with their source references. They exclude credentials, sessions, challenges, setup tokens, retry identities, provider secrets/configuration, scheduled jobs and embeddings. Full operational PostgreSQL backup uses `pg_dump`/`pg_restore`; the administrator `backup` command remains SQLite-only and returns `BACKUP_EXTERNAL` for PostgreSQL.
 
 ### MCP extensions
 
-The local stdio server adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. Project-scoped AI tools use explicit `projectId` or the existing checkout/working-directory discovery. Cross-project operations require `crossProject: true`; optional `projectIds` constrain that explicit scope. `process_memory.type` is `analyze` or `embed`; `generate_document.format` uses the five formats above. Poll `get_ai_jobs`, then read source-linked artifacts with `get_suggestions`. These tools neither enable AI nor override owner project consent. Existing `search_memory` remains deterministic.
+The local stdio server adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. Project-scoped AI tools use explicit `projectId` or the existing checkout/working-directory discovery. Cross-project operations require `crossProject: true`; optional `projectIds` constrain that explicit scope. `process_memory.type` is `analyze` or `embed`; `generate_document.format` uses the five formats above. Poll `get_ai_jobs`, then read source-linked artifacts with `get_suggestions`. These tools neither enable AI nor override owner project consent. Existing `search_memory` remains deterministic. `semantic_search.limit` is optional and accepts integer values from 1 to 100; supplied null, nonpositive, fractional, nonnumeric or larger values fail before backend dispatch. Omission retains the backend default.
 
 The machine-readable [OpenAPI 3.1 contract](openapi.json) documents the implemented routes and schemas. It can be consumed without generated clients; authentication and optional project-consent boundaries remain server-enforced.
 
@@ -1703,6 +1733,8 @@ Default transports do not follow redirects. TypeScript uses Request redirect:err
 
 Authenticated SDK origins require literal canonical IPv4 loopback spelling `127.0.0.1`; shorthand, integer, hexadecimal, escaped and trailing-dot spellings are rejected before WHATWG normalization can change their meaning. IPv6 loopback textual forms still canonicalize to `::1`. Explicit ports must be numeric and in 1–65535; empty ports are rejected.
 
+Go server `SCRATCHPAD_PUBLIC_URL` configuration rejects noncanonical numeric IPv4 hostnames, including empty hexadecimal `0x` components, with `CONFIG_INVALID`; use canonical dotted-decimal IPv4.
+
 The TypeScript authenticated client binds per-request URLs to its configured instance origin before fetch. Typed baseUrl overrides cannot redirect owner headers to a different HTTP or HTTPS origin; same-origin overrides remain valid. Its request boundary also fixes redirect:error even when per-request options request following redirects. Caller-installed middleware and arbitrary custom transports remain trusted extensions responsible for preserving this boundary. Bare query/fragment delimiters are invalid origins in both SDKs.
 
 The Go authenticated factory also guards the final Do boundary after generated per-call request editors. The effective request origin and HTTP Host override must match the configured scheme, normalized hostname and effective port before the underlying transport is called. Request editors cannot forward factory bearer headers to another origin. TypeScript rejects literal user-information delimiters even when parsed username/password are empty.
@@ -1724,3 +1756,133 @@ Single-project classification and relationship acceptance effects remain availab
 ## Accepted clarification: bounded optional mirroring
 
 Issue #22 retains central-first immutable capture and stable retry identities. Optional repository mirroring rejects nonregular targets before and after a nonblocking, no-follow root-scoped open. Its existing five-second context also bounds scan reads and processing; cancellation releases owned locks and returns explicit mirror failure with the saved central record identity. See [the mirror runbook](runbooks/security-22-bounded-mirroring.md) for recovery and filesystem limits.
+
+## Go replacement addition: unresolved questions and compact context
+
+The development Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; the legacy TypeScript validator remains unchanged until cutover.
+
+The existing context response remains the default or explicit `version=1`. Explicit `version=2` returns distinct source previews, section references, lifecycle/authority/confidence, counts and truncation under response limits. The separate `/projects/{id}/context/compact` endpoint defaults to version 2 and supports generated SDKs without changing the legacy Go method signature. Limits are `limit` (1–100, default 20), `maxChars` (4096–64000 serialized UTF-8 bytes including newline, default 12000), and `previewChars` (32–2000 UTF-16 units, default 320). Current state is selected before history limits. Source detail remains available by ID. See [the contract and runbook](runbooks/go-context.md) for fields, omission reporting, compatibility and verification limits.
+
+## Go replacement addition: RAG availability
+
+Authenticated `GET /rag/status` reports the separate new RAG prerequisite state:
+`enabled`, `available`, `database` (`sqlite` or `postgres`), and `reason`
+(`disabled`, `postgres_required`, `pgvector_required`, or `available`).
+`pgvectorVersion` is included only when available. The deployment opt-in is
+`SCRATCHPAD_RAG_ENABLED=true`; false or unset disables it. The live application
+schema must contain pgvector. The server does not install extensions, and missing
+RAG prerequisites do not disable ordinary memory or existing semantic search.
+This Go-only development addition is separate from the semantic passage routes
+below and does not itself report indexing coverage. See [the RAG runbook](runbooks/go-rag.md) for verification and
+the remaining implementation boundaries.
+
+## Go replacement addition: passage indexing and semantic evidence
+
+Authenticated `POST /rag/index` accepts project scope and `recordId`, and returns
+`202 {job}`. A repeated request reuses the source generation. `rebuild: true`
+requires the current `expectedVersion` and a completed or failed job; active jobs
+return a conflict. Indexing is asynchronous and per-record, reusing durable jobs,
+leases, retries and the existing job listing/retry interfaces. Completed jobs
+report `passageCount` and `sourceCount`. Derived generated records are excluded.
+
+RAG source-generation hashes preserve exact JSON numbers from the persisted
+immutable record. Historical failed jobs hashed before PostgreSQL normalized
+exponent spelling remain unchanged; enqueue the source with ordinary
+`POST /rag/index` (without `rebuild`) to create its current stored-source
+generation, rather than retrying the obsolete hash.
+
+Authenticated `POST /rag/retrieve` accepts project scope, `query`, `intent`
+(`current` by default or `history`), `limit` (1–100, default 20) and `maxChars`
+(4096–64000 UTF-8 response bytes including newline, default 12000). This initial
+slice uses bounded exact native semantic ranking and returns cited excerpts with
+source record/project IDs, UTF-16 source locations, content hash, processing
+version, authority, confidence, applicability and bounded accepted relationships.
+Semantic scores do not establish authority. Cross-project scope requires an
+explicit request and participation consent; referenced relationship endpoints
+must belong to selected eligible projects. Lifecycle changes are read live,
+without re-embedding unchanged source text.
+
+The response is `{results, resultsOmitted, semantic}`. `semantic.available` is
+true after successful semantic retrieval; `semantic.indexCoverage` is currently
+`complete` or `incomplete`, scoped to eligible immutable sources in the current
+embedding generation. Incomplete results must not be interpreted as absent evidence.
+Hybrid rank fusion, lexical fallback and the stdio evidence tool are implemented
+as specified in the consolidated sections below. Representative retrieval
+evaluation and full delivery acceptance remain separate gates.
+See [the RAG runbook](runbooks/go-rag.md) for projection migration, restart,
+rebuild and compatibility boundaries.
+
+## Go replacement addition: automatic passage enqueue
+
+When PostgreSQL RAG is enabled, eligible `POST /records` captures queue their
+local passage generation in the same transaction as the source, audit and retry
+identity. Queue or audit failure rolls back all effects. Replayed captures preserve
+the original source and do not duplicate jobs. Enqueue does not require provider
+availability or decryption of its secret.
+
+A separate cancellable reconciliation loop discovers bounded batches of eligible
+history and newly consenting projects, including new embedding generations. It
+continues while embedding requests are blocked, rechecks consent/configuration
+under the shared writer lock and reuses durable source jobs through restart.
+Completion-only model changes preserve the generation. Current-generation
+coverage, hybrid fallback and the stdio evidence interface follow the contracts
+below. Coverage remains explicit per request; implementing these interfaces does
+not establish representative retrieval quality or release acceptance.
+
+## Go replacement addition: current-generation coverage
+
+Authenticated `GET /rag/coverage` accepts project scope in query parameters and
+returns snapshot-consistent eligible/indexed/queued/running/failed/unindexed and
+incompatible source counts, compatible `passageCount`, current `fingerprint` and
+`status` (`complete` or `incomplete`). It requires project participation consent
+and never calls the provider or decrypts its token. Source hashes, generation,
+completed jobs and the exact source-faithful passage set must agree before a
+source counts as indexed. Current passage IDs, UTF-16 ranges, text, dimensions
+and nonzero vectors are checked; extra or corrupt passages make coverage
+incomplete. `passageCount` counts valid individual passages, including those from
+an incompletely indexed source. Retrieval independently validates passage IDs and
+reports assessed current coverage. Old queued passage
+generations are retained and excluded from current worker selection.
+
+## Go replacement addition: hybrid evidence and lexical fallback
+
+`POST /rag/retrieve` now fuses bounded native lexical and exact semantic passage
+candidates using reciprocal rank with a constant of 60. Passage IDs deduplicate
+before the fused limit; lexical matches can survive a low cosine score. Results
+retain `score` for cosine and add `rankScore` and `retrieval: "hybrid"`.
+
+Provider/index failure or an empty incomplete semantic result returns cited native
+lexical source evidence when available, with `retrieval: "lexical"`,
+`semantic.available=false`, a fixed `reason`, and `indexCoverage` as assessed or
+`unavailable`. Optional projection preparation failures use `RAG_UNAVAILABLE`;
+fallback still requires healthy core storage. Authentication and consent failures
+remain errors. Fallback uses
+immutable sources, exact UTF-16 citations, live lifecycle and bounded responses.
+After the bulk snapshot ends, fallback rechecks selected source hashes, lifecycle
+and cited relationships against fresh data, then rechecks authentication and all
+snapshot participants' consent before responding.
+When a healthy query returns indexed candidates with incomplete coverage, native
+raw-source lexical candidates join the indexed lexical list before rank fusion.
+The lexical union is deduplicated and limited to 100 before fusion with the 100
+semantic candidates. Pending sources retain `retrieval: "lexical"` and a lexical
+`score`; indexed sources retain cosine `score` and `retrieval: "hybrid"`. Both
+carry the shared `rankScore`. Semantic availability remains true and coverage
+remains incomplete. Scope, lifecycle, citations and the final response budget
+apply to the combined result. Broader retrieval evaluation remains required.
+
+## Go replacement addition: fallback relationship citations
+
+Lexical fallback now retains bounded accepted replacement/contradiction and other
+relationship references. Both endpoints must belong to the selected eligible
+projects. Excluded-project IDs and notes remain hidden. Lifecycle classification
+is independent of scoped preview limits, and the response budget reports preview
+omissions before shortening the first cited source excerpt.
+
+## Go replacement addition: stdio cited evidence tool
+
+The local stdio MCP registers `retrieve_evidence` and forwards authenticated
+`POST /rag/retrieve` through the existing HTTP client. It uses checkout discovery
+or explicit scope, requires explicit cross-project intent, and forwards query,
+current/history intent and bounded response limits. Invalid explicit limits are
+rejected rather than omitted. The tool returns server citations and uncertainty
+without promoting scores or historical records into accepted policy.

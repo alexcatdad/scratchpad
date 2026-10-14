@@ -41,6 +41,23 @@ HTTP operations and tests both clients against the actual API over TCP. It check
 project resolution, capture/retrieval and typed unauthorized/missing-record errors.
 It neither contacts the owner's instance nor uses a fabricated session token.
 
+The Go backend suite also runs these same generated TypeScript and Go consumers
+against actual Go subprocesses on SQLite and PostgreSQL. It enrolls a disposable
+SSH key through authenticated HTTP, then the SDK runner proves possession and
+obtains its own bearer token. It verifies typed failures as well as successful
+operations, including the compatible `RECORD_NOT_FOUND` error code.
+
+```sh
+TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpad_test \
+  go -C backend test -race -count=1 -run '^TestGeneratedClientsCallAuthenticatedGoBackend$' -v .
+```
+
+Run with the project Node 24 runtime and installed dependencies. Without the
+disposable PostgreSQL connection, its engine case explicitly skips. The SDK
+runner's external-fixture mode takes `SCRATCHPAD_SDK_TEST_URL` and
+`SCRATCHPAD_SDK_SIGNING_KEY`; the backend test supplies both. That mode never
+initializes a TypeScript database or server and never removes the caller's key.
+
 ## TypeScript usage
 
 The repository workspace package is `@scratchpad/api-client`. Build it before use.

@@ -609,7 +609,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Inspect persisted jobs */
+        /**
+         * Inspect a bounded page of persisted jobs
+         * @description Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
+         */
         get: operations["get_ai_jobs"];
         put?: never;
         /** Queue consent-filtered processing */
@@ -644,7 +647,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Retrieve currently permitted derived artifacts */
+        /**
+         * Retrieve a bounded page of currently permitted derived artifacts
+         * @description Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
+         */
         get: operations["get_suggestions"];
         put?: never;
         post?: never;
@@ -878,6 +884,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{id}/context/compact": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Go backend compact version-2 context; legacy context route remains unchanged */
+        get: operations["get_projects_id_context_compact"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Go backend RAG prerequisite availability, separate from indexing coverage */
+        get: operations["get_rag_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Go backend per-record durable passage indexing and versioned rebuild */
+        post: operations["post_rag_index"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/retrieve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+         * @description Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+         */
+        post: operations["post_rag_retrieve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/rag/coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Go backend current-generation indexing coverage without provider access */
+        get: operations["get_rag_coverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -982,7 +1076,7 @@ export interface components {
             /** @enum {string} */
             reasoningEffort?: "default" | "none" | "low" | "medium" | "high" | "xhigh";
             similarityThreshold?: number;
-            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation" | "export")[];
+            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation")[];
             apiKeyConfigured?: boolean;
             version?: number;
             /** @default 4096 */
@@ -1001,7 +1095,7 @@ export interface components {
             /** @enum {string} */
             reasoningEffort?: "default" | "none" | "low" | "medium" | "high" | "xhigh";
             similarityThreshold?: number;
-            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation" | "export")[];
+            analysisModes?: ("summary" | "classification" | "duplicate_candidate" | "relationship_candidate" | "contradiction" | "cluster" | "pattern" | "recommendation")[];
             /** @description Omit to preserve the stored key; empty string removes it. */
             apiKey?: string;
             /** @default 4096 */
@@ -1015,7 +1109,7 @@ export interface components {
         };
         Job: components["schemas"]["Entity"] & {
             /** @enum {string} */
-            type?: "analyze" | "embed" | "export";
+            type?: "analyze" | "embed" | "export" | "rag_index";
             /** @enum {string} */
             status?: "queued" | "running" | "completed" | "failed";
             scope?: components["schemas"]["Scope"];
@@ -1033,6 +1127,12 @@ export interface components {
                 kind: string;
                 count: number;
             }[];
+            recordId?: string;
+            fingerprint?: string;
+            contentHash?: string;
+            processingVersion?: string;
+            passageCount?: number | null;
+            sourceCount?: number | null;
         };
         Artifact: components["schemas"]["Entity"] & {
             /** @enum {string} */
@@ -2466,7 +2566,13 @@ export interface operations {
     };
     get_ai_jobs: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: number;
+                /** @description Opaque continuation returned by the previous page. */
+                cursor?: string;
+                /** @description Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor. */
+                jobId?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -2481,6 +2587,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         jobs?: components["schemas"]["Job"][];
+                        /** @description Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work. */
+                        hasActive?: boolean;
+                        /** @description Present only when another page exists. */
+                        nextCursor?: string;
                     };
                 };
             };
@@ -2555,6 +2665,9 @@ export interface operations {
                 projectIds?: string[];
                 /** @description Optional filter. */
                 crossProject?: boolean;
+                limit?: number;
+                /** @description Opaque continuation from the previous suggestion page in the same scope. */
+                cursor?: string;
             };
             header?: never;
             path?: never;
@@ -2570,6 +2683,10 @@ export interface operations {
                 content: {
                     "application/json": {
                         suggestions?: components["schemas"]["Artifact"][];
+                        /** @description Another currently readable artifact exists; hidden artifacts do not create continuation hints. */
+                        hasMore?: boolean;
+                        /** @description Opaque continuation in the same scope, present only when hasMore is true. */
+                        nextCursor?: string;
                     };
                 };
             };
@@ -3032,6 +3149,195 @@ export interface operations {
                             blocked: boolean;
                         }[];
                         freshAuthenticationRequired: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_projects_id_context_compact: {
+        parameters: {
+            query?: {
+                /** @description Maximum distinct source previews */
+                limit?: number;
+                /** @description Maximum serialized UTF-8 response bytes, including newline */
+                maxChars?: number;
+                /** @description Maximum preview UTF-16 units */
+                previewChars?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_rag_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated availability; missing prerequisites do not disable ordinary memory */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        available: boolean;
+                        /** @enum {string} */
+                        database: "sqlite" | "postgres";
+                        /** @enum {string} */
+                        reason: "disabled" | "postgres_required" | "pgvector_required" | "embedding_dimensions_unsupported" | "available";
+                        /** @description Present when RAG prerequisites and passage dimensions are available */
+                        pgvectorVersion?: string;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_rag_index: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Scope"] & {
+                    recordId: string;
+                    /** @default false */
+                    rebuild?: boolean;
+                    /** @description Required for explicit rebuild of a completed or failed job */
+                    expectedVersion?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Durable indexing job; repeated requests reuse the same source generation */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        job: components["schemas"]["Job"];
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_rag_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Scope"] & {
+                    query: string;
+                    /**
+                     * @default current
+                     * @enum {string}
+                     */
+                    intent?: "current" | "history";
+                    /** @default 20 */
+                    limit?: number;
+                    /**
+                     * @description Maximum serialized UTF-8 response bytes including newline
+                     * @default 12000
+                     */
+                    maxChars?: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; current-generation indexing coverage is assessed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        results: ({
+                            /**
+                             * @description Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction.
+                             * @enum {string}
+                             */
+                            queryMatchScope?: "record" | "passage" | "title";
+                        } & {
+                            [key: string]: unknown;
+                        })[];
+                        resultsOmitted: number;
+                        semantic: {
+                            available: boolean;
+                            /** @description Fixed fallback reason code when semantic retrieval is unavailable */
+                            reason?: string;
+                            /** @enum {string} */
+                            indexCoverage: "complete" | "incomplete" | "unavailable";
+                        };
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_rag_coverage: {
+        parameters: {
+            query?: {
+                projectId?: string;
+                projectIds?: string[];
+                crossProject?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Snapshot-consistent eligible source and compatible passage counts; completeness does not establish semantic provider availability */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        status: "complete" | "incomplete";
+                        fingerprint: string;
+                        eligibleSources: number;
+                        indexedSources: number;
+                        queuedSources: number;
+                        runningSources: number;
+                        failedSources: number;
+                        unindexedSources: number;
+                        incompatibleSources: number;
+                        passageCount: number;
                     };
                 };
             };

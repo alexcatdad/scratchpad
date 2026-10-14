@@ -298,6 +298,7 @@ function Dashboard() {
             />
           ) : tab === "Insights" ? (
             <Insights
+              key={search.projectId ?? ""}
               projects={projects}
               projectId={search.projectId ?? ""}
               onProjectChange={(projectId) =>

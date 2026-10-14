@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,9 @@ type CaptureResult struct {
 }
 
 func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitContext, error) {
+	if s.ProjectID != "" {
+		return map[string]any{"id": s.ProjectID}, nil, nil
+	}
 	dir := s.WorkingDirectory
 	if dir == "" {
 		dir = c.Config.WorkingDirectory
@@ -41,11 +45,8 @@ func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitCont
 		return nil, nil, err
 	}
 	g, err := Discover(ctx, dir)
-	if err != nil && s.ProjectID == "" {
+	if err != nil {
 		return nil, nil, err
-	}
-	if s.ProjectID != "" {
-		return map[string]any{"id": s.ProjectID}, g, nil
 	}
 	if g == nil || g.RepositoryIdentity == "" {
 		return nil, g, &APIError{Code: "PROJECT_IDENTITY_REQUIRED", Message: "No strong Git identity. Ask the owner, then resolve_project with an explicit name or pass projectId."}
@@ -56,12 +57,30 @@ func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitCont
 	err = c.request(ctx, "POST", "/projects/resolve", map[string]any{"context": map[string]any{"git": g}}, "", &result)
 	return result.Project, g, err
 }
+func (c *Client) resolveCapture(ctx context.Context, s Scope) (map[string]any, *GitContext, error) {
+	if s.ProjectID == "" {
+		return c.resolve(ctx, s)
+	}
+	dir := s.WorkingDirectory
+	if dir == "" {
+		dir = c.Config.WorkingDirectory
+	}
+	dir, err := filepath.Abs(dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	// Capture retains known checkout provenance after explicit owner selection,
+	// including partial context when discovery reports ambiguous remotes.
+	g, _ := Discover(ctx, dir)
+	return map[string]any{"id": s.ProjectID}, g, nil
+}
+
 func (c *Client) capture(ctx context.Context, kind string, common Common, payload any) (*mcp.CallToolResult, CaptureResult, error) {
 	out := CaptureResult{}
 	if strings.TrimSpace(common.RequestID) == "" {
 		return nil, out, errors.New("requestId must not be blank")
 	}
-	project, g, err := c.resolve(ctx, common.Scope)
+	project, g, err := c.resolveCapture(ctx, common.Scope)
 	if err != nil {
 		return nil, out, err
 	}
@@ -97,18 +116,82 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 }
 func NewServer(c *Client) *mcp.Server { return NewServerWithVersion(c, "dev") }
 
+func nullArgument(request *mcp.CallToolRequest, name string) bool {
+	var arguments map[string]json.RawMessage
+	if json.Unmarshal(request.Params.Arguments, &arguments) != nil {
+		return false
+	}
+	value, exists := arguments[name]
+	return exists && strings.TrimSpace(string(value)) == "null"
+}
+
+func compactVersionTwo(value any) bool {
+	number, ok := value.(json.Number)
+	if !ok {
+		return false
+	}
+	text, exponent := string(number), 0
+	if at := strings.IndexAny(text, "eE"); at >= 0 {
+		var err error
+		exponent, err = strconv.Atoi(text[at+1:])
+		if err != nil {
+			return false
+		}
+		text = text[:at]
+	}
+	fraction := 0
+	if at := strings.IndexByte(text, '.'); at >= 0 {
+		fraction = len(text) - at - 1
+		text = text[:at] + text[at+1:]
+	}
+	text = strings.TrimLeft(text, "0")
+	coefficient := strings.TrimRight(text, "0")
+	return coefficient == "2" && exponent == fraction-(len(text)-len(coefficient))
+}
+
 func NewServerWithVersion(c *Client, version string) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous."})
+	s := mcp.NewServer(&mcp.Implementation{Name: "scratchpad-mcp", Version: version}, &mcp.ServerOptions{Instructions: "Record explicit decisions as explicit, direct observations as observed, and interpretations as inferred. Report confidence honestly; never present historical records or suggested relationships as current authority without examining corrections and supersession. Use a stable requestId for retries and a new identity for separate intentional captures. Ask the owner when project identity is ambiguous. Record only secret references. Keep API tokens, passwords, private keys and installation encryption keys out of captures. Synthetic reference: secret://provider/main. Keep the value in owner-controlled secret configuration."})
 	registerCaptures(s, c)
 	registerAI(s, c)
-	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory"}, func(ctx context.Context, _ *mcp.CallToolRequest, in Scope) (*mcp.CallToolResult, any, error) {
-		p, _, err := c.resolve(ctx, in)
+	type ContextInput struct {
+		Scope
+		Version      *int `json:"version,omitempty" jsonschema:"Omit for legacy context; version 2 requests bounded compact context on the Go backend"`
+		Limit        *int `json:"limit,omitempty" jsonschema:"Compact source record limit, 1 to 100"`
+		MaxChars     *int `json:"maxChars,omitempty" jsonschema:"Compact serialized response budget, 4096 to 64000 bytes"`
+		PreviewChars *int `json:"previewChars,omitempty" jsonschema:"Compact preview limit, 32 to 2000 UTF-16 units"`
+	}
+	mcp.AddTool(s, &mcp.Tool{Name: "get_project_context", Description: "Resolve the checkout and retrieve deterministic project memory; explicitly request version 2 for compact bounded previews"}, func(ctx context.Context, request *mcp.CallToolRequest, in ContextInput) (*mcp.CallToolResult, any, error) {
+		for _, field := range []string{"version", "limit", "maxChars", "previewChars"} {
+			if nullArgument(request, field) {
+				return nil, nil, &APIError{Code: "VALIDATION_FAILED", Message: field + " must be an integer when supplied."}
+			}
+		}
+		if (in.Limit != nil || in.MaxChars != nil || in.PreviewChars != nil) && (in.Version == nil || *in.Version != 2) {
+			return nil, nil, &APIError{Code: "VALIDATION_FAILED", Message: "Compact context limits require explicit version 2."}
+		}
+		p, _, err := c.resolve(ctx, in.Scope)
 		if err != nil {
 			return nil, nil, err
 		}
 		var out any
 		id, _ := p["id"].(string)
-		err = c.request(ctx, "GET", "/projects/"+url.PathEscape(id)+"/context", nil, "", &out)
+		path := "/projects/" + url.PathEscape(id) + "/context"
+		params := url.Values{}
+		for key, value := range map[string]*int{"version": in.Version, "limit": in.Limit, "maxChars": in.MaxChars, "previewChars": in.PreviewChars} {
+			if value != nil {
+				params.Set(key, strconv.Itoa(*value))
+			}
+		}
+		if len(params) > 0 {
+			path += "?" + params.Encode()
+		}
+		err = c.request(ctx, "GET", path, nil, "", &out)
+		if err == nil && in.Version != nil && *in.Version == 2 {
+			view, ok := out.(map[string]any)
+			if !ok || !compactVersionTwo(view["version"]) {
+				return nil, nil, errors.New("COMPACT_CONTEXT_UNAVAILABLE: this server does not support version 2; request legacy context or use the Go backend")
+			}
+		}
 		return nil, out, err
 	})
 	type Search struct {

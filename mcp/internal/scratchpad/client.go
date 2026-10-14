@@ -60,6 +60,10 @@ func NewClient(c Config) (*Client, error) {
 	return &Client{Config: c, HTTP: &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}}, nil
 }
 func (c *Client) raw(ctx context.Context, method, path string, body any, key, token string, out any) error {
+	return c.rawWithHTTP(ctx, c.HTTP, method, path, body, key, token, out)
+}
+
+func (c *Client) rawWithHTTP(ctx context.Context, httpClient *http.Client, method, path string, body any, key, token string, out any) error {
 	var data []byte
 	var err error
 	if body != nil {
@@ -79,7 +83,7 @@ func (c *Client) raw(ctx context.Context, method, path string, body any, key, to
 	if key != "" {
 		req.Header.Set("Idempotency-Key", key)
 	}
-	res, err := c.HTTP.Do(req)
+	res, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -98,7 +102,15 @@ func (c *Client) raw(ctx context.Context, method, path string, body any, key, to
 		return fmt.Errorf("Scratchpad HTTP %d", res.StatusCode)
 	}
 	if out != nil && len(data) > 0 {
-		return json.Unmarshal(data, out)
+		decoder := json.NewDecoder(bytes.NewReader(data))
+		decoder.UseNumber()
+		if err := decoder.Decode(out); err != nil {
+			return err
+		}
+		if err := decoder.Decode(new(any)); err != io.EOF {
+			return errors.New("Scratchpad returned more than one JSON value")
+		}
+		return nil
 	}
 	return nil
 }
@@ -206,11 +218,24 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	return c.token, nil
 }
 func (c *Client) request(ctx context.Context, method, path string, body any, key string, out any) error {
+	return c.requestWithHTTP(ctx, c.HTTP, method, path, body, key, out)
+}
+
+// Evidence's provider wait is bounded by the API's configured request deadline.
+// Preserve caller cancellation, transport limits and redirect policy without
+// shortening that deadline to the default client timeout used by other calls.
+func (c *Client) requestEvidence(ctx context.Context, body any, out any) error {
+	httpClient := *c.HTTP
+	httpClient.Timeout = 0
+	return c.requestWithHTTP(ctx, &httpClient, "POST", "/rag/retrieve", body, "", out)
+}
+
+func (c *Client) requestWithHTTP(ctx context.Context, httpClient *http.Client, method, path string, body any, key string, out any) error {
 	token, err := c.authenticate(ctx)
 	if err != nil {
 		return err
 	}
-	err = c.raw(ctx, method, path, body, key, token, out)
+	err = c.rawWithHTTP(ctx, httpClient, method, path, body, key, token, out)
 	var apiErr *APIError
 	if errors.As(err, &apiErr) && (apiErr.Code == "AUTH_REQUIRED" || apiErr.Code == "AUTH_INVALID") {
 		c.mu.Lock()

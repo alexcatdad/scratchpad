@@ -10,6 +10,11 @@
 
 This document defines the initial technical architecture for Scratchpad.
 
+The supported TypeScript runtime below is being replaced under issue #36. The
+accepted Go direction is consolidated in PRD §46 and the implementation boundary
+in this document's “Go backend replacement in progress” section. Go builds remain
+opt-in until parity, recovery and delivery acceptance pass.
+
 Scratchpad is a private, self-hosted developer-memory system with:
 
 - a central stateful application;
@@ -84,7 +89,7 @@ The architecture prioritizes:
 
 ## 3. Technology Decisions
 
-### 3.1 Web application and API
+### 3.1 Supported web application and API during replacement
 
 Use:
 
@@ -103,7 +108,11 @@ TanStack Start owns:
 - configuration UI;
 - background-job integration.
 
-A separate HTTP framework is not required for V1.
+A separate HTTP framework is not required for the supported TypeScript runtime.
+The accepted replacement moves central API, authentication, persistence and jobs
+to Go, while retaining this React/TypeScript dashboard. Go owns the public API and
+the optional private Node process renders dashboard pages only; see the Go
+replacement section for implemented integration and outstanding acceptance.
 
 ---
 
@@ -352,11 +361,10 @@ Sessions use secure HTTP-only cookies.
 
 ### 6.3 GitHub
 
-This historical baseline is superseded for optional owner authentication by §32.
-
-GitHub is not an authentication provider.
-
-GitHub may enrich the owner profile with:
+GitHub optionally authenticates the owner through a verified stable account
+binding, as specified in §32. Independent passkeys and administrator recovery
+remain available. A public GitHub profile snapshot grants no authentication
+authority and may enrich presentation with:
 
 - username;
 - avatar;
@@ -965,7 +973,16 @@ The source implementation extends the SQLite MVP with optional PostgreSQL, datab
 
 ### Persistence
 
-A single asynchronous Store boundary uses Drizzle with SQLite or PostgreSQL. `SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default. Domain behavior, authentication, retries, auditing and optimistic edits stay in the central server. Database-native full-text facilities implement deterministic retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated application database and its own operational backup tooling. Native export/import provides knowledge portability, not transparent live migration or credential migration.
+The supported TypeScript runtime uses an asynchronous Drizzle Store boundary
+with SQLite or PostgreSQL. The Go replacement uses its own database boundary and
+ordered migrations while preserving existing source history and contracts.
+`SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default.
+Domain behavior, authentication, retries, auditing and optimistic edits stay in the
+central server. Database-native full-text facilities implement deterministic
+retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated
+application database and its own operational backup tooling. Native export/import
+provides knowledge portability, not transparent live migration or credential
+migration.
 
 ### Optional processing
 
@@ -1007,7 +1024,7 @@ Machine onboarding is an instruction-only skill using existing client configurat
 
 ## Accepted clarification: non-executing checkout discovery (2026-10-09)
 
-MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers.
+MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers. Scope-only reads and AI operations with explicit IDs skip discovery; capture invocations retain trusted Git provenance and optional mirroring under the existing capture contract.
 
 ### Accepted clarification: production request log privacy (2026-10-09)
 
@@ -1016,3 +1033,34 @@ The production server entry point logs request method, pathname, response status
 ## Accepted clarification: private SQLite storage
 
 Issue #21 requires owner-only live SQLite storage before opening the database. Startup creates private new storage and refuses unsafe existing directory/file ownership, mode, links or macOS ACLs with repair guidance. Backup directories follow the same boundary; unrelated parent directories are not modified. Runtime UID peers and administrators remain trusted. See [the storage runbook](runbooks/security-21-private-sqlite.md); PostgreSQL selection remains independent.
+
+## Go backend replacement in progress (issue 36)
+
+The Go RAG prerequisite interface uses `SCRATCHPAD_RAG_ENABLED` and authenticated
+`GET /api/v1/rag/status`. It checks the current application-schema pgvector
+extension without provisioning it, and preserves ordinary memory when unavailable.
+The Go backend also implements per-record leased passage indexing, independent
+embedding compatibility, versioned rebuild and bounded native semantic evidence.
+Automatic capture enqueue and eligible-history reconciliation are implemented.
+Bounded passage rank fusion and lexical outage/index fallback are implemented.
+Healthy partial-index retrieval merges raw lexical evidence before passage deduplication, rank fusion and budget selection. Retrieval evaluation remains incomplete. The stdio evidence tool is implemented. See [the RAG runbook](runbooks/go-rag.md).
+
+The accepted replacement direction is tracked in [issue 36](https://github.com/alexcatdad/scratchpad/issues/36). The separate `backend` Go executable currently implements migration/startup, recipient-bound SSH login, passkey setup/enrollment, discoverable login, administrator recovery, session logout, local SSH enrollment, credential revocation, project resolution/settings/versioned updates, immutable capture with durable retry identities, filtered lexical listing/search, deterministic project context, metadata/evidence/mirror and relationship curation, owner profile/public-GitHub presentation, native knowledge export/import, legacy JSONL import, schema-preserving online SQLite backup, encrypted AI configuration/provider verification, global settings, durable AI job enqueue/list/retry controls, recoverable embedding execution and legacy semantic retrieval, source/privacy-checked suggestion listing and review, leased analysis and private document generation, durable consent-aware scheduling, question-only captures and applicable linked-answer context, explicit bounded version-2 context, GitHub OAuth and published SSH-key synchronization, and authenticated record-detail reads, including restored sessions. GitHub access retains stable account identity, complete paginated authentication/signing-key snapshots, persistent local blocks, independent-credential unlinking and generation-based revocation. A bounded refresh worker checks persisted attempts every 30 seconds and refreshes due bindings after five minutes; failed synchronization never extends the 24-hour complete-cache lifetime. The existing TypeScript application remains the supported runtime until full behavioral parity is verified. Its schema-1 format is recognized by Go; Go migration 2 adds an entity ordering index, and migration 3 adds an atomically maintained context-header projection for selection before source-body hydration. Neither rewrites captures. The TypeScript executable refuses schema 2 and schema 3, so rollback requires the pre-upgrade schema-1 backup. See [the migration runbook](runbooks/go-backend-migrations.md) for implemented boundaries, verification and operational limits. Provider API keys now use versioned authenticated encryption with a retained deployment key file; legacy conversion is tracked independently of schema migration. Further retrieval evaluation, focused-query/performance work and full delivery acceptance remain required subsequent work. Compact context and question contracts are documented in the [context runbook](runbooks/go-context.md).
+
+The retained React dashboard can now be rendered by an optional private Node
+process in explicit UI-only mode, with Go owning the public origin and all API,
+health, readiness and authentication routes. Dashboard GET/HEAD requests use a
+fixed loopback renderer; credentials and forwarding identity are stripped, and
+renderer cookies cannot override Go sessions. UI-only mode refuses TypeScript
+backend initialization. The real browser workflow verifies enrollment, project
+creation, capture, record inspection and API availability after renderer shutdown.
+This same-host integration does not establish full dashboard parity or container
+cutover. See the [dashboard runbook](runbooks/go-dashboard.md).
+
+An opt-in Docker `go-runtime` target packages Go with the retained renderer and a
+launcher that forwards administrative commands, drains both serving processes on
+termination and stops the companion on child failure. The final default image
+continues to run TypeScript. Actual locally built image verification covers
+browser enrollment, capture, online SQLite backup and fresh-volume restoration;
+full release and rollback acceptance remains separate. See the
+[Go container runbook](runbooks/go-container.md).

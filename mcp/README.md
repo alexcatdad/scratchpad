@@ -34,6 +34,8 @@ Launch the binary from the project folder. Every project-scoped tool accepts `wo
 
 Capture tools: `record_decision`, `record_adr`, `record_business_decision`, `record_finding`, `record_qa`, `record_failure`, `record_constraint`, `record_project_state`. Each takes common `title`, `authority`, `confidence`, and `requestId` fields alongside natural type-specific fields. Reuse the request ID and input for retries. A new intentional capture needs a new ID, even when text matches. The server generates readable content from payloads.
 
+Record secret references, such as the synthetic `secret://provider/main`, with useful non-secret context. Keep API tokens, passwords, private keys and installation encryption keys in owner-controlled secret configuration. MCP initialization includes this guidance. Free-text capture remains flexible; guidance does not guarantee that arbitrary captures contain no secrets, and provider-token encryption does not encrypt project records or mirrors.
+
 Read tools: `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, `find_related`. Search supports optional type, tag, date/time bounds, branch, lifecycle status, relationship type/related record, descriptive source, Git path hint, authority, confidence, cursor, and limit filters. Decision history includes all three decision types by default, with optional type selection and pagination; related records are based on stored relationships, not an AI inference. `resolve_project` creates/resolves an owner-confirmed name for weak discovery contexts.
 
 The portable [scratchpad-connect skill](../skills/scratchpad-connect/SKILL.md) lets an agent discover existing public keys with its preferred Git/SSH tooling, configure the client and verify an authenticated scoped read. Each machine keeps its own private key; no GitHub OAuth token is needed by the MCP.
@@ -54,6 +56,40 @@ Capture responses always identify the resolved project and distinguish central s
 
 ## Acceptance and release identity
 
-See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Explicit project selection retains checkout provenance even when remotes are ambiguous.
+See [the MCP acceptance runbook](../docs/runbooks/mcp-acceptance.md) for the PRD scenario coverage and the distinction between local boundary tests and the full production-server workflow. Git inspection disables optional Git index locks so central-only capture does not refresh repository metadata. Scope-only reads and AI operations with an explicit `projectId` bypass checkout discovery. Capture invocations inspect the supplied or configured working directory for local provenance and optional mirroring; explicit owner project selection retains known checkout provenance even when remotes are ambiguous. Git inspection continues to prohibit repository-selected helper programs.
 
 Local builds identify as `dev`. Release builds inject the tag with `go build -ldflags '-X main.version=<version>'`; both `--version` and MCP initialization report that value.
+
+## Compact project context
+
+`get_project_context` defaults to legacy context. Supply `version: 2` for compact
+context; `limit`, `maxChars` and `previewChars` require that version. Other
+combinations fail instead of silently ignoring the supplied limits.
+
+## Suggestion pages
+
+`get_suggestions` accepts optional `limit` (1–200, Go default 100) and an opaque
+`cursor` from the previous page in the same scope. Follow `nextCursor` only when
+`hasMore` is true; hidden artifacts do not create continuation hints. Omitting
+pagination preserves legacy response compatibility. Explicit pagination requires
+a supporting backend and returns a clear error when unsupported.
+
+## Cited RAG evidence
+
+`retrieve_evidence` forwards a question or identifier to the Go PostgreSQL RAG
+backend over the existing authenticated HTTP connection. It defaults to checkout
+project discovery, or accepts an explicit project/working directory. Cross-project
+retrieval requires `crossProject: true` and optional `projectIds`; current server
+participation consent remains authoritative. SQLite semantic search remains the
+separate existing `semantic_search` tool.
+
+Inputs are `query`, optional `intent` (`current` or `history`), `limit` (1–100)
+and `maxChars` (4096–64000 serialized response bytes). Omitted limits use server
+defaults; explicit invalid values fail. Results retain source identifiers/links,
+quoted locations, authority, applicability, relationship previews and indexing
+uncertainty. Inspect sources with `get_record`; similarity does not establish
+accepted policy, and incomplete indexing is not absent evidence. Backend support
+is required; unsupported deployments return a tool error.
+
+`retrieve_evidence` follows caller cancellation and the server's configured
+request deadline. Ordinary MCP API calls retain the client's 30-second timeout.

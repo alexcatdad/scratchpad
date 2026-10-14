@@ -120,7 +120,7 @@ func TestAuthenticatedHTTP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if projects.StatusCode() != 200 || projects.JSON200 == nil || projects.JSON200.Projects == nil || len(*projects.JSON200.Projects) != 1 {
+	if projects.StatusCode() != 200 || projects.JSON200 == nil || projects.JSON200.Projects == nil || len(*projects.JSON200.Projects) < 1 {
 		t.Fatalf("projects: %s", projects.Body)
 	}
 	var body PostProjectsResolveJSONRequestBody

@@ -80,7 +80,13 @@ export function Insights({
   const [showAllJobs, setShowAllJobs] = useState(false);
   const [aiEnabled, setAiEnabled] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionCursor, setSuggestionCursor] = useState("");
+  const [nextSuggestionCursor, setNextSuggestionCursor] = useState<string>();
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [jobCursor, setJobCursor] = useState("");
+  const [nextJobCursor, setNextJobCursor] = useState<string>();
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const [hasActiveJobs, setHasActiveJobs] = useState(false);
   const [results, setResults] = useState<SemanticResult[]>([]);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -99,34 +105,53 @@ export function Insights({
     const params = new URLSearchParams(
       projectId ? { projectId } : { crossProject: "true" },
     );
-    const [artifacts, queued, config] = await Promise.all([
-      api<{ suggestions: Suggestion[] }>(`/suggestions?${params}`),
-      api<{ jobs: Job[] }>("/ai/jobs"),
-      api<{ enabled: boolean }>("/ai/settings"),
-    ]);
-    if (sequence !== requestSequence.current) return;
-    setAiEnabled(config.enabled);
-    setSuggestions(artifacts.suggestions);
-    setJobs(queued.jobs);
-  }, [projectId]);
+    params.set("limit", "100");
+    if (suggestionCursor) params.set("cursor", suggestionCursor);
+    const jobParams = new URLSearchParams({ limit: "100" });
+    if (jobCursor) jobParams.set("cursor", jobCursor);
+    setJobsLoading(true);
+    try {
+      const [artifacts, queued, config] = await Promise.all([
+        api<{
+          suggestions: Suggestion[];
+          nextCursor?: string;
+          hasMore?: boolean;
+        }>(`/suggestions?${params}`),
+        api<{ jobs: Job[]; nextCursor?: string; hasActive?: boolean }>(
+          `/ai/jobs?${jobParams}`,
+        ),
+        api<{ enabled: boolean }>("/ai/settings"),
+      ]);
+      if (sequence !== requestSequence.current) return;
+      setAiEnabled(config.enabled);
+      setSuggestions(artifacts.suggestions);
+      setNextSuggestionCursor(
+        artifacts.hasMore === true ? artifacts.nextCursor : undefined,
+      );
+      setJobs(queued.jobs);
+      setNextJobCursor(queued.nextCursor);
+      setHasActiveJobs(
+        queued.hasActive ??
+          queued.jobs.some((job) => ["queued", "running"].includes(job.status)),
+      );
+    } finally {
+      if (sequence === requestSequence.current) setJobsLoading(false);
+    }
+  }, [projectId, jobCursor, suggestionCursor]);
   useEffect(() => {
-    setResults([]);
     void refresh().catch((reason: Error) => setError(reason.message));
     return () => {
       requestSequence.current++;
     };
   }, [refresh]);
-  const pending = jobs.some((job) =>
-    ["queued", "running"].includes(job.status),
-  );
   useEffect(() => {
-    if (!pending) return;
+    if (!hasActiveJobs) return;
     const timer = setInterval(
       () => void refresh().catch((reason: Error) => setError(reason.message)),
       4000,
     );
     return () => clearInterval(timer);
-  }, [pending, refresh]);
+  }, [hasActiveJobs, refresh]);
   async function perform(work: () => Promise<void>) {
     setBusy(true);
     setError("");
@@ -364,6 +389,28 @@ export function Insights({
             run analysis to get started.
           </p>
         )}
+        {(suggestionCursor || nextSuggestionCursor) && (
+          <nav className="action-row" aria-label="Suggestion pages">
+            {suggestionCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setSuggestionCursor("")}
+              >
+                Latest suggestions
+              </button>
+            )}
+            {nextSuggestionCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setSuggestionCursor(nextSuggestionCursor)}
+              >
+                Older suggestions
+              </button>
+            )}
+          </nav>
+        )}
         {suggestions
           .filter(
             (suggestion) =>
@@ -431,7 +478,11 @@ export function Insights({
             </article>
           ))}
       </section>
-      <section className="settings-section" hidden={selected !== "jobs"}>
+      <section
+        className="settings-section"
+        hidden={selected !== "jobs"}
+        aria-busy={jobsLoading}
+      >
         <h2>Background jobs</h2>
         <p>
           {jobs.filter((job) => job.status === "failed").length} failed ·{" "}
@@ -450,7 +501,31 @@ export function Insights({
             </button>
           </p>
         )}
-        {!jobs.length && <p>No jobs queued yet.</p>}
+        {!jobs.length && (
+          <p>{jobCursor ? "No jobs on this page." : "No jobs queued yet."}</p>
+        )}
+        {(jobCursor || nextJobCursor) && (
+          <nav className="action-row" aria-label="Job pages">
+            {jobCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setJobCursor("")}
+              >
+                Latest jobs
+              </button>
+            )}
+            {nextJobCursor && (
+              <button
+                type="button"
+                disabled={busy || jobsLoading}
+                onClick={() => setJobCursor(nextJobCursor)}
+              >
+                Older jobs
+              </button>
+            )}
+          </nav>
+        )}
         <ul className="job-list">
           {(showAllJobs ? jobs : jobs.slice(0, 10)).map((job) => (
             <li key={job.id}>

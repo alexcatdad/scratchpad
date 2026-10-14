@@ -2226,7 +2226,7 @@
     "/api/v1/ai/jobs": {
       "get": {
         "operationId": "get_ai_jobs",
-        "summary": "Inspect persisted jobs",
+        "summary": "Inspect a bounded page of persisted jobs",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2240,6 +2240,14 @@
                       "items": {
                         "$ref": "#/components/schemas/Job"
                       }
+                    },
+                    "hasActive": {
+                      "type": "boolean",
+                      "description": "Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work."
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "description": "Present only when another page exists."
                     }
                   }
                 }
@@ -2249,7 +2257,40 @@
           "default": {
             "$ref": "#/components/responses/Error"
           }
-        }
+        },
+        "description": "Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Opaque continuation returned by the previous page."
+          },
+          {
+            "name": "jobId",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500,
+              "pattern": "^(?!\\.{1,2}$)[A-Za-z0-9_.:~-]+$"
+            },
+            "description": "Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor."
+          }
+        ]
       },
       "post": {
         "operationId": "post_ai_jobs",
@@ -2343,7 +2384,7 @@
     "/api/v1/suggestions": {
       "get": {
         "operationId": "get_suggestions",
-        "summary": "Retrieve currently permitted derived artifacts",
+        "summary": "Retrieve a bounded page of currently permitted derived artifacts",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -2357,6 +2398,14 @@
                       "items": {
                         "$ref": "#/components/schemas/Artifact"
                       }
+                    },
+                    "hasMore": {
+                      "type": "boolean",
+                      "description": "Another currently readable artifact exists; hidden artifacts do not create continuation hints."
+                    },
+                    "nextCursor": {
+                      "type": "string",
+                      "description": "Opaque continuation in the same scope, present only when hasMore is true."
                     }
                   }
                 }
@@ -2394,8 +2443,28 @@
               "type": "boolean"
             },
             "description": "Optional filter."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Opaque continuation from the previous suggestion page in the same scope."
           }
-        ]
+        ],
+        "description": "Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata."
       }
     },
     "/api/v1/suggestions/{id}/accept": {
@@ -3257,6 +3326,385 @@
           }
         }
       }
+    },
+    "/api/v1/projects/{id}/context/compact": {
+      "get": {
+        "operationId": "get_projects_id_context_compact",
+        "summary": "Go backend compact version-2 context; legacy context route remains unchanged",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum distinct source previews",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "maxChars",
+            "in": "query",
+            "required": false,
+            "description": "Maximum serialized UTF-8 response bytes, including newline",
+            "schema": {
+              "type": "integer",
+              "minimum": 4096,
+              "maximum": 64000
+            }
+          },
+          {
+            "name": "previewChars",
+            "in": "query",
+            "required": false,
+            "description": "Maximum preview UTF-16 units",
+            "schema": {
+              "type": "integer",
+              "minimum": 32,
+              "maximum": 2000
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/status": {
+      "get": {
+        "operationId": "get_rag_status",
+        "summary": "Go backend RAG prerequisite availability, separate from indexing coverage",
+        "responses": {
+          "200": {
+            "description": "Authenticated availability; missing prerequisites do not disable ordinary memory",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["enabled", "available", "database", "reason"],
+                  "properties": {
+                    "enabled": {
+                      "type": "boolean"
+                    },
+                    "available": {
+                      "type": "boolean"
+                    },
+                    "database": {
+                      "type": "string",
+                      "enum": ["sqlite", "postgres"]
+                    },
+                    "reason": {
+                      "type": "string",
+                      "enum": [
+                        "disabled",
+                        "postgres_required",
+                        "pgvector_required",
+                        "embedding_dimensions_unsupported",
+                        "available"
+                      ]
+                    },
+                    "pgvectorVersion": {
+                      "type": "string",
+                      "description": "Present when RAG prerequisites and passage dimensions are available"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/index": {
+      "post": {
+        "operationId": "post_rag_index",
+        "summary": "Go backend per-record durable passage indexing and versioned rebuild",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  {
+                    "type": "object",
+                    "required": ["recordId"],
+                    "properties": {
+                      "recordId": {
+                        "type": "string"
+                      },
+                      "rebuild": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "expectedVersion": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "description": "Required for explicit rebuild of a completed or failed job"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Durable indexing job; repeated requests reuse the same source generation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["job"],
+                  "properties": {
+                    "job": {
+                      "$ref": "#/components/schemas/Job"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/retrieve": {
+      "post": {
+        "operationId": "post_rag_retrieve",
+        "summary": "Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback",
+        "description": "Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/Scope"
+                  },
+                  {
+                    "type": "object",
+                    "required": ["query"],
+                    "properties": {
+                      "query": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 4000
+                      },
+                      "intent": {
+                        "type": "string",
+                        "enum": ["current", "history"],
+                        "default": "current"
+                      },
+                      "limit": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 100,
+                        "default": 20
+                      },
+                      "maxChars": {
+                        "type": "integer",
+                        "minimum": 4096,
+                        "maximum": 64000,
+                        "default": 12000,
+                        "description": "Maximum serialized UTF-8 response bytes including newline"
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bounded source excerpts, identifiers, UTF-16 locations, authority, lifecycle and selected-project relationship references; current-generation indexing coverage is assessed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["results", "resultsOmitted", "semantic"],
+                  "properties": {
+                    "results": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "additionalProperties": true,
+                        "properties": {
+                          "queryMatchScope": {
+                            "type": "string",
+                            "enum": ["record", "passage", "title"],
+                            "description": "Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction."
+                          }
+                        }
+                      }
+                    },
+                    "resultsOmitted": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "semantic": {
+                      "type": "object",
+                      "required": ["available", "indexCoverage"],
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "description": "Fixed fallback reason code when semantic retrieval is unavailable"
+                        },
+                        "indexCoverage": {
+                          "type": "string",
+                          "enum": ["complete", "incomplete", "unavailable"]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/v1/rag/coverage": {
+      "get": {
+        "operationId": "get_rag_coverage",
+        "summary": "Go backend current-generation indexing coverage without provider access",
+        "parameters": [
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "projectIds",
+            "in": "query",
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "maxItems": 100,
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "crossProject",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Snapshot-consistent eligible source and compatible passage counts; completeness does not establish semantic provider availability",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "status",
+                    "fingerprint",
+                    "eligibleSources",
+                    "indexedSources",
+                    "queuedSources",
+                    "runningSources",
+                    "failedSources",
+                    "unindexedSources",
+                    "incompatibleSources",
+                    "passageCount"
+                  ],
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "enum": ["complete", "incomplete"]
+                    },
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "eligibleSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "indexedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "queuedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "runningSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "failedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "unindexedSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "incompatibleSources": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "passageCount": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3601,8 +4049,7 @@
                 "contradiction",
                 "cluster",
                 "pattern",
-                "recommendation",
-                "export"
+                "recommendation"
               ]
             }
           },
@@ -3677,8 +4124,7 @@
                 "contradiction",
                 "cluster",
                 "pattern",
-                "recommendation",
-                "export"
+                "recommendation"
               ]
             }
           },
@@ -3732,7 +4178,7 @@
             "properties": {
               "type": {
                 "type": "string",
-                "enum": ["analyze", "embed", "export"]
+                "enum": ["analyze", "embed", "export", "rag_index"]
               },
               "status": {
                 "type": "string",
@@ -3790,6 +4236,26 @@
                     }
                   }
                 }
+              },
+              "recordId": {
+                "type": "string"
+              },
+              "fingerprint": {
+                "type": "string"
+              },
+              "contentHash": {
+                "type": "string"
+              },
+              "processingVersion": {
+                "type": "string"
+              },
+              "passageCount": {
+                "type": ["integer", "null"],
+                "minimum": 0
+              },
+              "sourceCount": {
+                "type": ["integer", "null"],
+                "minimum": 0
               }
             }
           }

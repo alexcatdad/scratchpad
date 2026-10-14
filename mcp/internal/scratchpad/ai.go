@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/url"
+	"strconv"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -34,26 +35,72 @@ func (c *Client) aiScope(ctx context.Context, scope AIScope) (map[string]any, er
 }
 
 func registerAI(server *mcp.Server, client *Client) {
-	type SemanticSearch struct {
+	type Evidence struct {
 		AIScope
-		Query string `json:"query" jsonschema:"Meaning to search for; requires compatible built embeddings and project consent"`
-		Limit int    `json:"limit,omitempty"`
+		Query    string `json:"query" jsonschema:"Question or identifier to retrieve cited project evidence for"`
+		Intent   string `json:"intent,omitempty" jsonschema:"current (default) or history; historical choices are not current policy"`
+		Limit    *int   `json:"limit,omitempty" jsonschema:"Maximum evidence passages, 1 to 100"`
+		MaxChars *int   `json:"maxChars,omitempty" jsonschema:"Serialized response byte budget, 4096 to 64000"`
 	}
-	mcp.AddTool(server, &mcp.Tool{Name: "semantic_search", Description: "Optional search by meaning in the resolved project or explicitly permitted cross-project scope. Returns derived similarity scores and source records; exact search_memory remains independent of AI."}, func(ctx context.Context, _ *mcp.CallToolRequest, input SemanticSearch) (*mcp.CallToolResult, any, error) {
+	mcp.AddTool(server, &mcp.Tool{Name: "retrieve_evidence", Description: "Retrieve bounded cited evidence on the Go PostgreSQL RAG backend. Defaults to the discovered project; cross-project retrieval requires explicit participation scope. Preserves authority, source links, lifecycle and indexing uncertainty; lexical fallback can work during model/index outages. Scores do not establish accepted policy. Follow source IDs with get_record, and never treat incomplete indexing as absent evidence."}, func(ctx context.Context, request *mcp.CallToolRequest, input Evidence) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || nullArgument(request, "maxChars") {
+			return nil, nil, errors.New("invalid evidence response limits")
+		}
+		if input.Intent != "" && input.Intent != "current" && input.Intent != "history" {
+			return nil, nil, errors.New("intent must be current or history")
+		}
+		if (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 100)) || (input.MaxChars != nil && (*input.MaxChars < 4096 || *input.MaxChars > 64000)) {
+			return nil, nil, errors.New("invalid evidence response limits")
+		}
 		body, err := client.aiScope(ctx, input.AIScope)
 		if err != nil {
 			return nil, nil, err
 		}
 		body["query"] = input.Query
-		if input.Limit > 0 {
-			body["limit"] = input.Limit
+		if input.Intent != "" {
+			body["intent"] = input.Intent
+		}
+		if input.Limit != nil {
+			body["limit"] = *input.Limit
+		}
+		if input.MaxChars != nil {
+			body["maxChars"] = *input.MaxChars
+		}
+		var result any
+		err = client.requestEvidence(ctx, body, &result)
+		return nil, result, err
+	})
+	type SemanticSearch struct {
+		AIScope
+		Query string `json:"query" jsonschema:"Meaning to search for; requires compatible built embeddings and project consent"`
+		Limit *int   `json:"limit,omitempty" jsonschema:"Maximum semantic results, 1 to 100; omitted uses the server default"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "semantic_search", Description: "Optional search by meaning in the resolved project or explicitly permitted cross-project scope. Returns derived similarity scores and source records; exact search_memory remains independent of AI."}, func(ctx context.Context, request *mcp.CallToolRequest, input SemanticSearch) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 100)) {
+			return nil, nil, errors.New("invalid semantic result limit")
+		}
+		body, err := client.aiScope(ctx, input.AIScope)
+		if err != nil {
+			return nil, nil, err
+		}
+		body["query"] = input.Query
+		if input.Limit != nil {
+			body["limit"] = *input.Limit
 		}
 		var result any
 		err = client.request(ctx, "POST", "/search/semantic", body, "", &result)
 		return nil, result, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "get_suggestions", Description: "Read optional AI summaries, patterns and reviewable suggestions for the resolved project or permitted cross-project scope. Derived output is not approved human policy."}, func(ctx context.Context, _ *mcp.CallToolRequest, input AIScope) (*mcp.CallToolResult, any, error) {
-		body, err := client.aiScope(ctx, input)
+	type Suggestions struct {
+		AIScope
+		Limit  *int    `json:"limit,omitempty" jsonschema:"Readable page size, 1 to 200; backend default 100"`
+		Cursor *string `json:"cursor,omitempty" jsonschema:"Opaque continuation from a previous suggestion page in the same scope"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "get_suggestions", Description: "Read a bounded page of optional AI summaries, patterns and reviewable suggestions for the resolved project or permitted cross-project scope. Follow nextCursor in the same scope for older readable artifacts. Derived output is not approved human policy."}, func(ctx context.Context, request *mcp.CallToolRequest, input Suggestions) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || nullArgument(request, "cursor") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 200)) || (input.Cursor != nil && *input.Cursor == "") {
+			return nil, nil, errors.New("invalid suggestion pagination")
+		}
+		body, err := client.aiScope(ctx, input.AIScope)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -66,8 +113,20 @@ func registerAI(server *mcp.Server, client *Client) {
 		} else {
 			query.Set("projectId", body["projectId"].(string))
 		}
+		if input.Limit != nil {
+			query.Set("limit", strconv.Itoa(*input.Limit))
+		}
+		if input.Cursor != nil {
+			query.Set("cursor", *input.Cursor)
+		}
 		var result any
 		err = client.request(ctx, "GET", "/suggestions?"+query.Encode(), nil, "", &result)
+		if err == nil && (input.Limit != nil || input.Cursor != nil) {
+			response, _ := result.(map[string]any)
+			if _, supported := response["hasMore"].(bool); !supported {
+				return nil, nil, errors.New("backend does not support suggestion pagination; update the backend or omit pagination arguments")
+			}
+		}
 		return nil, result, err
 	})
 	type Analyze struct {
@@ -87,9 +146,37 @@ func registerAI(server *mcp.Server, client *Client) {
 		err = client.request(ctx, "POST", "/ai/jobs", body, "", &result)
 		return nil, result, err
 	})
-	mcp.AddTool(server, &mcp.Tool{Name: "get_ai_jobs", Description: "Inspect persisted optional AI job status, retries and failures. Provider failure does not affect deterministic memory."}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+	type Jobs struct {
+		Limit  *int    `json:"limit,omitempty" jsonschema:"Page size, 1 to 200; omitted uses the server default"`
+		Cursor *string `json:"cursor,omitempty" jsonschema:"Opaque nonempty nextCursor from a previous page"`
+		JobID  *string `json:"jobId,omitempty" jsonschema:"Poll one persisted job by ID; cannot be combined with cursor"`
+	}
+	mcp.AddTool(server, &mcp.Tool{Name: "get_ai_jobs", Description: "Inspect persisted optional AI job status, retries and failures. Follow nextCursor for further pages; hasActive covers all jobs. Use jobId to poll a specific job. Provider failure does not affect deterministic memory."}, func(ctx context.Context, request *mcp.CallToolRequest, input Jobs) (*mcp.CallToolResult, any, error) {
+		if nullArgument(request, "limit") || nullArgument(request, "cursor") || nullArgument(request, "jobId") || (input.Limit != nil && (*input.Limit < 1 || *input.Limit > 200)) || (input.Cursor != nil && *input.Cursor == "") || (input.JobID != nil && (*input.JobID == "" || input.Cursor != nil)) {
+			return nil, nil, errors.New("invalid job pagination or lookup")
+		}
+		query := url.Values{}
+		if input.Limit != nil {
+			query.Set("limit", strconv.Itoa(*input.Limit))
+		}
+		if input.Cursor != nil {
+			query.Set("cursor", *input.Cursor)
+		}
+		if input.JobID != nil {
+			query.Set("jobId", *input.JobID)
+		}
+		path := "/ai/jobs"
+		if len(query) > 0 {
+			path += "?" + query.Encode()
+		}
 		var result any
-		err := client.request(ctx, "GET", "/ai/jobs", nil, "", &result)
+		err := client.request(ctx, "GET", path, nil, "", &result)
+		if err == nil && len(query) > 0 {
+			body, _ := result.(map[string]any)
+			if _, supported := body["hasActive"].(bool); !supported {
+				return nil, nil, errors.New("backend does not support AI job pagination or lookup; update the backend or call get_ai_jobs without arguments")
+			}
+		}
 		return nil, result, err
 	})
 	type Document struct {

@@ -122,6 +122,10 @@ export function createApi(config: {
   trustedProxies?: string[];
   pgvector?: boolean;
 }) {
+  if (process.env.SCRATCHPAD_UI_ONLY === "true")
+    throw new Error(
+      "The dashboard renderer cannot initialize backend services.",
+    );
   const store = new Store(config.databasePath, config.databaseUrl, {
       pgvector: config.pgvector,
     }),
@@ -1454,6 +1458,10 @@ export function createApi(config: {
 }
 let singleton: ReturnType<typeof createApi> | undefined;
 export function getApi(): ReturnType<typeof createApi> {
+  if (process.env.SCRATCHPAD_UI_ONLY === "true")
+    throw new Error(
+      "The dashboard renderer cannot initialize backend services.",
+    );
   singleton ??= createApi({
     githubOAuth:
       process.env.SCRATCHPAD_GITHUB_CLIENT_ID ||
@@ -1476,9 +1484,20 @@ export function getApi(): ReturnType<typeof createApi> {
   singleton.ai.start();
   return singleton;
 }
-export const handleApiRequest = (
+export const handleApiRequest = async (
   request: Request,
   clientAddress?: string,
-): Promise<Response> => getApi().handleRequest(request, clientAddress);
+): Promise<Response> =>
+  process.env.SCRATCHPAD_UI_ONLY === "true"
+    ? response(
+        {
+          error: {
+            code: "DASHBOARD_ONLY",
+            message: "Use the Go API endpoint.",
+          },
+        },
+        503,
+      )
+    : getApi().handleRequest(request, clientAddress);
 export const createSetupToken = async (recovery = false): Promise<string> =>
   await getApi().auth.createSetupToken(recovery);

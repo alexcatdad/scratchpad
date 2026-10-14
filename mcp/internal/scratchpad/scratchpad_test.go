@@ -120,7 +120,7 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 	}
 	defer cs.Close()
 	listed, err := cs.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 19 {
+	if err != nil || len(listed.Tools) != 20 {
 		t.Fatalf("tools %v %v", listed, err)
 	}
 	fields := map[string]map[string]any{"decision": {"decision": "Use SQLite"}, "adr": {"decision": "Use SQLite"}, "business_decision": {"decision": "Self hosted"}, "finding": {"finding": "Works"}, "qa": {"question": "Why?", "answer": "Because"}, "failure": {"observed": "Failed"}, "constraint": {"constraint": "English only"}, "project_state": {"state": "active"}}
@@ -335,9 +335,17 @@ func TestCaptureMirrorGatesAndPartialSuccess(t *testing.T) {
 
 func TestStdioProtocol(t *testing.T) {
 	if os.Getenv("SCRATCHPAD_TEST_HELPER") == "1" {
-		c, err := NewClient(Config{URL: "http://localhost:1"})
+		origin := os.Getenv("SCRATCHPAD_TEST_API_URL")
+		if origin == "" {
+			origin = "http://localhost:1"
+		}
+		c, err := NewClient(Config{URL: origin})
 		if err != nil {
 			os.Exit(2)
+		}
+		if os.Getenv("SCRATCHPAD_TEST_API_URL") != "" {
+			c.token = "synthetic-presence-token"
+			c.expires = time.Now().Add(time.Hour)
 		}
 		if err = NewServer(c).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 			os.Exit(3)
@@ -358,10 +366,33 @@ func TestStdioProtocol(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 19 {
+	if err != nil || len(tools.Tools) != 20 {
 		t.Fatalf("%v %v", tools, err)
 	}
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_qa", Arguments: map[string]any{"question": "incomplete"}})
+	for _, tool := range tools.Tools {
+		if tool.Name == "record_qa" {
+			encoded, _ := json.Marshal(tool.InputSchema)
+			var schema struct {
+				Required []string `json:"required"`
+			}
+			if json.Unmarshal(encoded, &schema) != nil {
+				t.Fatal("invalid capture schema")
+			}
+			question := false
+			for _, field := range schema.Required {
+				if field == "answer" {
+					t.Fatal("answer remains required for question-only capture")
+				}
+				if field == "question" {
+					question = true
+				}
+			}
+			if !question {
+				t.Fatal("question is no longer required")
+			}
+		}
+	}
+	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_qa", Arguments: map[string]any{"answer": "missing required question"}})
 	if err == nil && (result == nil || !result.IsError) {
 		t.Fatal("invalid typed input unexpectedly accepted")
 	}

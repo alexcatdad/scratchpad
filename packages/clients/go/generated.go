@@ -23,7 +23,6 @@ const (
 	AiSettingsAnalysisModesCluster               AiSettingsAnalysisModes = "cluster"
 	AiSettingsAnalysisModesContradiction         AiSettingsAnalysisModes = "contradiction"
 	AiSettingsAnalysisModesDuplicateCandidate    AiSettingsAnalysisModes = "duplicate_candidate"
-	AiSettingsAnalysisModesExport                AiSettingsAnalysisModes = "export"
 	AiSettingsAnalysisModesPattern               AiSettingsAnalysisModes = "pattern"
 	AiSettingsAnalysisModesRecommendation        AiSettingsAnalysisModes = "recommendation"
 	AiSettingsAnalysisModesRelationshipCandidate AiSettingsAnalysisModes = "relationship_candidate"
@@ -40,8 +39,6 @@ func (e AiSettingsAnalysisModes) Valid() bool {
 	case AiSettingsAnalysisModesContradiction:
 		return true
 	case AiSettingsAnalysisModesDuplicateCandidate:
-		return true
-	case AiSettingsAnalysisModesExport:
 		return true
 	case AiSettingsAnalysisModesPattern:
 		return true
@@ -92,7 +89,6 @@ const (
 	AiSettingsPatchAnalysisModesCluster               AiSettingsPatchAnalysisModes = "cluster"
 	AiSettingsPatchAnalysisModesContradiction         AiSettingsPatchAnalysisModes = "contradiction"
 	AiSettingsPatchAnalysisModesDuplicateCandidate    AiSettingsPatchAnalysisModes = "duplicate_candidate"
-	AiSettingsPatchAnalysisModesExport                AiSettingsPatchAnalysisModes = "export"
 	AiSettingsPatchAnalysisModesPattern               AiSettingsPatchAnalysisModes = "pattern"
 	AiSettingsPatchAnalysisModesRecommendation        AiSettingsPatchAnalysisModes = "recommendation"
 	AiSettingsPatchAnalysisModesRelationshipCandidate AiSettingsPatchAnalysisModes = "relationship_candidate"
@@ -109,8 +105,6 @@ func (e AiSettingsPatchAnalysisModes) Valid() bool {
 	case AiSettingsPatchAnalysisModesContradiction:
 		return true
 	case AiSettingsPatchAnalysisModesDuplicateCandidate:
-		return true
-	case AiSettingsPatchAnalysisModesExport:
 		return true
 	case AiSettingsPatchAnalysisModesPattern:
 		return true
@@ -397,9 +391,10 @@ func (e JobStatus) Valid() bool {
 
 // Defines values for JobType.
 const (
-	JobTypeAnalyze JobType = "analyze"
-	JobTypeEmbed   JobType = "embed"
-	JobTypeExport  JobType = "export"
+	JobTypeAnalyze  JobType = "analyze"
+	JobTypeEmbed    JobType = "embed"
+	JobTypeExport   JobType = "export"
+	JobTypeRagIndex JobType = "rag_index"
 )
 
 // Valid indicates whether the value is a known member of the JobType enum.
@@ -410,6 +405,8 @@ func (e JobType) Valid() bool {
 	case JobTypeEmbed:
 		return true
 	case JobTypeExport:
+		return true
+	case JobTypeRagIndex:
 		return true
 	default:
 		return false
@@ -944,6 +941,129 @@ func (e PatchProjectsIdJSONBodyKind) Valid() bool {
 	}
 }
 
+// Defines values for GetRagCoverage200JSONResponseBodyStatus.
+const (
+	GetRagCoverage200JSONResponseBodyStatusComplete   GetRagCoverage200JSONResponseBodyStatus = "complete"
+	GetRagCoverage200JSONResponseBodyStatusIncomplete GetRagCoverage200JSONResponseBodyStatus = "incomplete"
+)
+
+// Valid indicates whether the value is a known member of the GetRagCoverage200JSONResponseBodyStatus enum.
+func (e GetRagCoverage200JSONResponseBodyStatus) Valid() bool {
+	switch e {
+	case GetRagCoverage200JSONResponseBodyStatusComplete:
+		return true
+	case GetRagCoverage200JSONResponseBodyStatusIncomplete:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostRagRetrieveJSONBodyIntent.
+const (
+	Current PostRagRetrieveJSONBodyIntent = "current"
+	History PostRagRetrieveJSONBodyIntent = "history"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieveJSONBodyIntent enum.
+func (e PostRagRetrieveJSONBodyIntent) Valid() bool {
+	switch e {
+	case Current:
+		return true
+	case History:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope.
+const (
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopePassage PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "passage"
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeRecord  PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "record"
+	PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeTitle   PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope = "title"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope enum.
+func (e PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope) Valid() bool {
+	switch e {
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopePassage:
+		return true
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeRecord:
+		return true
+	case PostRagRetrieve200JSONResponseBodyResultsQueryMatchScopeTitle:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PostRagRetrieve200JSONResponseBodySemanticIndexCoverage.
+const (
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete    PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "complete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete  PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "incomplete"
+	PostRagRetrieve200JSONResponseBodySemanticIndexCoverageUnavailable PostRagRetrieve200JSONResponseBodySemanticIndexCoverage = "unavailable"
+)
+
+// Valid indicates whether the value is a known member of the PostRagRetrieve200JSONResponseBodySemanticIndexCoverage enum.
+func (e PostRagRetrieve200JSONResponseBodySemanticIndexCoverage) Valid() bool {
+	switch e {
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageComplete:
+		return true
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageIncomplete:
+		return true
+	case PostRagRetrieve200JSONResponseBodySemanticIndexCoverageUnavailable:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetRagStatus200JSONResponseBodyDatabase.
+const (
+	GetRagStatus200JSONResponseBodyDatabasePostgres GetRagStatus200JSONResponseBodyDatabase = "postgres"
+	GetRagStatus200JSONResponseBodyDatabaseSqlite   GetRagStatus200JSONResponseBodyDatabase = "sqlite"
+)
+
+// Valid indicates whether the value is a known member of the GetRagStatus200JSONResponseBodyDatabase enum.
+func (e GetRagStatus200JSONResponseBodyDatabase) Valid() bool {
+	switch e {
+	case GetRagStatus200JSONResponseBodyDatabasePostgres:
+		return true
+	case GetRagStatus200JSONResponseBodyDatabaseSqlite:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for GetRagStatus200JSONResponseBodyReason.
+const (
+	Available                      GetRagStatus200JSONResponseBodyReason = "available"
+	Disabled                       GetRagStatus200JSONResponseBodyReason = "disabled"
+	EmbeddingDimensionsUnsupported GetRagStatus200JSONResponseBodyReason = "embedding_dimensions_unsupported"
+	PgvectorRequired               GetRagStatus200JSONResponseBodyReason = "pgvector_required"
+	PostgresRequired               GetRagStatus200JSONResponseBodyReason = "postgres_required"
+)
+
+// Valid indicates whether the value is a known member of the GetRagStatus200JSONResponseBodyReason enum.
+func (e GetRagStatus200JSONResponseBodyReason) Valid() bool {
+	switch e {
+	case Available:
+		return true
+	case Disabled:
+		return true
+	case EmbeddingDimensionsUnsupported:
+		return true
+	case PgvectorRequired:
+		return true
+	case PostgresRequired:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for PostRecordsIdEvidenceJSONBodyKind.
 const (
 	Conversation PostRecordsIdEvidenceJSONBodyKind = "conversation"
@@ -1258,18 +1378,24 @@ type GithubProfile struct {
 
 // Job defines model for Job.
 type Job struct {
-	ArtifactIds *[]string  `json:"artifactIds,omitempty"`
-	Attempts    *int       `json:"attempts,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	Format      *JobFormat `json:"format,omitempty"`
-	Id          string     `json:"id"`
-	LastError   *string    `json:"lastError,omitempty"`
-	LeaseUntil  *string    `json:"leaseUntil,omitempty"`
-	RunAfter    *string    `json:"runAfter,omitempty"`
-	Scope       *Scope     `json:"scope,omitempty"`
-	Status      *JobStatus `json:"status,omitempty"`
-	Type        *JobType   `json:"type,omitempty"`
-	Version     int        `json:"version"`
+	ArtifactIds       *[]string  `json:"artifactIds,omitempty"`
+	Attempts          *int       `json:"attempts,omitempty"`
+	ContentHash       *string    `json:"contentHash,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	Fingerprint       *string    `json:"fingerprint,omitempty"`
+	Format            *JobFormat `json:"format,omitempty"`
+	Id                string     `json:"id"`
+	LastError         *string    `json:"lastError,omitempty"`
+	LeaseUntil        *string    `json:"leaseUntil,omitempty"`
+	PassageCount      *int       `json:"passageCount,omitempty"`
+	ProcessingVersion *string    `json:"processingVersion,omitempty"`
+	RecordId          *string    `json:"recordId,omitempty"`
+	RunAfter          *string    `json:"runAfter,omitempty"`
+	Scope             *Scope     `json:"scope,omitempty"`
+	SourceCount       *int       `json:"sourceCount,omitempty"`
+	Status            *JobStatus `json:"status,omitempty"`
+	Type              *JobType   `json:"type,omitempty"`
+	Version           int        `json:"version"`
 
 	// Warnings Audited suggestions omitted for insufficient evidence; valid siblings remain available.
 	Warnings *[]struct {
@@ -1435,6 +1561,17 @@ type SemanticQuery struct {
 	ProjectId    *string   `json:"projectId,omitempty"`
 	ProjectIds   *[]string `json:"projectIds,omitempty"`
 	Query        string    `json:"query"`
+}
+
+// GetAiJobsParams defines parameters for GetAiJobs.
+type GetAiJobsParams struct {
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque continuation returned by the previous page.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
+	// JobId Return at most this specific portable entity ID; absent jobs return an empty array. Cannot combine with cursor.
+	JobId *string `form:"jobId,omitempty" json:"jobId,omitempty"`
 }
 
 // PostAiJobsIdRetryParams defines parameters for PostAiJobsIdRetry.
@@ -1639,6 +1776,18 @@ type PatchProjectsIdParams struct {
 // PatchProjectsIdJSONBodyKind defines parameters for PatchProjectsId.
 type PatchProjectsIdJSONBodyKind string
 
+// GetProjectsIdContextCompactParams defines parameters for GetProjectsIdContextCompact.
+type GetProjectsIdContextCompactParams struct {
+	// Limit Maximum distinct source previews
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// MaxChars Maximum serialized UTF-8 response bytes, including newline
+	MaxChars *int `form:"maxChars,omitempty" json:"maxChars,omitempty"`
+
+	// PreviewChars Maximum preview UTF-16 units
+	PreviewChars *int `form:"previewChars,omitempty" json:"previewChars,omitempty"`
+}
+
 // PatchProjectsIdSettingsJSONBody defines parameters for PatchProjectsIdSettings.
 type PatchProjectsIdSettingsJSONBody struct {
 	ExpectedVersion *int            `json:"expectedVersion,omitempty"`
@@ -1650,6 +1799,63 @@ type PatchProjectsIdSettingsParams struct {
 	// IfMatch Alternative optimistic version precondition where supported; profile PATCH requires body expectedVersion.
 	IfMatch *string `json:"If-Match,omitempty"`
 }
+
+// GetRagCoverageParams defines parameters for GetRagCoverage.
+type GetRagCoverageParams struct {
+	ProjectId    *string   `form:"projectId,omitempty" json:"projectId,omitempty"`
+	ProjectIds   *[]string `form:"projectIds,omitempty" json:"projectIds,omitempty"`
+	CrossProject *bool     `form:"crossProject,omitempty" json:"crossProject,omitempty"`
+}
+
+// GetRagCoverage200JSONResponseBodyStatus defines parameters for GetRagCoverage.
+type GetRagCoverage200JSONResponseBodyStatus string
+
+// PostRagIndexJSONBody defines parameters for PostRagIndex.
+type PostRagIndexJSONBody struct {
+	CrossProject *bool `json:"crossProject,omitempty"`
+
+	// ExpectedVersion Required for explicit rebuild of a completed or failed job
+	ExpectedVersion *int      `json:"expectedVersion,omitempty"`
+	ProjectId       *string   `json:"projectId,omitempty"`
+	ProjectIds      *[]string `json:"projectIds,omitempty"`
+	Rebuild         *bool     `json:"rebuild,omitempty"`
+	RecordId        string    `json:"recordId"`
+}
+
+// PostRagRetrieveJSONBody defines parameters for PostRagRetrieve.
+type PostRagRetrieveJSONBody struct {
+	CrossProject *bool                          `json:"crossProject,omitempty"`
+	Intent       *PostRagRetrieveJSONBodyIntent `json:"intent,omitempty"`
+	Limit        *int                           `json:"limit,omitempty"`
+
+	// MaxChars Maximum serialized UTF-8 response bytes including newline
+	MaxChars   *int      `json:"maxChars,omitempty"`
+	ProjectId  *string   `json:"projectId,omitempty"`
+	ProjectIds *[]string `json:"projectIds,omitempty"`
+	Query      string    `json:"query"`
+}
+
+// PostRagRetrieveJSONBodyIntent defines parameters for PostRagRetrieve.
+type PostRagRetrieveJSONBodyIntent string
+
+// PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope string
+
+// PostRagRetrieve200JSONResponseBody_Results_Item defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBody_Results_Item struct {
+	// QueryMatchScope Optional raw lexical match scope: passage means all query tokens occur in the returned content excerpt; title denotes title discovery; record means whole-source matching may extend outside the excerpt. Budget truncation conservatively uses record. This does not describe semantic query satisfaction.
+	QueryMatchScope      *PostRagRetrieve200JSONResponseBodyResultsQueryMatchScope `json:"queryMatchScope,omitempty"`
+	AdditionalProperties map[string]interface{}                                    `json:"-"`
+}
+
+// PostRagRetrieve200JSONResponseBodySemanticIndexCoverage defines parameters for PostRagRetrieve.
+type PostRagRetrieve200JSONResponseBodySemanticIndexCoverage string
+
+// GetRagStatus200JSONResponseBodyDatabase defines parameters for GetRagStatus.
+type GetRagStatus200JSONResponseBodyDatabase string
+
+// GetRagStatus200JSONResponseBodyReason defines parameters for GetRagStatus.
+type GetRagStatus200JSONResponseBodyReason string
 
 // GetRecordsParams defines parameters for GetRecords.
 type GetRecordsParams struct {
@@ -1825,6 +2031,10 @@ type GetSuggestionsParams struct {
 
 	// CrossProject Optional filter.
 	CrossProject *bool `form:"crossProject,omitempty" json:"crossProject,omitempty"`
+	Limit        *int  `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque continuation from the previous suggestion page in the same scope.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // PostSuggestionsIdAcceptParams defines parameters for PostSuggestionsIdAccept.
@@ -1928,6 +2138,12 @@ type PatchProjectsIdJSONRequestBody PatchProjectsIdJSONBody
 
 // PatchProjectsIdSettingsJSONRequestBody defines body for PatchProjectsIdSettings for application/json ContentType.
 type PatchProjectsIdSettingsJSONRequestBody PatchProjectsIdSettingsJSONBody
+
+// PostRagIndexJSONRequestBody defines body for PostRagIndex for application/json ContentType.
+type PostRagIndexJSONRequestBody PostRagIndexJSONBody
+
+// PostRagRetrieveJSONRequestBody defines body for PostRagRetrieve for application/json ContentType.
+type PostRagRetrieveJSONRequestBody PostRagRetrieveJSONBody
 
 // PostRecordsJSONRequestBody defines body for PostRecords for application/json ContentType.
 type PostRecordsJSONRequestBody PostRecordsJSONBody
@@ -2161,6 +2377,74 @@ func (a GetAuthCredentials200JSONResponseBody_Credentials_Item) MarshalJSON() ([
 	return json.Marshal(object)
 }
 
+// Getter for additional properties for PostRagRetrieve200JSONResponseBody_Results_Item. Returns the specified
+// element and whether it was found
+func (a PostRagRetrieve200JSONResponseBody_Results_Item) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for PostRagRetrieve200JSONResponseBody_Results_Item
+func (a *PostRagRetrieve200JSONResponseBody_Results_Item) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for PostRagRetrieve200JSONResponseBody_Results_Item to handle AdditionalProperties
+func (a *PostRagRetrieve200JSONResponseBody_Results_Item) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["queryMatchScope"]; found {
+		err = json.Unmarshal(raw, &a.QueryMatchScope)
+		if err != nil {
+			return fmt.Errorf("error reading 'queryMatchScope': %w", err)
+		}
+		delete(object, "queryMatchScope")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for PostRagRetrieve200JSONResponseBody_Results_Item to handle AdditionalProperties
+func (a PostRagRetrieve200JSONResponseBody_Results_Item) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	if a.QueryMatchScope != nil {
+		object["queryMatchScope"], err = json.Marshal(a.QueryMatchScope)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'queryMatchScope': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // AsNativeArchive returns the union data inside the PostImportJSONBody as a NativeArchive
 func (t PostImportJSONBody) AsNativeArchive() (NativeArchive, error) {
 	var body NativeArchive
@@ -2297,10 +2581,12 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
-	// GetAiJobs Inspect persisted jobs
+	// GetAiJobs Inspect a bounded page of persisted jobs
+	//
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-	GetAiJobs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostAiJobsWithBody Queue consent-filtered processing
 	//
@@ -2724,6 +3010,11 @@ type ClientInterface interface {
 	// Corresponds with GET /api/v1/projects/{id}/context (the `GetProjectsIdContext` operationId).
 	GetProjectsIdContext(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetProjectsIdContextCompact Go backend compact version-2 context; legacy context route remains unchanged
+	//
+	// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+	GetProjectsIdContextCompact(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetProjectsIdSettings Read project policy
 	//
 	// Corresponds with GET /api/v1/projects/{id}/settings (the `GetProjectsIdSettings` operationId).
@@ -2742,6 +3033,48 @@ type ClientInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRagCoverage Go backend current-generation indexing coverage without provider access
+	//
+	// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+	GetRagCoverage(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagIndex Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagRetrieveWithBody Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+	//
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostRagRetrieve Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+	//
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieve(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetRagStatus Go backend RAG prerequisite availability, separate from indexing coverage
+	//
+	// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+	GetRagStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRecords Deterministic filtered/full-text memory
 	//
@@ -2916,7 +3249,9 @@ type ClientInterface interface {
 	// Corresponds with PATCH /api/v1/settings (the `PatchSettings` operationId).
 	PatchSettings(ctx context.Context, params *PatchSettingsParams, body PatchSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetSuggestions Retrieve currently permitted derived artifacts
+	// GetSuggestions Retrieve a bounded page of currently permitted derived artifacts
+	//
+	// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 	//
 	// Corresponds with GET /api/v1/suggestions (the `GetSuggestions` operationId).
 	GetSuggestions(ctx context.Context, params *GetSuggestionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2974,11 +3309,13 @@ type ClientInterface interface {
 	GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
-// GetAiJobs Inspect persisted jobs
+// GetAiJobs Inspect a bounded page of persisted jobs
+//
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-func (c *Client) GetAiJobs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetAiJobsRequest(c.Server)
+func (c *Client) GetAiJobs(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAiJobsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3991,6 +4328,21 @@ func (c *Client) GetProjectsIdContext(ctx context.Context, id string, reqEditors
 	return c.Client.Do(req)
 }
 
+// GetProjectsIdContextCompact Go backend compact version-2 context; legacy context route remains unchanged
+//
+// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+func (c *Client) GetProjectsIdContextCompact(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetProjectsIdContextCompactRequest(c.Server, id, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetProjectsIdSettings Read project policy
 //
 // Corresponds with GET /api/v1/projects/{id}/settings (the `GetProjectsIdSettings` operationId).
@@ -4030,6 +4382,108 @@ func (c *Client) PatchProjectsIdSettingsWithBody(ctx context.Context, id string,
 // Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 func (c *Client) PatchProjectsIdSettings(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPatchProjectsIdSettingsRequest(c.Server, id, params, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRagCoverage Go backend current-generation indexing coverage without provider access
+//
+// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+func (c *Client) GetRagCoverage(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRagCoverageRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagIndexWithBody Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *Client) PostRagIndexWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagIndexRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagIndex Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *Client) PostRagIndex(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagIndexRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagRetrieveWithBody Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+//
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *Client) PostRagRetrieveWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagRetrieveRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostRagRetrieve Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+//
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *Client) PostRagRetrieve(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostRagRetrieveRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetRagStatus Go backend RAG prerequisite availability, separate from indexing coverage
+//
+// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+func (c *Client) GetRagStatus(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRagStatusRequest(c.Server)
 	if err != nil {
 		return nil, err
 	}
@@ -4463,7 +4917,9 @@ func (c *Client) PatchSettings(ctx context.Context, params *PatchSettingsParams,
 	return c.Client.Do(req)
 }
 
-// GetSuggestions Retrieve currently permitted derived artifacts
+// GetSuggestions Retrieve a bounded page of currently permitted derived artifacts
+//
+// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 //
 // Corresponds with GET /api/v1/suggestions (the `GetSuggestions` operationId).
 func (c *Client) GetSuggestions(ctx context.Context, params *GetSuggestionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -4611,7 +5067,7 @@ func (c *Client) GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*
 }
 
 // NewGetAiJobsRequest constructs an http.Request for the GetAiJobs method
-func NewGetAiJobsRequest(server string) (*http.Request, error) {
+func NewGetAiJobsRequest(server string, params *GetAiJobsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4627,6 +5083,57 @@ func NewGetAiJobsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.JobId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "jobId", *params.JobId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -6007,6 +6514,91 @@ func NewGetProjectsIdContextRequest(server string, id string) (*http.Request, er
 	return req, nil
 }
 
+// NewGetProjectsIdContextCompactRequest constructs an http.Request for the GetProjectsIdContextCompact method
+func NewGetProjectsIdContextCompactRequest(server string, id string, params *GetProjectsIdContextCompactParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "id", id, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/projects/%s/context/compact", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.MaxChars != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "maxChars", *params.MaxChars, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.PreviewChars != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "previewChars", *params.PreviewChars, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetProjectsIdSettingsRequest constructs an http.Request for the GetProjectsIdSettings method
 func NewGetProjectsIdSettingsRequest(server string, id string) (*http.Request, error) {
 	var err error
@@ -6098,6 +6690,191 @@ func NewPatchProjectsIdSettingsRequestWithBody(server string, id string, params 
 			req.Header.Set("If-Match", headerParam0)
 		}
 
+	}
+
+	return req, nil
+}
+
+// NewGetRagCoverageRequest constructs an http.Request for the GetRagCoverage method
+func NewGetRagCoverageRequest(server string, params *GetRagCoverageParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/coverage")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.ProjectId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "projectId", *params.ProjectId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProjectIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "projectIds", *params.ProjectIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.CrossProject != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "crossProject", *params.CrossProject, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostRagIndexRequest calls the generic PostRagIndex builder with application/json body
+func NewPostRagIndexRequest(server string, body PostRagIndexJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostRagIndexRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostRagIndexRequestWithBody constructs an http.Request for the PostRagIndex method, with any body, and a specified content type
+func NewPostRagIndexRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/index")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostRagRetrieveRequest calls the generic PostRagRetrieve builder with application/json body
+func NewPostRagRetrieveRequest(server string, body PostRagRetrieveJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostRagRetrieveRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostRagRetrieveRequestWithBody constructs an http.Request for the PostRagRetrieve method, with any body, and a specified content type
+func NewPostRagRetrieveRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/retrieve")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetRagStatusRequest constructs an http.Request for the GetRagStatus method
+func NewGetRagStatusRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/rag/status")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
 	}
 
 	return req, nil
@@ -7055,6 +7832,30 @@ func NewGetSuggestionsRequest(server string, params *GetSuggestionsParams) (*htt
 
 		}
 
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -7331,12 +8132,14 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
-	// GetAiJobsWithResponse Inspect persisted jobs
+	// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
+	//
+	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-	GetAiJobsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error)
+	GetAiJobsWithResponse(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error)
 
 	// PostAiJobsWithBodyWithResponse Queue consent-filtered processing
 	//
@@ -7784,6 +8587,13 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/projects/{id}/context (the `GetProjectsIdContext` operationId).
 	GetProjectsIdContextWithResponse(ctx context.Context, id string, reqEditors ...RequestEditorFn) (*GetProjectsIdContextResponse, error)
 
+	// GetProjectsIdContextCompactWithResponse Go backend compact version-2 context; legacy context route remains unchanged
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+	GetProjectsIdContextCompactWithResponse(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*GetProjectsIdContextCompactResponse, error)
+
 	// GetProjectsIdSettingsWithResponse Read project policy
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -7804,6 +8614,52 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PATCH /api/v1/projects/{id}/settings (the `PatchProjectsIdSettings` operationId).
 	PatchProjectsIdSettingsWithResponse(ctx context.Context, id string, params *PatchProjectsIdSettingsParams, body PatchProjectsIdSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchProjectsIdSettingsResponse, error)
+
+	// GetRagCoverageWithResponse Go backend current-generation indexing coverage without provider access
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+	GetRagCoverageWithResponse(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*GetRagCoverageResponse, error)
+
+	// PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error)
+
+	// PostRagIndexWithResponse Go backend per-record durable passage indexing and versioned rebuild
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+	PostRagIndexWithResponse(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error)
+
+	// PostRagRetrieveWithBodyWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+	//
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error)
+
+	// PostRagRetrieveWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+	//
+	// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+	PostRagRetrieveWithResponse(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error)
+
+	// GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+	GetRagStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRagStatusResponse, error)
 
 	// GetRecordsWithResponse Deterministic filtered/full-text memory
 	//
@@ -7984,7 +8840,9 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with PATCH /api/v1/settings (the `PatchSettings` operationId).
 	PatchSettingsWithResponse(ctx context.Context, params *PatchSettingsParams, body PatchSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchSettingsResponse, error)
 
-	// GetSuggestionsWithResponse Retrieve currently permitted derived artifacts
+	// GetSuggestionsWithResponse Retrieve a bounded page of currently permitted derived artifacts
+	//
+	// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -8053,7 +8911,12 @@ type GetAiJobsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		Jobs *[]Job `json:"jobs,omitempty"`
+		// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
+		HasActive *bool  `json:"hasActive,omitempty"`
+		Jobs      *[]Job `json:"jobs,omitempty"`
+
+		// NextCursor Present only when another page exists.
+		NextCursor *string `json:"nextCursor,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -8061,7 +8924,12 @@ type GetAiJobsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetAiJobsResponse) GetJSON200() *struct {
-	Jobs *[]Job `json:"jobs,omitempty"`
+	// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
+	HasActive *bool  `json:"hasActive,omitempty"`
+	Jobs      *[]Job `json:"jobs,omitempty"`
+
+	// NextCursor Present only when another page exists.
+	NextCursor *string `json:"nextCursor,omitempty"`
 } {
 	return r.JSON200
 }
@@ -10068,6 +10936,54 @@ func (r GetProjectsIdContextResponse) ContentType() string {
 	return ""
 }
 
+type GetProjectsIdContextCompactResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *map[string]interface{}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetProjectsIdContextCompactResponse) GetJSON200() *map[string]interface{} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetProjectsIdContextCompactResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetProjectsIdContextCompactResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetProjectsIdContextCompactResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetProjectsIdContextCompactResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetProjectsIdContextCompactResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetProjectsIdSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10170,6 +11086,260 @@ func (r PatchProjectsIdSettingsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PatchProjectsIdSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetRagCoverageResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		EligibleSources     int                                     `json:"eligibleSources"`
+		FailedSources       int                                     `json:"failedSources"`
+		Fingerprint         string                                  `json:"fingerprint"`
+		IncompatibleSources int                                     `json:"incompatibleSources"`
+		IndexedSources      int                                     `json:"indexedSources"`
+		PassageCount        int                                     `json:"passageCount"`
+		QueuedSources       int                                     `json:"queuedSources"`
+		RunningSources      int                                     `json:"runningSources"`
+		Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+		UnindexedSources    int                                     `json:"unindexedSources"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRagCoverageResponse) GetJSON200() *struct {
+	EligibleSources     int                                     `json:"eligibleSources"`
+	FailedSources       int                                     `json:"failedSources"`
+	Fingerprint         string                                  `json:"fingerprint"`
+	IncompatibleSources int                                     `json:"incompatibleSources"`
+	IndexedSources      int                                     `json:"indexedSources"`
+	PassageCount        int                                     `json:"passageCount"`
+	QueuedSources       int                                     `json:"queuedSources"`
+	RunningSources      int                                     `json:"runningSources"`
+	Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+	UnindexedSources    int                                     `json:"unindexedSources"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetRagCoverageResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRagCoverageResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRagCoverageResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRagCoverageResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRagCoverageResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostRagIndexResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *struct {
+		Job Job `json:"job"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostRagIndexResponse) GetJSON202() *struct {
+	Job Job `json:"job"`
+} {
+	return r.JSON202
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostRagIndexResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostRagIndexResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostRagIndexResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostRagIndexResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostRagIndexResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostRagRetrieveResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+		ResultsOmitted int                                               `json:"resultsOmitted"`
+		Semantic       struct {
+			Available     bool                                                    `json:"available"`
+			IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+			// Reason Fixed fallback reason code when semantic retrieval is unavailable
+			Reason *string `json:"reason,omitempty"`
+		} `json:"semantic"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostRagRetrieveResponse) GetJSON200() *struct {
+	Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+	ResultsOmitted int                                               `json:"resultsOmitted"`
+	Semantic       struct {
+		Available     bool                                                    `json:"available"`
+		IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+		// Reason Fixed fallback reason code when semantic retrieval is unavailable
+		Reason *string `json:"reason,omitempty"`
+	} `json:"semantic"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostRagRetrieveResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostRagRetrieveResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostRagRetrieveResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostRagRetrieveResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostRagRetrieveResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetRagStatusResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Available bool                                    `json:"available"`
+		Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+		Enabled   bool                                    `json:"enabled"`
+
+		// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
+		PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+		Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetRagStatusResponse) GetJSON200() *struct {
+	Available bool                                    `json:"available"`
+	Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+	Enabled   bool                                    `json:"enabled"`
+
+	// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
+	PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+	Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetRagStatusResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetRagStatusResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetRagStatusResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetRagStatusResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetRagStatusResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -10955,6 +12125,11 @@ type GetSuggestionsResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
+		// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+		HasMore *bool `json:"hasMore,omitempty"`
+
+		// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+		NextCursor  *string     `json:"nextCursor,omitempty"`
 		Suggestions *[]Artifact `json:"suggestions,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
@@ -10963,6 +12138,11 @@ type GetSuggestionsResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetSuggestionsResponse) GetJSON200() *struct {
+	// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+	HasMore *bool `json:"hasMore,omitempty"`
+
+	// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+	NextCursor  *string     `json:"nextCursor,omitempty"`
 	Suggestions *[]Artifact `json:"suggestions,omitempty"`
 } {
 	return r.JSON200
@@ -11264,13 +12444,15 @@ func (r GetReadyResponse) ContentType() string {
 	return ""
 }
 
-// GetAiJobsWithResponse Inspect persisted jobs
+// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
+//
+// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /api/v1/ai/jobs (the `GetAiJobs` operationId).
-func (c *ClientWithResponses) GetAiJobsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error) {
-	rsp, err := c.GetAiJobs(ctx, reqEditors...)
+func (c *ClientWithResponses) GetAiJobsWithResponse(ctx context.Context, params *GetAiJobsParams, reqEditors ...RequestEditorFn) (*GetAiJobsResponse, error) {
+	rsp, err := c.GetAiJobs(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -12071,6 +13253,19 @@ func (c *ClientWithResponses) GetProjectsIdContextWithResponse(ctx context.Conte
 	return ParseGetProjectsIdContextResponse(rsp)
 }
 
+// GetProjectsIdContextCompactWithResponse Go backend compact version-2 context; legacy context route remains unchanged
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/projects/{id}/context/compact (the `GetProjectsIdContextCompact` operationId).
+func (c *ClientWithResponses) GetProjectsIdContextCompactWithResponse(ctx context.Context, id string, params *GetProjectsIdContextCompactParams, reqEditors ...RequestEditorFn) (*GetProjectsIdContextCompactResponse, error) {
+	rsp, err := c.GetProjectsIdContextCompact(ctx, id, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetProjectsIdContextCompactResponse(rsp)
+}
+
 // GetProjectsIdSettingsWithResponse Read project policy
 //
 // Returns a wrapper object for the known response body format(s).
@@ -12108,6 +13303,88 @@ func (c *ClientWithResponses) PatchProjectsIdSettingsWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParsePatchProjectsIdSettingsResponse(rsp)
+}
+
+// GetRagCoverageWithResponse Go backend current-generation indexing coverage without provider access
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/rag/coverage (the `GetRagCoverage` operationId).
+func (c *ClientWithResponses) GetRagCoverageWithResponse(ctx context.Context, params *GetRagCoverageParams, reqEditors ...RequestEditorFn) (*GetRagCoverageResponse, error) {
+	rsp, err := c.GetRagCoverage(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRagCoverageResponse(rsp)
+}
+
+// PostRagIndexWithBodyWithResponse Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *ClientWithResponses) PostRagIndexWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error) {
+	rsp, err := c.PostRagIndexWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagIndexResponse(rsp)
+}
+
+// PostRagIndexWithResponse Go backend per-record durable passage indexing and versioned rebuild
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/index (the `PostRagIndex` operationId).
+func (c *ClientWithResponses) PostRagIndexWithResponse(ctx context.Context, body PostRagIndexJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagIndexResponse, error) {
+	rsp, err := c.PostRagIndex(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagIndexResponse(rsp)
+}
+
+// PostRagRetrieveWithBodyWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+//
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *ClientWithResponses) PostRagRetrieveWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error) {
+	rsp, err := c.PostRagRetrieveWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagRetrieveResponse(rsp)
+}
+
+// PostRagRetrieveWithResponse Go backend bounded cited evidence using lexical/semantic rank fusion and outage fallback
+//
+// Bounded reciprocal-rank fusion of compatible passage candidates, with immutable-source lexical fallback when provider or index is unavailable. Further partial-index merge, dedup and retrieval evaluation remain delivery work.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/rag/retrieve (the `PostRagRetrieve` operationId).
+func (c *ClientWithResponses) PostRagRetrieveWithResponse(ctx context.Context, body PostRagRetrieveJSONRequestBody, reqEditors ...RequestEditorFn) (*PostRagRetrieveResponse, error) {
+	rsp, err := c.PostRagRetrieve(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostRagRetrieveResponse(rsp)
+}
+
+// GetRagStatusWithResponse Go backend RAG prerequisite availability, separate from indexing coverage
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/rag/status (the `GetRagStatus` operationId).
+func (c *ClientWithResponses) GetRagStatusWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRagStatusResponse, error) {
+	rsp, err := c.GetRagStatus(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetRagStatusResponse(rsp)
 }
 
 // GetRecordsWithResponse Deterministic filtered/full-text memory
@@ -12439,7 +13716,9 @@ func (c *ClientWithResponses) PatchSettingsWithResponse(ctx context.Context, par
 	return ParsePatchSettingsResponse(rsp)
 }
 
-// GetSuggestionsWithResponse Retrieve currently permitted derived artifacts
+// GetSuggestionsWithResponse Retrieve a bounded page of currently permitted derived artifacts
+//
+// Go backend: defaults to 100 readable artifacts, maximum 200. Follow nextCursor in the same scope. hasMore and continuation reflect only currently readable artifacts after complete privacy validation. Invalid limits, empty or malformed cursors and changed cursor scope return 400. Legacy deployments retain the suggestions response without pagination metadata.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -12572,7 +13851,12 @@ func ParseGetAiJobsResponse(rsp *http.Response) (*GetAiJobsResponse, error) {
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			Jobs *[]Job `json:"jobs,omitempty"`
+			// HasActive Live running leases or eligible queued/recoverable work exist, including jobs outside this page. Disabled AI and dormant incompatible RAG generations do not activate queued or expired running work.
+			HasActive *bool  `json:"hasActive,omitempty"`
+			Jobs      *[]Job `json:"jobs,omitempty"`
+
+			// NextCursor Present only when another page exists.
+			NextCursor *string `json:"nextCursor,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -13915,6 +15199,39 @@ func ParseGetProjectsIdContextResponse(rsp *http.Response) (*GetProjectsIdContex
 	return response, nil
 }
 
+// ParseGetProjectsIdContextCompactResponse parses an HTTP response from a GetProjectsIdContextCompactWithResponse call
+func ParseGetProjectsIdContextCompactResponse(rsp *http.Response) (*GetProjectsIdContextCompactResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetProjectsIdContextCompactResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest map[string]interface{}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetProjectsIdSettingsResponse parses an HTTP response from a GetProjectsIdSettingsWithResponse call
 func ParseGetProjectsIdSettingsResponse(rsp *http.Response) (*GetProjectsIdSettingsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -13969,6 +15286,169 @@ func ParsePatchProjectsIdSettingsResponse(rsp *http.Response) (*PatchProjectsIdS
 		var dest struct {
 			Settings *ProjectSettings `json:"settings,omitempty"`
 			Version  *int             `json:"version,omitempty"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRagCoverageResponse parses an HTTP response from a GetRagCoverageWithResponse call
+func ParseGetRagCoverageResponse(rsp *http.Response) (*GetRagCoverageResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRagCoverageResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			EligibleSources     int                                     `json:"eligibleSources"`
+			FailedSources       int                                     `json:"failedSources"`
+			Fingerprint         string                                  `json:"fingerprint"`
+			IncompatibleSources int                                     `json:"incompatibleSources"`
+			IndexedSources      int                                     `json:"indexedSources"`
+			PassageCount        int                                     `json:"passageCount"`
+			QueuedSources       int                                     `json:"queuedSources"`
+			RunningSources      int                                     `json:"runningSources"`
+			Status              GetRagCoverage200JSONResponseBodyStatus `json:"status"`
+			UnindexedSources    int                                     `json:"unindexedSources"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostRagIndexResponse parses an HTTP response from a PostRagIndexWithResponse call
+func ParsePostRagIndexResponse(rsp *http.Response) (*PostRagIndexResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostRagIndexResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest struct {
+			Job Job `json:"job"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostRagRetrieveResponse parses an HTTP response from a PostRagRetrieveWithResponse call
+func ParsePostRagRetrieveResponse(rsp *http.Response) (*PostRagRetrieveResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostRagRetrieveResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Results        []PostRagRetrieve200JSONResponseBody_Results_Item `json:"results"`
+			ResultsOmitted int                                               `json:"resultsOmitted"`
+			Semantic       struct {
+				Available     bool                                                    `json:"available"`
+				IndexCoverage PostRagRetrieve200JSONResponseBodySemanticIndexCoverage `json:"indexCoverage"`
+
+				// Reason Fixed fallback reason code when semantic retrieval is unavailable
+				Reason *string `json:"reason,omitempty"`
+			} `json:"semantic"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetRagStatusResponse parses an HTTP response from a GetRagStatusWithResponse call
+func ParseGetRagStatusResponse(rsp *http.Response) (*GetRagStatusResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetRagStatusResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Available bool                                    `json:"available"`
+			Database  GetRagStatus200JSONResponseBodyDatabase `json:"database"`
+			Enabled   bool                                    `json:"enabled"`
+
+			// PgvectorVersion Present when RAG prerequisites and passage dimensions are available
+			PgvectorVersion *string                               `json:"pgvectorVersion,omitempty"`
+			Reason          GetRagStatus200JSONResponseBodyReason `json:"reason"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
@@ -14516,6 +15996,11 @@ func ParseGetSuggestionsResponse(rsp *http.Response) (*GetSuggestionsResponse, e
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
+			// HasMore Another currently readable artifact exists; hidden artifacts do not create continuation hints.
+			HasMore *bool `json:"hasMore,omitempty"`
+
+			// NextCursor Opaque continuation in the same scope, present only when hasMore is true.
+			NextCursor  *string     `json:"nextCursor,omitempty"`
 			Suggestions *[]Artifact `json:"suggestions,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
