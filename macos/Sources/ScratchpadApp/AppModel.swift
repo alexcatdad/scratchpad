@@ -74,27 +74,24 @@ final class AppModel: ObservableObject {
         _ = currentObservationRevision()
         guard observationRevision.canRefresh else { return }
         let revision = currentObservationRevision()
-        Task.detached { [weak self] in
-            do {
-                let value = try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)
-                await MainActor.run {
-                    guard let self else { return }
-                    guard self.isCurrentObservation(revision) else { return }
-                    self.acceptServiceStatus(value)
-                }
-            } catch {
-                await MainActor.run {
-                    guard let self else { return }
-                    guard self.isCurrentObservation(revision) else { return }
-                    self.status = nil
-                    self.statusObservedAt = nil
-                    guard !self.observationRevision.isStartPending else { return }
-                    self.recordIncidentEvents(self.incidentTracker.observe(
-                        nil,
-                        serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
-                        absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
-                    ))
-                }
+        Task { @MainActor [weak self] in
+            let outcome: OperationOutcome<ServiceStatus> = await Task.detached {
+                do { return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) }
+                catch { return .failure(error.localizedDescription) }
+            }.value
+            guard let self, self.isCurrentObservation(revision) else { return }
+            switch outcome {
+            case .success(let value):
+                self.acceptServiceStatus(value)
+            case .failure:
+                self.status = nil
+                self.statusObservedAt = nil
+                guard !self.observationRevision.isStartPending else { return }
+                self.recordIncidentEvents(self.incidentTracker.observe(
+                    nil,
+                    serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
+                    absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
+                ))
             }
         }
     }
@@ -236,13 +233,15 @@ final class AppModel: ObservableObject {
             return
         }
 
-        Task.detached { [weak self] in
+        Task { @MainActor [weak self] in
             for _ in 0..<20 {
-                do {
-                    let status = try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)
-                    await MainActor.run {
-                        guard let self, self.isCurrentStartIntent(revision) else { return }
-                        guard status.lifecycle == "running" || status.lifecycle == "paused" else { return }
+                let outcome: OperationOutcome<ServiceStatus> = await Task.detached {
+                    do { return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) }
+                    catch { return .failure(error.localizedDescription) }
+                }.value
+                guard let self, self.isCurrentStartIntent(revision) else { return }
+                if case .success(let status) = outcome {
+                    if status.lifecycle == "running" || status.lifecycle == "paused" {
                         self.acceptServiceStatus(status)
                         _ = self.observationRevision.finishStart(revision)
                         self.persistLifecyclePolicy()
@@ -250,18 +249,17 @@ final class AppModel: ObservableObject {
                         self.errorMessage = nil
                     }
                     return
-                } catch {
+                }
+                if case .failure = outcome {
                     try? await Task.sleep(for: .milliseconds(250))
                 }
             }
-            await MainActor.run {
-                guard let self, self.isCurrentStartIntent(revision) else { return }
-                _ = self.observationRevision.finishStartFailure(revision)
-                self.persistLifecyclePolicy()
-                self.startupProcess = nil
-                self.errorMessage = "The capture service has not become available yet. Check queue Keychain unlock and local storage status."
-                self.recordLocalSaveUnavailable()
-            }
+            guard let self, self.isCurrentStartIntent(revision) else { return }
+            _ = self.observationRevision.finishStartFailure(revision)
+            self.persistLifecyclePolicy()
+            self.startupProcess = nil
+            self.errorMessage = "The capture service has not become available yet. Check queue Keychain unlock and local storage status."
+            self.recordLocalSaveUnavailable()
         }
     }
 
@@ -385,20 +383,19 @@ final class AppModel: ObservableObject {
         }
         busy = true
         errorMessage = nil
-        Task.detached { [weak self] in
-            let outcome: OperationOutcome<T>
-            do { outcome = .success(try operation()) }
-            catch { outcome = .failure(error.localizedDescription) }
-            await MainActor.run {
-                guard let self else { return }
-                switch outcome {
-                case .success(let value): completion(value)
-                case .failure(let message): self.errorMessage = message
-                    onFailure(message)
-                }
-                self.busy = false
-                self.runNextOperation()
+        Task { @MainActor [weak self] in
+            let outcome: OperationOutcome<T> = await Task.detached {
+                do { return .success(try operation()) }
+                catch { return .failure(error.localizedDescription) }
+            }.value
+            guard let self else { return }
+            switch outcome {
+            case .success(let value): completion(value)
+            case .failure(let message): self.errorMessage = message
+                onFailure(message)
             }
+            self.busy = false
+            self.runNextOperation()
         }
     }
 
