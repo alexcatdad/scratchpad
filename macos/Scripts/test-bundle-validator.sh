@@ -40,7 +40,7 @@ if "$repo_root/macos/Scripts/validate-bundle.sh" "$app" >"$tmp/icon-error" 2>&1;
   echo "bundle validator accepted a missing app icon resource" >&2
   exit 1
 fi
-rg -q "missing app icon resource" "$tmp/icon-error"
+grep -q "missing app icon resource" "$tmp/icon-error"
 mv "$tmp/missing-icon.icns" "$app/Contents/Resources/ScratchpadAppIcon.icns"
 "$repo_root/macos/Scripts/validate-bundle.sh" "$app" >/dev/null
 

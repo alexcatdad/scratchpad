@@ -30,7 +30,7 @@ SIGNING_IDENTITY='Developer ID Application: Synthetic (TEAMID)' \
     echo "signed package script unexpectedly proceeded without a Keychain provisioning profile" >&2
     exit 1
   }
-rg -q 'KEYCHAIN_PROFILE is required' "$tmp/profile-error"
+grep -q 'KEYCHAIN_PROFILE is required' "$tmp/profile-error"
 test -f "$tmp/existing/Scratchpad.app/Contents/marker"
 
 rm -f "$SWIFT_CALLED"
@@ -77,10 +77,10 @@ export TEST_REPO_ROOT="$repo_root" TEST_DEVELOPER_DIR=/Library/Developer/Command
 export RPATH_LOG="$tmp/rpath.log"
 sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
   "$tmp/Scratchpad" "$TEST_REPO_ROOT" "$TEST_DEVELOPER_DIR"
-rg -q -F -- "-delete_rpath $TEST_REPO_ROOT/macos/.build/out/Products/Debug/PackageFrameworks $tmp/Scratchpad" "$RPATH_LOG"
-rg -q -F -- "-delete_rpath $TEST_DEVELOPER_DIR/usr/lib/swift-6.2/macosx $tmp/Scratchpad" "$RPATH_LOG"
-rg -q -F -- "-add_rpath @executable_path/../Frameworks $tmp/Scratchpad" "$RPATH_LOG"
-if rg -q -F -- '-delete_rpath /usr/lib/swift' "$RPATH_LOG" || rg -q -F -- '-delete_rpath @loader_path' "$RPATH_LOG"; then
+grep -F -q -e "-delete_rpath $TEST_REPO_ROOT/macos/.build/out/Products/Debug/PackageFrameworks $tmp/Scratchpad" "$RPATH_LOG"
+grep -F -q -e "-delete_rpath $TEST_DEVELOPER_DIR/usr/lib/swift-6.2/macosx $tmp/Scratchpad" "$RPATH_LOG"
+grep -F -q -e "-add_rpath @executable_path/../Frameworks $tmp/Scratchpad" "$RPATH_LOG"
+if grep -F -q -e '-delete_rpath /usr/lib/swift' "$RPATH_LOG" || grep -F -q -e '-delete_rpath @loader_path' "$RPATH_LOG"; then
   echo "framework-rpath setup removed a non-development runtime path" >&2
   exit 1
 fi
@@ -181,9 +181,9 @@ touch "$framework/Versions/B/Autoupdate" \
   "$framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
 PATH="$tmp/fake-bin:$PATH" sh "$repo_root/macos/Scripts/sign-sparkle-framework.sh" "$framework" "$synthetic_identity"
 test "$(head -n 1 "$SIGN_LOG")" = "$framework/Versions/B/Autoupdate"
-rg -q -F "$framework/Versions/B/Updater.app" "$SIGN_LOG"
-rg -q -F "$framework/Versions/B/XPCServices/Downloader.xpc" "$SIGN_LOG"
-if rg -q -x -F "$framework" "$SIGN_LOG"; then
+grep -F -q -e "$framework/Versions/B/Updater.app" "$SIGN_LOG"
+grep -F -q -e "$framework/Versions/B/XPCServices/Downloader.xpc" "$SIGN_LOG"
+if grep -x -F -q -e "$framework" "$SIGN_LOG"; then
   echo "nested Sparkle signer unexpectedly signed the outer framework" >&2
   exit 1
 fi
