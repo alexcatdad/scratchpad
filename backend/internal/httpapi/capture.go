@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"reflect"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,6 +20,8 @@ import (
 	"github.com/alexcatdad/scratchpad/backend/internal/domain"
 )
 
+var clientSavedAtPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$`)
+
 func captureText(value any, max int) (string, error) {
 	text, ok := value.(string)
 	text = strings.TrimSpace(text)
@@ -27,6 +30,21 @@ func captureText(value any, max int) (string, error) {
 	}
 	return text, nil
 }
+
+func clientSavedAt(value any) (string, error) {
+	text, ok := value.(string)
+	if !ok || text == "" {
+		return "", validationProject()
+	}
+	if !clientSavedAtPattern.MatchString(text) {
+		return "", validationProject()
+	}
+	if _, err := time.Parse(time.RFC3339Nano, text); err != nil {
+		return "", validationProject()
+	}
+	return text, nil
+}
+
 func captureEnum(value any, allowed []string) (string, error) {
 	text, ok := value.(string)
 	if ok {
@@ -96,6 +114,12 @@ func captureRecord(raw json.RawMessage) (*domain.Record, json.RawMessage, error)
 			return nil, nil, validationProject()
 		}
 		record.HappenedAt = at
+	}
+	if value, exists := fields["clientSavedAt"]; exists {
+		record.ClientSavedAt, err = clientSavedAt(value)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 	payload, ok := fields["payload"].(map[string]any)
 	if !ok || payload == nil {

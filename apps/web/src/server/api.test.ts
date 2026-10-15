@@ -104,9 +104,10 @@ describe("persistent API domain", () => {
   it("persists idempotency across restart, refuses changed content, and retains original Git provenance", async () => {
     const { api, call, databasePath } = await fixture(true),
       p = await project(call);
+    const clientSavedAt = "2026-10-15T08:09:10.123456789+02:00";
     const body = {
       projectId: p.id,
-      record: capture,
+      record: { ...capture, clientSavedAt },
       gitContext: { dirty: false, commit: "original" },
     };
     const first = await call("/api/v1/records", "POST", body, {
@@ -121,12 +122,29 @@ describe("persistent API domain", () => {
     );
     expect(retry.data.record.id).toBe(first.data.record.id);
     expect(retry.data.record.gitContext.commit).toBe("original");
+    expect(retry.data.record.clientSavedAt).toBe(clientSavedAt);
     expect(
       (
         await call(
           "/api/v1/records",
           "POST",
           { ...body, record: { ...capture, title: "Changed" } },
+          { "Idempotency-Key": "capture-1" },
+        )
+      ).status,
+    ).toBe(409);
+    expect(
+      (
+        await call(
+          "/api/v1/records",
+          "POST",
+          {
+            ...body,
+            record: {
+              ...capture,
+              clientSavedAt: "2026-10-15T08:09:10.123456788+02:00",
+            },
+          },
           { "Idempotency-Key": "capture-1" },
         )
       ).status,
@@ -147,7 +165,37 @@ describe("persistent API domain", () => {
         body: JSON.stringify(body),
       }),
     );
-    expect((await response.json()).record.id).toBe(first.data.record.id);
+    const restartedRecord = (await response.json()).record;
+    expect(restartedRecord.id).toBe(first.data.record.id);
+    expect(restartedRecord.clientSavedAt).toBe(clientSavedAt);
+  });
+  it("validates client save timestamps with RFC 3339 offset bounds", async () => {
+    const { call } = await fixture();
+    const p = await project(call);
+    for (const clientSavedAt of [
+      "2026-10-15T08:09:10+02:60",
+      "2026-10-15T08:09:10+24:00",
+      "2026-10-15T08:09:10,123+02:00",
+      "2026-10-15T24:09:10Z",
+      "2026-02-30T08:09:10Z",
+    ]) {
+      const rejected = await call("/api/v1/records", "POST", {
+        projectId: p.id,
+        record: { ...capture, clientSavedAt },
+      });
+      expect(rejected.status).toBe(400);
+    }
+    const accepted = await call("/api/v1/records", "POST", {
+      projectId: p.id,
+      record: {
+        ...capture,
+        clientSavedAt: "2026-10-15T08:09:10.123456789123+23:59",
+      },
+    });
+    expect(accepted.status).toBe(201);
+    expect(accepted.data.record.clientSavedAt).toBe(
+      "2026-10-15T08:09:10.123456789123+23:59",
+    );
   });
   it("preserves raw records through curated corrections and rejects stale edits", async () => {
     const { call } = await fixture(),
@@ -206,7 +254,11 @@ describe("persistent API domain", () => {
   it("round trips knowledge and audit history without exporting authentication", async () => {
     const { call } = await fixture(),
       p = await project(call);
-    await call("/api/v1/records", "POST", { projectId: p.id, record: capture });
+    const clientSavedAt = "2026-10-15T08:09:10.123456789Z";
+    await call("/api/v1/records", "POST", {
+      projectId: p.id,
+      record: { ...capture, clientSavedAt },
+    });
     const exported = (await call("/api/v1/export", "POST", {})).data;
     expect(exported.data.credential).toBeUndefined();
     expect(exported.data.session).toBeUndefined();
@@ -216,6 +268,7 @@ describe("persistent API domain", () => {
     ).toBe(200);
     const output = (await destination.call("/api/v1/export", "POST", {})).data;
     expect(output.data.record).toEqual(exported.data.record);
+    expect(output.data.record[0].clientSavedAt).toBe(clientSavedAt);
     expect(output.data.project).toEqual(exported.data.project);
     expect(
       (await destination.call("/api/v1/import", "POST", exported)).data
@@ -492,6 +545,10 @@ describe("owner authentication", () => {
     };
     const token = await api.auth.sshVerify(body);
     expect(token.accessToken).toBeTruthy();
+    expect(token).toMatchObject({
+      credentialId: "real-key",
+      captureCapabilities: ["clientSavedAt-v1"],
+    });
     await expect(api.auth.sshVerify(body)).rejects.toThrow("consumed");
     await api.close();
     const restarted = createApi({

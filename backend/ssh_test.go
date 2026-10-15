@@ -88,6 +88,12 @@ func TestSSHLoginAndSingleUseProof(t *testing.T) {
 	if !ok || token == "" {
 		t.Fatal("SSH session missing")
 	}
+	if credentialID, ok := response["credentialId"].(string); !ok || credentialID == "" {
+		t.Fatal("SSH session omitted its authenticated credential identity")
+	}
+	if capabilities, ok := response["captureCapabilities"].([]any); !ok || len(capabilities) != 1 || capabilities[0] != "clientSavedAt-v1" {
+		t.Fatal("SSH session omitted the durable capture timestamp capability")
+	}
 	status, record := fetchRecord(t, origin, token)
 	if status != 200 || record["record"].(map[string]any)["id"] != "rec_restored" {
 		t.Fatal("new SSH session cannot retrieve restored capture")

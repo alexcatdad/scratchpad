@@ -212,6 +212,8 @@ export async function importNative(
           object.parse(value.payload);
           z.enum(authorityTypes).nullable().parse(value.authority);
           z.iso.datetime().parse(value.recordedAt);
+          if (value.clientSavedAt !== undefined)
+            z.iso.datetime({ offset: true }).parse(value.clientSavedAt);
         }
         if (kind === "source") {
           await requireEntity(store, "project", value.projectId);

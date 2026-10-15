@@ -19,6 +19,7 @@ type Record struct {
 	Confidence       string          `json:"confidence"`
 	ConfidenceReason string          `json:"confidenceReason,omitempty"`
 	HappenedAt       string          `json:"happenedAt,omitempty"`
+	ClientSavedAt    string          `json:"clientSavedAt,omitempty"`
 	Payload          map[string]any  `json:"payload"`
 	Actor            map[string]any  `json:"actor,omitempty"`
 	GitContext       *map[string]any `json:"gitContext,omitempty"`

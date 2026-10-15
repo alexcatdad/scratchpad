@@ -379,6 +379,11 @@ func validatePortable(ctx context.Context, conn *sql.Conn, kind string, value ma
 		if happenedAt, exists := value["happenedAt"]; exists && !portableTimestamp(happenedAt) {
 			return importInvalid()
 		}
+		if savedAt, exists := value["clientSavedAt"]; exists {
+			if _, err := clientSavedAt(savedAt); err != nil {
+				return importInvalid()
+			}
+		}
 	case "source":
 		if err := portableEntity(ctx, conn, "project", value["projectId"]); err != nil {
 			return err

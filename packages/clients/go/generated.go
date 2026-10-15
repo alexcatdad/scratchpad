@@ -887,6 +887,21 @@ func (e PostAuthMcpChallenge200JSONResponseBodyVersion) Valid() bool {
 	}
 }
 
+// Defines values for PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities.
+const (
+	ClientSavedAtV1 PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities = "clientSavedAt-v1"
+)
+
+// Valid indicates whether the value is a known member of the PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities enum.
+func (e PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities) Valid() bool {
+	switch e {
+	case ClientSavedAtV1:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetProfile200JSONResponseBodyDatabaseEngine.
 const (
 	GetProfile200JSONResponseBodyDatabaseEnginePostgresql GetProfile200JSONResponseBodyDatabaseEngine = "postgresql"
@@ -1332,14 +1347,17 @@ type ArtifactStatus string
 
 // Capture defines model for Capture.
 type Capture struct {
-	Actor            *map[string]interface{} `json:"actor,omitempty"`
-	Authority        CaptureAuthority        `json:"authority"`
-	Confidence       *CaptureConfidence      `json:"confidence,omitempty"`
-	ConfidenceReason *string                 `json:"confidenceReason,omitempty"`
-	HappenedAt       *time.Time              `json:"happenedAt,omitempty"`
-	Payload          map[string]interface{}  `json:"payload"`
-	Title            string                  `json:"title"`
-	Type             CaptureType             `json:"type"`
+	Actor     *map[string]interface{} `json:"actor,omitempty"`
+	Authority CaptureAuthority        `json:"authority"`
+
+	// ClientSavedAt Optional client-observed time when this capture was durably accepted locally. It does not replace server-owned recordedAt.
+	ClientSavedAt    *time.Time             `json:"clientSavedAt,omitempty"`
+	Confidence       *CaptureConfidence     `json:"confidence,omitempty"`
+	ConfidenceReason *string                `json:"confidenceReason,omitempty"`
+	HappenedAt       *time.Time             `json:"happenedAt,omitempty"`
+	Payload          map[string]interface{} `json:"payload"`
+	Title            string                 `json:"title"`
+	Type             CaptureType            `json:"type"`
 }
 
 // CaptureAuthority defines model for Capture.Authority.
@@ -1523,20 +1541,23 @@ type ProjectSettingsRepoMirroringRecordTypes string
 
 // Record defines model for Record.
 type Record struct {
-	Actor      *map[string]interface{} `json:"actor,omitempty"`
-	Authority  *string                 `json:"authority,omitempty"`
-	Content    *string                 `json:"content,omitempty"`
-	CreatedAt  time.Time               `json:"createdAt"`
-	GitContext *map[string]interface{} `json:"gitContext,omitempty"`
-	HappenedAt *string                 `json:"happenedAt,omitempty"`
-	Id         string                  `json:"id"`
-	Payload    *map[string]interface{} `json:"payload,omitempty"`
-	ProjectId  *string                 `json:"projectId,omitempty"`
-	Provenance *map[string]interface{} `json:"provenance,omitempty"`
-	RecordedAt *string                 `json:"recordedAt,omitempty"`
-	Title      *string                 `json:"title,omitempty"`
-	Type       *RecordType             `json:"type,omitempty"`
-	Version    int                     `json:"version"`
+	Actor     *map[string]interface{} `json:"actor,omitempty"`
+	Authority *string                 `json:"authority,omitempty"`
+
+	// ClientSavedAt Optional client-observed local acceptance time; distinct from server-owned recordedAt.
+	ClientSavedAt *time.Time              `json:"clientSavedAt,omitempty"`
+	Content       *string                 `json:"content,omitempty"`
+	CreatedAt     time.Time               `json:"createdAt"`
+	GitContext    *map[string]interface{} `json:"gitContext,omitempty"`
+	HappenedAt    *string                 `json:"happenedAt,omitempty"`
+	Id            string                  `json:"id"`
+	Payload       *map[string]interface{} `json:"payload,omitempty"`
+	ProjectId     *string                 `json:"projectId,omitempty"`
+	Provenance    *map[string]interface{} `json:"provenance,omitempty"`
+	RecordedAt    *string                 `json:"recordedAt,omitempty"`
+	Title         *string                 `json:"title,omitempty"`
+	Type          *RecordType             `json:"type,omitempty"`
+	Version       int                     `json:"version"`
 }
 
 // RecordType defines model for Record.Type.
@@ -1690,6 +1711,9 @@ type PostAuthMcpVerifyJSONBody struct {
 	PublicKey   string `json:"publicKey"`
 	Signature   string `json:"signature"`
 }
+
+// PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities defines parameters for PostAuthMcpVerify.
+type PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities string
 
 // PostAuthRegisterOptionsJSONBody defines parameters for PostAuthRegisterOptions.
 type PostAuthRegisterOptionsJSONBody struct {
@@ -10091,8 +10115,14 @@ type PostAuthMcpVerifyResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *struct {
-		AccessToken *string    `json:"accessToken,omitempty"`
-		ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+		AccessToken *string `json:"accessToken,omitempty"`
+
+		// CaptureCapabilities Capture contract capabilities supported by this authenticated server.
+		CaptureCapabilities *[]PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities `json:"captureCapabilities,omitempty"`
+
+		// CredentialId Credential that completed this proof; used by clients to pin deferred capture retries.
+		CredentialId *string    `json:"credentialId,omitempty"`
+		ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
 	}
 	// JSONDefault the response for an HTTP default `application/json` response
 	JSONDefault *Error
@@ -10100,8 +10130,14 @@ type PostAuthMcpVerifyResponse struct {
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r PostAuthMcpVerifyResponse) GetJSON200() *struct {
-	AccessToken *string    `json:"accessToken,omitempty"`
-	ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+	AccessToken *string `json:"accessToken,omitempty"`
+
+	// CaptureCapabilities Capture contract capabilities supported by this authenticated server.
+	CaptureCapabilities *[]PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities `json:"captureCapabilities,omitempty"`
+
+	// CredentialId Credential that completed this proof; used by clients to pin deferred capture retries.
+	CredentialId *string    `json:"credentialId,omitempty"`
+	ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
 } {
 	return r.JSON200
 }
@@ -14646,8 +14682,14 @@ func ParsePostAuthMcpVerifyResponse(rsp *http.Response) (*PostAuthMcpVerifyRespo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest struct {
-			AccessToken *string    `json:"accessToken,omitempty"`
-			ExpiresAt   *time.Time `json:"expiresAt,omitempty"`
+			AccessToken *string `json:"accessToken,omitempty"`
+
+			// CaptureCapabilities Capture contract capabilities supported by this authenticated server.
+			CaptureCapabilities *[]PostAuthMcpVerify200JSONResponseBodyCaptureCapabilities `json:"captureCapabilities,omitempty"`
+
+			// CredentialId Credential that completed this proof; used by clients to pin deferred capture retries.
+			CredentialId *string    `json:"credentialId,omitempty"`
+			ExpiresAt    *time.Time `json:"expiresAt,omitempty"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

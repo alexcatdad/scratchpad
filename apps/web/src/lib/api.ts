@@ -24,6 +24,7 @@ export type MemoryRecord = {
   createdAt: string;
   version: number;
   payload: Record<string, unknown>;
+  clientSavedAt?: string;
   actor?: Record<string, unknown>;
   provenance?: Record<string, unknown>;
   applicability?: string;
