@@ -333,6 +333,7 @@ func (s *SSH) verify(ctx context.Context, id, key, signature string) (map[string
 		return nil, err
 	}
 	expires := timestamp(time.Now().Add(24 * time.Hour))
+	credentialID := ""
 	err = s.Store.Write(ctx, func(conn *sql.Conn) error {
 		challenge, err := s.loadChallenge(ctx, conn, id, key)
 		if err != nil {
@@ -363,6 +364,7 @@ func (s *SSH) verify(ctx context.Context, id, key, signature string) (map[string
 				return err
 			}
 		}
+		credentialID = stringValue(credential, "id")
 		challenge["consumedAt"] = timestamp(time.Now())
 		if err := update(ctx, conn, "challenge", challenge); err != nil {
 			return err
@@ -377,7 +379,7 @@ func (s *SSH) verify(ctx context.Context, id, key, signature string) (map[string
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{"accessToken": token, "expiresAt": expires}, nil
+	return map[string]any{"accessToken": token, "expiresAt": expires, "credentialId": credentialID, "captureCapabilities": []string{"clientSavedAt-v1"}}, nil
 }
 func update(ctx context.Context, conn *sql.Conn, kind string, value map[string]any) error {
 	version, ok := value["version"].(float64)

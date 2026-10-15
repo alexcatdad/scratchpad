@@ -740,7 +740,11 @@ export class Auth {
         });
       requireValue(credential, "AUTH_INVALID", "Key is not enrolled.", 401);
       await this.github?.check(credential);
-      return await this.session(credential, false);
+      return {
+        ...(await this.session(credential, false)),
+        credentialId: credential.id,
+        captureCapabilities: ["clientSavedAt-v1"],
+      };
     });
   }
 }

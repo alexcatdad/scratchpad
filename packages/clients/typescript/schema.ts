@@ -1018,6 +1018,11 @@ export interface components {
             confidenceReason?: string;
             /** Format: date-time */
             happenedAt?: string;
+            /**
+             * Format: date-time
+             * @description Optional client-observed time when this capture was durably accepted locally. It does not replace server-owned recordedAt.
+             */
+            clientSavedAt?: string;
             payload: {
                 [key: string]: unknown;
             };
@@ -1042,6 +1047,11 @@ export interface components {
                 [key: string]: unknown;
             };
             recordedAt?: string;
+            /**
+             * Format: date-time
+             * @description Optional client-observed local acceptance time; distinct from server-owned recordedAt.
+             */
+            clientSavedAt?: string;
             happenedAt?: string;
             actor?: {
                 [key: string]: unknown;
@@ -1380,6 +1390,10 @@ export interface operations {
                         accessToken?: string;
                         /** Format: date-time */
                         expiresAt?: string;
+                        /** @description Credential that completed this proof; used by clients to pin deferred capture retries. */
+                        credentialId?: string;
+                        /** @description Capture contract capabilities supported by this authenticated server. */
+                        captureCapabilities?: "clientSavedAt-v1"[];
                     };
                 };
             };
