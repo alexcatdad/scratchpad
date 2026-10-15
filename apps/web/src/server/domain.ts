@@ -37,6 +37,7 @@ export const captureSchema = z.object({
   authority: z.enum(authorityTypes),
   confidence: z.enum(["high", "medium", "low", "unknown"]).default("unknown"),
   confidenceReason: text.optional(),
+  clientSavedAt: z.iso.datetime({ offset: true }).optional(),
   happenedAt: z.iso.datetime().optional(),
   payload: z.record(z.string(), z.unknown()),
   actor: z

@@ -39,7 +39,8 @@ func TestCapturePersistsImmutableRecordAndProvenance(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Capture"}, restoredToken)
 			projectID := project["project"].(map[string]any)["id"].(string)
-			record := map[string]any{"type": "decision", "title": "  Choose Go  ", "authority": "explicit", "payload": map[string]any{"decision": "Keep the central API authoritative."}, "actor": map[string]any{"kind": "user", "client": "synthetic-agent"}}
+			clientSavedAt := "2026-10-15T08:09:10.123456789Z"
+			record := map[string]any{"type": "decision", "title": "  Choose Go  ", "authority": "explicit", "clientSavedAt": clientSavedAt, "payload": map[string]any{"decision": "Keep the central API authoritative."}, "actor": map[string]any{"kind": "user", "client": "synthetic-agent"}}
 			status, body := captureRequest(t, origin, projectID, "", record)
 			if status != 201 {
 				t.Fatalf("capture unavailable: %d", status)
@@ -47,6 +48,9 @@ func TestCapturePersistsImmutableRecordAndProvenance(t *testing.T) {
 			saved := body["record"].(map[string]any)
 			if saved["title"] != "Choose Go" || saved["content"] != "decision: Keep the central API authoritative." || saved["confidence"] != "unknown" || saved["payloadVersion"] != float64(1) {
 				t.Fatal("capture content or defaults differ")
+			}
+			if saved["clientSavedAt"] != clientSavedAt || saved["recordedAt"] == clientSavedAt {
+				t.Fatal("capture did not preserve separate client and server timestamps")
 			}
 			actor := saved["actor"].(map[string]any)
 			if actor["kind"] != "agent" || actor["client"] != "synthetic-agent" || actor["credentialFingerprint"] != "credential_restored" {
@@ -61,7 +65,8 @@ func TestCapturePersistsImmutableRecordAndProvenance(t *testing.T) {
 			defer res.Body.Close()
 			var detail map[string]any
 			json.NewDecoder(res.Body).Decode(&detail)
-			if res.StatusCode != 200 || detail["record"].(map[string]any)["content"] != saved["content"] || detail["metadata"].(map[string]any)["archived"] != false || len(detail["audit"].([]any)) != 1 {
+			detailRecord := detail["record"].(map[string]any)
+			if res.StatusCode != 200 || detailRecord["content"] != saved["content"] || detailRecord["clientSavedAt"] != clientSavedAt || detailRecord["recordedAt"] != saved["recordedAt"] || detail["metadata"].(map[string]any)["archived"] != false || len(detail["audit"].([]any)) != 1 {
 				t.Fatal("capture detail did not preserve raw history and audit")
 			}
 		})
@@ -73,7 +78,7 @@ func TestCaptureRetryKeepsOneImmutableRecord(t *testing.T) {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
 			var projectID, recordID string
-			record := map[string]any{"type": "finding", "title": "Stable retry", "authority": "observed", "payload": map[string]any{"finding": "Retry safely."}}
+			record := map[string]any{"type": "finding", "title": "Stable retry", "authority": "observed", "clientSavedAt": "2026-10-15T08:09:10.123456789+02:00", "payload": map[string]any{"finding": "Retry safely."}}
 			t.Run("first", func(t *testing.T) {
 				origin := startServer(t, path, databaseURL)
 				_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Retry"}, restoredToken)
@@ -90,6 +95,11 @@ func TestCaptureRetryKeepsOneImmutableRecord(t *testing.T) {
 				if status != 201 || body["record"].(map[string]any)["id"] != recordID {
 					t.Fatal("retry created another capture after restart")
 				}
+				record["clientSavedAt"] = "2026-10-15T08:09:10.123456788+02:00"
+				status, _ = captureRequest(t, origin, projectID, "synthetic-request", record)
+				if status != 409 {
+					t.Fatal("retry identity accepted a changed client save timestamp")
+				}
 				record["title"] = "Different"
 				status, _ = captureRequest(t, origin, projectID, "synthetic-request", record)
 				if status != 409 {
@@ -97,6 +107,27 @@ func TestCaptureRetryKeepsOneImmutableRecord(t *testing.T) {
 				}
 			})
 		})
+	}
+}
+
+func TestCaptureClientSavedAtValidation(t *testing.T) {
+	path, databaseURL, _ := githubHistoricalBrowser(t, "sqlite")
+	origin := startServer(t, path, databaseURL)
+	_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Timestamp validation"}, restoredToken)
+	projectID := project["project"].(map[string]any)["id"].(string)
+	for _, invalid := range []any{"yesterday", "2026-10-15T08:09:10", float64(42), nil} {
+		record := map[string]any{"type": "finding", "title": "Invalid local time", "authority": "observed", "clientSavedAt": invalid, "payload": map[string]any{"finding": "Synthetic invalid timestamp."}}
+		status, _ := captureRequest(t, origin, projectID, "", record)
+		if status != http.StatusBadRequest {
+			t.Fatalf("invalid clientSavedAt %v returned %d", invalid, status)
+		}
+	}
+	status, saved := captureRequest(t, origin, projectID, "", map[string]any{"type": "finding", "title": "Legacy caller", "authority": "observed", "payload": map[string]any{"finding": "Timestamp omitted."}})
+	if status != http.StatusCreated {
+		t.Fatalf("legacy capture without clientSavedAt returned %d", status)
+	}
+	if _, exists := saved["record"].(map[string]any)["clientSavedAt"]; exists {
+		t.Fatal("server invented a client save timestamp for an older caller")
 	}
 }
 
@@ -268,6 +299,8 @@ func TestRealStdioCapturesAllRecordTypesThroughGo(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			private, key := githubSyntheticKey(t)
 			enrollLocalSSH(t, origin, private, key, local)
+			serviceSocket, stopService := startConfiguredDurableService(t, origin, t.TempDir(), filepath.Dir(private), private)
+			defer stopService()
 			workspace := t.TempDir()
 			for _, args := range [][]string{{"init", "-q", "-b", "main", workspace}, {"-C", workspace, "remote", "add", "origin", "https://github.com/synthetic/capture.git"}, {"-C", workspace, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "user.name=Synthetic", "-c", "user.email=synthetic@example.invalid", "commit", "-q", "--allow-empty", "-m", "Synthetic"}} {
 				cmd := exec.Command("git", args...)
@@ -276,7 +309,7 @@ func TestRealStdioCapturesAllRecordTypesThroughGo(t *testing.T) {
 					t.Fatal("synthetic Git fixture failed")
 				}
 			}
-			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", "records", "-state", filepath.Join(t.TempDir(), "capture-state.json"))
+			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "records", "-state", filepath.Join(t.TempDir(), "capture-state.json"))
 			cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
 			out, err := cmd.CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "PASS records") || !strings.Contains(string(out), "lexical search") {

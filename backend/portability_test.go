@@ -76,7 +76,11 @@ func TestNativeExportImportsAcrossDatabaseEngines(t *testing.T) {
 				t.Fatal("project fixture failed")
 			}
 			projectID := result["project"].(map[string]any)["id"].(string)
-			record := curationCapture(t, source, projectID, "Live portable capture")
+			status, captured := captureRequest(t, source, projectID, "portable-capture", map[string]any{"type": "finding", "title": "Live portable capture", "authority": "observed", "clientSavedAt": "2026-10-15T08:09:10.123456789Z", "payload": map[string]any{"finding": "Preserve the original local acceptance time."}})
+			if status != 201 {
+				t.Fatal("capture with local acceptance time failed")
+			}
+			record := captured["record"].(map[string]any)
 			status, result = curationRequest(t, source, "POST", "/export", map[string]any{})
 			if status != 200 {
 				t.Fatal("export failed")
@@ -89,7 +93,7 @@ func TestNativeExportImportsAcrossDatabaseEngines(t *testing.T) {
 			}
 			status, detail := curationRequest(t, target, "GET", "/records/"+record["id"].(string), nil)
 			if status != 200 || !reflect.DeepEqual(detail["record"], record) {
-				t.Fatal("cross-engine import rewrote raw capture")
+				t.Fatal("cross-engine import rewrote raw capture or client save time")
 			}
 		})
 	}

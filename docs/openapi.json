@@ -211,6 +211,18 @@
                     "expiresAt": {
                       "type": "string",
                       "format": "date-time"
+                    },
+                    "credentialId": {
+                      "type": "string",
+                      "description": "Credential that completed this proof; used by clients to pin deferred capture retries."
+                    },
+                    "captureCapabilities": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "enum": ["clientSavedAt-v1"]
+                      },
+                      "description": "Capture contract capabilities supported by this authenticated server."
                     }
                   }
                 }
@@ -3875,6 +3887,11 @@
             "type": "string",
             "format": "date-time"
           },
+          "clientSavedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Optional client-observed time when this capture was durably accepted locally. It does not replace server-owned recordedAt."
+          },
           "payload": {
             "type": "object",
             "additionalProperties": true
@@ -3933,6 +3950,11 @@
               },
               "recordedAt": {
                 "type": "string"
+              },
+              "clientSavedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Optional client-observed local acceptance time; distinct from server-owned recordedAt."
               },
               "happenedAt": {
                 "type": "string"
