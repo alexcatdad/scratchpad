@@ -4,6 +4,9 @@
     "includes": [
       "**",
       "!**/node_modules",
+      "!**/.scratch",
+      "!**/.build",
+      "!**/.swiftpm",
       "!**/dist",
       "!**/.astro",
       "!**/.output",

@@ -2,7 +2,10 @@ node_modules
 test-results
 playwright-report
 package-lock.json
+.scratch/**
 **/dist
+**/.build
+**/.swiftpm
 **/.astro
 **/.output
 **/.tanstack

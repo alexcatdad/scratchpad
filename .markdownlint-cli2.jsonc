@@ -3,6 +3,9 @@
   "ignores": [
     "**/node_modules/**",
     "**/dist/**",
+    "**/.build/**",
+    "**/.swiftpm/**",
+    ".scratch/**",
     "**/.astro/**",
     "test-results/**",
     "playwright-report/**"
