@@ -8,10 +8,15 @@ service="$app/Contents/Helpers/scratchpad-service"
 mcp="$app/Contents/Helpers/scratchpad-mcp"
 keychain_helper="$app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"
 keychain_info="$app/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
+resources="$app/Contents/Resources"
 test -x "$service" || { echo "missing executable service helper" >&2; exit 1; }
 test -x "$mcp" || { echo "missing executable MCP helper" >&2; exit 1; }
 test -x "$keychain_helper" || { echo "missing executable Keychain helper" >&2; exit 1; }
 test -f "$keychain_info" || { echo "missing Keychain helper app metadata" >&2; exit 1; }
+test -f "$resources/ScratchpadAppIcon.icns" || { echo "missing app icon resource" >&2; exit 1; }
+test -f "$resources/ScratchpadTrayIcon.png" || { echo "missing tray icon resource" >&2; exit 1; }
+test -f "$resources/ScratchpadTrayIcon@2x.png" || { echo "missing high-resolution tray icon resource" >&2; exit 1; }
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIconFile' "$info")" = "ScratchpadAppIcon.icns" || { echo "app icon metadata does not match bundled resource" >&2; exit 1; }
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$keychain_info")" = "com.alexcatdad.scratchpad.keychain-helper" || {
   echo "unexpected Keychain helper bundle identifier" >&2
   exit 1

@@ -96,13 +96,16 @@ mkdir -p "$stage_root/helpers"
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
 
-mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Frameworks"
+mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Frameworks" "$candidate/Contents/Resources"
 cp "$bin/Scratchpad" "$candidate/Contents/MacOS/Scratchpad"
 cp "$bin/scratchpad-keychain" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"
 cp "$repo_root/macos/Resources/KeychainHelper-Info.plist" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 cp "$stage_root/helpers/scratchpad-service" "$candidate/Contents/Helpers/scratchpad-service"
 cp "$stage_root/helpers/scratchpad-mcp" "$candidate/Contents/Helpers/scratchpad-mcp"
 cp "$repo_root/macos/Resources/Info.plist" "$candidate/Contents/Info.plist"
+cp "$repo_root/macos/Resources/ScratchpadAppIcon.icns" "$candidate/Contents/Resources/ScratchpadAppIcon.icns"
+cp "$repo_root/macos/Resources/ScratchpadTrayIcon.png" "$candidate/Contents/Resources/ScratchpadTrayIcon.png"
+cp "$repo_root/macos/Resources/ScratchpadTrayIcon@2x.png" "$candidate/Contents/Resources/ScratchpadTrayIcon@2x.png"
 cp "$repo_root/macos/Resources/com.alexcatdad.scratchpad.service.plist" "$candidate/Contents/Library/LaunchAgents/com.alexcatdad.scratchpad.service.plist"
 
 framework=$(find "$repo_root/macos/.build/artifacts" -type d -name Sparkle.framework -print -quit 2>/dev/null || true)

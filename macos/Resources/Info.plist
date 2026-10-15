@@ -6,6 +6,7 @@
 	<key>CFBundleExecutable</key><string>Scratchpad</string>
 	<key>CFBundleIdentifier</key><string>com.alexcatdad.scratchpad</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+	<key>CFBundleIconFile</key><string>ScratchpadAppIcon.icns</string>
 	<key>CFBundleName</key><string>Scratchpad</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.0.0</string>

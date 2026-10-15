@@ -14,7 +14,12 @@ struct ScratchpadApp: App {
                 .environmentObject(updates)
                 .onAppear { model.refresh() }
         } label: {
-            Label("Scratchpad", systemImage: "tray.full")
+            Image("ScratchpadTrayIcon", bundle: .main)
+                .renderingMode(.template)
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 18, height: 18)
+                .accessibilityLabel("Scratchpad")
         }
         .menuBarExtraStyle(.window)
 
@@ -43,12 +48,12 @@ struct MenuContent: View {
             HStack {
                 Text("Scratchpad").font(.headline)
                 Spacer()
-                if totalWaiting > 0 { Text("\(totalWaiting) saved").font(.caption).foregroundStyle(.secondary) }
+                if totalWaiting > 0 { Text("\(totalWaiting) waiting").font(.caption).foregroundStyle(.secondary) }
             }
             statusGlance
             Divider()
             Button { openWindow(id: "workspace") } label: {
-                Label("Capture queue \(totalWaiting)", systemImage: "list.bullet")
+                Label("Pending captures \(totalWaiting)", systemImage: "list.bullet")
             }
             .disabled(model.status == nil)
             if model.status?.lifecycle == "paused" {
@@ -56,15 +61,21 @@ struct MenuContent: View {
             } else if model.status?.lifecycle == "running" {
                 Button { model.setLifecycle("pause_delivery") } label: { Label("Pause delivery", systemImage: "pause") }
             }
-            Button { openWindow(id: "workspace") } label: { Label("Projects, settings & connections…", systemImage: "slider.horizontal.3") }
+            Button { openWindow(id: "workspace") } label: { Label("Settings & connections…", systemImage: "slider.horizontal.3") }
             if model.status?.lifecycle == "stopped" || model.status == nil {
                 Button { model.startService() } label: { Label("Start service", systemImage: "play.fill") }
             } else {
                 Button(role: .destructive) { confirmStop = true } label: { Label("Stop service…", systemImage: "stop.fill") }
             }
             Divider()
-            Button("Quit tray interface") { NSApp.terminate(nil) }
-                .font(.callout)
+            Button { NSApp.terminate(nil) } label: {
+                HStack {
+                    Text("Quit tray interface")
+                    Spacer()
+                    Text("Service unchanged").font(.caption2).foregroundStyle(.tertiary)
+                }
+            }
+            .font(.callout)
         }
         .padding(16)
         .frame(width: 310)
@@ -79,12 +90,17 @@ struct MenuContent: View {
     @ViewBuilder private var statusGlance: some View {
         if let status = model.status {
             VStack(alignment: .leading, spacing: 7) {
-                Label(statusHeadline(status), systemImage: status.lifecycle == "running" ? "circle.fill" : "circle")
-                    .font(.subheadline.weight(.semibold))
+                HStack(alignment: .top, spacing: 8) {
+                    Circle().fill(statusAccent(status)).frame(width: 7, height: 7).padding(.top, 5)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(statusHeadline(status)).font(.subheadline.weight(.semibold))
+                        Text(statusSubtitle(status)).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
                 LabeledStatus(title: "Capture service", value: status.lifecycle.capitalized, good: status.lifecycle == "running" || status.lifecycle == "paused")
-                LabeledStatus(title: "Local saving", value: localSave(status), good: (status.lifecycle == "running" || status.lifecycle == "paused") && status.keyAvailable && status.storageAvailable != false)
                 let connection = status.connection?.effectiveState() ?? "unknown"
                 LabeledStatus(title: "Scratchpad server", value: connectionText(connection), good: connection == "connected")
+                LabeledStatus(title: "Local saving", value: localSave(status), good: localSaveIsReady(status))
             }
             .padding(11)
             .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 10))
@@ -99,15 +115,29 @@ struct MenuContent: View {
     private func statusHeadline(_ status: ServiceStatus) -> String {
         if status.lifecycle == "stopped" { return "Service stopped" }
         if status.lifecycle == "quiescing" { return "Preparing update" }
-        if !status.keyAvailable || status.storageAvailable == false { return "Local saving needs attention" }
-        if status.lifecycle == "paused" { return "Delivery paused · local capture active" }
+        if !status.keyAvailable || status.storageAvailable == false { return "Local saving unavailable" }
+        if status.lifecycle == "paused" { return "Delivery paused" }
         switch status.connection?.effectiveState() {
-        case "connectivity": return "Server offline · captures remain local"
-        case "authentication", "credential_changed": return "Authentication needs attention"
-        case "server_incompatible": return "Server version needs attention"
-        case "connected": return totalWaiting > 0 ? "Captures are saved on this Mac" : "Scratchpad is ready"
-        default: return "Service running"
+        case "connectivity": return "Server offline"
+        case "authentication", "credential_changed": return "Authentication needed"
+        case "server_incompatible": return "Server incompatible"
+        case "connected": return totalWaiting > 0 ? "Captures waiting" : "Server connected"
+        default: return "Server not verified"
         }
+    }
+    private func statusSubtitle(_ status: ServiceStatus) -> String {
+        if status.lifecycle == "stopped" || status.lifecycle == "quiescing" { return "Local saving is unavailable." }
+        if !status.keyAvailable { return "The queue key is unavailable." }
+        if status.storageAvailable == false { return "Local queue storage is unavailable." }
+        if status.lifecycle == "running" || status.lifecycle == "paused" { return "Captures are saved on this Mac." }
+        return "Local saving has not been confirmed."
+    }
+    private func localSaveIsReady(_ status: ServiceStatus) -> Bool {
+        (status.lifecycle == "running" || status.lifecycle == "paused") && status.keyAvailable && status.storageAvailable != false
+    }
+    private func statusAccent(_ status: ServiceStatus) -> Color {
+        guard localSaveIsReady(status) else { return .orange }
+        return status.connection?.effectiveState() == "connected" ? .green : .orange
     }
     private func localSave(_ status: ServiceStatus) -> String {
         if status.lifecycle == "stopped" || status.lifecycle == "quiescing" { return "Unavailable" }

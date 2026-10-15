@@ -185,7 +185,13 @@ final class AppModel: ObservableObject {
     }
     func verifyConnection() {
         let client = self.client
-        perform({ try client.call("verify_connection", body: EmptyBody(), as: VerifyResult.self) }) { self.verified = $0 }
+        verified = nil
+        perform({ try client.call("verify_connection", body: EmptyBody(), as: VerifyResult.self) }, completion: { result in
+            self.verified = result
+            self.refresh()
+        }, onFailure: { _ in
+            self.refresh()
+        })
     }
     func setLifecycle(_ operation: String) {
         let revision = beginLifecycleIntent(operation: operation)

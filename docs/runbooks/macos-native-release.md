@@ -38,6 +38,21 @@ plutil -lint macos/Resources/Info.plist macos/Resources/com.alexcatdad.scratchpa
 
 SwiftPM tests exercise configuration merging, the schema compatibility gate, key-helper argument parsing, and the update approval/quiescence gate with synthetic values. They do not exercise Keychain access, SMAppService approval, a live server, or an installed app.
 
+For a workspace-only native UI or menu-bar icon change, run the package tests with the service smoke fixture disabled. In this environment SwiftPM needs the installed SwiftUI macro plugin paths and a populated private dependency cache:
+
+```sh
+env -u SCRATCHPAD_TEST_SERVICE \
+  DEVELOPER_DIR=/Library/Developer/CommandLineTools \
+  CLANG_MODULE_CACHE_PATH=/private/tmp/scratchpad-clang-module-cache \
+  SWIFTPM_MODULECACHE_OVERRIDE=/private/tmp/scratchpad-swift-module-cache \
+  swift test --disable-sandbox --package-path macos \
+    --scratch-path /private/tmp/scratchpad-native-policy-build \
+    -Xswiftc -load-plugin-library -Xswiftc /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins/libSwiftUIMacros.dylib \
+    -Xswiftc -load-plugin-library -Xswiftc /Library/Developer/CommandLineTools/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib
+```
+
+Leaving `SCRATCHPAD_TEST_SERVICE` unset makes the service smoke test return before spawning a process. This verifies compilation and portable policy tests only; it does not verify rendered menu appearance or launch the app.
+
 ## Assemble an app bundle
 
 Use a macOS host with the pinned SwiftPM dependencies, Go toolchain from `mcp/go.mod`, and the selected signing toolchain. The script builds the menu app, keychain helper, local service and stdio MCP binary, then assembles `Contents/MacOS`, `Contents/Helpers`, the Sparkle framework and the login-agent plist.
