@@ -196,6 +196,30 @@ func TestCollectorExecutableComesOnlyFromBundledSibling(t *testing.T) {
 	}
 }
 
+func TestCollectorEnvironmentPreservesSSHAgentWithSystemPath(t *testing.T) {
+	t.Setenv("PATH", "/private/tmp/synthetic-untrusted-bin")
+	t.Setenv("SSH_AUTH_SOCK", "/private/tmp/synthetic-agent.sock")
+	t.Setenv("DYLD_INSERT_LIBRARIES", "/private/tmp/synthetic-injection.dylib")
+
+	environment := make(map[string]string)
+	for _, entry := range collectorEnvironment() {
+		name, value, ok := strings.Cut(entry, "=")
+		if !ok {
+			t.Fatalf("invalid environment entry %q", entry)
+		}
+		environment[name] = value
+	}
+	if got := environment["SSH_AUTH_SOCK"]; got != "/private/tmp/synthetic-agent.sock" {
+		t.Fatalf("SSH agent socket was not preserved: %q", got)
+	}
+	if got := environment["PATH"]; got != collectorSystemPath {
+		t.Fatalf("collector PATH = %q, want fixed system path %q", got, collectorSystemPath)
+	}
+	if _, ok := environment["DYLD_INSERT_LIBRARIES"]; ok {
+		t.Fatal("unapproved dynamic-library environment was passed to collector")
+	}
+}
+
 func TestCollectorWaitIsBounded(t *testing.T) {
 	client := &fakeCollectorClient{err: localcapture.ErrServiceStoppedSentinel}
 	start := func(string) (<-chan error, error) { return nil, nil }

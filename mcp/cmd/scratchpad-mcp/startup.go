@@ -17,6 +17,7 @@ const (
 	collectorPollInterval   = 100 * time.Millisecond
 	collectorProbeTimeout   = 300 * time.Millisecond
 	collectorMaxStarts      = 3
+	collectorSystemPath     = "/usr/bin:/bin:/usr/sbin:/sbin"
 )
 
 type collectorStatusClient interface {
@@ -193,9 +194,12 @@ func verifyCollectorExecutable(path string) (string, error) {
 }
 
 func collectorEnvironment() []string {
-	var environment []string
-	for _, name := range []string{"HOME", "USER", "LOGNAME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR"} {
+	environment := []string{"PATH=" + collectorSystemPath}
+	for _, name := range []string{"HOME", "USER", "LOGNAME", "TMPDIR", "XDG_CONFIG_HOME", "XDG_RUNTIME_DIR", "SSH_AUTH_SOCK"} {
 		if value, ok := os.LookupEnv(name); ok {
+			if name == "SSH_AUTH_SOCK" && value == "" {
+				continue
+			}
 			environment = append(environment, name+"="+value)
 		}
 	}
