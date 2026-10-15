@@ -108,6 +108,8 @@ cp "$repo_root/macos/Resources/com.alexcatdad.scratchpad.service.plist" "$candid
 framework=$(find "$repo_root/macos/.build/artifacts" -type d -name Sparkle.framework -print -quit 2>/dev/null || true)
 test -n "$framework" || { echo "SwiftPM did not produce Sparkle.framework" >&2; exit 1; }
 ditto "$framework" "$candidate/Contents/Frameworks/Sparkle.framework"
+sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
+  "$candidate/Contents/MacOS/Scratchpad" "$repo_root" "$developer_dir"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$candidate/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"

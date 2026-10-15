@@ -46,12 +46,50 @@ if "$repo_root/macos/Scripts/package-app.sh" / >/dev/null 2>&1; then
 fi
 
 mkdir -p "$tmp/fake-bin"
+cat > "$tmp/fake-bin/otool" <<'SH'
+#!/bin/sh
+cat <<EOF
+Load command 1
+          cmd LC_RPATH
+      cmdsize 32
+         path /usr/lib/swift (offset 12)
+Load command 2
+          cmd LC_RPATH
+      cmdsize 32
+         path @loader_path (offset 12)
+Load command 3
+          cmd LC_RPATH
+      cmdsize 128
+         path $TEST_REPO_ROOT/macos/.build/out/Products/Debug/PackageFrameworks (offset 12)
+Load command 4
+          cmd LC_RPATH
+      cmdsize 80
+         path $TEST_DEVELOPER_DIR/usr/lib/swift-6.2/macosx (offset 12)
+EOF
+SH
+cat > "$tmp/fake-bin/install_name_tool" <<'SH'
+#!/bin/sh
+printf '%s\n' "$*" >> "$RPATH_LOG"
+SH
+chmod +x "$tmp/fake-bin/otool" "$tmp/fake-bin/install_name_tool"
+export PATH="$tmp/fake-bin:$PATH"
+export TEST_REPO_ROOT="$repo_root" TEST_DEVELOPER_DIR=/Library/Developer/CommandLineTools
+export RPATH_LOG="$tmp/rpath.log"
+sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
+  "$tmp/Scratchpad" "$TEST_REPO_ROOT" "$TEST_DEVELOPER_DIR"
+rg -q -F -- "-delete_rpath $TEST_REPO_ROOT/macos/.build/out/Products/Debug/PackageFrameworks $tmp/Scratchpad" "$RPATH_LOG"
+rg -q -F -- "-delete_rpath $TEST_DEVELOPER_DIR/usr/lib/swift-6.2/macosx $tmp/Scratchpad" "$RPATH_LOG"
+rg -q -F -- "-add_rpath @executable_path/../Frameworks $tmp/Scratchpad" "$RPATH_LOG"
+if rg -q -F -- '-delete_rpath /usr/lib/swift' "$RPATH_LOG" || rg -q -F -- '-delete_rpath @loader_path' "$RPATH_LOG"; then
+  echo "framework-rpath setup removed a non-development runtime path" >&2
+  exit 1
+fi
+
 cat > "$tmp/fake-bin/security" <<'SH'
 #!/bin/sh
 printf '  1) %s "%s"\n     1 valid identities found\n' "$PROFILE_CERT_SHA1" "$PROFILE_SIGNING_IDENTITY"
 SH
 chmod +x "$tmp/fake-bin/security"
-export PATH="$tmp/fake-bin:$PATH"
 synthetic_certificate='synthetic developer certificate bytes'
 synthetic_certificate_data=$(printf '%s' "$synthetic_certificate" | base64 | tr -d '\n')
 synthetic_certificate_hash=$(printf '%s' "$synthetic_certificate" | shasum -a 1 | awk '{print toupper($1)}')
@@ -164,4 +202,4 @@ if sh "$repo_root/macos/Scripts/create-keychain-helper-entitlements.sh" \
 fi
 test ! -e "$tmp/rejected-app-id.entitlements"
 
-echo "package script preserves prior output; signing preflight validates identity, profile scope, certificate, and expiry; Sparkle nested code signing covers Autoupdate and inner bundles"
+echo "package script preserves prior output; profile signing preflight and relocatable Sparkle RPATH are validated; nested signing covers Autoupdate and inner bundles"
