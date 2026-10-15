@@ -170,7 +170,24 @@ func run() error {
 	}
 	var saved state
 	if *phase == "service-unavailable" {
-		_, err := call(ctx, session, "record_finding", map[string]any{
+		data, err := os.ReadFile(*statePath)
+		if err != nil {
+			return fmt.Errorf("read prior capture state for central read assertion: %w", err)
+		}
+		if err = json.Unmarshal(data, &saved); err != nil {
+			return fmt.Errorf("load all eight prior captures for central read assertion: %w", err)
+		}
+		if len(saved.Captures) != 8 {
+			return errors.New("central read assertion requires all eight prior captures")
+		}
+		resumeContext, err := call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace})
+		if err != nil {
+			return fmt.Errorf("central read failed while local collector startup was unavailable: %w", err)
+		}
+		if err = verifyResumeContext(resumeContext, saved.Captures); err != nil {
+			return fmt.Errorf("central read omitted known captures while local collector startup was unavailable: %w", err)
+		}
+		_, err = call(ctx, session, "record_finding", map[string]any{
 			"projectId": "proj_unavailable_service", "requestId": "service-unavailable-no-fallback",
 			"title": "Synthetic unavailable-service proof", "authority": "observed", "confidence": "high",
 			"finding": "The MCP client must require durable local intake.",
@@ -178,7 +195,7 @@ func run() error {
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "service") {
 			return fmt.Errorf("capture did not fail clearly when local service was unavailable: %v", err)
 		}
-		fmt.Println("PASS service-unavailable: capture failed at local intake while central HTTP remained configured")
+		fmt.Println("PASS service-unavailable: central reads remained available and capture failed at local intake")
 		return nil
 	}
 	if *phase == "scope" {

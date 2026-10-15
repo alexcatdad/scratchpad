@@ -33,6 +33,16 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
+	helperDir := filepath.Join(dir, "Contents", "Helpers")
+	keyHelper := filepath.Join(helperDir, "scratchpad-keychain.app", "Contents", "MacOS", "scratchpad-keychain")
+	if err = os.MkdirAll(filepath.Dir(keyHelper), 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		panic(err)
+	}
+	if err = os.WriteFile(keyHelper, []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		panic(err)
+	}
 	binary = filepath.Join(dir, "scratchpad-server")
 	build := exec.Command("go", "build", "-race", "-o", binary, "./cmd/scratchpad-server")
 	build.Stdout, build.Stderr = os.Stdout, os.Stderr
@@ -40,7 +50,7 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}
-	mcpBinary, serviceBinary, integrationBinary = filepath.Join(dir, "scratchpad-mcp"), filepath.Join(dir, "scratchpad-service"), filepath.Join(dir, "integration")
+	mcpBinary, serviceBinary, integrationBinary = filepath.Join(helperDir, "scratchpad-mcp"), filepath.Join(helperDir, "scratchpad-service"), filepath.Join(dir, "integration")
 	for _, target := range []struct{ output, pkg string }{{mcpBinary, "./cmd/scratchpad-mcp"}, {serviceBinary, "./cmd/scratchpad-service"}, {integrationBinary, "./integration"}} {
 		build := exec.Command("go", "build", "-race", "-o", target.output, target.pkg)
 		build.Dir = "../mcp"
@@ -454,6 +464,14 @@ func TestRealMCPDurableServiceToScratchpadSQLiteRestartAndReceipts(t *testing.T)
 	statePath := filepath.Join(work, "captures.json")
 	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "capture", "")
 	assertStoredTrayCaptures(t, databasePath, 8, 8)
+	initialCaptureState, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStatePath := filepath.Join(work, "initial-captures-for-read.json")
+	if err = os.WriteFile(readStatePath, initialCaptureState, 0600); err != nil {
+		t.Fatal(err)
+	}
 	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "lost-response-capture", "")
 	if count := countRecords(t, databasePath); count != 10 {
 		t.Fatalf("lost-ack intake did not create exactly one central record: got %d", count)
@@ -509,10 +527,16 @@ func TestRealMCPDurableServiceToScratchpadSQLiteRestartAndReceipts(t *testing.T)
 	// A live central server must not become a direct-capture fallback when the
 	// local intake process is stopped.
 	stopService()
+	if _, err := os.Lstat(serviceSocket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("test service socket remained after shutdown: err=%v", err)
+	}
 	before := countRecords(t, databasePath)
-	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "service-unavailable", "")
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, readStatePath, "service-unavailable", "")
 	if after := countRecords(t, databasePath); after != before {
 		t.Fatalf("capture bypassed unavailable local service: record count %d -> %d", before, after)
+	}
+	if _, err := os.Lstat(serviceSocket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed MCP startup left a local service socket behind: err=%v", err)
 	}
 }
 
@@ -656,6 +680,29 @@ func runMCPPhase(t *testing.T, origin, socket, workspace, signingKey, statePath,
 	args := []string{"-url", origin, "-public-key", publicKey, "-signing-key", signingKey, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", socket, "-state", statePath, "-phase", phase}
 	args = append(args, extraArgs...)
 	command := exec.Command(integrationBinary, args...)
+	// MCP startup may launch its bundled sibling service when local intake is
+	// unavailable. Keep that service's default database and config under this
+	// disposable test tree, and do not expose the host SSH agent to it.
+	testHome := filepath.Join(filepath.Dir(statePath), "mcp-test-home")
+	if err := os.MkdirAll(testHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(testHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	environment := make([]string, 0, len(os.Environ())+3)
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == "HOME" || name == "XDG_CONFIG_HOME" || name == "SSH_AUTH_SOCK" {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	command.Env = append(environment,
+		"HOME="+testHome,
+		"XDG_CONFIG_HOME="+testHome,
+		"SSH_AUTH_SOCK=",
+	)
 	out, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("actual service/MCP/backend phase %s failed: %v %s", phase, err, out)
