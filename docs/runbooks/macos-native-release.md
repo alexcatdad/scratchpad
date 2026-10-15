@@ -4,11 +4,11 @@ This runbook describes reproducible local packaging and the checks required befo
 
 ## Declared v1 platform support
 
-| macOS | Architecture | v1 status | Evidence |
-| --- | --- | --- | --- |
+| macOS                | Architecture            | v1 status        | Evidence                                                                                                                      |
+| -------------------- | ----------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------- |
 | 13 Ventura and later | Apple Silicon (`arm64`) | Supported target | The package deployment target is macOS 13. `SMAppService` is available from macOS 13, and Go 1.27 requires macOS 13 or later. |
-| Any | Intel (`amd64`) | Deferred | No Intel build or acceptance lane is provided. |
-| Any | Linux | Deferred | The native menu app and its `SMAppService` login agent are macOS-only. |
+| Any                  | Intel (`amd64`)         | Deferred         | No Intel build or acceptance lane is provided.                                                                                |
+| Any                  | Linux                   | Deferred         | The native menu app and its `SMAppService` login agent are macOS-only.                                                        |
 
 Packaging currently builds on the host architecture: SwiftPM and `go build` use their default host targets, and the bundle does not combine architectures. Build distribution candidates on an Apple Silicon Mac; do not describe a host build as universal. The current native build/test evidence is from macOS 27.0.1 on `arm64`. Installed acceptance on the declared macOS 13 floor remains pending, so the supported floor is a declared compatibility target, not a claim of lower-bound runtime acceptance.
 

@@ -3,10 +3,10 @@ name: macOS local-capture acceptance
 on:
   pull_request:
     paths:
-      - 'macos/**'
-      - 'mcp/**'
-      - 'backend/**'
-      - '.github/workflows/macos-acceptance.yml'
+      - "macos/**"
+      - "mcp/**"
+      - "backend/**"
+      - ".github/workflows/macos-acceptance.yml"
   workflow_dispatch:
 
 permissions:

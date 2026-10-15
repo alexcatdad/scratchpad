@@ -642,13 +642,7 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   });
   command(
     "go",
-    [
-      ...args,
-      "-phase",
-      "projects",
-      "-restricted-project",
-      restrictedProject,
-    ],
+    [...args, "-phase", "projects", "-restricted-project", restrictedProject],
     resolve(root, "mcp"),
   );
   await restartOrRestore();
