@@ -1,0 +1,137 @@
+name: macOS local-capture acceptance
+
+on:
+  pull_request:
+    paths:
+      - 'macos/**'
+      - 'mcp/**'
+      - 'backend/**'
+      - '.github/workflows/macos-acceptance.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-acceptance-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  synthetic-local-capture:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: |
+            backend/go.sum
+            mcp/go.sum
+
+      - name: Build the isolated service fixture for Swift IPC tests
+        id: service-fixture
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/scratchpad-service-fixture-build.log"
+          if go -C mcp build -o "$RUNNER_TEMP/scratchpad-service-smoke" ./cmd/scratchpad-service >"$log" 2>&1; then
+            cat "$log"
+          else
+            cat "$log"
+            exit 1
+          fi
+          test -x "$RUNNER_TEMP/scratchpad-service-smoke"
+          echo "Built disposable test executable: $RUNNER_TEMP/scratchpad-service-smoke"
+
+      - name: Verify Swift package and real IPC against the explicit fixture
+        id: swift-tests
+        env:
+          SCRATCHPAD_TEST_SERVICE: ${{ runner.temp }}/scratchpad-service-smoke
+        run: |
+          set -euo pipefail
+          test -x "$SCRATCHPAD_TEST_SERVICE" || { echo "required synthetic service fixture is missing: $SCRATCHPAD_TEST_SERVICE" >&2; exit 1; }
+          log="$RUNNER_TEMP/swift-tests.log"
+          if swift test --package-path macos >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Verify dev bundle script isolation and helper rebuild
+        id: dev-app-tests
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/dev-app-tests.log"
+          if macos/Scripts/test-dev-app.sh >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Verify MCP collector startup and lifecycle
+        id: mcp-lifecycle
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/mcp-lifecycle-tests.log"
+          if go -C mcp test -race -count=1 -timeout 5m ./cmd/scratchpad-mcp >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Verify competing starts and persistent Stop
+        id: service-lifecycle
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/service-lifecycle-tests.log"
+          if go -C mcp test -race -count=1 -timeout 5m ./cmd/scratchpad-service >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Verify IPC socket cleanup and durable lifecycle controls
+        id: ipc-lifecycle
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/ipc-lifecycle-tests.log"
+          if go -C mcp test -race -count=1 -timeout 5m ./internal/localcapture -run '^(TestPauseStopExplicitStartAndDiscardControls|TestIPCServerCleanupDoesNotUnlinkReplacementSocket)$' >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Verify real MCP, collector, and SQLite backend boundary
+        id: backend-e2e
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/backend-local-capture-e2e.log"
+          if go -C backend test -race -count=1 -timeout 5m -run '^TestRealMCPDurableServiceToScratchpadSQLiteRestartAndReceipts$' . >"$log" 2>&1; then cat "$log"; else cat "$log"; exit 1; fi
+
+      - name: Summarize evidence and limitations
+        if: always()
+        env:
+          FIXTURE_RESULT: ${{ steps.service-fixture.outcome }}
+          SWIFT_RESULT: ${{ steps.swift-tests.outcome }}
+          DEV_APP_RESULT: ${{ steps.dev-app-tests.outcome }}
+          MCP_RESULT: ${{ steps.mcp-lifecycle.outcome }}
+          SERVICE_RESULT: ${{ steps.service-lifecycle.outcome }}
+          IPC_RESULT: ${{ steps.ipc-lifecycle.outcome }}
+          BACKEND_RESULT: ${{ steps.backend-e2e.outcome }}
+        run: |
+          {
+            echo '## macOS local-capture acceptance'
+            echo
+            echo 'Ephemeral runner: macos-15; repository permissions: contents: read.'
+            echo
+            echo '| Check | Result |'
+            echo '| --- | --- |'
+            echo "| Synthetic Swift IPC service fixture | $FIXTURE_RESULT |"
+            echo "| Swift package and service IPC | $SWIFT_RESULT |"
+            echo "| Dev bundle isolation/helper rebuild | $DEV_APP_RESULT |"
+            echo "| MCP collector startup | $MCP_RESULT |"
+            echo "| Collector competing starts and Stop | $SERVICE_RESULT |"
+            echo "| IPC socket and lifecycle controls | $IPC_RESULT |"
+            echo "| Real MCP → collector → SQLite backend test | $BACKEND_RESULT |"
+            echo
+            echo 'All exercised data, SSH keys, queue keys, databases, sockets, and HTTP listeners are synthetic and temporary.'
+            echo 'This unattended lane does not verify rendered UI, Keychain or login-item behavior, installed Codex/Claude operation, real server authentication, signing/notarization, or downloaded-update acceptance.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Retain synthetic acceptance logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: macos-local-capture-acceptance-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/scratchpad-service-fixture-build.log
+            ${{ runner.temp }}/swift-tests.log
+            ${{ runner.temp }}/dev-app-tests.log
+            ${{ runner.temp }}/mcp-lifecycle-tests.log
+            ${{ runner.temp }}/service-lifecycle-tests.log
+            ${{ runner.temp }}/ipc-lifecycle-tests.log
+            ${{ runner.temp }}/backend-local-capture-e2e.log
+          if-no-files-found: ignore

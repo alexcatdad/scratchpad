@@ -53,6 +53,22 @@ env -u SCRATCHPAD_TEST_SERVICE \
 
 Leaving `SCRATCHPAD_TEST_SERVICE` unset makes the service smoke test return before spawning a process. This verifies compilation and portable policy tests only; it does not verify rendered menu appearance or launch the app.
 
+The **macOS local-capture acceptance** workflow runs on relevant pull requests
+and on manual dispatch using an ephemeral `macos-15` runner. It builds an
+explicit disposable service fixture, runs the Swift IPC suite and focused Go
+collector lifecycle checks, then exercises the real MCP → collector → SQLite
+backend boundary. It records a workflow summary and retains test logs as an
+artifact. The fixture is mandatory for the Swift smoke; a missing binary fails
+the job instead of silently skipping that test.
+
+It also runs the synthetic dev-app script test, covering default UI-only
+replacement and the opt-in Go helper rebuild without launching a macOS app.
+
+This lane automates synthetic functional checks, not installed acceptance. It
+does not inspect rendered UI, access a real Keychain or login item, configure
+Codex or Claude, authenticate to a live server, or test signing, notarization,
+or downloaded updates.
+
 ## Assemble an app bundle
 
 Use a macOS host with the pinned SwiftPM dependencies, Go toolchain from `mcp/go.mod`, and the selected signing toolchain. The script builds the menu app, keychain helper, local service and stdio MCP binary, then assembles `Contents/MacOS`, `Contents/Helpers`, the Sparkle framework and the login-agent plist.
