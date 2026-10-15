@@ -169,7 +169,6 @@ func TestRealStdioFullResumptionSurvivesGoRestart(t *testing.T) {
 			}
 			var origin string
 			state := filepath.Join(t.TempDir(), "resume.json")
-			serviceBase := t.TempDir()
 			for _, phase := range []string{"capture", "verify"} {
 				t.Run(phase, func(t *testing.T) {
 					if origin == "" {
@@ -184,15 +183,7 @@ func TestRealStdioFullResumptionSurvivesGoRestart(t *testing.T) {
 					} else {
 						origin = startServer(t, path, databaseURL, strings.TrimPrefix(origin, "http://"))
 					}
-					var serviceSocket string
-					var stopService func()
-					if phase == "capture" {
-						serviceSocket, stopService = startConfiguredDurableService(t, origin, serviceBase, workspace, private, "SCRATCHPAD_MIRROR=true", "SCRATCHPAD_MIRROR_PATH=scratchpad/decisions.jsonl")
-					} else {
-						serviceSocket, stopService = startDurableServiceWithEnv(t, serviceBase, "SCRATCHPAD_MIRROR=true", "SCRATCHPAD_MIRROR_PATH=scratchpad/decisions.jsonl")
-					}
-					defer stopService()
-					cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", phase, "-state", state, "-mirror")
+					cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", phase, "-state", state, "-mirror")
 					cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "SCRATCHPAD_MIRROR_PATH=scratchpad/decisions.jsonl")
 					out, err := cmd.CombinedOutput()
 					if err != nil || !strings.Contains(string(out), "PASS "+phase) {

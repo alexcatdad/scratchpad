@@ -299,8 +299,6 @@ func TestRealStdioCapturesAllRecordTypesThroughGo(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			private, key := githubSyntheticKey(t)
 			enrollLocalSSH(t, origin, private, key, local)
-			serviceSocket, stopService := startConfiguredDurableService(t, origin, t.TempDir(), filepath.Dir(private), private)
-			defer stopService()
 			workspace := t.TempDir()
 			for _, args := range [][]string{{"init", "-q", "-b", "main", workspace}, {"-C", workspace, "remote", "add", "origin", "https://github.com/synthetic/capture.git"}, {"-C", workspace, "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "-c", "user.name=Synthetic", "-c", "user.email=synthetic@example.invalid", "commit", "-q", "--allow-empty", "-m", "Synthetic"}} {
 				cmd := exec.Command("git", args...)
@@ -309,7 +307,7 @@ func TestRealStdioCapturesAllRecordTypesThroughGo(t *testing.T) {
 					t.Fatal("synthetic Git fixture failed")
 				}
 			}
-			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "records", "-state", filepath.Join(t.TempDir(), "capture-state.json"))
+			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-phase", "records", "-state", filepath.Join(t.TempDir(), "capture-state.json"))
 			cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
 			out, err := cmd.CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "PASS records") || !strings.Contains(string(out), "lexical search") {

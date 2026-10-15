@@ -114,10 +114,7 @@ func TestRealStdioQuestionOnlyCaptureUsesGoBackend(t *testing.T) {
 				t.Fatal("project failed")
 			}
 			id := response["project"].(map[string]any)["id"].(string)
-			workspace := filepath.Dir(private)
-			serviceSocket, stopService := startConfiguredDurableService(t, origin, t.TempDir(), workspace, private)
-			defer stopService()
-			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "questions", "-project-id", id, "-state", filepath.Join(t.TempDir(), "questions.json"))
+			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-phase", "questions", "-project-id", id, "-state", filepath.Join(t.TempDir(), "questions.json"))
 			out, err := cmd.CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "PASS questions") {
 				t.Fatalf("real question capture failed: %v %s", err, out)
