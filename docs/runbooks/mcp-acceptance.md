@@ -28,6 +28,12 @@ go build -ldflags '-X main.version=0.1.0-test' -o /tmp/scratchpad-mcp-version-ch
 
 An ordinary local build reports `dev`; release tooling supplies the tag version. The MCP initialization response uses the same injected version.
 
+## Bundled macOS MCP and local collector
+
+The tray app bundles the MCP adapter and the shared local capture service. Starting the adapter attempts collector startup and readiness checks; the collector obtains singleton ownership before opening its durable capture queue, using ordinary startup so a persisted Stop remains in force. An ensure failure is reported to stderr while MCP remains available for online reads; capture reports local unavailability truthfully. The collector is independent of MCP client lifetime, so closing a client does not stop delivery. Only the tray's explicit Start action clears a persisted Stop.
+
+This integration applies to the bundled macOS app in this development branch. Standalone release packaging and acceptance are separate; published binaries retain their released behavior.
+
 ## Coverage and evidence boundaries
 
 | PRD requirement                                                                  | Evidence                                                                                                                     | What the check proves                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -68,6 +74,7 @@ See [the integration runbook](../../mcp/integration/README.md) for manually runn
 - MCP never commits or pushes a mirror. Central success and local mirror/report failures remain distinct.
 - Scenarios A–C require source-preserving retrieval and server-side interpretation of amendments/replacements. Clearly labeled synthetic histories are valid under PRD §43; real project histories are optional datasets. Passing MCP transport tests alone does not prove these behaviors.
 - Release publication, notarization, GHCR availability, Homebrew installation, and the actual production deployment are separate acceptance evidence; a local MCP build does not establish them.
+- This startup integration is limited to the bundled macOS app in this development branch; assess standalone release packaging separately.
 
 ## Validate an installed release without using an existing server
 

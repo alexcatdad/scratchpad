@@ -15,6 +15,7 @@ func TestSafeStartupMessagesClassifyWithoutDetails(t *testing.T) {
 	}{
 		{localcapture.ErrKeyUnavailableSentinel, "encrypted capture queue"},
 		{localcapture.ErrConflictSentinel, "another instance may be active"},
+		{errPersistentlyStopped, "saved lifecycle setting"},
 		{localcapture.ErrStorageFailedSentinel, "private capture storage"},
 		{errors.New("synthetic private path and key material"), "start or stopped safely"},
 	} {

@@ -153,6 +153,7 @@ type IPCServer struct {
 	Service        Service
 	SocketPath     string
 	listener       *net.UnixListener
+	socketInfo     os.FileInfo
 	mu             sync.Mutex
 	RequestTimeout time.Duration
 	ControlTimeout time.Duration
@@ -178,50 +179,42 @@ func DefaultSocketPath() string {
 }
 
 func ListenIPC(path string, svc Service) (*IPCServer, error) {
-	if path == "" {
-		path = DefaultSocketPath()
-	}
-	abs, err := filepath.Abs(path)
+	guard, err := AcquireStartupGuard(path)
 	if err != nil {
+		return nil, err
+	}
+	defer guard.Close()
+	if err = guard.Prepare(); err != nil {
+		return nil, err
+	}
+	return guard.ListenIPC(svc)
+}
+
+func (g *StartupGuard) ListenIPC(svc Service) (*IPCServer, error) {
+	if g == nil || g.closed || g.lockFile == nil {
 		return nil, ErrStorageFailedSentinel
 	}
-	dir := filepath.Dir(abs)
-	if err = os.MkdirAll(dir, 0700); err != nil {
-		return nil, ErrStorageFailedSentinel
+	if !g.prepared {
+		if err := g.Prepare(); err != nil {
+			return nil, err
+		}
 	}
-	if securePrivateDirectory(dir) != nil {
-		return nil, ErrStorageFailedSentinel
-	}
-	if fi, e := os.Lstat(abs); e == nil {
-		if fi.Mode()&os.ModeSymlink != 0 || fi.Mode()&os.ModeSocket == 0 || !ownedByCurrentUser(fi) {
-			return nil, ErrStorageFailedSentinel
-		}
-		c, e := net.DialTimeout("unix", abs, 200*time.Millisecond)
-		if e == nil {
-			c.Close()
-			return nil, ErrConflictSentinel
-		}
-		if !errors.Is(e, syscall.ECONNREFUSED) && !errors.Is(e, syscall.ENOENT) {
-			return nil, ErrStorageFailedSentinel
-		}
-		if e = os.Remove(abs); e != nil {
-			return nil, ErrStorageFailedSentinel
-		}
-	} else if !errors.Is(e, os.ErrNotExist) {
-		return nil, ErrStorageFailedSentinel
-	}
-	addr := &net.UnixAddr{Name: abs, Net: "unix"}
+	addr := &net.UnixAddr{Name: g.socketPath, Net: "unix"}
 	listener, err := net.ListenUnix("unix", addr)
 	if err != nil {
 		return nil, ErrStorageFailedSentinel
 	}
-	if err = os.Chmod(abs, 0600); err != nil {
+	if err = os.Chmod(g.socketPath, 0600); err != nil {
 		listener.Close()
-		os.Remove(abs)
+		return nil, ErrStorageFailedSentinel
+	}
+	socketInfo, err := os.Lstat(g.socketPath)
+	if err != nil || socketInfo.Mode()&os.ModeSocket == 0 || !ownedByCurrentUser(socketInfo) {
+		listener.Close()
 		return nil, ErrStorageFailedSentinel
 	}
 	listener.SetUnlinkOnClose(false)
-	return &IPCServer{Service: svc, SocketPath: abs, listener: listener, RequestTimeout: ipcDeadline, ControlTimeout: defaultControlTimeout}, nil
+	return &IPCServer{Service: svc, SocketPath: g.socketPath, listener: listener, socketInfo: socketInfo, RequestTimeout: ipcDeadline, ControlTimeout: defaultControlTimeout}, nil
 }
 
 func (s *IPCServer) Serve(ctx context.Context) error {
@@ -243,7 +236,7 @@ func (s *IPCServer) Serve(ctx context.Context) error {
 	}
 	wg.Wait()
 	_ = s.listener.Close()
-	_ = os.Remove(s.SocketPath)
+	s.unlinkOwnedSocket()
 	if ctx.Err() != nil {
 		return ctx.Err()
 	}
@@ -254,10 +247,23 @@ func (s *IPCServer) Close() error {
 	if s.listener != nil {
 		_ = s.listener.Close()
 	}
-	if s.SocketPath != "" {
+	s.unlinkOwnedSocket()
+	return nil
+}
+
+func (s *IPCServer) unlinkOwnedSocket() {
+	if s.SocketPath == "" || s.socketInfo == nil {
+		return
+	}
+	guard, err := AcquireStartupGuard(s.SocketPath)
+	if err != nil {
+		return
+	}
+	defer guard.Close()
+	current, err := os.Lstat(s.SocketPath)
+	if err == nil && os.SameFile(s.socketInfo, current) {
 		_ = os.Remove(s.SocketPath)
 	}
-	return nil
 }
 
 func (s *IPCServer) serveOne(conn *net.UnixConn) {

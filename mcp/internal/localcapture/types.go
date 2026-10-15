@@ -16,6 +16,9 @@ const (
 	FastConfirmWait           = time.Second
 	ReceiptRetention          = 30 * 24 * time.Hour
 	CapabilityClientSavedAtV1 = "clientSavedAt-v1"
+	// PersistentlyStoppedStartupExitCode is the service process exit status
+	// when ordinary startup observes the owner's saved Stop state.
+	PersistentlyStoppedStartupExitCode = 3
 )
 
 // Operation is one bounded request supported by the local service protocol.

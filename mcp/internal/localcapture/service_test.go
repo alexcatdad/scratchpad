@@ -1913,6 +1913,50 @@ func TestPrivateIPCStatusAndPause(t *testing.T) {
 	}
 }
 
+func TestIPCServerCleanupDoesNotUnlinkReplacementSocket(t *testing.T) {
+	path := filepath.Join(shortPrivateTempDir(t), "service.sock")
+	store, err := OpenStore(filepath.Join(t.TempDir(), "queue.sqlite"), &testKeys{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := NewRuntime(context.Background(), ServiceOptions{Store: store, Adapter: &testAdapter{}, DeferWorker: true})
+	if err != nil {
+		_ = store.Close()
+		t.Fatal(err)
+	}
+	defer runtime.Close()
+	server, err := ListenIPC(path, runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = server.listener.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err = os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	replacement.SetUnlinkOnClose(false)
+	defer replacement.Close()
+	before, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(server.socketInfo, before) {
+		t.Fatal("replacement socket unexpectedly reused the original inode")
+	}
+	if err = server.Close(); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Lstat(path)
+	if err != nil || !os.SameFile(before, after) {
+		t.Fatalf("old IPC server removed a replacement socket: before=%v after=%v err=%v", before, after, err)
+	}
+}
+
 func TestDefaultSocketPathIgnoresEnvironmentSpecificTempDirectory(t *testing.T) {
 	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "environment-specific-tmp"))
 	t.Setenv("XDG_RUNTIME_DIR", "")

@@ -23,6 +23,8 @@ scratchpad-mcp --version
 
 The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
 
+The bundled MCP startup behavior applies to this development branch's macOS tray app. Published v0.3.0 binaries retain their released behavior; this work does not change their packaging.
+
 ## Run with Docker
 
 The versioned image supports Linux ARM64 and AMD64:

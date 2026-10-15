@@ -35,18 +35,24 @@ Use an SSH authentication or signing key synchronized from the owner’s verifie
 | `SCRATCHPAD_MIRROR`         | `true` enables optional repository mirroring; default off                                  |
 | `SCRATCHPAD_MIRROR_PATH`    | Repository-relative mirror file; default `scratchpad/decisions.jsonl`                      |
 
-Launch and keep `scratchpad-service` running before using capture tools. An
-unavailable or stopped service causes capture to fail; the MCP never falls back
-to a direct capture request. Configure the service with the same server URL and
-credential references. Every project-scoped tool accepts `workingDirectory` to
-override the launch folder for that call; project and Git provenance are
-snapshotted per capture. No mutable current-project setting is shared between
-concurrent calls. Non-Git and ambiguous contexts require an explicit
-`projectId` or owner-confirmed `resolve_project` call. Git `origin` takes
-precedence; otherwise one unique fetch identity is required. Equivalent
-SSH/HTTPS remote forms and worktrees map to the same source identity.
-Credentials embedded in Git remotes are stripped from transmitted remote
-context.
+At MCP launch, `scratchpad-mcp` checks the private service socket and starts the
+bundled sibling `scratchpad-service` when it is absent. It waits up to 12 seconds
+for the collector and encrypted storage to become ready. If startup fails, MCP
+still serves central reads and reports the problem safely on stderr; capture
+continues to fail closed until the local service is available. Concurrent MCP
+clients converge on the same per-user service, and exiting a client does not
+stop it. Startup uses the ordinary service path, so a persistent Stop remains
+in effect and is never cleared by MCP. The owner must choose Start from the tray
+before captures can succeed. The MCP never falls back to a direct capture
+request. Configure the service with the same server URL and credential
+references. Every project-scoped tool accepts `workingDirectory` to override the
+launch folder for that call; project and Git provenance are snapshotted per
+capture. No mutable current-project setting is shared between concurrent calls.
+Non-Git and ambiguous contexts require an explicit `projectId` or
+owner-confirmed `resolve_project` call. Git `origin` takes precedence; otherwise
+one unique fetch identity is required. Equivalent SSH/HTTPS remote forms and
+worktrees map to the same source identity. Credentials embedded in Git remotes
+are stripped from transmitted remote context.
 
 Capture tools: `record_decision`, `record_adr`, `record_business_decision`, `record_finding`, `record_qa`, `record_failure`, `record_constraint`, `record_project_state`. Each takes common `title`, `authority`, `confidence`, and `requestId` fields alongside natural type-specific fields. Reuse the request ID and input for retries. A new intentional capture needs a new ID, even when text matches. The server generates readable content from payloads.
 

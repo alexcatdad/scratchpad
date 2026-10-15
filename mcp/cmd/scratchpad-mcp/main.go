@@ -25,17 +25,22 @@ func main() {
 		fmt.Printf("scratchpad-mcp %s (build %s)\n", version, buildNumber)
 		return
 	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	// Capture always goes through the durable per-user service. An explicitly
+	// configured socket is useful for tests and managed installs; blank uses the
+	// platform default. Attempt collector startup before serving MCP. A failure
+	// leaves central reads available; captures continue to fail closed.
+	socketPath := os.Getenv("SCRATCHPAD_SERVICE_SOCKET")
+	if err := ensureCollector(ctx, socketPath, launchCollector); err != nil {
+		fmt.Fprintln(os.Stderr, "Scratchpad local capture is unavailable; open the tray app to inspect service status.")
+	}
 	c, err := scratchpad.NewClient(scratchpad.Config{URL: os.Getenv("SCRATCHPAD_URL"), PublicKeyPath: os.Getenv("SCRATCHPAD_PUBLIC_KEY"), SigningKeyPath: os.Getenv("SCRATCHPAD_SIGNING_KEY"), Mirror: os.Getenv("SCRATCHPAD_MIRROR") == "true", MirrorPath: os.Getenv("SCRATCHPAD_MIRROR_PATH")})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	// Capture always goes through the durable per-user service. An explicitly
-	// configured socket is useful for tests and managed installs; blank uses the
-	// platform default. A missing service is reported by each capture tool.
-	c.CaptureService = localcapture.NewClient(os.Getenv("SCRATCHPAD_SERVICE_SOCKET"))
-	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	c.CaptureService = localcapture.NewClient(socketPath)
 	if err = scratchpad.NewServerWithVersion(c, version).Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

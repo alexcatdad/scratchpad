@@ -19,6 +19,7 @@ const keyIdentifier = "com.alexcatdad.scratchpad.capture-queue.v1"
 // Release builds inject these values with the same -X convention as scratchpad-mcp.
 var version = "dev"
 var buildNumber = "dev"
+var errPersistentlyStopped = errors.New("service is persistently stopped")
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--version" {
@@ -27,6 +28,9 @@ func main() {
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, safeStartupMessage(err))
+		if errors.Is(err, errPersistentlyStopped) {
+			os.Exit(localcapture.PersistentlyStoppedStartupExitCode)
+		}
 		os.Exit(1)
 	}
 }
@@ -39,6 +43,8 @@ func safeStartupMessage(err error) string {
 		return "Scratchpad local service could not unlock its encrypted capture queue."
 	case errors.Is(err, localcapture.ErrConflictSentinel):
 		return "Scratchpad local service could not acquire its socket; another instance may be active."
+	case errors.Is(err, errPersistentlyStopped):
+		return "Scratchpad local service is stopped by its saved lifecycle setting."
 	case errors.Is(err, localcapture.ErrStorageFailedSentinel):
 		return "Scratchpad local service could not open its private capture storage."
 	default:
@@ -71,6 +77,14 @@ func run() error {
 		fmt.Fprintln(os.Stdout, version)
 		return nil
 	}
+	startup, err := localcapture.AcquireStartupGuard(*socketPath)
+	if err != nil {
+		return err
+	}
+	defer startup.Close()
+	if err = startup.Prepare(); err != nil {
+		return err
+	}
 
 	store, err := localcapture.OpenStore(*dbPath, localcapture.HelperKeyProvider{Path: *helperPath, Identifier: *identifier})
 	if err != nil {
@@ -87,10 +101,15 @@ func run() error {
 	}
 	if runtime.InitiallyStopped() {
 		runtime.Close()
-		return nil
+		return errPersistentlyStopped
 	}
-	server, err := localcapture.ListenIPC(*socketPath, runtime)
+	server, err := startup.ListenIPC(runtime)
 	if err != nil {
+		runtime.Close()
+		return err
+	}
+	if err = startup.Close(); err != nil {
+		_ = server.Close()
 		runtime.Close()
 		return err
 	}
