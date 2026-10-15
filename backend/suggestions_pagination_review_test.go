@@ -16,7 +16,8 @@ func TestSuggestionPagesBoundReadableHistoryAndPreserveScopeOrdering(t *testing.
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			base := suggestionFixture(t, origin, "summary", map[string]any{"text": "Readable historical interpretation"})
-			driver, dsn := "sqlite", path
+			// The fixture writes beside the live server, so wait for its brief SQLite writes.
+			driver, dsn := "sqlite", "file:"+url.PathEscape(path)+"?_pragma=busy_timeout(5000)"
 			if engine == "postgres" {
 				driver, dsn = "pgx", databaseURL
 			}
