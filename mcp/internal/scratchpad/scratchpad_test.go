@@ -97,13 +97,15 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 			if _, ok := record["payload"]; !ok {
 				t.Error("missing payload")
 			}
-			fmt.Fprint(w, `{"record":{"id":"rec_one"},"mirror":{"eligible":false}}`)
+			record["id"] = "rec_one"
+			json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
 		default:
 			t.Errorf("unexpected %s", r.URL.Path)
 		}
 	}))
 	defer api.Close()
 	c, _ := NewClient(Config{URL: api.URL, WorkingDirectory: t.TempDir()})
+	attachFixtureCaptureService(c)
 	c.token = "test"
 	c.expires = time.Now().Add(time.Hour)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -120,7 +122,7 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 	}
 	defer cs.Close()
 	listed, err := cs.ListTools(ctx, nil)
-	if err != nil || len(listed.Tools) != 20 {
+	if err != nil || len(listed.Tools) != 21 {
 		t.Fatalf("tools %v %v", listed, err)
 	}
 	fields := map[string]map[string]any{"decision": {"decision": "Use SQLite"}, "adr": {"decision": "Use SQLite"}, "business_decision": {"decision": "Self hosted"}, "finding": {"finding": "Works"}, "qa": {"question": "Why?", "answer": "Because"}, "failure": {"observed": "Failed"}, "constraint": {"constraint": "English only"}, "project_state": {"state": "active"}}
@@ -290,7 +292,14 @@ func TestCaptureMirrorGatesAndPartialSuccess(t *testing.T) {
 				switch r.URL.Path {
 				case "/api/v1/records":
 					creates++
-					fmt.Fprintf(w, `{"record":{"id":"rec_mirror","type":"decision"},"mirror":{"eligible":%t}}`, tc.eligible)
+					var body map[string]any
+					if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+						t.Error(err)
+					}
+					record := body["record"].(map[string]any)
+					record["id"] = "rec_mirror"
+					record["type"] = "decision"
+					json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": tc.eligible}})
 				case "/api/v1/records/rec_mirror/mirror":
 					reports++
 					fmt.Fprint(w, `{}`)
@@ -300,6 +309,7 @@ func TestCaptureMirrorGatesAndPartialSuccess(t *testing.T) {
 			}))
 			defer api.Close()
 			c, _ := NewClient(Config{URL: api.URL, WorkingDirectory: dir, Mirror: tc.local, MirrorPath: tc.path})
+			attachFixtureCaptureService(c)
 			c.token = "test"
 			c.expires = time.Now().Add(time.Hour)
 			for range 2 {
@@ -343,6 +353,7 @@ func TestStdioProtocol(t *testing.T) {
 		if err != nil {
 			os.Exit(2)
 		}
+		attachFixtureCaptureService(c)
 		if os.Getenv("SCRATCHPAD_TEST_API_URL") != "" {
 			c.token = "synthetic-presence-token"
 			c.expires = time.Now().Add(time.Hour)
@@ -366,7 +377,7 @@ func TestStdioProtocol(t *testing.T) {
 	}
 	defer session.Close()
 	tools, err := session.ListTools(ctx, nil)
-	if err != nil || len(tools.Tools) != 20 {
+	if err != nil || len(tools.Tools) != 21 {
 		t.Fatalf("%v %v", tools, err)
 	}
 	for _, tool := range tools.Tools {

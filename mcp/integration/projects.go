@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -23,7 +22,8 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(fixture)
+	// Keep these disposable repositories under the workflow's temporary root so
+	// the restart phase can replay the exact original working-directory inputs.
 	git := func(dir string, args ...string) (string, error) {
 		command := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 		out, err := command.CombinedOutput()
@@ -51,8 +51,6 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 		if id == "" || projectID == "" {
 			return nil, errors.New("project scenario omitted record/project identity")
 		}
-		// Verification can replay captures after disposable worktree cleanup.
-		args["projectId"] = projectID
 		gitContext, _ := raw["gitContext"].(map[string]any)
 		captures = append(captures, capture{Tool: "record_decision", Arguments: args, RecordID: id, ProjectID: projectID, GitContext: gitContext})
 		return out, nil
@@ -94,9 +92,8 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 	}
 	// E: linked checkouts are the same project; per-call directory selection
 	// must retain their distinct branch, commit, root and worktree context.
-	if _, err = git(workspace, "-c", "user.name=Acceptance", "-c", "user.email=acceptance@example.com", "commit", "--allow-empty", "-m", "Disposable worktree baseline"); err != nil {
-		return nil, err
-	}
+	// The workflow creates its disposable baseline before initial captures so
+	// their Git provenance remains identical through the later restart replay.
 	branch, err := git(workspace, "symbolic-ref", "--short", "HEAD")
 	if err != nil {
 		return nil, err
@@ -113,7 +110,8 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 	if _, err = git(workspace, "worktree", "add", "-b", "acceptance-feature", worktree); err != nil {
 		return nil, err
 	}
-	defer func() { _, _ = git(workspace, "worktree", "remove", "--force", worktree) }()
+	// The parent workflow removes the entire temporary fixture after restart
+	// verification; retaining the linked checkout keeps retry provenance stable.
 	if _, err = git(worktree, "-c", "user.name=Acceptance", "-c", "user.email=acceptance@example.com", "commit", "--allow-empty", "-m", "Disposable feature revision"); err != nil {
 		return nil, err
 	}
@@ -148,22 +146,28 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 			return nil, fmt.Errorf("worktree identity/provenance mismatch: %v", out)
 		}
 	}
-	// F: lack of strong identity is explicit, then owner-confirmed resolution
-	// enables capture without inventing Git provenance or changing the folder.
+	// F: lack of strong identity is retained durably without inventing a project;
+	// an owner can resolve it later without changing the folder.
 	nonGit := filepath.Join(fixture, "non-git")
 	if err = os.Mkdir(nonGit, 0700); err != nil {
 		return nil, err
 	}
-	result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_decision", Arguments: map[string]any{"workingDirectory": nonGit, "requestId": "non-git-before-resolution", "title": "Non-Git identity", "decision": "Ask for project identity", "authority": "observed", "confidence": "high"}})
+	heldArguments := map[string]any{"workingDirectory": nonGit, "requestId": "non-git-before-resolution", "title": "Non-Git identity", "decision": "Ask for project identity", "authority": "observed", "confidence": "high"}
+	queued, err := call(ctx, session, "record_decision", heldArguments)
 	if err != nil {
 		return nil, err
 	}
-	encoded, err := json.Marshal(result)
-	if err != nil {
-		return nil, err
+	receipt, _ := queued["receipt"].(map[string]any)
+	content, _ := receipt["content"].(map[string]any)
+	scope, _ := content["scope"].(map[string]any)
+	if queued["outcome"] != "saved_pending" || receipt["state"] != "needs_selection" || receipt["centralRecordId"] != nil || receipt["centralProjectId"] != nil || scope["workingDirectory"] != nonGit {
+		return nil, fmt.Errorf("non-Git capture was not held for owner selection: %v", queued)
 	}
-	if !result.IsError || !strings.Contains(string(encoded), "PROJECT_IDENTITY_REQUIRED") {
-		return nil, fmt.Errorf("non-Git weak identity was not rejected: %s", encoded)
+	captures = append(captures, capture{Tool: "record_decision", Arguments: heldArguments, ReceiptID: fmt.Sprint(receipt["receiptId"]), NeedsSelection: true})
+	heldReplay, err := call(ctx, session, "record_decision", heldArguments)
+	heldReplayReceipt, _ := heldReplay["receipt"].(map[string]any)
+	if err != nil || heldReplay["outcome"] != "saved_pending" || heldReplayReceipt["receiptId"] != receipt["receiptId"] || heldReplayReceipt["state"] != "needs_selection" {
+		return nil, fmt.Errorf("unchanged non-Git capture replay changed its receipt: %v %v", heldReplay, err)
 	}
 	resolved, err := call(ctx, session, "resolve_project", map[string]any{"workingDirectory": nonGit, "name": "Owner confirmed non-Git " + filepath.Base(fixture)})
 	if err != nil {
@@ -183,6 +187,9 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 		return nil, errors.New("non-Git central-only capture changed its folder")
 	}
 	for _, saved := range captures {
+		if saved.NeedsSelection {
+			continue
+		}
 		retried, err := call(ctx, session, saved.Tool, saved.Arguments)
 		if err != nil {
 			return nil, err

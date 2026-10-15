@@ -85,6 +85,7 @@ func run() error {
 	signingKey := flag.String("signing-key", "", "Disposable local signing key (or use SSH agent)")
 	workspace := flag.String("workspace", "", "Disposable Git checkout with one remote")
 	binary := flag.String("binary", "", "Built scratchpad-mcp executable")
+	serviceSocket := flag.String("service-socket", "", "Private durable capture service socket")
 	agents := flag.Int("agents", 4, "Independent concurrent MCP processes")
 	rounds := flag.Int("rounds", 20, "Sequential workload rounds per agent")
 	seedRecords := flag.Int("seed-records", 100, "Synthetic history before measured rounds")
@@ -144,7 +145,7 @@ func run() error {
 	for range *agents {
 		command := exec.CommandContext(ctx, absBinary)
 		command.Dir = absWorkspace
-		command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*serverURL, "SCRATCHPAD_PUBLIC_KEY="+*publicKey, "SCRATCHPAD_SIGNING_KEY="+*signingKey, "SCRATCHPAD_MIRROR=false")
+		command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*serverURL, "SCRATCHPAD_PUBLIC_KEY="+*publicKey, "SCRATCHPAD_SIGNING_KEY="+*signingKey, "SCRATCHPAD_SERVICE_SOCKET="+*serviceSocket, "SCRATCHPAD_MIRROR=false")
 		session, err := mcp.NewClient(&mcp.Implementation{Name: "scratchpad-benchmark", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 		if err != nil {
 			return errors.New("cannot initialize real stdio MCP")

@@ -19,19 +19,23 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alexcatdad/scratchpad/mcp/internal/localcapture"
 	"golang.org/x/net/idna"
 )
 
 type Config struct {
-	URL, PublicKeyPath, SigningKeyPath, WorkingDirectory, MirrorPath string
-	Mirror                                                           bool
+	URL, PublicKeyPath, SigningKeyPath, WorkingDirectory, MirrorPath, ServiceSocketPath string
+	Mirror                                                                              bool
 }
 type Client struct {
-	Config  Config
-	HTTP    *http.Client
-	mu      sync.Mutex
-	token   string
-	expires time.Time
+	Config              Config
+	HTTP                *http.Client
+	CaptureService      localcapture.Service
+	mu                  sync.Mutex
+	token               string
+	expires             time.Time
+	credentialID        string
+	captureCapabilities []string
 }
 type APIError struct {
 	Code    string `json:"code"`
@@ -204,8 +208,10 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 		return "", fmt.Errorf("sign challenge (unlock your SSH agent/key): %w", err)
 	}
 	var session struct {
-		Token   string    `json:"accessToken"`
-		Expires time.Time `json:"expiresAt"`
+		Token               string    `json:"accessToken"`
+		Expires             time.Time `json:"expiresAt"`
+		CredentialID        string    `json:"credentialId"`
+		CaptureCapabilities []string  `json:"captureCapabilities"`
 	}
 	if err = c.raw(ctx, "POST", "/auth/mcp/verify", map[string]string{"challengeId": challenge.ChallengeID, "publicKey": strings.TrimSpace(string(pub)), "signature": string(signature)}, "", "", &session); err != nil {
 		return "", err
@@ -215,7 +221,29 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	}
 	c.token = session.Token
 	c.expires = session.Expires
+	c.credentialID = session.CredentialID
+	c.captureCapabilities = session.CaptureCapabilities
 	return c.token, nil
+}
+
+// AuthenticateIdentity performs a fresh SSH proof and returns the server's
+// credential ID for durable retry binding. It deliberately does not reuse the
+// ordinary MCP process token cache.
+func (c *Client) AuthenticateIdentity(ctx context.Context) (string, []string, error) {
+	c.mu.Lock()
+	c.token = ""
+	c.credentialID = ""
+	c.captureCapabilities = nil
+	c.mu.Unlock()
+	if _, err := c.authenticate(ctx); err != nil {
+		return "", nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.credentialID == "" {
+		return "", nil, &APIError{Code: "SERVER_INCOMPATIBLE", Message: "Scratchpad server did not confirm the authenticated credential identity."}
+	}
+	return c.credentialID, append([]string(nil), c.captureCapabilities...), nil
 }
 func (c *Client) request(ctx context.Context, method, path string, body any, key string, out any) error {
 	return c.requestWithHTTP(ctx, c.HTTP, method, path, body, key, out)

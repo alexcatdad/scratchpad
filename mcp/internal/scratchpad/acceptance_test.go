@@ -109,6 +109,7 @@ func acceptanceSession(t *testing.T, dir string, mirror bool) (*mcp.ClientSessio
 	if err != nil {
 		t.Fatal(err)
 	}
+	attachFixtureCaptureService(c)
 	c.token = "fixture-session"
 	c.expires = time.Now().Add(time.Hour)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -133,7 +134,8 @@ func acceptanceCall(t *testing.T, s *mcp.ClientSession, name string, args map[st
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Fatalf("%s failed: %+v", name, result)
+		data, _ := json.Marshal(result)
+		t.Fatalf("%s failed: %s", name, data)
 	}
 	data, err := json.Marshal(result.StructuredContent)
 	if err != nil {

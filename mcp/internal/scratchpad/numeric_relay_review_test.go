@@ -17,7 +17,18 @@ func TestStdioRelayPreservesExactAPINumericalEvidence(t *testing.T) {
 		case r.URL.Path == "/api/v1/records/rec_number":
 			fmt.Fprint(w, `{"record":`+record+`}`)
 		case r.URL.Path == "/api/v1/records" && r.Method == "POST":
-			fmt.Fprint(w, `{"record":`+record+`,"mirror":{"eligible":false}}`)
+			var request map[string]any
+			if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+				t.Error(err)
+			}
+			var central map[string]any
+			decoder := json.NewDecoder(strings.NewReader(record))
+			decoder.UseNumber()
+			if err := decoder.Decode(&central); err != nil {
+				t.Error(err)
+			}
+			central["clientSavedAt"] = request["record"].(map[string]any)["clientSavedAt"]
+			json.NewEncoder(w).Encode(map[string]any{"record": central, "mirror": map[string]any{"eligible": false}})
 		case r.URL.Path == "/api/v1/records":
 			fmt.Fprint(w, `{"records":[`+record+`],"nextCursor":null}`)
 		case r.URL.Path == "/api/v1/projects/proj_number/context":
@@ -96,19 +107,27 @@ func TestStdioCaptureRetainsOutputSchemaAndRejectsMalformedEnvelope(t *testing.T
 			AdditionalProperties *bool                     `json:"additionalProperties"`
 			Properties           map[string]map[string]any `json:"properties"`
 		}
-		if json.Unmarshal(raw, &schema) != nil || schema.Type != "object" || schema.AdditionalProperties == nil || *schema.AdditionalProperties || len(schema.Required) != 3 || len(schema.Properties) != 3 {
+		if json.Unmarshal(raw, &schema) != nil || schema.Type != "object" || schema.AdditionalProperties == nil || *schema.AdditionalProperties || len(schema.Required) != 2 || len(schema.Properties) != 7 {
 			t.Fatalf("capture output schema changed: %s", raw)
 		}
-		for _, name := range []string{"project", "record", "mirror"} {
-			if schema.Properties[name]["type"] != "object" {
-				t.Fatalf("capture output property lost its object contract: %s", name)
-			}
+		for _, name := range []string{"outcome", "receipt"} {
 			found := false
 			for _, required := range schema.Required {
 				found = found || required == name
 			}
 			if !found {
-				t.Fatalf("capture output property is no longer required: %s", name)
+				t.Fatalf("capture output is missing required field: %s", name)
+			}
+		}
+		for _, name := range []string{"project", "record", "mirror", "receipt", "centralRecordId", "centralProjectId"} {
+			if name == "centralRecordId" || name == "centralProjectId" {
+				if schema.Properties[name]["type"] != "string" {
+					t.Fatalf("capture output property lost its identity contract: %s", name)
+				}
+				continue
+			}
+			if schema.Properties[name]["type"] != "object" {
+				t.Fatalf("capture output property lost its object contract: %s", name)
 			}
 		}
 	}
