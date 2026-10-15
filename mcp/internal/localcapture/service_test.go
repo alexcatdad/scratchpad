@@ -1932,9 +1932,11 @@ func TestIPCServerCleanupDoesNotUnlinkReplacementSocket(t *testing.T) {
 	if err = server.listener.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.Remove(path); err != nil {
+	reservedOriginalPath := path + ".original"
+	if err = os.Rename(path, reservedOriginalPath); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() { _ = os.Remove(reservedOriginalPath) })
 	replacement, err := net.ListenUnix("unix", &net.UnixAddr{Name: path, Net: "unix"})
 	if err != nil {
 		t.Fatal(err)
