@@ -1685,6 +1685,20 @@ Semantic search retains the same HTTP interface and consent/compatibility behavi
 
 The OpenAPI contract drives deterministic TypeScript and Go client generation. Follow the API client runbook for generation, compilation, package consumption and actual authenticated integration checks. Generated clients preserve the central API's authentication, optimistic concurrency, typed errors and explicit project scope.
 
+## Accepted clarification: durable client capture timestamps
+
+Successful MCP proof verification returns the authenticated `credentialId` and
+`captureCapabilities`. The currently supported capture capability is
+`clientSavedAt-v1`; clients use it to determine whether an optional
+`clientSavedAt` timestamp can be sent with a capture. The timestamp is the
+client-observed time the capture was durably accepted locally. It must be an
+RFC 3339 date-time with an offset, is preserved on the immutable record and in
+native export/import, and participates in durable retry identity. A replay with
+the same request identity but a different timestamp conflicts. Older callers
+may omit it; the server never invents it. Server-owned `recordedAt` continues
+to identify central acceptance. This field is stored within the existing record
+entity and requires no schema migration.
+
 ## 68. GitHub owner-access authorization
 
 The accepted [GitHub owner-access ADR](adr/0001-github-owner-access.md) expands authentication beyond the historical presentation-only profile interface in §67. Public `/profile/github` snapshots remain descriptive; verified owner binding is separate and cannot be created by submitting a username.

@@ -115,7 +115,18 @@ func TestCaptureClientSavedAtValidation(t *testing.T) {
 	origin := startServer(t, path, databaseURL)
 	_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Timestamp validation"}, restoredToken)
 	projectID := project["project"].(map[string]any)["id"].(string)
-	for _, invalid := range []any{"yesterday", "2026-10-15T08:09:10", float64(42), nil} {
+	for _, invalid := range []any{
+		"yesterday",
+		"2026-10-15T08:09:10",
+		"2026-10-15T08:09:10+02:60",
+		"2026-10-15T08:09:10+24:00",
+		"2026-10-15T08:09:10,123+02:00",
+		"2026-10-15T24:09:10Z",
+		"2026-10-15T08:09:60Z",
+		"2026-02-30T08:09:10Z",
+		float64(42),
+		nil,
+	} {
 		record := map[string]any{"type": "finding", "title": "Invalid local time", "authority": "observed", "clientSavedAt": invalid, "payload": map[string]any{"finding": "Synthetic invalid timestamp."}}
 		status, _ := captureRequest(t, origin, projectID, "", record)
 		if status != http.StatusBadRequest {
@@ -128,6 +139,11 @@ func TestCaptureClientSavedAtValidation(t *testing.T) {
 	}
 	if _, exists := saved["record"].(map[string]any)["clientSavedAt"]; exists {
 		t.Fatal("server invented a client save timestamp for an older caller")
+	}
+	clientSavedAt := "2026-10-15T08:09:10.123456789123+23:59"
+	status, saved = captureRequest(t, origin, projectID, "", map[string]any{"type": "finding", "title": "Valid offset boundary", "authority": "observed", "clientSavedAt": clientSavedAt, "payload": map[string]any{"finding": "The upper supported offset and long fractional precision remain valid."}})
+	if status != http.StatusCreated || saved["record"].(map[string]any)["clientSavedAt"] != clientSavedAt {
+		t.Fatal("valid RFC 3339 offset timestamp was rejected or rewritten")
 	}
 }
 

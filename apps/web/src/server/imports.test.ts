@@ -513,6 +513,54 @@ describe("current context and live policy", () => {
 });
 
 describe("native archive integrity", () => {
+  it("rejects invalid client timestamp offsets atomically and preserves valid bounds", async () => {
+    const source = await fixture();
+    await source.call("/records", "POST", {
+      projectId: "project",
+      record: {
+        type: "finding",
+        title: "Synthetic timestamp",
+        authority: "observed",
+        clientSavedAt: "2026-10-15T08:09:10Z",
+        payload: { finding: "Timestamp validation." },
+      },
+    });
+    const exported = (await source.call("/export", "POST", {})).data;
+    const freshStore = () => {
+      const api = createApi({
+        databasePath: ":memory:",
+        origin: "http://localhost:3000",
+      });
+      cleanup.push(() => api.close());
+      return api;
+    };
+    for (const value of [
+      "2026-10-15T08:09:10+02:60",
+      "2026-10-15T08:09:10+24:00",
+      "2026-10-15T08:09:10,123+02:00",
+      "2026-10-15T24:09:10Z",
+      "2026-02-30T08:09:10Z",
+    ]) {
+      const destination = freshStore();
+      const invalid = structuredClone(exported);
+      invalid.data.record[0].clientSavedAt = value;
+      await expect(
+        importNative(destination.store, invalid, actor),
+      ).rejects.toMatchObject({ name: "ZodError" });
+      expect(await destination.store.list("project")).toHaveLength(0);
+      expect(await destination.store.list("record")).toHaveLength(0);
+    }
+
+    const destination = freshStore();
+    const valid = structuredClone(exported);
+    const value = "2026-10-15T08:09:10.123456789123+23:59";
+    valid.data.record[0].clientSavedAt = value;
+    await importNative(destination.store, valid, actor);
+    expect((await destination.store.list("record"))[0].clientSavedAt).toBe(
+      value,
+    );
+  });
+
   it("revalidates matching invalid historical artifacts before committing other archive rows", async () => {
     const source = await fixture();
     const capture = {
