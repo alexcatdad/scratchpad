@@ -6,6 +6,7 @@ struct ScratchpadApp: App {
     @StateObject private var model = AppModel()
     @StateObject private var updates = UpdateCoordinator()
     @Environment(\.openWindow) private var openWindow
+    private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL)
 
     var body: some Scene {
         MenuBarExtra {
@@ -14,12 +15,17 @@ struct ScratchpadApp: App {
                 .environmentObject(updates)
                 .onAppear { model.refresh() }
         } label: {
-            Image("ScratchpadTrayIcon", bundle: .main)
-                .renderingMode(.template)
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 18, height: 18)
-                .accessibilityLabel("Scratchpad")
+            if let image = trayIcon {
+                Image(nsImage: image)
+                    .renderingMode(.template)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 18, height: 18)
+                    .accessibilityLabel("Scratchpad")
+            } else {
+                Image(systemName: "pawprint.fill")
+                    .accessibilityLabel("Scratchpad")
+            }
         }
         .menuBarExtraStyle(.window)
 
