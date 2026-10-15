@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
+import { startDurableMcpService } from "./durable-mcp-service";
 import { createWorkflowHarness, root } from "./workflow-harness";
 
 test("concurrent agents retain captures and retries through restart and report the workload", async ({
@@ -19,6 +20,7 @@ test("concurrent agents retain captures and retries through restart and report t
   const databaseName = `scratchpad_baseline_${randomUUID().replaceAll("-", "")}`;
   let databaseAdmin: ReturnType<typeof postgres> | undefined;
   let databaseCreated = false;
+  let stopDurableMcpService: (() => Promise<void>) | undefined;
   try {
     if (harness.postgresMode) {
       databaseAdmin = postgres(harness.environment.SCRATCHPAD_DATABASE_URL, {
@@ -111,6 +113,17 @@ test("concurrent agents retain captures and retries through restart and report t
       ["build", "-o", workloadBinary, "./benchmark"],
       resolve(root, "mcp"),
     );
+    const durableService = await startDurableMcpService({
+      environment: harness.environment,
+      origin: harness.origin,
+      publicKey: `${key}.pub`,
+      signingKey: key,
+      workspace,
+      binary,
+      statePath: resolve(harness.temporary, "benchmark-state.json"),
+      temporary: harness.temporary,
+    });
+    stopDurableMcpService = durableService.stop;
     let workloadOutput: string;
     let workloadFailure: unknown;
     try {
@@ -127,6 +140,8 @@ test("concurrent agents retain captures and retries through restart and report t
           workspace,
           "-binary",
           binary,
+          "-service-socket",
+          durableService.socketPath,
           "-agents",
           String(agents),
           "-rounds",
@@ -231,6 +246,7 @@ test("concurrent agents retain captures and retries through restart and report t
     expect(after).toEqual(before);
   } finally {
     try {
+      await stopDurableMcpService?.();
       await harness.stop();
       harness.cleanupDocker();
       rmSync(harness.temporary, { recursive: true, force: true });

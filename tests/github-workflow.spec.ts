@@ -7,6 +7,7 @@ import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
 import { createApi } from "../apps/web/src/server/api";
+import { startDurableMcpService } from "./durable-mcp-service";
 import { createWorkflowHarness, root } from "./workflow-harness";
 
 const { cleanupDocker, command, start, stop, temporary } =
@@ -21,6 +22,7 @@ let published = true;
 let api: ReturnType<typeof createApi>;
 let proxy: Server;
 const key = resolve(temporary, "github-identity");
+let stopDurableMcpService: (() => Promise<void>) | undefined;
 let publicKey: string;
 let extraPublicKey: string | undefined;
 let account = { id: 987654321, login: "synthetic-owner", type: "User" };
@@ -114,6 +116,7 @@ test.beforeAll(async () => {
   await new Promise<void>((done) => proxy.listen(3102, done));
 });
 test.afterAll(async () => {
+  await stopDurableMcpService?.();
   if (proxy) await new Promise<void>((done) => proxy.close(() => done()));
   await api?.close();
   if (databaseAdmin) {
@@ -280,9 +283,23 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
     workspace,
     "-binary",
     binary,
+    "-service-socket",
+    "",
     "-state",
     resolve(temporary, "github-mcp-state.json"),
   ];
+  const durableService = await startDurableMcpService({
+    environment: process.env,
+    origin,
+    publicKey: `${key}.pub`,
+    signingKey: key,
+    workspace,
+    binary,
+    statePath: resolve(temporary, "github-mcp-state.json"),
+    temporary,
+  });
+  stopDurableMcpService = durableService.stop;
+  args[args.indexOf("-service-socket") + 1] = durableService.socketPath;
   expect(await realMcp([...args, "-phase", "capture"])).toContain(
     "PASS capture",
   );
