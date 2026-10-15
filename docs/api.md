@@ -907,11 +907,13 @@ Response:
 ```json
 {
   "accessToken": "...",
-  "expiresAt": "..."
+  "expiresAt": "...",
+  "credentialId": "credential_...",
+  "captureCapabilities": ["clientSavedAt-v1"]
 }
 ```
 
-The exact token format may be opaque rather than JWT.
+`credentialId` identifies the credential that completed this proof. Clients use `captureCapabilities` to confirm that the server preserves the client save timestamp before submitting deferred captures; a missing capability means the client must retain the capture locally. The exact token format may be opaque rather than JWT.
 
 ---
 
@@ -1392,6 +1394,8 @@ This prevents an agent retry from creating duplicate raw records after network u
 
 Idempotency state must be persisted.
 
+For `POST /api/v1/records`, `record.clientSavedAt` is an optional RFC 3339 timestamp supplied by a client that durably accepted the capture before delivery. The server preserves the exact value in the immutable record and in native export/import. It is provenance only: `recordedAt` remains assigned by the server when the central capture commits, and `happenedAt` continues to describe when the recorded event occurred. Omitting `clientSavedAt` preserves compatibility with older callers and records. It participates in the persisted idempotency identity, so replaying the same request preserves the original record while changing this timestamp with the same key returns `CONFLICT`.
+
 ---
 
 ## 54. Concurrency
@@ -1459,20 +1463,18 @@ Typical write:
 ```text
 Agent calls record_finding
         ↓
-MCP inspects repo
+MCP snapshots repo and per-call mirror consent
         ↓
-MCP resolves project
+MCP submits immutable capture to local service
         ↓
-MCP authenticates if token expired
-        ↓
-POST /records
+service stores encrypted receipt, then authenticates and delivers centrally
         ↓
 central record persisted
         ↓
-if project/settings permit:
-MCP mirrors to repo
+if saved consent and project settings permit:
+service delivery adapter mirrors to repo
         ↓
-MCP reports result to agent
+MCP returns durable receipt and separate mirror outcome
 ```
 
 ---
@@ -1571,9 +1573,9 @@ Persisted idempotency state and an explicit revision precondition must support t
 
 ## 64. Accepted clarification — mirror outcome contract
 
-Per decision `scratchpad-20260929-015`, repository mirroring requires both local MCP enablement and project permission, with `decision`, `adr`, and `business_decision` eligible by default. Persist the central record before any mirror append. Return the central record identity even if mirroring fails, with an explicit partial-success outcome. Retrying must not duplicate central or local records.
+Per decision `scratchpad-20260929-015`, repository mirroring requires per-capture local MCP consent and project permission, with `decision`, `adr`, and `business_decision` eligible by default. The MCP snapshots the working directory, Git context and mirror consent into the durable service request. The service delivery adapter persists centrally before any mirror append and performs the repository write against that saved checkout scope. Return the central record identity even if mirroring fails, with an explicit partial-success outcome. Retrying must not duplicate central or local records.
 
-The MCP reports mirror outcome for its local capture/checkout; the exact reporting endpoint and append coordination remain implementation details. This is not browser-to-repository synchronization, and no automatic Git commit or push is authorized by mirroring.
+The MCP reports the service's mirror outcome for the original capture/checkout. This is not browser-to-repository synchronization, and no automatic Git commit or push is authorized by mirroring.
 
 ## 65. MVP implementation extensions
 
@@ -1886,3 +1888,16 @@ or explicit scope, requires explicit cross-project intent, and forwards query,
 current/history intent and bounded response limits. Invalid explicit limits are
 rejected rather than omitted. The tool returns server citations and uncertainty
 without promoting scores or historical records into accepted policy.
+
+## Go replacement addition: durable tray capture receipts
+
+The bundled stdio MCP sends all eight `record_*` capture tools through the
+private local capture service. `saved_pending` confirms local durable intake
+only: its receipt has no central record or project IDs. `delivered` confirms
+central persistence and includes the durable receipt plus `centralRecordId` and
+`centralProjectId`. Full `record` and `project` objects are optional because a
+service restart can retain delivery state without retaining its transient HTTP
+response; use `get_capture_receipt` for delivery state and `get_record` for the
+central record. MCP text and structured output share this contract. The MCP
+does not fall back to direct central capture when the local service is
+unavailable.

@@ -539,16 +539,26 @@ The Scratchpad MCP is a local **stdio MCP server written in Go**.
 
 Its responsibilities are intentionally narrow:
 
-1. receive MCP tool calls;
-2. inspect the local development environment;
-3. determine project context;
-4. collect Git provenance;
-5. authenticate to Scratchpad;
-6. call the central HTTP API;
-7. optionally write eligible records into the local repository;
-8. return results to the agent.
+1. receive MCP tool calls and snapshot project/Git context for that call;
+2. hand every capture to the private local capture service before acknowledging it;
+3. return a truthful durable outcome after local intake: a pending receipt or a confirmed delivered receipt. If the service is stopped or local intake is unavailable, return an explicit error without claiming the capture was saved;
+4. read and search the central HTTP API, and route non-capture operations online;
+5. pass per-call Git context and mirror consent to the local service, then report its durable receipt and separate mirror outcome.
 
-Business logic belongs to the Scratchpad API, not the MCP binary.
+The service stores immutable capture input, request identity, original client save
+time, per-call checkout context, mirror consent and retry state in owner-private
+encrypted local storage. Its delivery adapter performs repository mirroring
+after central persistence. The central API remains authoritative;
+the local queue is not a second searchable memory store. A pending receipt has
+no central record ID. A delivered receipt retains central record/project IDs
+even when a restart means the full response object is no longer available.
+Central delivery requires successful authenticated verification that advertises
+`clientSavedAt-v1`; an older or unreachable server leaves the durably saved
+capture pending rather than accepting it without its original save time. Local
+intake does not require network access or prior authentication. Explicit tray
+verification also performs an authenticated `GET /projects` read using the
+verified session; periodic health probes remain authentication-only. There is
+no direct HTTP fallback when local intake is unavailable or stopped.
 
 ---
 
@@ -559,9 +569,9 @@ Local MCP configuration should remain minimal.
 Required configuration:
 
 ```text
-API endpoint
-authentication identity/configuration
-dual-write enabled/disabled
+local service socket (platform default unless overridden)
+Scratchpad API endpoint and SSH credential references for the service
+optional repository mirroring policy
 ```
 
 Project IDs are not normally configured.
