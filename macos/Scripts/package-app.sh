@@ -84,7 +84,7 @@ if [ -n "${SIGNING_IDENTITY:-}" ]; then
     exit 1
   }
   sh "$repo_root/macos/Scripts/create-keychain-helper-entitlements.sh" \
-    "$stage_root/keychain-profile.plist" "$KEYCHAIN_ACCESS_GROUP" "$stage_root/keychain-access.entitlements"
+    "$stage_root/keychain-profile.plist" "$SIGNING_IDENTITY" "$KEYCHAIN_ACCESS_GROUP" "$stage_root/keychain-access.entitlements"
   profile_team=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$stage_root/keychain-profile.plist")
 fi
 
@@ -128,10 +128,8 @@ if [ -n "${SIGNING_IDENTITY:-}" ]; then
   cp "$KEYCHAIN_PROFILE" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/embedded.provisionprofile"
   # Sign nested Sparkle code from the deepest bundle outward. The app is signed
   # last, so its resource seal covers the finished helper and framework layout.
-  find "$candidate/Contents/Frameworks/Sparkle.framework" -depth \( -name '*.xpc' -o -name '*.app' -o -name '*.framework' \) -type d -print | while IFS= read -r nested; do
-    [ "$nested" = "$candidate/Contents/Frameworks/Sparkle.framework" ] && continue
-    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$nested"
-  done
+  sh "$repo_root/macos/Scripts/sign-sparkle-framework.sh" \
+    "$candidate/Contents/Frameworks/Sparkle.framework" "$SIGNING_IDENTITY"
   codesign --force --options runtime --timestamp --entitlements "$stage_root/keychain-access.entitlements" --sign "$SIGNING_IDENTITY" "$candidate/Contents/Helpers/scratchpad-keychain.app"
   helper_team=$(codesign -dv --verbose=4 "$candidate/Contents/Helpers/scratchpad-keychain.app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
   [ "$helper_team" = "$profile_team" ] || { echo "KEYCHAIN_PROFILE team does not match SIGNING_IDENTITY" >&2; exit 1; }
