@@ -45,3 +45,46 @@ func TestNativeImportValidatesOptionalHappenedAtAtomically(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeImportValidatesOptionalClientSavedAtAtomically(t *testing.T) {
+	for _, engine := range []string{"sqlite", "postgres"} {
+		t.Run(engine, func(t *testing.T) {
+			path, databaseURL := portableInstance(t, engine)
+			origin := startServer(t, path, databaseURL)
+			status, before := curationRequest(t, origin, "POST", "/export", map[string]any{})
+			if status != 200 {
+				t.Fatal("initial export failed")
+			}
+			for _, value := range []string{
+				"2026-10-15T08:09:10+02:60",
+				"2026-10-15T08:09:10+24:00",
+				"2026-10-15T08:09:10,123+02:00",
+				"2026-10-15T24:09:10Z",
+				"2026-02-30T08:09:10Z",
+			} {
+				archive := portableArchive()
+				archive["data"].(map[string]any)["record"].([]any)[0].(map[string]any)["clientSavedAt"] = value
+				status, result := curationRequest(t, origin, "POST", "/import", archive)
+				if status != 400 || result["error"].(map[string]any)["code"] != "IMPORT_INVALID" {
+					t.Fatalf("invalid clientSavedAt %q did not return IMPORT_INVALID: HTTP %d", value, status)
+				}
+				status, after := curationRequest(t, origin, "POST", "/export", map[string]any{})
+				if status != 200 || !reflect.DeepEqual(before["data"], after["data"]) {
+					t.Fatal("invalid timestamp partially modified imported state")
+				}
+			}
+
+			value := "2026-10-15T08:09:10.123456789123+23:59"
+			archive := portableArchive()
+			archive["data"].(map[string]any)["record"].([]any)[0].(map[string]any)["clientSavedAt"] = value
+			status, result := curationRequest(t, origin, "POST", "/import", archive)
+			if status != 200 {
+				t.Fatalf("valid clientSavedAt rejected: HTTP %d %+v", status, result)
+			}
+			status, result = curationRequest(t, origin, "GET", "/records/rec:portable", nil)
+			if status != 200 || result["record"].(map[string]any)["clientSavedAt"] != value {
+				t.Fatal("import rewrote the valid client timestamp")
+			}
+		})
+	}
+}

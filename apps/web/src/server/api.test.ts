@@ -169,6 +169,34 @@ describe("persistent API domain", () => {
     expect(restartedRecord.id).toBe(first.data.record.id);
     expect(restartedRecord.clientSavedAt).toBe(clientSavedAt);
   });
+  it("validates client save timestamps with RFC 3339 offset bounds", async () => {
+    const { call } = await fixture();
+    const p = await project(call);
+    for (const clientSavedAt of [
+      "2026-10-15T08:09:10+02:60",
+      "2026-10-15T08:09:10+24:00",
+      "2026-10-15T08:09:10,123+02:00",
+      "2026-10-15T24:09:10Z",
+      "2026-02-30T08:09:10Z",
+    ]) {
+      const rejected = await call("/api/v1/records", "POST", {
+        projectId: p.id,
+        record: { ...capture, clientSavedAt },
+      });
+      expect(rejected.status).toBe(400);
+    }
+    const accepted = await call("/api/v1/records", "POST", {
+      projectId: p.id,
+      record: {
+        ...capture,
+        clientSavedAt: "2026-10-15T08:09:10.123456789123+23:59",
+      },
+    });
+    expect(accepted.status).toBe(201);
+    expect(accepted.data.record.clientSavedAt).toBe(
+      "2026-10-15T08:09:10.123456789123+23:59",
+    );
+  });
   it("preserves raw records through curated corrections and rejects stale edits", async () => {
     const { call } = await fixture(),
       p = await project(call);
