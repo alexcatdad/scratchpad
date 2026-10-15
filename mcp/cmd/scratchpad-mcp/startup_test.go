@@ -230,7 +230,11 @@ func TestCollectorWaitIsBounded(t *testing.T) {
 
 func TestCollectorLaunchSurvivesMCPParentExitWithoutLeakingStdio(t *testing.T) {
 	dir := t.TempDir()
-	socketDir, err := os.MkdirTemp("/private/tmp", "spc-")
+	socketTempRoot := "/private/tmp"
+	if _, err := os.Stat(socketTempRoot); err != nil {
+		socketTempRoot = "/tmp"
+	}
+	socketDir, err := os.MkdirTemp(socketTempRoot, "spc-")
 	if err != nil {
 		t.Fatal(err)
 	}

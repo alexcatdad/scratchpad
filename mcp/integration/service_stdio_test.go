@@ -196,7 +196,11 @@ func TestRealStdioMCPToDurableServiceToSSHHTTP(t *testing.T) {
 	if err = service.SetConfiguration(ctx, configuration); err != nil {
 		t.Fatal(err)
 	}
-	socketDirectory, err := os.MkdirTemp("/private/tmp", "sp-")
+	socketTempRoot := "/private/tmp"
+	if _, err := os.Stat(socketTempRoot); err != nil {
+		socketTempRoot = "/tmp"
+	}
+	socketDirectory, err := os.MkdirTemp(socketTempRoot, "sp-")
 	if err != nil {
 		t.Fatal(err)
 	}
