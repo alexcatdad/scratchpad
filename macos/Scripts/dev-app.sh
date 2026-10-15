@@ -8,15 +8,18 @@ dev_app="$dev_parent/Scratchpad Dev.app"
 dev_executable="$dev_app/Contents/MacOS/Scratchpad"
 base_app=
 run_app=0
+rebuild_helpers=0
 
 usage() {
   cat <<'EOF'
-Usage: dev-app.sh [--base-app /path/to/Scratchpad.app] [--run]
+Usage: dev-app.sh [--base-app /path/to/Scratchpad.app] [--rebuild-helpers] [--run]
 
 Build the Scratchpad menu-bar app into macos/.build/dev/Scratchpad Dev.app.
 The default only builds and replaces that workspace bundle. --run explicitly
 restarts only that dev bundle after the replacement is ready.
 On first use, --base-app must point to a complete signed Scratchpad.app bundle.
+--rebuild-helpers also builds the current Go MCP and service into the candidate
+and ad-hoc signs those two helpers. The default preserves the seed helpers.
 EOF
 }
 
@@ -29,6 +32,10 @@ while [ "$#" -gt 0 ]; do
       ;;
     --run)
       run_app=1
+      shift
+      ;;
+    --rebuild-helpers)
+      rebuild_helpers=1
       shift
       ;;
     -h|--help)
@@ -47,6 +54,7 @@ developer_dir=${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}
 xcode_developer_dir=${SCRATCHPAD_XCODE_DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}
 swiftui_macro="$xcode_developer_dir/Platforms/MacOSX.platform/Developer/usr/lib/swift/host/plugins/libSwiftUIMacros.dylib"
 swift_bin=${SWIFT_BIN:-swift}
+go_bin=${GO_BIN:-go}
 codesign_bin=${CODESIGN_BIN:-/usr/bin/codesign}
 ditto_bin=${DITTO_BIN:-/usr/bin/ditto}
 open_bin=${OPEN_BIN:-/usr/bin/open}
@@ -61,6 +69,10 @@ sleep_bin=${SLEEP_BIN:-/bin/sleep}
 [ -x "$codesign_bin" ] || { echo "codesign was not found: $codesign_bin" >&2; exit 1; }
 [ -x "$ditto_bin" ] || { echo "ditto was not found: $ditto_bin" >&2; exit 1; }
 [ -x "$plist_buddy" ] || { echo "PlistBuddy was not found: $plist_buddy" >&2; exit 1; }
+[ "$rebuild_helpers" -eq 0 ] || { [ -x "$go_bin" ] || command -v "$go_bin" >/dev/null 2>&1; } || {
+  echo "Go was not found" >&2
+  exit 1
+}
 
 export DEVELOPER_DIR="$developer_dir"
 mkdir -p "$package_root/.build"
@@ -151,9 +163,19 @@ sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
   "$plist_buddy" -c 'Add :SUEnableAutomaticChecks bool false' "$candidate/Contents/Info.plist"
 plutil -lint "$candidate/Contents/Info.plist" >/dev/null
 
-# Only the rebuilt UI executable and outer dev app are ad-hoc signed, with no
-# hardened-runtime options. The signed service, MCP, Keychain helper and
-# Developer ID Sparkle framework remain untouched.
+# Rebuild the Go helpers only when explicitly requested. Keep the default UI
+# iteration fast and preserve all signed seed components.
+if [ "$rebuild_helpers" -eq 1 ]; then
+  "$go_bin" build -C "$repo_root/mcp" -ldflags '-X main.version=dev -X main.buildNumber=dev' \
+    -o "$candidate/Contents/Helpers/scratchpad-service" ./cmd/scratchpad-service
+  "$go_bin" build -C "$repo_root/mcp" -ldflags '-X main.version=dev -X main.buildNumber=dev' \
+    -o "$candidate/Contents/Helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
+  "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/Helpers/scratchpad-service"
+  "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/Helpers/scratchpad-mcp"
+fi
+
+# Only rebuilt components receive local ad-hoc signatures, with no hardened
+# runtime options. Unchanged Keychain helper and Sparkle remain from the seed.
 "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/MacOS/Scratchpad"
 "$codesign_bin" --force --sign - --options 0 "$candidate"
 "$codesign_bin" --verify --deep --strict "$candidate"
@@ -200,7 +222,11 @@ if ! mv "$candidate" "$dev_app"; then
   echo "could not replace the workspace dev app at $dev_app" >&2
   exit 1
 fi
-echo "Built $dev_app (ad-hoc local signature; nested signed components preserved)."
+if [ "$rebuild_helpers" -eq 1 ]; then
+  echo "Built $dev_app (UI and Go helpers ad-hoc signed; Keychain helper and Sparkle preserved)."
+else
+  echo "Built $dev_app (ad-hoc local signature; nested signed components preserved)."
+fi
 if [ "$run_app" -eq 1 ]; then
   if ! "$open_bin" -n "$dev_app"; then
     rm -rf "$dev_app"

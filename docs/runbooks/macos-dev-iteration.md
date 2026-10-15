@@ -39,8 +39,20 @@ Its Sparkle feed and public update key are removed. The rebuilt menu app and
 outer dev bundle receive local ad-hoc signatures; the signed service, MCP,
 Keychain helper, and Sparkle framework copied from the seed are preserved.
 This is a local UI iteration bundle, not a distributable or notarized release.
-Service, MCP, Keychain helper, or Sparkle changes require a full package and a
-fresh `--base-app` seed; this fast path is for app UI and resource edits.
+Service and MCP changes can use the opt-in helper rebuild path, which builds
+the current Go executables into the staged candidate and ad-hoc signs only
+those helpers:
+
+```sh
+macos/Scripts/dev-app.sh --rebuild-helpers
+```
+
+Combine it with `--run` to explicitly restart the dev app only after both Go
+helpers are built and the replacement bundle is verified. This restarts only
+the tray app; restarting a running collector is a separate service action.
+
+The UI-only path remains the default. Keychain helper or Sparkle changes still
+require a full package and a fresh `--base-app` seed.
 
 The dev app uses Scratchpad's normal local service socket and capture storage.
 Opening it refreshes service status but does not start the service. Its manual

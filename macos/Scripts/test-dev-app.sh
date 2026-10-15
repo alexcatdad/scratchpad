@@ -61,6 +61,19 @@ set -eu
 printf 'open %s\n' "$*" >> "$COMMAND_LOG"
 [ "${OPEN_FAIL:-0}" != 1 ] || exit 1
 EOF
+cat > "$fake_bin/go" <<'EOF'
+#!/bin/sh
+set -eu
+printf 'go %s\n' "$*" >> "$COMMAND_LOG"
+out=
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = '-o' ]; then out=$2; shift 2; else shift; fi
+done
+[ -n "$out" ] || { echo 'fake go build did not receive -o' >&2; exit 2; }
+mkdir -p "$(dirname "$out")"
+printf '%s\n' "$GO_BUILD_CONTENT" > "$out"
+chmod +x "$out"
+EOF
 cat > "$fake_bin/ps" <<'EOF'
 #!/bin/sh
 set -eu
@@ -104,6 +117,7 @@ export COMMAND_LOG="$log"
 export FAKE_BIN_DIR="$test_root/swift-bin"
 export FAKE_BUILD_CONTENT=first-build
 export SWIFT_BIN="$fake_bin/swift"
+export GO_BIN="$fake_bin/go"
 export CODESIGN_BIN="$fake_bin/codesign"
 export OPEN_BIN="$fake_bin/open"
 export PS_BIN="$fake_bin/ps"
@@ -141,6 +155,9 @@ dev_executable="$dev_app/Contents/MacOS/Scratchpad"
 }
 [ -d "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo 'nested framework was not preserved' >&2; exit 1; }
 [ -f "$dev_app/Contents/Helpers/scratchpad-service" ] || { echo 'service helper was not preserved' >&2; exit 1; }
+[ "$(cat "$dev_app/Contents/Helpers/scratchpad-service")" = service ] || { echo 'default UI build replaced the service helper' >&2; exit 1; }
+[ "$(cat "$dev_app/Contents/Helpers/scratchpad-mcp")" = mcp ] || { echo 'default UI build replaced the MCP helper' >&2; exit 1; }
+! grep -q '^go ' "$log" || { echo 'default UI build invoked Go' >&2; exit 1; }
 
 "$PLIST_BUDDY_BIN" -c 'Set :CFBundleIdentifier com.alexcatdad.scratchpad' "$dev_app/Contents/Info.plist"
 : > "$log"
@@ -150,6 +167,18 @@ if "$fake_repo/macos/Scripts/dev-app.sh" --base-app "$base_app" >/dev/null 2>&1;
 fi
 ! grep -q '^swift ' "$log" || { echo 'invalid destination was discovered after building' >&2; exit 1; }
 "$PLIST_BUDDY_BIN" -c 'Set :CFBundleIdentifier com.alexcatdad.scratchpad.dev' "$dev_app/Contents/Info.plist"
+
+: > "$log"
+export GO_BUILD_CONTENT=rebuilt-helper
+"$fake_repo/macos/Scripts/dev-app.sh" --rebuild-helpers >/dev/null
+[ "$(cat "$dev_app/Contents/Helpers/scratchpad-service")" = rebuilt-helper ] || { echo '--rebuild-helpers did not replace the service helper' >&2; exit 1; }
+[ "$(cat "$dev_app/Contents/Helpers/scratchpad-mcp")" = rebuilt-helper ] || { echo '--rebuild-helpers did not replace the MCP helper' >&2; exit 1; }
+[ "$(cat "$dev_app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain")" = helper ] || { echo '--rebuild-helpers changed the Keychain helper' >&2; exit 1; }
+[ -d "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo '--rebuild-helpers changed Sparkle' >&2; exit 1; }
+grep -Fq 'go build -C ' "$log" || { echo '--rebuild-helpers did not build Go helpers' >&2; exit 1; }
+grep -Fq -- '-X main.version=dev -X main.buildNumber=dev' "$log" || { echo '--rebuild-helpers did not use development metadata' >&2; exit 1; }
+grep -Eq '^codesign --force --sign - --options 0 .*/Contents/Helpers/scratchpad-service$' "$log" || { echo '--rebuild-helpers did not ad-hoc sign the service' >&2; exit 1; }
+grep -Eq '^codesign --force --sign - --options 0 .*/Contents/Helpers/scratchpad-mcp$' "$log" || { echo '--rebuild-helpers did not ad-hoc sign MCP' >&2; exit 1; }
 
 export FAKE_BUILD_CONTENT=failed-replacement
 if CODESIGN_FAIL=1 "$fake_repo/macos/Scripts/dev-app.sh" >/dev/null 2>&1; then
