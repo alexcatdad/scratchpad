@@ -1,13 +1,15 @@
 # CI performance checkpoint
 
 The CI workflow separates backend tests, native Go browsers and Go container
-acceptance so independent work can run concurrently. No backend test shards or
-path-based test skipping are enabled.
+acceptance so independent work can run concurrently. Backend tests run in two
+balanced shards; no path-based test skipping is enabled.
 
 ## Coverage and merge gate
 
 The existing required `go` check aggregates `go-mcp`, `go-backend`, `go-browser`
-and `go-container`. Its `always()` job accepts only four successful results;
+and `go-container`. The backend matrix requires both shards to succeed and uses
+`fail-fast: false` so a failure does not cancel evidence from the other shard.
+The `always()` aggregate job accepts only four successful lane results;
 failed, cancelled, skipped or missing results cannot satisfy it. Keep `go` required
 in branch protection. Other existing required checks remain required.
 
@@ -38,10 +40,30 @@ The backend server fixture signals termination, waits for process exit and fails
 on an unsuccessful exit or timeout. Recheck these boundaries if process lifecycle
 handling changes; an arbitrary exit sleep must not substitute for joining work.
 
-Backend and pgvector steps retain `go test -json` output as `go-backend-tests`
-and `go-pgvector-tests` artifacts, including when tests fail. Explicit Bash
+Backend and pgvector steps retain `go test -json` output as `go-backend-tests-1`,
+`go-backend-tests-2` and `go-pgvector-tests` artifacts, including when tests fail.
+Missing backend evidence fails its upload step. Explicit Bash
 execution preserves `pipefail`, so piping output through `tee` cannot hide a
 failing test command.
+
+## Backend shards
+
+`scripts/backend-shard.sh` assigns a measured group of slow top-level tests to
+shard 1 with an anchored `-run` pattern. Shard 2 uses the identical pattern with
+`-skip`, running its complete complement across `./...`. New tests, examples and
+fuzz seeds therefore run automatically in shard 2; subtests stay with their
+parent. Both shards retain `-race`, `-count=1`, the 30-minute timeout, PostgreSQL
+and the existing fixture setup and checks. Each runner has its own database.
+
+The initial split balances the sum of per-test median durations from five
+unsharded CI runs: approximately 294 seconds per shard. This is a scheduling
+estimate, not a runtime guarantee. Rebalance the short slow-test list when
+measured timings drift; do not replace the complement with an allowlist.
+
+The regression test executes the actual shard script against a disposable Go
+module and checks its union against an unsharded race run, including subtests,
+duplicate names across packages, name prefixes, examples, fuzz seeds and skips.
+It also checks invalid shard rejection and test failure propagation.
 
 ## Verification and measurement
 
@@ -50,6 +72,7 @@ Use the pinned Node version through fnm. From the repository root:
 ```sh
 fnm exec --using "$(cat .node-version)" npm ci
 fnm exec --using "$(cat .node-version)" npm run lint
+fnm exec --using "$(cat .node-version)" node --test scripts/backend-shard.test.mjs
 actionlint
 fnm exec --using "$(cat .node-version)" npx playwright test --list
 fnm exec --using "$(cat .node-version)" npx playwright test --project=retained --list
@@ -78,10 +101,12 @@ At the measurement checkpoint:
    runner minutes, including setup, uploads and the aggregate job. Compare
    candidate and baseline medians; the initial budget is at most 25% additional
    runner minutes. These elapsed runner minutes are not rounded billing units.
-4. Compare backend and pgvector JSON test identities and outcomes. Report flakes,
-   failed attempts and unexpected skips alongside timings.
-5. Stop and review the measurements. Add balanced shards only in a subsequent
-   stage if needed. If timing and compute constraints conflict, obtain a decision
+4. Combine both backend artifacts and compare their test identities and outcomes
+   against the unsharded reference. Reject missing or overlapping identities.
+   Compare pgvector outcomes too. Report flakes, failed attempts and unexpected
+   skips alongside timings.
+5. Stop and review the measurements before merging or further optimisation.
+   If timing and compute constraints conflict, obtain a decision
    before changing either constraint or moving coverage out of the PR gate.
 
 Read-only GitHub evidence can be collected with `gh run view RUN_ID` and
