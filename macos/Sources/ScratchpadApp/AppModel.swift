@@ -5,6 +5,7 @@ import ScratchpadNative
 @MainActor
 final class AppModel: ObservableObject {
     @Published private(set) var status: ServiceStatus?
+    @Published private(set) var statusObservedAt: Date?
     @Published private(set) var receipts: [Receipt] = []
     @Published private(set) var selectedReceipt: Receipt?
     @Published private(set) var selectedReceiptID: String?
@@ -86,6 +87,7 @@ final class AppModel: ObservableObject {
                     guard let self else { return }
                     guard self.isCurrentObservation(revision) else { return }
                     self.status = nil
+                    self.statusObservedAt = nil
                     guard !self.observationRevision.isStartPending else { return }
                     self.recordIncidentEvents(self.incidentTracker.observe(
                         nil,
@@ -269,6 +271,7 @@ final class AppModel: ObservableObject {
 
     private func acceptServiceStatus(_ value: ServiceStatus) {
         status = value
+        statusObservedAt = .now
         observationRevision.observeLifecycle(value.lifecycle)
         persistLifecyclePolicy()
         recordIncidentEvents(incidentTracker.observe(

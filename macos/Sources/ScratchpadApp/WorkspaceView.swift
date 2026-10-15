@@ -32,7 +32,7 @@ struct WorkspaceView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(connectionLabel, systemImage: connectionIcon)
                         .font(.caption)
-                    Text("Local capture \(localSaveReady ? "ready" : "not available")")
+                    Text(LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
                         .font(.caption2).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading).padding()
@@ -65,10 +65,6 @@ struct WorkspaceView: View {
         }
     }
     private var connectionIcon: String { model.status?.connection?.effectiveState() == "connected" ? "circle.fill" : "circle" }
-    private var localSaveReady: Bool {
-        guard let status = model.status else { return false }
-        return (status.lifecycle == "running" || status.lifecycle == "paused") && status.keyAvailable && status.storageAvailable != false
-    }
 }
 
 struct QueuePage: View {

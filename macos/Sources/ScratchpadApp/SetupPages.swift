@@ -79,6 +79,7 @@ struct SettingsPage: View {
         Form {
             Section("Server connection") {
                 LabeledContent("Server", value: model.configuration.serverURL.isEmpty ? "Not configured" : model.configuration.serverURL)
+                LabeledContent("Local capture", value: LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
                 LabeledContent("Connection", value: connectionName)
                 Text("Pending captures stay bound to their original server and credential.").font(.caption).foregroundStyle(.secondary)
                 Button("View authentication") { NotificationCenter.default.post(name: .showAuthenticationPage, object: nil) }
@@ -167,6 +168,16 @@ struct MCPSetupPage: View {
         VStack(alignment: .leading, spacing: 14) {
             Text("MCP setup").font(.largeTitle.bold())
             Text("Preview the exact client change before applying it. Existing unrelated configuration is preserved.").foregroundStyle(.secondary)
+            Text("Launching a configured client asks its bundled Scratchpad MCP adapter to ensure the shared local collector is running. Persistent Stop is respected and must be cleared with Start in Scratchpad; closing a client leaves collector delivery running.")
+                .font(.caption).foregroundStyle(.secondary)
+            GroupBox("Scratchpad app status") {
+                VStack(alignment: .leading, spacing: 6) {
+                    LabeledContent("Local capture", value: LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
+                    LabeledContent("Server connection", value: remoteConnectionName)
+                    Text("These statuses are checked separately. Local capture readiness describes the bundled collector; server connection reflects its latest connection observation.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
             Picker("Client", selection: $kind) { ForEach(MCPClientKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
             if !isGeneric {
                 TextField("Configuration file", text: $configPath).textFieldStyle(.roundedBorder)
@@ -209,6 +220,15 @@ struct MCPSetupPage: View {
         case .codex: configPath = "\(home)/.codex/config.toml"
         case .claudeCode: configPath = "\(home)/.claude.json"
         case .generic: configPath = ""
+        }
+    }
+    private var remoteConnectionName: String {
+        switch model.status?.connection?.effectiveState() {
+        case "connected": "Reachable"
+        case "connectivity": "Offline"
+        case "authentication", "credential_changed": "Authentication needed"
+        case "server_incompatible": "Incompatible server"
+        default: "Not checked"
         }
     }
     private func makePreview() {
