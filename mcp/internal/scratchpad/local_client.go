@@ -23,10 +23,14 @@ func NewLocalClient(socket string) (*Client, error) {
 func (c *Client) RequestCentral(ctx context.Context, req localcapture.OnlineRequest) (json.RawMessage, error) {
 	var out json.RawMessage
 	var err error
+	var body any
+	if req.Method != http.MethodGet {
+		body = req.Body
+	}
 	if req.Path == "/rag/retrieve" {
 		err = c.requestEvidence(ctx, req.Body, &out)
 	} else {
-		err = c.request(ctx, req.Method, req.Path, req.Body, "", &out)
+		err = c.request(ctx, req.Method, req.Path, body, "", &out)
 	}
 	return out, err
 }

@@ -871,7 +871,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
         ],
         {
           cwd: resolve(root, "mcp"),
-          env: environment,
+          env: {
+            ...environment,
+            SCRATCHPAD_SERVICE_SOCKET: durableService.socketPath,
+          },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );

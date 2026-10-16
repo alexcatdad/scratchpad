@@ -1,6 +1,6 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
@@ -187,7 +187,11 @@ async function realMcp(args: string[], env = process.env) {
       clearTimeout(timeout);
       code === 0
         ? done(output)
-        : reject(new Error(`MCP exited ${code}: ${output}`));
+        : reject(
+            new Error(
+              `MCP phase ${args[args.indexOf("-phase") + 1]} exited ${code}: ${output}`,
+            ),
+          );
     });
   });
 }
@@ -306,9 +310,10 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   const unavailableSignerArgs = [...args];
   unavailableSignerArgs[unavailableSignerArgs.indexOf("-signing-key") + 1] =
     resolve(temporary, "missing-signing-key");
-  await expect(
-    realMcp([...unavailableSignerArgs, "-phase", "verify"]),
-  ).rejects.toThrow(/sign challenge \(unlock your SSH agent\/key\)/);
+  // Caller signing flags cannot override the collector-owned identity.
+  expect(
+    await realMcp([...unavailableSignerArgs, "-phase", "verify"]),
+  ).toContain("PASS verify");
   // Exercise the connect skill with two agent-backed candidates and an
   // existing Git signing preference, then verify real stdio MCP access.
   const secondKey = resolve(temporary, "github-second-identity");
@@ -333,6 +338,7 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
       encoding: "utf8",
       timeout: 60_000,
     });
+  let stopAgentCollector: (() => Promise<void>) | undefined;
   try {
     agentCommand("ssh-add", [key, secondKey]);
     await page
@@ -375,24 +381,41 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
     expect(selected).toBeDefined();
     const selectedPath = resolve(temporary, "selected-agent-key.pub");
     writeFileSync(selectedPath, `${selected}\n`);
+    const agentTemporary = resolve(temporary, "agent-collector");
+    mkdirSync(agentTemporary);
+    const agentCollector = await startDurableMcpService({
+      environment: agentEnv,
+      origin,
+      publicKey: selectedPath,
+      signingKey: selectedPath,
+      workspace,
+      binary,
+      statePath: resolve(temporary, "github-mcp-state.json"),
+      temporary: agentTemporary,
+    });
+    stopAgentCollector = agentCollector.stop;
     const agentArgs = [...args];
+    agentArgs[agentArgs.indexOf("-service-socket") + 1] =
+      agentCollector.socketPath;
     agentArgs[agentArgs.indexOf("-public-key") + 1] = selectedPath;
     agentArgs[agentArgs.indexOf("-signing-key") + 1] = "";
     expect(await realMcp([...agentArgs, "-phase", "read"], agentEnv)).toContain(
       "PASS read",
     );
-    await expect(
-      realMcp([...agentArgs, "-phase", "read"], {
+    // The MCP needs no SSH agent; the collector owns its signing environment.
+    expect(
+      await realMcp([...agentArgs, "-phase", "read"], {
         ...agentEnv,
         SSH_AUTH_SOCK: resolve(temporary, "absent-agent.sock"),
       }),
-    ).rejects.toThrow(/sign challenge \(unlock your SSH agent\/key\)/);
+    ).toContain("PASS read");
     // No preference leaves a real ambiguity. Do not guess a credential.
     agentCommand("git", ["config", "--unset", "user.signingkey"]);
     expect(() =>
       agentCommand("git", ["config", "--get", "user.signingkey"]),
     ).toThrow();
   } finally {
+    await stopAgentCollector?.();
     agentCommand("ssh-agent", ["-k"]);
     extraPublicKey = undefined;
     await page

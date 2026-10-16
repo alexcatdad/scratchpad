@@ -10,12 +10,17 @@ import (
 	"errors"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/alexcatdad/scratchpad/mcp/internal/localcapture"
 	"github.com/alexcatdad/scratchpad/mcp/internal/scratchpad"
 )
 
-type Adapter struct{}
+type Adapter struct {
+	onlineMu      sync.Mutex
+	onlineBinding localcapture.Binding
+	onlineClient  *scratchpad.Client
+}
 
 func supportsCaptureTimestamp(values []string) bool {
 	for _, value := range values {
@@ -210,11 +215,31 @@ func localcaptureFailure(code localcapture.DeliveryCode, retryable bool) error {
 
 var _ localcapture.DeliveryAdapter = (*Adapter)(nil)
 
+// onlineRequestClient retains only the current binding's in-memory HTTP session.
+// Capture delivery and explicit health checks continue to obtain fresh SSH proofs.
+func (a *Adapter) onlineRequestClient(ctx context.Context, binding localcapture.Binding) (*scratchpad.Client, error) {
+	fingerprint, err := publicKeyFingerprint(binding.PublicKeyPath)
+	if err != nil || fingerprint != binding.CredentialFingerprint {
+		return nil, localcaptureFailure(localcapture.DeliveryCredentialChanged, false)
+	}
+	a.onlineMu.Lock()
+	defer a.onlineMu.Unlock()
+	if a.onlineClient != nil && a.onlineBinding == binding {
+		return a.onlineClient, nil
+	}
+	client, _, _, err := a.authenticatedClient(ctx, binding)
+	if err != nil {
+		return nil, err
+	}
+	a.onlineBinding, a.onlineClient = binding, client
+	return client, nil
+}
+
 func (a *Adapter) OnlineRequest(ctx context.Context, binding localcapture.Binding, req localcapture.OnlineRequest) (localcapture.OnlineResponse, error) {
 	if !localcapture.ValidOnlineRequest(req) {
 		return localcapture.OnlineResponse{}, localcapture.ErrConflictSentinel
 	}
-	client, _, _, err := a.authenticatedClient(ctx, binding)
+	client, err := a.onlineRequestClient(ctx, binding)
 	if err != nil {
 		return localcapture.OnlineResponse{}, err
 	}
@@ -222,6 +247,13 @@ func (a *Adapter) OnlineRequest(ctx context.Context, binding localcapture.Bindin
 	if err != nil {
 		var api *scratchpad.APIError
 		if errors.As(err, &api) {
+			if api.Code == "AUTH_INVALID" || api.Code == "AUTH_REQUIRED" {
+				a.onlineMu.Lock()
+				if a.onlineClient == client {
+					a.onlineClient = nil
+				}
+				a.onlineMu.Unlock()
+			}
 			return localcapture.OnlineResponse{ErrorCode: api.Code}, nil
 		}
 		return localcapture.OnlineResponse{}, classify(err)
