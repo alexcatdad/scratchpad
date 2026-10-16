@@ -28,8 +28,8 @@ func TestGithubPublishedKeyAuthorizesRealStdioUntilRemoved(t *testing.T) {
 					if err != nil || !strings.Contains(string(out), "PASS detail:") {
 						t.Fatalf("published key did not authorize real stdio record read: %v %s", err, out)
 					}
-				} else if err == nil || !strings.Contains(string(out), "local Scratchpad service: authentication") {
-					t.Fatalf("revoked published key did not fail with collector authentication error: %v %s", err, out)
+				} else if err == nil || !strings.Contains(string(out), "AUTH_INVALID") {
+					t.Fatalf("revoked published key did not fail with server authentication rejection: %v %s", err, out)
 				}
 			}
 
