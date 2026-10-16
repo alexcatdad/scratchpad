@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -14,8 +15,36 @@ import (
 func TestRealStdioInitializationRecommendsSecretReferences(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, mcpBinary)
-	cmd.Env = append(os.Environ(), "SCRATCHPAD_URL=http://localhost:1", "SCRATCHPAD_PUBLIC_KEY=", "SCRATCHPAD_SIGNING_KEY=")
+	isolatedDir := t.TempDir()
+	isolatedMCP := filepath.Join(isolatedDir, "scratchpad-mcp")
+	binary, err := os.ReadFile(mcpBinary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(isolatedMCP, binary, 0700); err != nil {
+		t.Fatal(err)
+	}
+	home := filepath.Join(isolatedDir, "home")
+	if err = os.MkdirAll(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	socketRoot := "/private/tmp"
+	if _, err = os.Stat(socketRoot); err != nil {
+		socketRoot = "/tmp"
+	}
+	socketDir, err := os.MkdirTemp(socketRoot, "sp-mcp-guidance-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(socketDir) })
+	socketPath := filepath.Join(socketDir, "service.sock")
+	cmd := exec.CommandContext(ctx, isolatedMCP)
+	cmd.Env = []string{
+		"HOME=" + home,
+		"XDG_CONFIG_HOME=" + home,
+		"TMPDIR=" + isolatedDir,
+		"SCRATCHPAD_SERVICE_SOCKET=" + socketPath,
+	}
 	input, err := cmd.StdinPipe()
 	if err != nil {
 		t.Fatal(err)

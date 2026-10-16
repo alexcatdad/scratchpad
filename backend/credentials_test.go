@@ -73,7 +73,8 @@ func TestLocalSSHEnrollmentAllowsRealAgentRead(t *testing.T) {
 			private, key := githubSyntheticKey(t)
 			origin := startServer(t, path, databaseURL)
 			enrollLocalSSH(t, origin, private, key, local)
-			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-phase", "detail", "-record-id", "rec_restored")
+			serviceSocket, _ := startConfiguredDurableService(t, origin, t.TempDir(), filepath.Dir(private), private)
+			cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "detail", "-record-id", "rec_restored")
 			out, err := cmd.CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "PASS detail") {
 				t.Fatal("enrolled SSH credential did not allow real stdio MCP retrieval", err)

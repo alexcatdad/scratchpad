@@ -60,8 +60,9 @@ func TestRAGRealStdioDiscoversProjectAndPreservesCitationsPrivacyAndBudget(t *te
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("integration build failed: %v %s", err, out)
 	}
+	serviceSocket, _ := startConfiguredDurableService(t, origin, t.TempDir(), workspace, private)
 	cmd := exec.Command(integration, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-other-project", other, "-denied-project", denied)
-	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "SCRATCHPAD_SERVICE_SOCKET="+serviceSocket)
 	out, err := cmd.CombinedOutput()
 	if err != nil || !strings.Contains(string(out), "Verified real stdio RAG") {
 		t.Fatalf("stdio RAG failed: %v %s", err, out)

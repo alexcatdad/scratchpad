@@ -204,8 +204,9 @@ func TestRealStdioAIWorkflowUsesGoWorkers(t *testing.T) {
 			if status != 200 {
 				t.Fatal("provider settings failed")
 			}
+			serviceSocket, _ := startConfiguredDurableService(t, origin, t.TempDir(), workspace, private)
 			cmd := exec.Command(integration, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", workspace, "-binary", mcpBinary, "-other-project", other, "-denied-project", denied)
-			cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null")
+			cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "SCRATCHPAD_SERVICE_SOCKET="+serviceSocket)
 			out, err := cmd.CombinedOutput()
 			if err != nil || !strings.Contains(string(out), "Verified all five optional AI tools") {
 				t.Fatalf("real stdio AI workflow failed: %v %s", err, out)

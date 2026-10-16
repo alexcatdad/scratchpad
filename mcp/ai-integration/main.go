@@ -43,7 +43,7 @@ func run() error {
 	command := exec.CommandContext(ctx, absBinary)
 	command.Dir = *workspace
 	command.Stderr = os.Stderr
-	command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*endpoint, "SCRATCHPAD_PUBLIC_KEY="+*public, "SCRATCHPAD_SIGNING_KEY="+*private, "SCRATCHPAD_MIRROR=false")
+	command.Env = append(os.Environ(), "SCRATCHPAD_MIRROR=false")
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "scratchpad-ai-integration", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	if err != nil {
 		return err

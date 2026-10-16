@@ -237,7 +237,8 @@ func TestPostgresSSHLoginThroughRealStdioMCP(t *testing.T) {
 	if status != 200 {
 		t.Fatal("PostgreSQL SSH session cannot read history")
 	}
-	cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-phase", "detail", "-record-id", "rec_restored")
+	serviceSocket, _ := startConfiguredDurableService(t, origin, t.TempDir(), filepath.Dir(private), private)
+	cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "detail", "-record-id", "rec_restored")
 	if out, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(out), "PASS detail") {
 		t.Fatalf("PostgreSQL stdio MCP failed: %v %s", err, out)
 	}

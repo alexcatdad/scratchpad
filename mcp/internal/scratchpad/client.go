@@ -19,19 +19,24 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alexcatdad/scratchpad/mcp/internal/localcapture"
 	"golang.org/x/net/idna"
 )
 
 type Config struct {
-	URL, PublicKeyPath, SigningKeyPath, WorkingDirectory, MirrorPath string
-	Mirror                                                           bool
+	URL, PublicKeyPath, SigningKeyPath, WorkingDirectory, MirrorPath, ServiceSocketPath string
+	Mirror                                                                              bool
 }
 type Client struct {
-	Config  Config
-	HTTP    *http.Client
-	mu      sync.Mutex
-	token   string
-	expires time.Time
+	Config              Config
+	HTTP                *http.Client
+	OnlineService       localcapture.OnlineService
+	CaptureService      localcapture.Service
+	mu                  sync.Mutex
+	token               string
+	expires             time.Time
+	credentialID        string
+	captureCapabilities []string
 }
 type APIError struct {
 	Code    string `json:"code"`
@@ -53,6 +58,10 @@ func NewClient(c Config) (*Client, error) {
 		if err != nil {
 			return nil, err
 		}
+	}
+	// Resolve the SSH-agent signing reference once for authentication and capture.
+	if c.SigningKeyPath == "" {
+		c.SigningKeyPath = c.PublicKeyPath
 	}
 	if c.MirrorPath == "" {
 		c.MirrorPath = "scratchpad/decisions.jsonl"
@@ -193,19 +202,17 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid signing proof")
 	}
-	key := c.Config.SigningKeyPath
-	if key == "" {
-		key = c.Config.PublicKeyPath
-	}
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", key, "-n", "scratchpad-auth-v2")
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", c.Config.SigningKeyPath, "-n", "scratchpad-auth-v2")
 	cmd.Stdin = bytes.NewReader(proof)
 	signature, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("sign challenge (unlock your SSH agent/key): %w", err)
 	}
 	var session struct {
-		Token   string    `json:"accessToken"`
-		Expires time.Time `json:"expiresAt"`
+		Token               string    `json:"accessToken"`
+		Expires             time.Time `json:"expiresAt"`
+		CredentialID        string    `json:"credentialId"`
+		CaptureCapabilities []string  `json:"captureCapabilities"`
 	}
 	if err = c.raw(ctx, "POST", "/auth/mcp/verify", map[string]string{"challengeId": challenge.ChallengeID, "publicKey": strings.TrimSpace(string(pub)), "signature": string(signature)}, "", "", &session); err != nil {
 		return "", err
@@ -215,7 +222,29 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	}
 	c.token = session.Token
 	c.expires = session.Expires
+	c.credentialID = session.CredentialID
+	c.captureCapabilities = session.CaptureCapabilities
 	return c.token, nil
+}
+
+// AuthenticateIdentity performs a fresh SSH proof and returns the server's
+// credential ID for durable retry binding. It deliberately does not reuse the
+// ordinary MCP process token cache.
+func (c *Client) AuthenticateIdentity(ctx context.Context) (string, []string, error) {
+	c.mu.Lock()
+	c.token = ""
+	c.credentialID = ""
+	c.captureCapabilities = nil
+	c.mu.Unlock()
+	if _, err := c.authenticate(ctx); err != nil {
+		return "", nil, err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.credentialID == "" {
+		return "", nil, &APIError{Code: "SERVER_INCOMPATIBLE", Message: "Scratchpad server did not confirm the authenticated credential identity."}
+	}
+	return c.credentialID, append([]string(nil), c.captureCapabilities...), nil
 }
 func (c *Client) request(ctx context.Context, method, path string, body any, key string, out any) error {
 	return c.requestWithHTTP(ctx, c.HTTP, method, path, body, key, out)
@@ -231,6 +260,25 @@ func (c *Client) requestEvidence(ctx context.Context, body any, out any) error {
 }
 
 func (c *Client) requestWithHTTP(ctx context.Context, httpClient *http.Client, method, path string, body any, key string, out any) error {
+	if c.OnlineService != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		response, err := c.OnlineService.OnlineRequest(ctx, localcapture.OnlineRequest{Method: method, Path: path, Body: encoded})
+		if err != nil {
+			return fmt.Errorf("local Scratchpad service: %w", err)
+		}
+		if response.ErrorCode != "" {
+			return &APIError{Code: response.ErrorCode, Message: "Server rejected the operation."}
+		}
+		if out == nil {
+			return nil
+		}
+		decoder := json.NewDecoder(bytes.NewReader(response.Body))
+		decoder.UseNumber()
+		return decoder.Decode(out)
+	}
 	token, err := c.authenticate(ctx)
 	if err != nil {
 		return err

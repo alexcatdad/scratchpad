@@ -1,6 +1,11 @@
 # Scratchpad MCP
 
-Local stdio MCP for the central Scratchpad API. Requires Go 1.27.2 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime. Dependencies are pinned in `go.mod` / `go.sum`. The official Go MCP SDK v1.8.0 was verified against the official Go module proxy on 2026-09-29.
+Local stdio MCP for Scratchpad. Captures use the private `scratchpad-service`
+over its local socket and are acknowledged only after durable local intake;
+reads and supported non-capture operations also use the collector. The collector
+owns server configuration and SSH authentication. Requires Go
+1.27.2 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime.
+Dependencies are pinned in `go.mod` / `go.sum`.
 
 ## Development runbook
 
@@ -20,17 +25,40 @@ CI must verify formatting without rewriting it (`test -z "$(gofmt -l .)"`), then
 
 Client walkthroughs: [Codex](https://alexcatdad.github.io/scratchpad/guides/codex/) and [ChatGPT macOS](https://alexcatdad.github.io/scratchpad/guides/chatgpt/). Both use the local stdio binary. ChatGPT web's hosted plugin path requires a separate integration; the Scratchpad dashboard/REST API is not a remote MCP endpoint.
 
-Use an SSH authentication or signing key synchronized from the owner’s verified GitHub binding, or enroll an independent SSH public key from the authenticated dashboard first. GitHub-managed access is available in the current server source; published v0.3.0 servers predate it. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
+Configure the server and enrolled SSH key once in Scratchpad's app. Codex needs
+only the bundled stdio command:
 
-| Variable                 | Meaning                                                                                         |
-| ------------------------ | ----------------------------------------------------------------------------------------------- |
-| `SCRATCHPAD_URL`         | Required server origin, e.g. `https://memory.example.com`; HTTP allowed only on loopback        |
-| `SCRATCHPAD_PUBLIC_KEY`  | Required absolute path to the enrolled OpenSSH public key                                       |
-| `SCRATCHPAD_SIGNING_KEY` | Optional absolute private-key path; defaults to public-key path for signing through `ssh-agent` |
-| `SCRATCHPAD_MIRROR`      | `true` enables optional repository mirroring locally; default off                               |
-| `SCRATCHPAD_MIRROR_PATH` | Repository-relative mirror file; default `scratchpad/decisions.jsonl`                           |
+```toml
+[mcp_servers.scratchpad]
+command = "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp"
+```
 
-Launch the binary from the project folder. Every project-scoped tool accepts `workingDirectory` to override that folder for one call. No mutable current-project setting is shared between concurrent calls. Non-Git and ambiguous contexts require an explicit `projectId` or owner-confirmed `resolve_project` call. Git `origin` takes precedence; otherwise one unique fetch identity is required. Equivalent SSH/HTTPS remote forms and worktrees map to the same source identity. Credentials embedded in Git remotes are stripped from transmitted remote context.
+The MCP ignores legacy server URL and SSH-key environment settings. It uses the
+collector's private socket for reads and captures; no token or key is returned to
+the MCP. An unconfigured collector requires setup in the app. Server-backed
+reads fail when offline; captures retain the existing durable local receipts.
+For isolated tests, `SCRATCHPAD_SERVICE_SOCKET` selects a private collector.
+Optional `SCRATCHPAD_MIRROR` and `SCRATCHPAD_MIRROR_PATH` still express
+repository consent; neither configures server authentication.
+
+At MCP launch, `scratchpad-mcp` checks the private service socket and starts the
+bundled sibling `scratchpad-service` when it is absent. It waits up to 12 seconds
+for the collector and encrypted storage to become ready. If startup fails, MCP
+still exposes its tools and reports the problem safely on stderr; reads and
+captures fail closed until the local service is available. Concurrent MCP
+clients converge on the same per-user service, and exiting a client does not
+stop it. Startup uses the ordinary service path, so a persistent Stop remains
+in effect and is never cleared by MCP. The owner must choose Start from the tray
+before captures can succeed. The MCP never falls back to a direct capture
+request. Configure the service with the same server URL and credential
+references. Every project-scoped tool accepts `workingDirectory` to override the
+launch folder for that call; project and Git provenance are snapshotted per
+capture. No mutable current-project setting is shared between concurrent calls.
+Non-Git and ambiguous contexts require an explicit `projectId` or
+owner-confirmed `resolve_project` call. Git `origin` takes precedence; otherwise
+one unique fetch identity is required. Equivalent SSH/HTTPS remote forms and
+worktrees map to the same source identity. Credentials embedded in Git remotes
+are stripped from transmitted remote context.
 
 Capture tools: `record_decision`, `record_adr`, `record_business_decision`, `record_finding`, `record_qa`, `record_failure`, `record_constraint`, `record_project_state`. Each takes common `title`, `authority`, `confidence`, and `requestId` fields alongside natural type-specific fields. Reuse the request ID and input for retries. A new intentional capture needs a new ID, even when text matches. The server generates readable content from payloads.
 
@@ -42,17 +70,28 @@ The portable [scratchpad-connect skill](../skills/scratchpad-connect/SKILL.md) l
 
 ## Authentication wire contract
 
-`POST /api/v1/auth/mcp/challenge` with `{publicKey}` returns `{version, recipient, purpose, challengeId, nonce, namespace, expiresAt}`. MCP validates version 2 and the recipient against its locally configured URL origin, then signs the [canonical recipient-bound transcript](../docs/api.md#accepted-clarification-recipient-bound-ssh-proof-2026-10-09), **without a newline**, using OpenSSH armored SSHSIG and namespace `scratchpad-auth-v2`. Upgrade server and signing clients together; nonce-only challenges are rejected without fallback. `POST /api/v1/auth/mcp/verify` submits `{challengeId, publicKey, signature}` and receives `{accessToken, expiresAt}`. Tokens stay in process memory only and are reused until expiry (up to 24 hours). Revocation/invalid authentication clears cached credentials; the next call starts a fresh challenge. There are no refresh tokens or retry loops for failed writes.
+`POST /api/v1/auth/mcp/challenge` with `{publicKey}` returns `{version, recipient, purpose, challengeId, nonce, namespace, expiresAt}`. The collector validates version 2 and the recipient against its locally configured URL origin, then signs the [canonical recipient-bound transcript](../docs/api.md#accepted-clarification-recipient-bound-ssh-proof-2026-10-09), **without a newline**, using OpenSSH armored SSHSIG and namespace `scratchpad-auth-v2`. Upgrade server and signing clients together; nonce-only challenges are rejected without fallback. `POST /api/v1/auth/mcp/verify` submits `{challengeId, publicKey, signature}` and receives `{accessToken, expiresAt}`. Tokens stay in process memory only and are reused until expiry (up to 24 hours). Revocation/invalid authentication clears cached credentials; the next call starts a fresh challenge. There are no refresh tokens or retry loops for failed writes.
 
 GitHub-managed sessions are also gated on every request by the synchronized key set, persistent local blocks and a 24-hour limit from the last complete successful synchronization. Failed refreshes and restarts do not extend that deadline. Detected removals and account unlink/replacement invalidate derived access; manual independent credentials retain local authority. Machines may renew sessions against valid cached keys during an outage. See the [OAuth runbook](../docs/runbooks/github-oauth.md).
 
 ## Mirroring and recovery
 
-The central capture completes before local mirroring. Both local enablement and the server's `mirror.eligible` policy must allow it. Only the full server-returned immutable record is appended. Stable IDs prevent duplicate append on replay, including concurrent MCP processes. Mirror status is reported separately with `POST /api/v1/records/:id/mirror`; a failed status report is visible in the MCP result without hiding central success.
+The MCP snapshots per-capture mirror consent and checkout/Git context into the durable service request. After central capture succeeds, the service delivery adapter performs the local mirror only when the saved consent and server's `mirror.eligible` policy both allow it. Only the full server-returned immutable record is appended. Stable IDs prevent duplicate append on replay, including concurrent MCP processes. The service reports mirror status with `POST /api/v1/records/:id/mirror`; a failed status report is visible in the MCP result without hiding central success.
 
 Mirroring never commits or pushes Git. Paths must stay inside the selected repository; symlink escapes are rejected. A per-file `.lock` directory coordinates writers. An interrupted process can leave a lock behind: stop all MCP writers, confirm no writer remains, then remove that specific empty lock directory and retry the original capture. Locks are deliberately not expired automatically, because a paused live writer must not be mistaken for a dead one. Malformed/partial JSONL is reported for repair rather than silently truncating historical data. Save a copy before repairing any malformed tail.
 
-Capture responses always identify the resolved project and distinguish central success from mirror/report failure. A retry after a mirror failure preserves the centrally captured Git context rather than rewriting it with the checkout's later dirty state.
+Capture responses include a durable receipt. Pending responses do not claim a
+central record ID; delivered receipts retain record and project IDs. Full
+central response objects can be absent after a service restart, in which case
+use `get_record` with the receipt's record ID. Central delivery requires the
+server's authenticated `clientSavedAt-v1` capability; local capture remains
+available while that server is unavailable or incompatible. Explicit tray
+verification also performs an authenticated `GET /projects` read with the
+verified session. Periodic health probes remain authentication-only. Older
+servers leave captures queued until an upgraded compatible server is selected;
+configuration changes do not redirect already queued items. A retry after a
+mirror failure preserves the centrally captured Git context rather than
+rewriting it with the checkout's later dirty state.
 
 ## Acceptance and release identity
 

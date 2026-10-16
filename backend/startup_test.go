@@ -3,10 +3,13 @@ package backend_test
 import (
 	"bufio"
 	"bytes"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -14,6 +17,8 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
@@ -21,11 +26,21 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-var binary, mcpBinary, integrationBinary string
+var binary, mcpBinary, serviceBinary, integrationBinary string
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "scratchpad-go-tests-")
 	if err != nil {
+		panic(err)
+	}
+	helperDir := filepath.Join(dir, "Contents", "Helpers")
+	keyHelper := filepath.Join(helperDir, "scratchpad-keychain.app", "Contents", "MacOS", "scratchpad-keychain")
+	if err = os.MkdirAll(filepath.Dir(keyHelper), 0700); err != nil {
+		_ = os.RemoveAll(dir)
+		panic(err)
+	}
+	if err = os.WriteFile(keyHelper, []byte("#!/bin/sh\nexit 1\n"), 0700); err != nil {
+		_ = os.RemoveAll(dir)
 		panic(err)
 	}
 	binary = filepath.Join(dir, "scratchpad-server")
@@ -35,8 +50,8 @@ func TestMain(m *testing.M) {
 		os.RemoveAll(dir)
 		os.Exit(1)
 	}
-	mcpBinary, integrationBinary = filepath.Join(dir, "scratchpad-mcp"), filepath.Join(dir, "integration")
-	for _, target := range []struct{ output, pkg string }{{mcpBinary, "./cmd/scratchpad-mcp"}, {integrationBinary, "./integration"}} {
+	mcpBinary, serviceBinary, integrationBinary = filepath.Join(helperDir, "scratchpad-mcp"), filepath.Join(helperDir, "scratchpad-service"), filepath.Join(dir, "integration")
+	for _, target := range []struct{ output, pkg string }{{mcpBinary, "./cmd/scratchpad-mcp"}, {serviceBinary, "./cmd/scratchpad-service"}, {integrationBinary, "./integration"}} {
 		build := exec.Command("go", "build", "-race", "-o", target.output, target.pkg)
 		build.Dir = "../mcp"
 		build.Stdout, build.Stderr = os.Stdout, os.Stderr
@@ -206,19 +221,20 @@ func startServer(t *testing.T, path, databaseURL string, listenAddress ...string
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
+	waited := make(chan struct{})
+	var waitErr error
+	go func() { waitErr = cmd.Wait(); close(waited) }()
 	t.Cleanup(func() {
-		cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Process.Signal(syscall.SIGTERM)
 		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("server exited unsuccessfully: %v", err)
+		case <-waited:
+			if waitErr != nil && !strings.Contains(waitErr.Error(), "signal: terminated") {
+				t.Errorf("server exited unsuccessfully: %v", waitErr)
 			}
 		// Allow the server's five-second graceful deadline plus race-runtime exit.
 		case <-time.After(10 * time.Second):
-			cmd.Process.Kill()
-			<-done
+			_ = cmd.Process.Kill()
+			<-waited
 			t.Error("server did not shut down")
 		}
 	})
@@ -246,6 +262,150 @@ func startServer(t *testing.T, path, databaseURL string, listenAddress ...string
 	return ""
 }
 
+// startServerWithStop is used by the cross-process tray acceptance test to
+// create a genuine backend outage and restart the server on the same origin.
+func startServerWithStop(t *testing.T, path, databaseURL, address string, publicOrigins ...string) (string, func()) {
+	t.Helper()
+	if address == "" {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		address = listener.Addr().String()
+		listener.Close()
+	}
+	publicOrigin := "http://" + address
+	if len(publicOrigins) > 0 && publicOrigins[0] != "" {
+		publicOrigin = publicOrigins[0]
+	}
+	cmd := exec.Command(binary, "serve")
+	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_PATH="+path, "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_LISTEN_ADDR="+address, "SCRATCHPAD_PUBLIC_URL="+publicOrigin)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	cmd.Stderr = &logs
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := make(chan struct{})
+	var waitErr error
+	go func() { waitErr = cmd.Wait(); close(waited) }()
+	var stopOnce sync.Once
+	var stopErr error
+	stop := func() {
+		stopOnce.Do(func() {
+			select {
+			case <-waited:
+				stopErr = waitErr
+			default:
+				_ = cmd.Process.Signal(syscall.SIGTERM)
+				select {
+				case <-waited:
+					stopErr = waitErr
+				case <-time.After(10 * time.Second):
+					_ = cmd.Process.Kill()
+					<-waited
+					stopErr = waitErr
+				}
+			}
+		})
+		if stopErr != nil && !strings.Contains(stopErr.Error(), "signal: terminated") {
+			t.Errorf("server exited unsuccessfully: %v", stopErr)
+		}
+	}
+	t.Cleanup(stop)
+	line := make(chan []byte, 1)
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		if scanner.Scan() {
+			line <- append([]byte(nil), scanner.Bytes()...)
+		} else {
+			line <- nil
+		}
+	}()
+	select {
+	case data := <-line:
+		var report struct {
+			Address string `json:"address"`
+		}
+		if err := json.Unmarshal(data, &report); err != nil || report.Address == "" {
+			t.Fatalf("startup report unavailable: %s; logs=%s", data, logs.String())
+		}
+		if report.Address != address {
+			t.Fatalf("server listened on unexpected address %q, want %q", report.Address, address)
+		}
+		return publicOrigin, stop
+	case <-time.After(10 * time.Second):
+		stop()
+		t.Fatalf("server startup timed out; logs=%s", logs.String())
+	}
+	return "", stop
+}
+
+type committedResponseDropProxy struct {
+	server  *http.Server
+	origin  string
+	armDrop atomic.Bool
+	dropped atomic.Int32
+}
+
+// newCommittedResponseDropProxy forwards real requests to the actual backend,
+// but can discard one successful capture response after the backend commits it.
+func newCommittedResponseDropProxy(t *testing.T, backendOrigin string) *committedResponseDropProxy {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	proxy := &committedResponseDropProxy{origin: "http://" + listener.Addr().String()}
+	transport := &http.Transport{Proxy: nil}
+	proxy.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		upstream := request.Clone(request.Context())
+		upstream.URL.Scheme = "http"
+		upstream.URL.Host = strings.TrimPrefix(backendOrigin, "http://")
+		upstream.Host = upstream.URL.Host
+		upstream.RequestURI = ""
+		response, requestErr := transport.RoundTrip(upstream)
+		if requestErr != nil {
+			http.Error(w, "synthetic upstream unavailable", http.StatusBadGateway)
+			return
+		}
+		defer response.Body.Close()
+		isCapture := request.Method == http.MethodPost && strings.HasSuffix(request.URL.Path, "/api/v1/records")
+		if isCapture && response.StatusCode >= 200 && response.StatusCode < 300 && proxy.armDrop.CompareAndSwap(true, false) {
+			// Drain the committed upstream response, then close the downstream
+			// socket without an HTTP response to model a lost central ACK.
+			_, _ = io.Copy(io.Discard, response.Body)
+			proxy.dropped.Add(1)
+			if hijacker, ok := w.(http.Hijacker); ok {
+				connection, _, hijackErr := hijacker.Hijack()
+				if hijackErr == nil {
+					_ = connection.Close()
+					return
+				}
+			}
+			return
+		}
+		for name, values := range response.Header {
+			for _, value := range values {
+				w.Header().Add(name, value)
+			}
+		}
+		w.WriteHeader(response.StatusCode)
+		_, _ = io.Copy(w, response.Body)
+	})}
+	go func() { _ = proxy.server.Serve(listener) }()
+	t.Cleanup(func() {
+		_ = proxy.server.Close()
+		transport.CloseIdleConnections()
+	})
+	return proxy
+}
+
+func (p *committedResponseDropProxy) dropNextCaptureResponse() { p.armDrop.Store(true) }
+
 func TestGoServerReadiness(t *testing.T) {
 	dir := t.TempDir()
 	os.Chmod(dir, 0700)
@@ -265,6 +425,387 @@ func TestGoServerReadiness(t *testing.T) {
 	if response.StatusCode != 200 || report.Status != "ready" || report.Database != "sqlite" {
 		t.Fatalf("unexpected readiness: %d %+v", response.StatusCode, report)
 	}
+}
+
+func TestRealMCPDurableServiceToScratchpadSQLiteRestartAndReceipts(t *testing.T) {
+	work := t.TempDir()
+	if err := os.Chmod(work, 0700); err != nil {
+		t.Fatal(err)
+	}
+	databasePath := legacyFixture(t)
+	privateKey, _ := enrolledSSHKey(t, databasePath)
+	publicKeyPath := privateKey + ".pub"
+	fingerprintOutput, err := exec.Command("ssh-keygen", "-lf", publicKeyPath).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	fingerprintFields := strings.Fields(string(fingerprintOutput))
+	if len(fingerprintFields) < 2 || !strings.HasPrefix(fingerprintFields[1], "SHA256:") {
+		t.Fatalf("synthetic key fingerprint unavailable: %q", fingerprintOutput)
+	}
+	fingerprint := fingerprintFields[1]
+
+	backendListener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	backendAddress := backendListener.Addr().String()
+	_ = backendListener.Close()
+	proxy := newCommittedResponseDropProxy(t, "http://"+backendAddress)
+	origin, stopBackend := startServerWithStop(t, databasePath, "", backendAddress, proxy.origin)
+	if origin != proxy.origin {
+		t.Fatalf("backend public origin %s did not match test proxy %s", origin, proxy.origin)
+	}
+	serviceSocket, stopService := startDurableService(t, work)
+	defer stopService()
+	configureService(t, origin, serviceSocket, publicKeyPath, privateKey, fingerprint, work)
+	workspace := filepath.Join(work, "repo")
+	createDisposableGitRepo(t, workspace, "git@github.com:synthetic-integration/full-flow.git")
+	statePath := filepath.Join(work, "captures.json")
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "capture", "")
+	assertStoredTrayCaptures(t, databasePath, 8, 8)
+	initialCaptureState, err := os.ReadFile(statePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readStatePath := filepath.Join(work, "initial-captures-for-read.json")
+	if err = os.WriteFile(readStatePath, initialCaptureState, 0600); err != nil {
+		t.Fatal(err)
+	}
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "lost-response-capture", "")
+	if count := countRecords(t, databasePath); count != 10 {
+		t.Fatalf("lost-ack intake did not create exactly one central record: got %d", count)
+	}
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "lost-response-retry", "")
+	if count := countRecords(t, databasePath); count != 10 {
+		t.Fatalf("retry after discarded acknowledgement duplicated a central record: got %d", count)
+	}
+	proxy.dropNextCaptureResponse()
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "central-response-drop", "")
+	if dropped := proxy.dropped.Load(); dropped != 1 {
+		t.Fatalf("expected one committed central capture response to be dropped, got %d", dropped)
+	}
+	centralSavedAt := storedClientSavedAtByTitle(t, databasePath, "Synthetic central response lost after commit")
+	if centralSavedAt == "" || countRecords(t, databasePath) != 11 {
+		t.Fatal("backend did not commit exactly one timestamped record before dropping its response")
+	}
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "central-response-retry", "")
+	if after := storedClientSavedAtByTitle(t, databasePath, "Synthetic central response lost after commit"); after != centralSavedAt {
+		t.Fatalf("central retry changed the original clientSavedAt: before=%q after=%q", centralSavedAt, after)
+	}
+	if count := countRecords(t, databasePath); count != 11 {
+		t.Fatalf("central response retry duplicated the committed record: got %d records", count)
+	}
+	// A fully delivered item remains replayable after a process restart even
+	// though its transient full server response is no longer cached in memory.
+	stopService()
+	serviceSocket, stopService = startDurableService(t, work)
+	defer stopService()
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "central-response-retry", "")
+	if count := countRecords(t, databasePath); count != 11 {
+		t.Fatalf("same-request replay after delivered-service restart duplicated a central record: got %d", count)
+	}
+	secondWorkspace := filepath.Join(work, "repo-second")
+	createDisposableGitRepo(t, secondWorkspace, "git@github.com:synthetic-integration/second-scope.git")
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "scope", "-second-workspace", secondWorkspace)
+
+	// Capture while the actual backend process is down. The result must be a
+	// local pending receipt, then survive stopping and restarting the service.
+	stopBackend()
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "outage-capture", "")
+	stopService()
+	_, stopBackend = startServerWithStop(t, databasePath, "", backendAddress, proxy.origin)
+	defer stopBackend()
+	serviceSocket, stopService = startDurableService(t, work)
+	defer stopService()
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, statePath, "receipt", "")
+	assertStoredTrayCaptures(t, databasePath, 8, 8)
+	if count := countRecords(t, databasePath); count != 14 { // restored record + eight types + lost-ack + committed-response retry + two scopes + outage capture
+		t.Fatalf("expected 14 centrally persisted records after receipt replay, got %d", count)
+	}
+
+	// A live central server must not become a direct-capture fallback when the
+	// local intake process is stopped.
+	stopService()
+	if _, err := os.Lstat(serviceSocket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("test service socket remained after shutdown: err=%v", err)
+	}
+	before := countRecords(t, databasePath)
+	runMCPPhase(t, origin, serviceSocket, workspace, privateKey, readStatePath, "service-unavailable", "")
+	if after := countRecords(t, databasePath); after != before {
+		t.Fatalf("capture bypassed unavailable local service: record count %d -> %d", before, after)
+	}
+	if _, err := os.Lstat(serviceSocket); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("failed MCP startup left a local service socket behind: err=%v", err)
+	}
+}
+
+func startDurableService(t *testing.T, base string) (string, func()) {
+	return startDurableServiceWithEnv(t, base)
+}
+
+func startDurableServiceWithEnv(t *testing.T, base string, extraEnv ...string) (string, func()) {
+	t.Helper()
+	socketRoot := "/private/tmp"
+	if _, err := os.Stat(socketRoot); err != nil {
+		socketRoot = os.TempDir()
+	}
+	privateDir, err := os.MkdirTemp(socketRoot, "spq-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(privateDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(privateDir) })
+	socket := filepath.Join(privateDir, "capture.sock")
+	keyPath := filepath.Join(base, "synthetic-queue-key")
+	if _, err := os.Stat(keyPath); errors.Is(err, os.ErrNotExist) {
+		queueKey := make([]byte, 32)
+		if _, err := rand.Read(queueKey); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(keyPath, queueKey, 0600); err != nil {
+			t.Fatal(err)
+		}
+		clear(queueKey)
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	helperPath := filepath.Join(privateDir, "synthetic-key-helper")
+	helper := "#!/bin/sh\nexec /bin/cat \"$SCRATCHPAD_TEST_QUEUE_KEY\"\n"
+	if err := os.WriteFile(helperPath, []byte(helper), 0700); err != nil {
+		t.Fatal(err)
+	}
+	checkHelper := exec.Command(helperPath, "get", "synthetic-test")
+	checkHelper.Env = append(os.Environ(), "SCRATCHPAD_TEST_QUEUE_KEY="+keyPath)
+	if output, err := checkHelper.Output(); err != nil || len(output) != 32 {
+		t.Fatalf("synthetic helper contract failed (output length %d): %v", len(output), err)
+	}
+	command := exec.Command(serviceBinary, "--database", filepath.Join(base, "queue.sqlite"), "--socket", socket, "--key-helper", helperPath, "--key-identifier", "synthetic-test")
+	command.Env = append(os.Environ(), extraEnv...)
+	command.Env = append(command.Env, "SCRATCHPAD_TEST_QUEUE_KEY="+keyPath)
+	var serviceLogs bytes.Buffer
+	command.Stdout, command.Stderr = &serviceLogs, &serviceLogs
+	if err := command.Start(); err != nil {
+		t.Fatal(err)
+	}
+	waited := make(chan struct{})
+	var waitErr error
+	go func() { waitErr = command.Wait(); close(waited) }()
+	var stopOnce sync.Once
+	var stopErr error
+	stop := func() {
+		stopOnce.Do(func() {
+			select {
+			case <-waited:
+				stopErr = waitErr
+			default:
+				_ = command.Process.Signal(syscall.SIGTERM)
+				select {
+				case <-waited:
+					stopErr = waitErr
+				case <-time.After(10 * time.Second):
+					_ = command.Process.Kill()
+					<-waited
+					stopErr = waitErr
+				}
+			}
+		})
+		if stopErr != nil && !strings.Contains(stopErr.Error(), "signal: terminated") {
+			t.Errorf("durable service exited unsuccessfully: %v", stopErr)
+		}
+	}
+	t.Cleanup(stop)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if info, err := os.Stat(socket); err == nil && info.Mode()&os.ModeSocket != 0 {
+			return socket, stop
+		}
+		select {
+		case <-waited:
+			_, databaseErr := os.Stat(filepath.Join(base, "queue.sqlite"))
+			_, socketErr := os.Stat(socket)
+			t.Fatalf("durable service exited during startup: exit=%v queueDBCreated=%t socketRemaining=%t output=%s", waitErr, databaseErr == nil, socketErr == nil, serviceLogs.String())
+		default:
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	stop()
+	t.Fatal("durable service did not create its private socket")
+	return "", stop
+}
+
+func configureService(t *testing.T, origin, socket, publicKey, signingKey, fingerprint, workspace string) {
+	t.Helper()
+	command := exec.Command(integrationBinary, "-url", origin, "-public-key", publicKey, "-signing-key", signingKey, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", socket, "-fingerprint", fingerprint, "-phase", "configure-service")
+	out, err := command.CombinedOutput()
+	if err != nil || !strings.Contains(string(out), "PASS configure-service") {
+		t.Fatalf("service configuration against actual backend failed: %v %s", err, out)
+	}
+}
+
+func startConfiguredDurableService(t *testing.T, origin, base, workspace, privateKey string, serviceEnv ...string) (string, func()) {
+	t.Helper()
+	fingerprintOutput, err := exec.Command("ssh-keygen", "-lf", privateKey+".pub").Output()
+	if err != nil {
+		t.Fatal("synthetic enrolled SSH fingerprint unavailable")
+	}
+	fields := strings.Fields(string(fingerprintOutput))
+	if len(fields) < 2 || !strings.HasPrefix(fields[1], "SHA256:") {
+		t.Fatal("synthetic enrolled SSH fingerprint malformed")
+	}
+	socket, stop := startDurableServiceWithEnv(t, base, serviceEnv...)
+	configureService(t, origin, socket, privateKey+".pub", privateKey, fields[1], workspace)
+	return socket, stop
+}
+
+func createDisposableGitRepo(t *testing.T, path, remote string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"init", "-b", "main"}, {"remote", "add", "origin", remote}} {
+		command := exec.Command("git", args...)
+		command.Dir = path
+		if out, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("create synthetic Git fixture: %v %s", err, out)
+		}
+	}
+}
+
+func runMCPPhase(t *testing.T, origin, socket, workspace, signingKey, statePath, phase string, extraArgs ...string) {
+	t.Helper()
+	publicKey := signingKey + ".pub"
+	args := []string{"-url", origin, "-public-key", publicKey, "-signing-key", signingKey, "-workspace", workspace, "-binary", mcpBinary, "-service-socket", socket, "-state", statePath, "-phase", phase}
+	args = append(args, extraArgs...)
+	command := exec.Command(integrationBinary, args...)
+	// MCP startup may launch its bundled sibling service when local intake is
+	// unavailable. Keep that service's default database and config under this
+	// disposable test tree, and do not expose the host SSH agent to it.
+	testHome := filepath.Join(filepath.Dir(statePath), "mcp-test-home")
+	if err := os.MkdirAll(testHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(testHome, 0700); err != nil {
+		t.Fatal(err)
+	}
+	environment := make([]string, 0, len(os.Environ())+3)
+	for _, entry := range os.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if name == "HOME" || name == "XDG_CONFIG_HOME" || name == "SSH_AUTH_SOCK" {
+			continue
+		}
+		environment = append(environment, entry)
+	}
+	command.Env = append(environment,
+		"HOME="+testHome,
+		"XDG_CONFIG_HOME="+testHome,
+		"SSH_AUTH_SOCK=",
+	)
+	out, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("actual service/MCP/backend phase %s failed: %v %s", phase, err, out)
+	}
+	want := "PASS " + phase
+	if !strings.Contains(string(out), want) {
+		t.Fatalf("actual service/MCP/backend phase %s did not complete: %s", phase, out)
+	}
+}
+
+func assertStoredTrayCaptures(t *testing.T, path string, expectedCaptures, expectedTypes int) {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT data FROM entities WHERE kind='record'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	types := map[string]bool{}
+	captures := 0
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var record struct {
+			Title         string `json:"title"`
+			Type          string `json:"type"`
+			ClientSavedAt string `json:"clientSavedAt"`
+		}
+		if err := json.Unmarshal([]byte(raw), &record); err != nil {
+			t.Fatal(err)
+		}
+		if strings.HasPrefix(record.Title, "Integration ") {
+			captures++
+			if record.ClientSavedAt == "" {
+				t.Fatalf("central record %q omitted original clientSavedAt", record.Title)
+			}
+			types[record.Type] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if captures != expectedCaptures || len(types) != expectedTypes {
+		t.Fatalf("backend SQLite stored %d tray captures across %d types, expected %d captures / %d types: %v", captures, len(types), expectedCaptures, expectedTypes, types)
+	}
+}
+
+func storedClientSavedAtByTitle(t *testing.T, path, title string) string {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	rows, err := db.Query(`SELECT data FROM entities WHERE kind='record'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var savedAt string
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			t.Fatal(err)
+		}
+		var record struct {
+			Title         string `json:"title"`
+			ClientSavedAt string `json:"clientSavedAt"`
+		}
+		if err := json.Unmarshal([]byte(raw), &record); err != nil {
+			t.Fatal(err)
+		}
+		if record.Title == title {
+			if savedAt != "" {
+				t.Fatalf("backend contains duplicate records titled %q", title)
+			}
+			savedAt = record.ClientSavedAt
+		}
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return savedAt
+}
+
+func countRecords(t *testing.T, path string) int {
+	t.Helper()
+	db, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow(`SELECT count(*) FROM entities WHERE kind='record'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	return count
 }
 
 const restoredRecord = `{"id":"rec_restored","createdAt":"2026-10-01T00:00:00.000Z","version":1,"projectId":"proj_restored","type":"finding","title":"Preserve original evidence","authority":"observed","confidence":"high","payload":{"finding":"A synthetic restored capture.","custom":[1,true,"evidence"]},"sourceContext":{"branch":"main","commit":"abc123"}}`

@@ -90,7 +90,8 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 		}
 		if r.URL.Path == "/api/v1/records" && r.Method == "POST" {
 			var body struct {
-				GitContext GitContext `json:"gitContext"`
+				GitContext GitContext     `json:"gitContext"`
+				Record     map[string]any `json:"record"`
 			}
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 				t.Error(err)
@@ -98,13 +99,15 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 			if body.GitContext.RootPathHint != canonicalRoot || body.GitContext.Commit == "" || !body.GitContext.Dirty || body.GitContext.RepositoryIdentity != "github.com/synthetic/prepared" {
 				t.Errorf("lost provenance: %+v", body.GitContext)
 			}
-			fmt.Fprint(w, `{"record":{"id":"synthetic-record"},"mirror":{"eligible":false}}`)
+			body.Record["id"] = "synthetic-record"
+			json.NewEncoder(w).Encode(map[string]any{"record": body.Record, "mirror": map[string]any{"eligible": false}})
 			return
 		}
 		fmt.Fprint(w, `{"records":[],"artifacts":[],"job":{"id":"synthetic-job"}}`)
 	}))
 	defer api.Close()
 	c, _ := NewClient(Config{URL: api.URL, WorkingDirectory: root})
+	attachFixtureCaptureService(c)
 	c.token = "synthetic-token"
 	c.expires = time.Now().Add(time.Hour)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

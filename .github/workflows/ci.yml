@@ -10,6 +10,27 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  macos-native:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: mcp/go.mod
+          cache-dependency-path: mcp/go.sum
+      - name: Build an isolated local-service fixture for the Swift IPC smoke
+        run: go build -C mcp -o "$RUNNER_TEMP/scratchpad-service-smoke" ./cmd/scratchpad-service
+      - name: Verify native package, Swift IPC seam and synthetic gates
+        env:
+          SCRATCHPAD_TEST_SERVICE: ${{ runner.temp }}/scratchpad-service-smoke
+        run: swift test --package-path macos
+      - name: Verify app metadata, release validator and shell scripts
+        run: |
+          plutil -lint macos/Resources/Info.plist macos/Resources/KeychainHelper-Info.plist macos/Resources/com.alexcatdad.scratchpad.service.plist
+          for script in macos/Scripts/*.sh; do sh -n "$script"; done
+          macos/Scripts/test-release-validator.sh
+          macos/Scripts/test-bundle-validator.sh
+          macos/Scripts/test-package-app.sh
   web-and-docs:
     runs-on: ubuntu-latest
     steps:

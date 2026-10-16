@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
 
+import { startDurableMcpService } from "./durable-mcp-service";
 import { createWorkflowHarness, root } from "./workflow-harness";
 
 const {
@@ -22,10 +23,12 @@ const {
   stop,
   temporary,
 } = createWorkflowHarness();
+let stopDurableMcpService: (() => Promise<void>) | undefined;
 
 test.beforeAll(start);
 test.afterAll(async () => {
   try {
+    await stopDurableMcpService?.();
     await stop();
   } finally {
     cleanupDocker();
@@ -542,6 +545,20 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     ],
     projectDirectory,
   );
+  command(
+    "git",
+    [
+      "-c",
+      "user.name=Acceptance",
+      "-c",
+      "user.email=acceptance@example.com",
+      "commit",
+      "--allow-empty",
+      "-m",
+      "Disposable workflow baseline",
+    ],
+    projectDirectory,
+  );
   const suppliedBinary = process.env.SCRATCHPAD_E2E_MCP_BINARY;
   const binary = suppliedBinary
     ? resolve(root, suppliedBinary)
@@ -573,9 +590,23 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     projectDirectory,
     "-binary",
     binary,
+    "-service-socket",
+    "",
     "-state",
     resolve(temporary, "state.json"),
   ];
+  const durableService = await startDurableMcpService({
+    environment,
+    origin,
+    publicKey: `${key}.pub`,
+    signingKey: key,
+    workspace: projectDirectory,
+    binary,
+    statePath: resolve(temporary, "state.json"),
+    temporary,
+  });
+  stopDurableMcpService = durableService.stop;
+  args[args.indexOf("-service-socket") + 1] = durableService.socketPath;
   command("go", [...args, "-phase", "capture"], resolve(root, "mcp"));
   const restrictedProject = await page.evaluate(async () => {
     const resolved = await fetch("/api/v1/projects/resolve", {
@@ -616,6 +647,11 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   );
   await restartOrRestore();
   command("go", [...args, "-phase", "verify"], resolve(root, "mcp"));
+  command(
+    "go",
+    [...args, "-phase", "verify-projects", "-mirror"],
+    resolve(root, "mcp"),
+  );
   await page.reload();
   await expect(
     page.getByRole("heading", { name: "Settings", exact: true }),
@@ -835,7 +871,10 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
         ],
         {
           cwd: resolve(root, "mcp"),
-          env: environment,
+          env: {
+            ...environment,
+            SCRATCHPAD_SERVICE_SOCKET: durableService.socketPath,
+          },
           stdio: ["ignore", "pipe", "pipe"],
         },
       );

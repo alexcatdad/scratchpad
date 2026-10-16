@@ -52,9 +52,17 @@ The architecture prioritizes:
 │                              │
 │ - Git/project discovery      │
 │ - Git provenance             │
-│ - SSH auth challenge         │
-│ - optional repo dual-write   │
-│ - HTTP client                │
+│ - local durable capture IPC  │
+│ - online reads and mutations │
+└──────────────┬───────────────┘
+               │ private local socket
+               ▼
+┌──────────────────────────────┐
+│ scratchpad-service           │
+│ Go                           │
+│ - encrypted durable queue    │
+│ - SSH identity and delivery  │
+│ - receipt and status API     │
 └──────────────┬───────────────┘
                │ HTTPS / HTTP
                ▼
@@ -967,7 +975,37 @@ Accepted on 2026-09-29 (decision `scratchpad-20260929-015`).
 
 The central API remains authoritative. Exact append coordination and mirror-result reporting are implementation details to resolve when building mirroring.
 
-## 30. Remaining-product implementation
+## 30. Accepted clarification — durable local tray capture
+
+Typed capture requests enter the private local capture service before the MCP
+acknowledges them. The service durably stores immutable payload, stable caller
+request identity, per-call project/Git snapshot and optional RFC3339Nano
+`clientSavedAt`; `recordedAt` remains server-owned and separate. Delivery
+re-authenticates the pinned server and SSH credential, records the authenticated
+credential identity before any possible server commit, and retries with that
+identity and request content. Re-enrolling the same key cannot silently change
+the retry scope.
+
+Central delivery requires `clientSavedAt-v1` in authenticated verification
+before resolving or submitting a capture. Older servers block delivery and
+retain the capture; local intake remains available without authentication or
+network access. Explicit tray verification performs an authenticated `GET
+/projects` read with the verified session before reporting connected. Periodic
+health probes perform authentication only. There is no direct MCP-to-server
+capture fallback if the service is unavailable or stopped. A stopped service
+rejects new intake. Pending responses expose a local receipt without
+inventing a central ID. Delivered responses expose durable central record and
+project IDs; full record/project/mirror objects are optional after a service
+restart. `get_record` remains the way to retrieve a central record. Search and
+non-capture mutations remain online-only.
+
+Pause prevents new delivery and retains queued items; Stop prevents new intake
+and delivery while preserving recoverable queue data. Configuration changes
+apply to new intake; existing queue items remain pinned to their original
+server and credential fingerprint. Repository mirroring remains optional and
+follows central success.
+
+## 31. Remaining-product implementation
 
 The source implementation extends the SQLite MVP with optional PostgreSQL, database-backed AI processing and intentional private document generation. Published v0.1.3 packages retain their original SQLite-only feature set; source support, canonical CI, release publication and deployment acceptance are separate evidence.
 
@@ -1064,3 +1102,15 @@ continues to run TypeScript. Actual locally built image verification covers
 browser enrollment, capture, online SQLite backup and fresh-volume restoration;
 full release and rollback acceptance remains separate. See the
 [Go container runbook](runbooks/go-container.md).
+
+## Accepted clarification: app-owned MCP connection
+
+The bundled MCP is a local client of the app's collector. Coding tools need
+only its executable path. Server URL, SSH-key references, authentication and
+HTTP sessions belong to the collector; legacy MCP connection environment values
+are ignored. Checkout discovery and explicit repository mirror consent remain
+local to the invoking MCP. All capture types use durable intake. Reads, project
+resolution and existing optional AI operations use an allowlisted collector IPC
+request, with bounded execution and response size. No direct-server fallback
+exists when the collector is unavailable. Offline reads report unavailability;
+pending captures retain their original server and credential binding.
