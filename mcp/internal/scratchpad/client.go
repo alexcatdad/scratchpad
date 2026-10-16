@@ -58,6 +58,10 @@ func NewClient(c Config) (*Client, error) {
 			return nil, err
 		}
 	}
+	// Resolve the SSH-agent signing reference once for authentication and capture.
+	if c.SigningKeyPath == "" {
+		c.SigningKeyPath = c.PublicKeyPath
+	}
 	if c.MirrorPath == "" {
 		c.MirrorPath = "scratchpad/decisions.jsonl"
 	}
@@ -197,11 +201,7 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid signing proof")
 	}
-	key := c.Config.SigningKeyPath
-	if key == "" {
-		key = c.Config.PublicKeyPath
-	}
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", key, "-n", "scratchpad-auth-v2")
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", c.Config.SigningKeyPath, "-n", "scratchpad-auth-v2")
 	cmd.Stdin = bytes.NewReader(proof)
 	signature, err := cmd.Output()
 	if err != nil {

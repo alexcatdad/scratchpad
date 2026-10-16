@@ -71,3 +71,23 @@ Run the focused shell workflow test with:
 ```sh
 macos/Scripts/test-dev-app.sh
 ```
+
+## Signing-key fallback regression
+
+An omitted `SCRATCHPAD_SIGNING_KEY` uses `SCRATCHPAD_PUBLIC_KEY` as the
+SSH-agent signing reference. The MCP resolves that default before authentication
+and local capture configuration validation. Explicit references must still match
+the collector; a different reference must fail before intake.
+
+Verify source changes without replacing the running app:
+
+```sh
+go -C mcp test -race ./internal/scratchpad -run '^TestCaptureSigningKeyFallback$' -count=1
+go -C mcp vet ./...
+go -C mcp test -race ./...
+go -C mcp build -o /private/tmp/scratchpad-mcp-validation ./cmd/scratchpad-mcp
+```
+
+These checks use synthetic fixtures. Rebuilding the dev bundle, reloading Codex,
+and repeating live offline acceptance are separate steps requiring the owner's
+approval for the affected local processes and settings.

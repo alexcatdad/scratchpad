@@ -220,3 +220,67 @@ func TestDeliveredReceiptAfterRestartDoesNotInventFullServerObjects(t *testing.T
 		t.Fatalf("receipt-only response has fabricated or missing identities: %s", raw)
 	}
 }
+
+// This boundary fixture records whether mismatched credentials reach intake.
+type signingReferenceService struct {
+	localcapture.Service
+	configuration localcapture.ServiceConfiguration
+	outcome       localcapture.CaptureOutcome
+	calls         int
+}
+
+func (s *signingReferenceService) GetConfiguration(context.Context) (localcapture.ServiceConfiguration, error) {
+	return s.configuration, nil
+}
+func (s *signingReferenceService) Capture(context.Context, localcapture.CaptureRequest) (localcapture.CaptureOutcome, error) {
+	s.calls++
+	return s.outcome, nil
+}
+
+func TestCaptureSigningKeyFallback(t *testing.T) {
+	for _, tc := range []struct {
+		name, signing, servicePublic, serviceSigning string
+		pending, reject                              bool
+	}{
+		{name: "omitted online", servicePublic: "owner.pub", serviceSigning: "owner.pub"},
+		{name: "omitted offline", servicePublic: "owner.pub", serviceSigning: "owner.pub", pending: true},
+		{name: "explicit signing reference", signing: "owner.key", servicePublic: "owner.pub", serviceSigning: "owner.key"},
+		{name: "different signing reference", signing: "other.key", servicePublic: "owner.pub", serviceSigning: "owner.pub", reject: true},
+		{name: "different public reference", servicePublic: "other.pub", serviceSigning: "owner.pub", reject: true},
+		{name: "omitted does not match different signing reference", servicePublic: "owner.pub", serviceSigning: "other.key", reject: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			signing := ""
+			if tc.signing != "" {
+				signing = filepath.Join(dir, tc.signing)
+			}
+			c, err := NewClient(Config{URL: "http://localhost:3123", WorkingDirectory: dir, PublicKeyPath: filepath.Join(dir, "owner.pub"), SigningKeyPath: signing})
+			if err != nil {
+				t.Fatal(err)
+			}
+			outcome := localcapture.CaptureOutcome{Outcome: localcapture.OutcomeDelivered, Receipt: localcapture.Receipt{ReceiptID: "receipt-synthetic", State: localcapture.ReceiptDelivered, CentralRecordID: "rec_synthetic", CentralProjectID: "proj_synthetic"}}
+			if tc.pending {
+				outcome.Outcome = localcapture.OutcomeSavedPending
+				outcome.Receipt.State = localcapture.ReceiptPending
+				outcome.Receipt.CentralRecordID = ""
+				outcome.Receipt.CentralProjectID = ""
+			}
+			s := &signingReferenceService{configuration: localcapture.ServiceConfiguration{ServerURL: c.Config.URL, CredentialFingerprint: "SHA256:synthetic", PublicKeyPath: filepath.Join(dir, tc.servicePublic), SigningKeyPath: filepath.Join(dir, tc.serviceSigning)}, outcome: outcome}
+			c.CaptureService = s
+			_, got, err := c.capture(context.Background(), "finding", Common{Scope: Scope{ProjectID: "proj_synthetic"}, RequestID: "synthetic-signing-fallback", Title: "Synthetic signing fallback", Authority: "observed", Confidence: "high"}, FindingPayload{Finding: "Synthetic boundary regression"})
+			if tc.reject {
+				if err == nil || !strings.Contains(err.Error(), "key references") || s.calls != 0 {
+					t.Fatalf("mismatch must fail before intake: calls=%d err=%v", s.calls, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s.calls != 1 || got.Outcome != string(outcome.Outcome) || got.Receipt["receiptId"] != "receipt-synthetic" || got.CentralRecordID != outcome.Receipt.CentralRecordID {
+				t.Fatalf("receipt outcome changed: %+v", got)
+			}
+		})
+	}
+}
