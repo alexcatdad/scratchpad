@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/alexcatdad/scratchpad/mcp/internal/localcapture"
 	"github.com/alexcatdad/scratchpad/mcp/internal/scratchpad"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -30,17 +29,21 @@ func main() {
 	// Capture always goes through the durable per-user service. An explicitly
 	// configured socket is useful for tests and managed installs; blank uses the
 	// platform default. Attempt collector startup before serving MCP. A failure
-	// leaves central reads available; captures continue to fail closed.
+	// keeps MCP available for diagnostics; all operations fail closed.
 	socketPath := os.Getenv("SCRATCHPAD_SERVICE_SOCKET")
 	if err := ensureCollector(ctx, socketPath, launchCollector); err != nil {
 		fmt.Fprintln(os.Stderr, "Scratchpad local capture is unavailable; open the tray app to inspect service status.")
 	}
-	c, err := scratchpad.NewClient(scratchpad.Config{URL: os.Getenv("SCRATCHPAD_URL"), PublicKeyPath: os.Getenv("SCRATCHPAD_PUBLIC_KEY"), SigningKeyPath: os.Getenv("SCRATCHPAD_SIGNING_KEY"), Mirror: os.Getenv("SCRATCHPAD_MIRROR") == "true", MirrorPath: os.Getenv("SCRATCHPAD_MIRROR_PATH")})
+	c, err := scratchpad.NewLocalClient(socketPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	c.CaptureService = localcapture.NewClient(socketPath)
+	c.Config.Mirror = os.Getenv("SCRATCHPAD_MIRROR") == "true"
+	c.Config.MirrorPath = os.Getenv("SCRATCHPAD_MIRROR_PATH")
+	if c.Config.MirrorPath == "" {
+		c.Config.MirrorPath = "scratchpad/decisions.jsonl"
+	}
 	if err = scratchpad.NewServerWithVersion(c, version).Run(ctx, &mcp.StdioTransport{}); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

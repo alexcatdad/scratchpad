@@ -22,9 +22,9 @@ func main() {
 	}
 }
 func run() error {
-	endpoint := flag.String("url", "", "Backend URL")
-	public := flag.String("public-key", "", "Synthetic public-key file")
-	private := flag.String("signing-key", "", "Synthetic private-key file")
+	flag.String("url", "", "Backend URL")
+	flag.String("public-key", "", "Synthetic public-key file")
+	flag.String("signing-key", "", "Synthetic private-key file")
 	workspace := flag.String("workspace", "", "Synthetic Git checkout")
 	binary := flag.String("binary", "", "MCP binary")
 	other := flag.String("other-project", "", "Second consenting project")
@@ -34,7 +34,7 @@ func run() error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, *binary)
 	cmd.Dir = *workspace
-	cmd.Env = append(os.Environ(), "SCRATCHPAD_URL="+*endpoint, "SCRATCHPAD_PUBLIC_KEY="+*public, "SCRATCHPAD_SIGNING_KEY="+*private, "SCRATCHPAD_MIRROR=false")
+	cmd.Env = append(os.Environ(), "SCRATCHPAD_MIRROR=false")
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "rag-integration", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
 		return err

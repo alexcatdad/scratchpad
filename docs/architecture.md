@@ -1102,3 +1102,15 @@ continues to run TypeScript. Actual locally built image verification covers
 browser enrollment, capture, online SQLite backup and fresh-volume restoration;
 full release and rollback acceptance remains separate. See the
 [Go container runbook](runbooks/go-container.md).
+
+## Accepted clarification: app-owned MCP connection
+
+The bundled MCP is a local client of the app's collector. Coding tools need
+only its executable path. Server URL, SSH-key references, authentication and
+HTTP sessions belong to the collector; legacy MCP connection environment values
+are ignored. Checkout discovery and explicit repository mirror consent remain
+local to the invoking MCP. All capture types use durable intake. Reads, project
+resolution and existing optional AI operations use an allowlisted collector IPC
+request, with bounded execution and response size. No direct-server fallback
+exists when the collector is unavailable. Offline reads report unavailability;
+pending captures retain their original server and credential binding.

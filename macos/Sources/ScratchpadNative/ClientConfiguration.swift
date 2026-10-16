@@ -99,21 +99,15 @@ public enum ClientConfiguration {
 
         reparsed = try parseTOMLSections(lines)
         let envSection = reparsed.first(where: { $0.path == ["mcp_servers", "scratchpad", "env"] })
-        if envSection == nil {
-            let refreshedTarget = reparsed.first(where: { $0.path == ["mcp_servers", "scratchpad"] })!
-            let header = refreshedTarget.end
-            lines.insert("[mcp_servers.scratchpad.env]", at: header)
-            for (key, value) in requiredEnvironment(configuration).sorted(by: { $0.key < $1.key }) {
-                lines.insert("\(key) = \"\(tomlEscape(value))\"", at: header + 1)
-            }
-        } else if let envSection {
+        if let envSection {
             try validateAssignments(in: envSection, lines: lines)
-            for (key, value) in requiredEnvironment(configuration).sorted(by: { $0.key < $1.key }) {
+            for key in connectionEnvironmentKeys {
                 if let index = assignmentLine(key, in: envSection, lines: lines) {
-                    lines[index] = replacingTOMLAssignment(lines[index], key: key, value: value)
-                } else {
-                    lines.insert("\(key) = \"\(tomlEscape(value))\"", at: envSection.end)
+                    lines[index] = ""
                 }
+            }
+            if lines[(envSection.header + 1)..<envSection.end].allSatisfy({ stripTOMLComment($0).trimmingCharacters(in: .whitespaces).isEmpty }) {
+                lines.removeSubrange(envSection.header..<envSection.end)
             }
         }
         return lines.joined(separator: "\n") + "\n"
@@ -141,17 +135,18 @@ public enum ClientConfiguration {
             guard let dictionary = current as? [String: String] else { throw ClientConfigurationError.invalidEntryEnvironment }
             environment = dictionary
         } else { environment = [:] }
-        requiredEnvironment(configuration).forEach { environment[$0.key] = $0.value }
+        connectionEnvironmentKeys.forEach { environment.removeValue(forKey: $0) }
         entry["command"] = executable
         entry.removeValue(forKey: "args")
-        entry["env"] = environment
+        if environment.isEmpty { entry.removeValue(forKey: "env") }
+        else { entry["env"] = environment }
         servers["scratchpad"] = entry
         root["mcpServers"] = servers
         return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
     }
 
     public static func genericEntry(executable: String, configuration: ServiceConfiguration) throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["command": executable, "env": requiredEnvironment(configuration)], options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
+        try JSONSerialization.data(withJSONObject: ["command": executable], options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
     }
 
     public static func writeAtomically(_ bytes: Data, to url: URL) throws {
@@ -184,11 +179,8 @@ public enum ClientConfiguration {
         throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
     }
 
-    private static func requiredEnvironment(_ configuration: ServiceConfiguration) -> [String: String] {
-        ["SCRATCHPAD_URL": configuration.serverURL,
-         "SCRATCHPAD_PUBLIC_KEY": configuration.publicKeyPath,
-         "SCRATCHPAD_SIGNING_KEY": configuration.signingKeyPath]
-    }
+    private static let connectionEnvironmentKeys = ["SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"]
+
     private static func tomlEscape(_ value: String) -> String {
         value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
     }

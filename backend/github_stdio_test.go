@@ -18,16 +18,18 @@ func TestGithubPublishedKeyAuthorizesRealStdioUntilRemoved(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			session := githubLogin(t, origin, "setup", token)
 
+			serviceSocket, _ := startConfiguredDurableService(t, origin, t.TempDir(), filepath.Dir(private), private)
+
 			read := func(allowed bool) {
 				t.Helper()
-				cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-phase", "detail", "-record-id", "rec_restored")
+				cmd := exec.Command(integrationBinary, "-url", origin, "-public-key", private+".pub", "-signing-key", private, "-workspace", filepath.Dir(private), "-binary", mcpBinary, "-service-socket", serviceSocket, "-phase", "detail", "-record-id", "rec_restored")
 				out, err := cmd.CombinedOutput()
 				if allowed {
 					if err != nil || !strings.Contains(string(out), "PASS detail:") {
 						t.Fatalf("published key did not authorize real stdio record read: %v %s", err, out)
 					}
-				} else if err == nil || !strings.Contains(string(out), "AUTH_INVALID") {
-					t.Fatalf("revoked published key did not fail with AUTH_INVALID: %v %s", err, out)
+				} else if err == nil || !strings.Contains(string(out), "local Scratchpad service: authentication") {
+					t.Fatalf("revoked published key did not fail with collector authentication error: %v %s", err, out)
 				}
 			}
 

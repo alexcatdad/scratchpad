@@ -42,15 +42,15 @@ func TestDurableCaptureStdioHelper(t *testing.T) {
 	if os.Getenv("SCRATCHPAD_DURABLE_MCP_HELPER") != "1" {
 		t.Skip("stdio child helper")
 	}
-	client, err := scratchpad.NewClient(scratchpad.Config{
-		URL: os.Getenv("SCRATCHPAD_TEST_URL"), PublicKeyPath: os.Getenv("SCRATCHPAD_TEST_PUBLIC_KEY"),
-		SigningKeyPath: os.Getenv("SCRATCHPAD_TEST_SIGNING_KEY"), Mirror: os.Getenv("SCRATCHPAD_TEST_MIRROR") == "true",
-		MirrorPath: os.Getenv("SCRATCHPAD_TEST_MIRROR_PATH"),
-	})
+	client, err := scratchpad.NewLocalClient(os.Getenv("SCRATCHPAD_TEST_SOCKET"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	client.CaptureService = localcapture.NewClient(os.Getenv("SCRATCHPAD_TEST_SOCKET"))
+	client.Config.Mirror = os.Getenv("SCRATCHPAD_TEST_MIRROR") == "true"
+	client.Config.MirrorPath = os.Getenv("SCRATCHPAD_TEST_MIRROR_PATH")
+	if client.Config.MirrorPath == "" {
+		client.Config.MirrorPath = "scratchpad/decisions.jsonl"
+	}
 	if err = scratchpad.NewServer(client).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		t.Fatal(err)
 	}
@@ -173,6 +173,12 @@ func TestRealStdioMCPToDurableServiceToSSHHTTP(t *testing.T) {
 			record := created[recordID]
 			mu.Unlock()
 			_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": true}})
+		case strings.HasPrefix(r.URL.Path, "/api/v1/records/") && r.Method == http.MethodGet:
+			if r.Header.Get("Authorization") != "Bearer synthetic-session" {
+				http.Error(w, "unauthorized", 401)
+				return
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"record": map[string]any{"id": "record-synthetic-read"}})
 		case r.URL.Path == "/api/v1/projects" && r.Method == http.MethodGet:
 			_ = json.NewEncoder(w).Encode(map[string]any{"projects": []any{map[string]any{"id": "project-synthetic", "name": "Synthetic project"}}})
 		default:
@@ -224,7 +230,7 @@ func TestRealStdioMCPToDurableServiceToSSHHTTP(t *testing.T) {
 	defer processCancel()
 	command := exec.CommandContext(processContext, os.Args[0], "-test.run=^TestDurableCaptureStdioHelper$")
 	command.Dir = workspace
-	command.Env = append(os.Environ(), "SCRATCHPAD_DURABLE_MCP_HELPER=1", "SCRATCHPAD_TEST_URL="+server.URL, "SCRATCHPAD_TEST_PUBLIC_KEY="+keyPath+".pub", "SCRATCHPAD_TEST_SIGNING_KEY="+keyPath, "SCRATCHPAD_TEST_SOCKET="+socketPath)
+	command.Env = append(os.Environ(), "SCRATCHPAD_DURABLE_MCP_HELPER=1", "SCRATCHPAD_TEST_SOCKET="+socketPath)
 	command.Stderr = os.Stderr
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "durable-integration", Version: "test"}, nil).Connect(processContext, &mcp.CommandTransport{Command: command}, nil)
 	if err != nil {
@@ -282,6 +288,10 @@ func TestRealStdioMCPToDurableServiceToSSHHTTP(t *testing.T) {
 		if receipt.StructuredContent.(map[string]any)["state"] != string(localcapture.ReceiptDelivered) {
 			t.Fatalf("receipt lookup for %s did not report delivered: %+v", kind, receipt.StructuredContent)
 		}
+	}
+	read, readErr := session.CallTool(processContext, &mcp.CallToolParams{Name: "get_record", Arguments: map[string]any{"id": "record-synthetic-read"}})
+	if readErr != nil || read.IsError {
+		t.Fatalf("collector-owned read failed: %+v %v", read, readErr)
 	}
 	retried, err := session.CallTool(processContext, &mcp.CallToolParams{Name: "record_decision", Arguments: retryArguments})
 	if err != nil || retried.IsError {

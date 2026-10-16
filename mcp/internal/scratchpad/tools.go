@@ -100,8 +100,10 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 	if err != nil {
 		return nil, out, errors.New("local capture service configuration is unavailable")
 	}
-	if err = c.validateCaptureConfiguration(configuration); err != nil {
-		return nil, out, err
+	if c.OnlineService == nil {
+		if err = c.validateCaptureConfiguration(configuration); err != nil {
+			return nil, out, err
+		}
 	}
 	encodedPayload, err := json.Marshal(payload)
 	if err != nil {

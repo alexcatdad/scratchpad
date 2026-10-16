@@ -91,3 +91,19 @@ go -C mcp build -o /private/tmp/scratchpad-mcp-validation ./cmd/scratchpad-mcp
 These checks use synthetic fixtures. Rebuilding the dev bundle, reloading Codex,
 and repeating live offline acceptance are separate steps requiring the owner's
 approval for the affected local processes and settings.
+
+## Command-only Codex acceptance
+
+Configure server URL and key references once through the app. The Codex entry
+contains the bundled MCP command; remove the legacy Scratchpad URL/public-key/
+signing-key environment entries after reviewing the configuration diff. Rebuild
+with `--rebuild-helpers --run` only with approval for the dev tray restart. The
+collector must also restart to load its new online-request operation. Keep its
+queue and settings intact, and verify fresh Keychain access before restarting.
+
+Verify an actual Codex context/record read, then the approved bounded collector
+proxy outage: capture must return a durable pending receipt, server-backed reads
+must fail, and reconnect must deliver the same receipt. Verify retry identity and
+restore normal collector launch settings. Check the loaded MCP executable, not
+just its path on disk. Source tests use disposable sockets/stores and a reachable
+HTTP trap to establish that missing collector IPC never triggers direct HTTP.

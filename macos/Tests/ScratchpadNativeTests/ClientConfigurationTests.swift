@@ -27,7 +27,7 @@ private let testConfiguration = ServiceConfiguration(
     #expect(result.contains("[mcp_servers.other]"))
     #expect(result.contains("theme = \"dark\""))
     #expect(result.contains("SCRATCHPAD_MIRROR = \"true\""))
-    #expect(result.contains("SCRATCHPAD_URL = \"https://memory.example.test\""))
+    #expect(!result.contains("SCRATCHPAD_URL"))
     #expect(result.contains("command = \"/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp\""))
     #expect(!result.contains("command = \"old\""))
 }
@@ -79,8 +79,8 @@ private let testConfiguration = ServiceConfiguration(
     let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
     #expect(result.contains("[[telemetry.routes]]"))
     #expect(result.contains("endpoint = \"https://example.test\""))
-    #expect(result.contains("[mcp_servers.scratchpad.env]"))
-    #expect(result.range(of: "[mcp_servers.scratchpad.env]")!.lowerBound < result.range(of: "[[telemetry.routes]]")!.lowerBound)
+    #expect(!result.contains("[mcp_servers.scratchpad.env]"))
+    #expect(result.range(of: "command = \"/tmp/new-mcp\"")!.lowerBound < result.range(of: "[[telemetry.routes]]")!.lowerBound)
 
     let unsupported = [
         "[mcp_servers.\"scrat\\u0063hpad\"]\ncommand = \"old\"\n",
@@ -113,9 +113,9 @@ private let testConfiguration = ServiceConfiguration(
     let environment = try #require(scratchpad["env"] as? [String: String])
     #expect(environment["KEEP"] == "value")
     #expect(environment["SCRATCHPAD_MIRROR"] == "true")
-    #expect(environment["SCRATCHPAD_URL"] == "https://memory.example.test")
-    #expect(environment["SCRATCHPAD_PUBLIC_KEY"] == "/tmp/synthetic.pub")
-    #expect(environment["SCRATCHPAD_SIGNING_KEY"] == "/tmp/synthetic-key")
+    #expect(environment["SCRATCHPAD_URL"] == nil)
+    #expect(environment["SCRATCHPAD_PUBLIC_KEY"] == nil)
+    #expect(environment["SCRATCHPAD_SIGNING_KEY"] == nil)
 }
 
 @Test func malformedClientConfigurationIsRejectedWithoutReplacement() {
@@ -176,4 +176,17 @@ private let testConfiguration = ServiceConfiguration(
         try ClientConfiguration.applyReviewedFile(linkPreview, selectedURL: link)
     }
     #expect(try Data(contentsOf: target) == contents)
+}
+
+@Test func commandOnlySetupRemovesLegacyConnectionSettings() throws {
+    let existing = "[mcp_servers.scratchpad]\ncommand = \"old\"\n[mcp_servers.scratchpad.env]\nSCRATCHPAD_URL = \"https://old.example.test\"\nSCRATCHPAD_PUBLIC_KEY = \"/tmp/old.pub\"\nSCRATCHPAD_SIGNING_KEY = \"/tmp/old\"\n[ui]\ntheme = \"dark\"\n"
+    let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/mcp", configuration: testConfiguration)
+    #expect(!result.contains("SCRATCHPAD_URL"))
+    #expect(!result.contains("SCRATCHPAD_PUBLIC_KEY"))
+    #expect(!result.contains("SCRATCHPAD_SIGNING_KEY"))
+    #expect(!result.contains("[mcp_servers.scratchpad.env]"))
+    #expect(result.contains("theme = \"dark\""))
+    let generic = try ClientConfiguration.genericEntry(executable: "/tmp/mcp", configuration: testConfiguration)
+    let entry = try #require(JSONSerialization.jsonObject(with: generic) as? [String: String])
+    #expect(entry == ["command": "/tmp/mcp"])
 }

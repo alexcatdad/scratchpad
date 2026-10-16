@@ -2,7 +2,8 @@
 
 Local stdio MCP for Scratchpad. Captures use the private `scratchpad-service`
 over its local socket and are acknowledged only after durable local intake;
-reads and non-capture mutations use the central API directly. Requires Go
+reads and supported non-capture operations also use the collector. The collector
+owns server configuration and SSH authentication. Requires Go
 1.27.2 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime.
 Dependencies are pinned in `go.mod` / `go.sum`.
 
@@ -24,22 +25,27 @@ CI must verify formatting without rewriting it (`test -z "$(gofmt -l .)"`), then
 
 Client walkthroughs: [Codex](https://alexcatdad.github.io/scratchpad/guides/codex/) and [ChatGPT macOS](https://alexcatdad.github.io/scratchpad/guides/chatgpt/). Both use the local stdio binary. ChatGPT web's hosted plugin path requires a separate integration; the Scratchpad dashboard/REST API is not a remote MCP endpoint.
 
-Use an SSH authentication or signing key synchronized from the owner’s verified GitHub binding, or enroll an independent SSH public key from the authenticated dashboard first. Private key material is never sent to the server. Configure your MCP client with the binary as its stdio command and these environment variables:
+Configure the server and enrolled SSH key once in Scratchpad's app. Codex needs
+only the bundled stdio command:
 
-| Variable                    | Meaning                                                                                    |
-| --------------------------- | ------------------------------------------------------------------------------------------ |
-| `SCRATCHPAD_URL`            | Scratchpad server origin, e.g. `https://memory.example.com`; HTTP allowed only on loopback |
-| `SCRATCHPAD_PUBLIC_KEY`     | Absolute path to the enrolled OpenSSH public key                                           |
-| `SCRATCHPAD_SIGNING_KEY`    | Optional private-key reference; defaults to the public-key path for `ssh-agent` signing    |
-| `SCRATCHPAD_SERVICE_SOCKET` | Private service socket; blank uses the platform default                                    |
-| `SCRATCHPAD_MIRROR`         | `true` enables optional repository mirroring; default off                                  |
-| `SCRATCHPAD_MIRROR_PATH`    | Repository-relative mirror file; default `scratchpad/decisions.jsonl`                      |
+```toml
+[mcp_servers.scratchpad]
+command = "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp"
+```
+
+The MCP ignores legacy server URL and SSH-key environment settings. It uses the
+collector's private socket for reads and captures; no token or key is returned to
+the MCP. An unconfigured collector requires setup in the app. Server-backed
+reads fail when offline; captures retain the existing durable local receipts.
+For isolated tests, `SCRATCHPAD_SERVICE_SOCKET` selects a private collector.
+Optional `SCRATCHPAD_MIRROR` and `SCRATCHPAD_MIRROR_PATH` still express
+repository consent; neither configures server authentication.
 
 At MCP launch, `scratchpad-mcp` checks the private service socket and starts the
 bundled sibling `scratchpad-service` when it is absent. It waits up to 12 seconds
 for the collector and encrypted storage to become ready. If startup fails, MCP
-still serves central reads and reports the problem safely on stderr; capture
-continues to fail closed until the local service is available. Concurrent MCP
+still exposes its tools and reports the problem safely on stderr; reads and
+captures fail closed until the local service is available. Concurrent MCP
 clients converge on the same per-user service, and exiting a client does not
 stop it. Startup uses the ordinary service path, so a persistent Stop remains
 in effect and is never cleared by MCP. The owner must choose Start from the tray
@@ -64,7 +70,7 @@ The portable [scratchpad-connect skill](../skills/scratchpad-connect/SKILL.md) l
 
 ## Authentication wire contract
 
-`POST /api/v1/auth/mcp/challenge` with `{publicKey}` returns `{version, recipient, purpose, challengeId, nonce, namespace, expiresAt}`. MCP validates version 2 and the recipient against its locally configured URL origin, then signs the [canonical recipient-bound transcript](../docs/api.md#accepted-clarification-recipient-bound-ssh-proof-2026-10-09), **without a newline**, using OpenSSH armored SSHSIG and namespace `scratchpad-auth-v2`. Upgrade server and signing clients together; nonce-only challenges are rejected without fallback. `POST /api/v1/auth/mcp/verify` submits `{challengeId, publicKey, signature}` and receives `{accessToken, expiresAt}`. Tokens stay in process memory only and are reused until expiry (up to 24 hours). Revocation/invalid authentication clears cached credentials; the next call starts a fresh challenge. There are no refresh tokens or retry loops for failed writes.
+`POST /api/v1/auth/mcp/challenge` with `{publicKey}` returns `{version, recipient, purpose, challengeId, nonce, namespace, expiresAt}`. The collector validates version 2 and the recipient against its locally configured URL origin, then signs the [canonical recipient-bound transcript](../docs/api.md#accepted-clarification-recipient-bound-ssh-proof-2026-10-09), **without a newline**, using OpenSSH armored SSHSIG and namespace `scratchpad-auth-v2`. Upgrade server and signing clients together; nonce-only challenges are rejected without fallback. `POST /api/v1/auth/mcp/verify` submits `{challengeId, publicKey, signature}` and receives `{accessToken, expiresAt}`. Tokens stay in process memory only and are reused until expiry (up to 24 hours). Revocation/invalid authentication clears cached credentials; the next call starts a fresh challenge. There are no refresh tokens or retry loops for failed writes.
 
 GitHub-managed sessions are also gated on every request by the synchronized key set, persistent local blocks and a 24-hour limit from the last complete successful synchronization. Failed refreshes and restarts do not extend that deadline. Detected removals and account unlink/replacement invalidate derived access; manual independent credentials retain local authority. Machines may renew sessions against valid cached keys during an outage. See the [OAuth runbook](../docs/runbooks/github-oauth.md).
 

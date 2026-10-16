@@ -30,6 +30,7 @@ type Config struct {
 type Client struct {
 	Config              Config
 	HTTP                *http.Client
+	OnlineService       localcapture.OnlineService
 	CaptureService      localcapture.Service
 	mu                  sync.Mutex
 	token               string
@@ -259,6 +260,25 @@ func (c *Client) requestEvidence(ctx context.Context, body any, out any) error {
 }
 
 func (c *Client) requestWithHTTP(ctx context.Context, httpClient *http.Client, method, path string, body any, key string, out any) error {
+	if c.OnlineService != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		response, err := c.OnlineService.OnlineRequest(ctx, localcapture.OnlineRequest{Method: method, Path: path, Body: encoded})
+		if err != nil {
+			return fmt.Errorf("local Scratchpad service: %w", err)
+		}
+		if response.ErrorCode != "" {
+			return &APIError{Code: response.ErrorCode, Message: "Server rejected the operation."}
+		}
+		if out == nil {
+			return nil
+		}
+		decoder := json.NewDecoder(bytes.NewReader(response.Body))
+		decoder.UseNumber()
+		return decoder.Decode(out)
+	}
 	token, err := c.authenticate(ctx)
 	if err != nil {
 		return err

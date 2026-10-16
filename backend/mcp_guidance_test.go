@@ -44,9 +44,6 @@ func TestRealStdioInitializationRecommendsSecretReferences(t *testing.T) {
 		"XDG_CONFIG_HOME=" + home,
 		"TMPDIR=" + isolatedDir,
 		"SCRATCHPAD_SERVICE_SOCKET=" + socketPath,
-		"SCRATCHPAD_URL=http://localhost:1",
-		"SCRATCHPAD_PUBLIC_KEY=",
-		"SCRATCHPAD_SIGNING_KEY=",
 	}
 	input, err := cmd.StdinPipe()
 	if err != nil {

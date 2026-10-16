@@ -15,8 +15,7 @@ import (
 	"github.com/alexcatdad/scratchpad/mcp/internal/scratchpad"
 )
 
-type Adapter struct {
-}
+type Adapter struct{}
 
 func supportsCaptureTimestamp(values []string) bool {
 	for _, value := range values {
@@ -210,3 +209,25 @@ func localcaptureFailure(code localcapture.DeliveryCode, retryable bool) error {
 }
 
 var _ localcapture.DeliveryAdapter = (*Adapter)(nil)
+
+func (a *Adapter) OnlineRequest(ctx context.Context, binding localcapture.Binding, req localcapture.OnlineRequest) (localcapture.OnlineResponse, error) {
+	if !localcapture.ValidOnlineRequest(req) {
+		return localcapture.OnlineResponse{}, localcapture.ErrConflictSentinel
+	}
+	client, _, _, err := a.authenticatedClient(ctx, binding)
+	if err != nil {
+		return localcapture.OnlineResponse{}, err
+	}
+	body, err := client.RequestCentral(ctx, req)
+	if err != nil {
+		var api *scratchpad.APIError
+		if errors.As(err, &api) {
+			return localcapture.OnlineResponse{ErrorCode: api.Code}, nil
+		}
+		return localcapture.OnlineResponse{}, classify(err)
+	}
+	if len(body) > localcapture.MaxFrameBytes-1024 {
+		return localcapture.OnlineResponse{ErrorCode: "RESPONSE_TOO_LARGE"}, nil
+	}
+	return localcapture.OnlineResponse{Body: body}, nil
+}

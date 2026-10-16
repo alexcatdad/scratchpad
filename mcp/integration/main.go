@@ -94,7 +94,7 @@ func run() error {
 	command := exec.CommandContext(ctx, absBinary)
 	command.Dir = absWorkspace
 	command.Stderr = os.Stderr
-	command.Env = append(os.Environ(), "SCRATCHPAD_URL="+*serverURL, "SCRATCHPAD_PUBLIC_KEY="+*publicKey, "SCRATCHPAD_SIGNING_KEY="+*signingKey, "SCRATCHPAD_SERVICE_SOCKET="+*serviceSocket, fmt.Sprintf("SCRATCHPAD_MIRROR=%t", *mirror || *phase == "projects"))
+	command.Env = append(os.Environ(), "SCRATCHPAD_SERVICE_SOCKET="+*serviceSocket, fmt.Sprintf("SCRATCHPAD_MIRROR=%t", *mirror || *phase == "projects"))
 	session, err := mcp.NewClient(&mcp.Implementation{Name: "scratchpad-integration", Version: "1"}, nil).Connect(ctx, &mcp.CommandTransport{Command: command}, nil)
 	if err != nil {
 		return fmt.Errorf("initialize real stdio MCP: %w", err)
@@ -170,22 +170,9 @@ func run() error {
 	}
 	var saved state
 	if *phase == "service-unavailable" {
-		data, err := os.ReadFile(*statePath)
-		if err != nil {
-			return fmt.Errorf("read prior capture state for central read assertion: %w", err)
-		}
-		if err = json.Unmarshal(data, &saved); err != nil {
-			return fmt.Errorf("load all eight prior captures for central read assertion: %w", err)
-		}
-		if len(saved.Captures) != 8 {
-			return errors.New("central read assertion requires all eight prior captures")
-		}
-		resumeContext, err := call(ctx, session, "get_project_context", map[string]any{"workingDirectory": absWorkspace})
-		if err != nil {
-			return fmt.Errorf("central read failed while local collector startup was unavailable: %w", err)
-		}
-		if err = verifyResumeContext(resumeContext, saved.Captures); err != nil {
-			return fmt.Errorf("central read omitted known captures while local collector startup was unavailable: %w", err)
+		_, err := call(ctx, session, "get_project_context", map[string]any{"projectId": "proj_synthetic"})
+		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "service") {
+			return fmt.Errorf("read bypassed unavailable collector: %v", err)
 		}
 		_, err = call(ctx, session, "record_finding", map[string]any{
 			"projectId": "proj_unavailable_service", "requestId": "service-unavailable-no-fallback",
@@ -195,7 +182,7 @@ func run() error {
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "service") {
 			return fmt.Errorf("capture did not fail clearly when local service was unavailable: %v", err)
 		}
-		fmt.Println("PASS service-unavailable: central reads remained available and capture failed at local intake")
+		fmt.Println("PASS service-unavailable: reads and captures failed through local IPC")
 		return nil
 	}
 	if *phase == "scope" {

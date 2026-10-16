@@ -1915,3 +1915,15 @@ response; use `get_capture_receipt` for delivery state and `get_record` for the
 central record. MCP text and structured output share this contract. The MCP
 does not fall back to direct central capture when the local service is
 unavailable.
+
+### App-owned MCP transport
+
+The bundled MCP requires only its command path. Its existing tools and central
+HTTP contracts are unchanged; the collector now performs their authenticated
+server requests. The private IPC `online_request` permits only the existing
+read, project-resolution and optional AI tool routes. Capture creation and
+server authentication/administration routes cannot use this operation. Online
+requests have a 120-second bound and the existing 4 MiB IPC frame limit; oversized
+responses report `RESPONSE_TOO_LARGE`. The MCP receives operation results, never
+SSH keys or session tokens. Unavailable collector or server reads fail explicitly
+without bypassing the collector. Capture and receipt semantics are unchanged.

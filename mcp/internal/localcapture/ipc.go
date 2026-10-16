@@ -312,6 +312,9 @@ func (s *IPCServer) serveOne(conn *net.UnixConn) {
 			return
 		}
 	}
+	if req.Op == OpOnlineRequest {
+		_ = conn.SetDeadline(time.Now().Add(OnlineTimeout + time.Second))
+	}
 	result, err := s.dispatch(req)
 	if err != nil {
 		code := wireCode(err)
@@ -379,6 +382,16 @@ func emptyBody(data json.RawMessage) error {
 func (s *IPCServer) dispatch(req Request) (any, error) {
 	ctx := context.Background()
 	switch req.Op {
+	case OpOnlineRequest:
+		var b OnlineRequest
+		if bodyAs(req.Body, &b) != nil {
+			return nil, ErrConflictSentinel
+		}
+		service, ok := s.Service.(OnlineService)
+		if !ok {
+			return nil, ErrUnknownOperationSentinel
+		}
+		return service.OnlineRequest(ctx, b)
 	case OpCapture:
 		var b CaptureRequest
 		if bodyAs(req.Body, &b) != nil {
