@@ -20,9 +20,25 @@ cd "$root"
 sha=$(git rev-parse HEAD)
 [[ $(git rev-parse "refs/tags/$RELEASE_TAG^{commit}") == "$sha" ]]
 version=${RELEASE_TAG#v}
-mkdir -p dist/release
+archive="$root/dist/release/scratchpad-$RELEASE_TAG-darwin-arm64.zip"
+receipt="$root/dist/release/notarization-app-$RELEASE_TAG.json"
+manifest="$root/dist/release/macos-app-release.json"
+for output in "$archive" "$receipt" "$manifest"; do
+  if [[ -e "$output" || -L "$output" ]]; then
+    echo "Refusing to overwrite existing release artifact: $output" >&2
+    exit 1
+  fi
+done
+
 work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
+stage=""
+cleanup() {
+  rm -rf "$work"
+  if [[ -n "$stage" ]]; then rm -rf "$stage"; fi
+}
+trap cleanup EXIT
+mkdir -p "$root/dist/release"
+stage=$(mktemp -d "$root/dist/release/.scratchpad-release.XXXXXX")
 app="$work/Scratchpad.app"
 
 APP_VERSION="$version" \
@@ -48,16 +64,32 @@ xcrun stapler validate "$app"
 spctl --assess --type execute --verbose=2 "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
 
-archive="$root/dist/release/scratchpad-$RELEASE_TAG-darwin-arm64.zip"
-receipt="$root/dist/release/notarization-app-$RELEASE_TAG.json"
-manifest="$root/dist/release/macos-app-release.json"
-rm -f "$archive" "$receipt" "$manifest"
-ditto -c -k --sequesterRsrc --keepParent "$app" "$archive"
-cp "$submission" "$receipt"
-archive_hash=$(shasum -a 256 "$archive" | awk '{print $1}')
-receipt_hash=$(shasum -a 256 "$receipt" | awk '{print $1}')
+staged_archive="$stage/scratchpad-$RELEASE_TAG-darwin-arm64.zip"
+staged_receipt="$stage/notarization-app-$RELEASE_TAG.json"
+staged_manifest="$stage/macos-app-release.json"
+ditto -c -k --sequesterRsrc --keepParent "$app" "$staged_archive"
+cp "$submission" "$staged_receipt"
+archive_hash=$(shasum -a 256 "$staged_archive" | awk '{print $1}')
+receipt_hash=$(shasum -a 256 "$staged_receipt" | awk '{print $1}')
 jq -n --arg tag "$RELEASE_TAG" --arg sha "$sha" --arg team "$APPLE_TEAM_ID" \
   --arg archive "$archive_hash" --arg receipt "$receipt_hash" \
   '{tag:$tag,sourceSha:$sha,teamId:$team,architecture:"arm64",artifacts:{app:{sha256:$archive,receiptSha256:$receipt}}}' \
-  > "$manifest"
+  > "$staged_manifest"
+
+for output in "$archive" "$receipt" "$manifest"; do
+  if [[ -e "$output" || -L "$output" ]]; then
+    echo "Refusing to overwrite release artifact created during packaging: $output" >&2
+    exit 1
+  fi
+done
+publish() {
+  mv -n "$1" "$2"
+  if [[ -e "$1" || -L "$1" ]]; then
+    echo "Could not publish release artifact without overwriting: $2" >&2
+    return 1
+  fi
+}
+publish "$staged_archive" "$archive"
+publish "$staged_receipt" "$receipt"
+publish "$staged_manifest" "$manifest"
 printf 'Created notarized app archive %s and manifest %s. No release assets or tap files were published.\n' "$archive" "$manifest"

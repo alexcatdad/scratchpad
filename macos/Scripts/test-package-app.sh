@@ -176,3 +176,4 @@ fi
 test ! -e "$tmp/rejected-app-id.entitlements"
 
 echo "package script preserves prior output; profile signing preflight and relocatable app RPATH are validated"
+sh "$repo_root/macos/Scripts/test-release-macos-app.sh"
