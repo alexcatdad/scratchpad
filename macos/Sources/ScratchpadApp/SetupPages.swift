@@ -66,14 +66,9 @@ struct AuthenticationPage: View {
 
 struct SettingsPage: View {
     @EnvironmentObject private var model: AppModel
-    @EnvironmentObject private var updates: UpdateCoordinator
     @AppStorage("incidentNotificationsEnabled") private var notificationsEnabled = false
     @State private var loginEnabled = false
     @State private var notificationPermission: IncidentNotifier.PermissionState = .notDetermined
-    private var updaterConfigured: Bool {
-        !(Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? "").isEmpty &&
-        !(Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? "").isEmpty
-    }
 
     var body: some View {
         Form {
@@ -118,19 +113,9 @@ struct SettingsPage: View {
                 }
                 Text("Alerts cover sustained outages, blocked delivery and local-save failures. They include counts and safe descriptions only.").font(.caption).foregroundStyle(.secondary)
             }
-            Section("Updates") {
-                Toggle("Check for updates automatically", isOn: Binding(get: { updates.automaticChecks }, set: { updates.automaticChecks = $0 })).disabled(!updaterConfigured)
-                if updaterConfigured {
-                    Text("Compatible updates can download automatically, but Scratchpad always asks before installation or restart and finishes any in-flight local saves first. Queued captures remain saved.").font(.caption).foregroundStyle(.secondary)
-                    Button("Check Now") { updates.checkForUpdates() }
-                    if let version = updates.pendingVersion {
-                        Label("Version \(version) is available", systemImage: "arrow.down.circle.fill")
-                    }
-                    if let message = updates.operationMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
-                } else {
-                    Label("Updater is not configured for this build", systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                    Text("A feed URL and Sparkle public verification key must be provided by the release build.").font(.caption).foregroundStyle(.secondary)
-                }
+            Section("App maintenance") {
+                Text("Install and update Scratchpad through Homebrew using the project’s tap.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)

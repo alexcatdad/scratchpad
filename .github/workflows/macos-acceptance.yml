@@ -118,7 +118,7 @@ jobs:
             echo "| Real MCP → collector → SQLite backend test | $BACKEND_RESULT |"
             echo
             echo 'All exercised data, SSH keys, queue keys, databases, sockets, and HTTP listeners are synthetic and temporary.'
-            echo 'This unattended lane does not verify rendered UI, Keychain or login-item behavior, installed Codex/Claude operation, real server authentication, signing/notarization, or downloaded-update acceptance.'
+            echo 'This unattended lane does not verify rendered UI, Keychain or login-item behavior, installed Codex/Claude operation, real server authentication, signing/notarization, or Homebrew upgrade acceptance.'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Retain synthetic acceptance logs

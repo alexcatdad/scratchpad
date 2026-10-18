@@ -1507,3 +1507,7 @@ or database waiting. Run relevant Go, frontend, docs, SDK, integration and conta
 checks with GitHub Actions as the canonical runner. Local verification, canonical
 CI, release verification and deployed acceptance are separate evidence layers;
 merge, deployment and destructive live-data migration require separate approval.
+
+## Accepted clarification: Homebrew-managed macOS app updates
+
+The macOS app is installed and upgraded through a Homebrew cask in the project tap. This replaces the earlier in-app updater direction: no Sparkle dependency, appcast, update-signing key or in-app update controls are required. Developer ID signing and notarization remain required. Upgrade acceptance must preserve the durable queue, credentials and settings and verify the updated collector starts. Cask publication and installed upgrade validation remain separate release work.

@@ -49,15 +49,9 @@ final class AppModel: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "serviceAbsenceSuppressed"),
-           !defaults.bool(forKey: "restartServiceAfterSparkleUpdate"),
            defaults.bool(forKey: "serviceExpectedToRun") {
             defaults.set(false, forKey: "serviceAbsenceSuppressed")
             defaults.set(defaults.integer(forKey: "serviceLifecycleRevision") + 1, forKey: "serviceLifecycleRevision")
-        }
-        if UserDefaults.standard.bool(forKey: "restartServiceAfterSparkleUpdate") {
-            Task { @MainActor [weak self] in
-                await self?.recoverServiceAfterUpdaterRestart()
-            }
         }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -335,17 +329,6 @@ final class AppModel: ObservableObject {
         defaults.set(observationRevision.absenceSuppressed, forKey: "serviceAbsenceSuppressed")
     }
 
-    private func recoverServiceAfterUpdaterRestart() async {
-        let failure = await Task.detached {
-            UpdateCoordinator.restoreServiceRespectingPersistentState()
-        }.value
-        UserDefaults.standard.set(false, forKey: "restartServiceAfterSparkleUpdate")
-        _ = currentObservationRevision()
-        _ = observationRevision.finishUpdaterRecovery()
-        persistLifecyclePolicy()
-        if let failure { errorMessage = failure }
-        refresh()
-    }
     func discard(_ receipt: Receipt) {
         let client = self.client
         perform({ try client.call("discard_receipt", body: ReceiptBody(receiptId: receipt.receiptId), as: Receipt.self) }) { _ in

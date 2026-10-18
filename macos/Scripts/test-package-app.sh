@@ -166,33 +166,6 @@ if sh "$repo_root/macos/Scripts/create-keychain-helper-entitlements.sh" \
 fi
 test ! -e "$tmp/rejected-identity-type.entitlements"
 
-cat > "$tmp/fake-bin/codesign" <<'SH'
-#!/bin/sh
-for argument do target=$argument; done
-printf '%s\n' "$target" >> "$SIGN_LOG"
-SH
-chmod +x "$tmp/fake-bin/codesign"
-export SIGN_LOG="$tmp/codesign.log"
-framework="$tmp/Sparkle.framework"
-mkdir -p "$framework/Versions/B/Updater.app/Contents/MacOS" \
-  "$framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS"
-touch "$framework/Versions/B/Autoupdate" \
-  "$framework/Versions/B/Updater.app/Contents/MacOS/Updater" \
-  "$framework/Versions/B/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
-PATH="$tmp/fake-bin:$PATH" sh "$repo_root/macos/Scripts/sign-sparkle-framework.sh" "$framework" "$synthetic_identity"
-test "$(head -n 1 "$SIGN_LOG")" = "$framework/Versions/B/Autoupdate"
-grep -F -q -e "$framework/Versions/B/Updater.app" "$SIGN_LOG"
-grep -F -q -e "$framework/Versions/B/XPCServices/Downloader.xpc" "$SIGN_LOG"
-if grep -x -F -q -e "$framework" "$SIGN_LOG"; then
-  echo "nested Sparkle signer unexpectedly signed the outer framework" >&2
-  exit 1
-fi
-rm -f "$framework/Versions/B/Autoupdate"
-if PATH="$tmp/fake-bin:$PATH" sh "$repo_root/macos/Scripts/sign-sparkle-framework.sh" "$framework" "$synthetic_identity" >/dev/null 2>&1; then
-  echo "nested Sparkle signer accepted a missing Autoupdate executable" >&2
-  exit 1
-fi
-
 cp "$tmp/profile.plist" "$tmp/invalid-profile.plist"
 /usr/libexec/PlistBuddy -c 'Set :Entitlements:com.apple.application-identifier PREFIX1234.com.other.app' "$tmp/invalid-profile.plist"
 if sh "$repo_root/macos/Scripts/create-keychain-helper-entitlements.sh" \
@@ -202,4 +175,4 @@ if sh "$repo_root/macos/Scripts/create-keychain-helper-entitlements.sh" \
 fi
 test ! -e "$tmp/rejected-app-id.entitlements"
 
-echo "package script preserves prior output; profile signing preflight and relocatable Sparkle RPATH are validated; nested signing covers Autoupdate and inner bundles"
+echo "package script preserves prior output; profile signing preflight and relocatable app RPATH are validated"

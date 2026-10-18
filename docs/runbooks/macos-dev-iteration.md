@@ -4,7 +4,7 @@
 `macos/.build/dev/Scratchpad Dev.app`. It incrementally builds only the
 `Scratchpad` SwiftPM product. The first invocation needs a complete signed
 Scratchpad app as a seed so the dev bundle can reuse its service, MCP, Keychain
-helper, and Sparkle framework:
+helper:
 
 ```sh
 macos/Scripts/dev-app.sh --base-app /path/to/Scratchpad.app
@@ -34,10 +34,8 @@ The installed/release app and capture service are never targeted by the
 script.
 
 The dev bundle uses `com.alexcatdad.scratchpad.dev`, so its standard
-`UserDefaults` and updater recovery flags are separate from the release app.
-Its Sparkle feed and public update key are removed. The rebuilt menu app and
-outer dev bundle receive local ad-hoc signatures; the signed service, MCP,
-Keychain helper, and Sparkle framework copied from the seed are preserved.
+`UserDefaults` are separate from the release app.
+The rebuilt menu app and outer dev bundle receive local ad-hoc signatures; the signed Keychain helper copied from the seed is preserved. The retired updater framework is removed when reusing an older seed.
 This is a local UI iteration bundle, not a distributable or notarized release.
 Service and MCP changes can use the opt-in helper rebuild path, which builds
 the current Go executables into the staged candidate and ad-hoc signs only
@@ -51,7 +49,7 @@ Combine it with `--run` to explicitly restart the dev app only after both Go
 helpers are built and the replacement bundle is verified. This restarts only
 the tray app; restarting a running collector is a separate service action.
 
-The UI-only path remains the default. Keychain helper or Sparkle changes still
+The UI-only path remains the default. Keychain helper changes still
 require a full package and a fresh `--base-app` seed.
 
 The dev app uses Scratchpad's normal local service socket and capture storage.

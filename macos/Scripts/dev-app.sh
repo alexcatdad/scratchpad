@@ -110,7 +110,6 @@ case "$seed_id" in
   *) echo "base app has unexpected bundle identifier: $seed_id" >&2; exit 1 ;;
 esac
 for required in \
-  "$seed_app/Contents/Frameworks/Sparkle.framework" \
   "$seed_app/Contents/Helpers/scratchpad-service" \
   "$seed_app/Contents/Helpers/scratchpad-mcp" \
   "$seed_app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"; do
@@ -145,6 +144,8 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 "$ditto_bin" "$seed_app" "$candidate"
+# Remove the retired updater when reusing an older dev bundle as the seed.
+rm -rf "$candidate/Contents/Frameworks/Sparkle.framework"
 mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Resources"
 cp "$source_executable" "$candidate/Contents/MacOS/Scratchpad"
 cp "$repo_root/macos/Resources/ScratchpadAppIcon.icns" "$candidate/Contents/Resources/ScratchpadAppIcon.icns"
@@ -157,10 +158,6 @@ sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
 "$plist_buddy" -c 'Set :CFBundleName Scratchpad Dev' "$candidate/Contents/Info.plist"
 "$plist_buddy" -c 'Set :CFBundleDisplayName Scratchpad Dev' "$candidate/Contents/Info.plist" 2>/dev/null || \
   "$plist_buddy" -c 'Add :CFBundleDisplayName string Scratchpad Dev' "$candidate/Contents/Info.plist"
-"$plist_buddy" -c 'Delete :SUFeedURL' "$candidate/Contents/Info.plist" >/dev/null 2>&1 || true
-"$plist_buddy" -c 'Delete :SUPublicEDKey' "$candidate/Contents/Info.plist" >/dev/null 2>&1 || true
-"$plist_buddy" -c 'Set :SUEnableAutomaticChecks false' "$candidate/Contents/Info.plist" >/dev/null 2>&1 || \
-  "$plist_buddy" -c 'Add :SUEnableAutomaticChecks bool false' "$candidate/Contents/Info.plist"
 plutil -lint "$candidate/Contents/Info.plist" >/dev/null
 
 # Rebuild the Go helpers only when explicitly requested. Keep the default UI
@@ -175,7 +172,7 @@ if [ "$rebuild_helpers" -eq 1 ]; then
 fi
 
 # Only rebuilt components receive local ad-hoc signatures, with no hardened
-# runtime options. Unchanged Keychain helper and Sparkle remain from the seed.
+# runtime options. The unchanged signed Keychain helper remains from the seed.
 "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/MacOS/Scratchpad"
 "$codesign_bin" --force --sign - --options 0 "$candidate"
 "$codesign_bin" --verify --deep --strict "$candidate"
@@ -223,7 +220,7 @@ if ! mv "$candidate" "$dev_app"; then
   exit 1
 fi
 if [ "$rebuild_helpers" -eq 1 ]; then
-  echo "Built $dev_app (UI and Go helpers ad-hoc signed; Keychain helper and Sparkle preserved)."
+  echo "Built $dev_app (UI and Go helpers ad-hoc signed; Keychain helper preserved)."
 else
   echo "Built $dev_app (ad-hoc local signature; nested signed components preserved)."
 fi

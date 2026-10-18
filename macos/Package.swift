@@ -9,16 +9,12 @@ let package = Package(
         .executable(name: "scratchpad-keychain", targets: ["ScratchpadKeychain"]),
         .library(name: "ScratchpadNative", targets: ["ScratchpadNative"]),
     ],
-    dependencies: [
-        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
-    ],
     targets: [
         .target(name: "ScratchpadNative"),
         .executableTarget(
             name: "ScratchpadApp",
             dependencies: [
                 "ScratchpadNative",
-                .product(name: "Sparkle", package: "Sparkle"),
             ]
         ),
         .executableTarget(name: "ScratchpadKeychain", dependencies: ["ScratchpadNative"]),

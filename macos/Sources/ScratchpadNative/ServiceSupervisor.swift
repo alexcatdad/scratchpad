@@ -18,13 +18,6 @@ public struct ServiceSupervisor {
         try launch(bundle: bundle, arguments: ["--explicit-start"], onTermination: onTermination)
     }
 
-    /// Used only when restoring the service after an updater handoff. The
-    /// service reads durable Pause/Stop state and cannot clear Stop here.
-    @discardableResult
-    public func launchRespectingPersistentState(bundle: Bundle = .main) throws -> Process {
-        try launch(bundle: bundle, arguments: [])
-    }
-
     @discardableResult
     private func launch(bundle: Bundle, arguments: [String], onTermination: (@Sendable (Int32) -> Void)? = nil) throws -> Process {
         let executable = Self.serviceURL(bundle: bundle)

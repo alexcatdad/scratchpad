@@ -17,7 +17,5 @@
 	<key>QueueSchemaMinReadable</key><integer>1</integer>
 	<key>QueueSchemaMaxReadable</key><integer>1</integer>
 	<key>QueueSchemaVersion</key><integer>1</integer>
-	<key>SUEnableAutomaticChecks</key><true/>
-	<key>SUAllowsAutomaticUpdates</key><false/>
 </dict>
 </plist>
