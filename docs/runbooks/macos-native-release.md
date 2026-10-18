@@ -101,16 +101,40 @@ spctl --assess --type execute --verbose=2 /tmp/Scratchpad.app
 
 The release validator checks version and queue-schema metadata and rejects retired updater configuration or framework files. Homebrew cask publication, archive checksums and actual installation/upgrade acceptance remain separate work. No appcast or update-signing key is required.
 
-## Notarize a later distribution candidate
+## Create a signed and notarized release archive
 
-Use an owner-managed `notarytool` Keychain profile so credentials never enter command arguments or repository files. These commands submit only a locally built artifact; do not run them without a separate release authorization.
+Run only from a clean checkout of the exact stable tag on an Apple Silicon Mac. The owner supplies the Developer ID identity, team ID, provisioning profile and authorized access group used by `package-app.sh`, plus an existing `notarytool` Keychain profile. Credential values remain local; do not put secrets in the command or repository.
 
 ```sh
-ditto -c -k --sequesterRsrc --keepParent /tmp/Scratchpad.app /tmp/Scratchpad.zip
-xcrun notarytool submit /tmp/Scratchpad.zip --keychain-profile "$NOTARY_PROFILE" --wait
-xcrun stapler staple /tmp/Scratchpad.app
-xcrun stapler validate /tmp/Scratchpad.app
-spctl --assess --type execute --verbose=2 /tmp/Scratchpad.app
+RELEASE_TAG=v1.0.0 \
+APPLE_SIGNING_IDENTITY='Developer ID Application: Example (TEAMID)' \
+APPLE_TEAM_ID='TEAMID' \
+KEYCHAIN_PROFILE='/secure/path/to/Scratchpad-Keychain.provisionprofile' \
+KEYCHAIN_ACCESS_GROUP='TEAMID.com.alexcatdad.scratchpad.keychain-helper' \
+NOTARYTOOL_PROFILE='scratchpad-notary' \
+bash scripts/release-macos-app.sh
 ```
 
-Retain the notarization submission ID and accepted result in the controlled release record. Installed acceptance is a separate step: on a disposable macOS account or machine, verify first launch, login-item approval, Start/Pause/Stop/Quit persistence, local key access, synthetic queued receipts, authenticated online verification, MCP client restart, offline capture behavior, Homebrew upgrade, queue compatibility and failed-upgrade recovery. Do not use real capture content in fixtures. Do not claim installed acceptance from portable tests or successful notarization alone.
+The script calls the executable `macos/Scripts/package-app.sh`, verifies the signed bundle, submits a temporary ZIP to Apple, staples and assesses the accepted app, then creates the final `dist/release/scratchpad-vX.Y.Z-darwin-arm64.zip`, notarization receipt and `macos-app-release.json` checksum manifest. It does not upload or publish them. This release script has not yet been run with owner signing credentials; the commands above describe the prepared path, not completed signing or notarization evidence.
+
+Generate a local draft cask after the release archive exists:
+
+```sh
+node scripts/release-cask.mjs v1.0.0 \
+  dist/release/scratchpad-v1.0.0-darwin-arm64.zip \
+  /path/to/homebrew-tap
+```
+
+This writes `Casks/scratchpad.rb` in the supplied local tap checkout, computes its SHA-256, and refuses a version downgrade. It does not publish or update the remote tap. The cask is a draft and is not safe for upgrades yet: automatic recovery across Homebrew rollback and service restart is unresolved, so do not publish or use it for installed upgrade acceptance.
+
+The existing collector executable provides the upgrade handoff used by a future cask hook:
+
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-service --prepare-upgrade
+# Homebrew replaces the app bundle here.
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-service --finish-upgrade
+```
+
+`--prepare-upgrade` drains an active collector and records whether it was running or paused; a saved Stop is preserved and is never cleared by the handoff. The private marker also prevents an already-running MCP client from auto-starting the old collector during replacement. `--finish-upgrade` starts the installed collector only when the marker records prior activity, waits for readiness, and removes the marker after success. A failed restart leaves the marker for retry. If Homebrew rolls back after prepare, run `--finish-upgrade` from the restored app to recover the prior service. The cask draft does not yet invoke these commands: postflight occurs before Homebrew has proved final transaction success, so automatic rollback-safe service restart remains unresolved.
+
+Before distribution, retain the notarization submission ID and accepted result in the controlled release record. Installed acceptance is a separate step: on a disposable macOS account or machine, verify first launch, login-item approval, Start/Pause/Stop/Quit persistence, local key access, synthetic queued receipts, authenticated online verification, MCP client restart, offline capture behavior, Homebrew upgrade, queue compatibility and failed-upgrade recovery. Do not use real capture content in fixtures. Do not claim installed acceptance from portable tests or successful notarization alone.

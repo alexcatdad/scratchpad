@@ -67,8 +67,26 @@ func run() error {
 	helperPath := flag.String("key-helper", defaultHelper, "")
 	identifier := flag.String("key-identifier", keyIdentifier, "")
 	explicitStart := flag.Bool("explicit-start", false, "")
+	prepareUpgradeFlag := flag.Bool("prepare-upgrade", false, "")
+	finishUpgradeFlag := flag.Bool("finish-upgrade", false, "")
+	upgradeResume := flag.Bool("upgrade-resume", false, "")
 	printSchema := flag.Bool("schema-version", false, "")
 	flag.Parse()
+	if *prepareUpgradeFlag && *finishUpgradeFlag {
+		return localcapture.ErrConflictSentinel
+	}
+	if *prepareUpgradeFlag {
+		return prepareUpgrade(*socketPath, *dbPath, *helperPath, *identifier, executable)
+	}
+	if *finishUpgradeFlag {
+		return finishUpgrade(*socketPath, *dbPath, *helperPath, *identifier, executable)
+	}
+	if *upgradeResume {
+		state, stateErr := localcapture.ReadUpgradeState()
+		if stateErr != nil || state == nil || !state.Restart {
+			return localcapture.ErrConflictSentinel
+		}
+	}
 	if *printSchema {
 		version, inspectErr := localcapture.InspectSchemaVersion(*dbPath)
 		if inspectErr != nil {
@@ -77,6 +95,12 @@ func run() error {
 		fmt.Fprintln(os.Stdout, version)
 		return nil
 	}
+	if !*upgradeResume {
+		upgradeInProgress, checkErr := localcapture.UpgradeInProgress()
+		if checkErr != nil || upgradeInProgress {
+			return localcapture.ErrConflictSentinel
+		}
+	}
 	startup, err := localcapture.AcquireStartupGuard(*socketPath)
 	if err != nil {
 		return err
@@ -84,6 +108,10 @@ func run() error {
 	defer startup.Close()
 	if err = startup.Prepare(); err != nil {
 		return err
+	}
+	upgradeInProgress, err := localcapture.UpgradeInProgress()
+	if err != nil || (upgradeInProgress && !*upgradeResume) {
+		return localcapture.ErrConflictSentinel
 	}
 
 	store, err := localcapture.OpenStore(*dbPath, localcapture.HelperKeyProvider{Path: *helperPath, Identifier: *identifier})
