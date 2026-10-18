@@ -28,6 +28,9 @@ func main() {
 	}
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, safeStartupMessage(err))
+		if errors.Is(err, localcapture.ErrUpgradePendingSentinel) {
+			os.Exit(localcapture.UpgradePendingExitCode)
+		}
 		if errors.Is(err, errPersistentlyStopped) {
 			os.Exit(localcapture.PersistentlyStoppedStartupExitCode)
 		}
@@ -43,6 +46,8 @@ func safeStartupMessage(err error) string {
 		return "Scratchpad local service could not unlock its encrypted capture queue."
 	case errors.Is(err, localcapture.ErrConflictSentinel):
 		return "Scratchpad local service could not acquire its socket; another instance may be active."
+	case errors.Is(err, localcapture.ErrUpgradePendingSentinel):
+		return "Scratchpad app replacement is still in progress; retry after Homebrew finishes."
 	case errors.Is(err, errPersistentlyStopped):
 		return "Scratchpad local service is stopped by its saved lifecycle setting."
 	case errors.Is(err, localcapture.ErrStorageFailedSentinel):
@@ -66,6 +71,7 @@ func run() error {
 	socketPath := flag.String("socket", localcapture.DefaultSocketPath(), "")
 	helperPath := flag.String("key-helper", defaultHelper, "")
 	identifier := flag.String("key-identifier", keyIdentifier, "")
+	upgradeServicePath := flag.String("upgrade-service-path", "", "")
 	explicitStart := flag.Bool("explicit-start", false, "")
 	prepareUpgradeFlag := flag.Bool("prepare-upgrade", false, "")
 	finishUpgradeFlag := flag.Bool("finish-upgrade", false, "")
@@ -76,7 +82,11 @@ func run() error {
 		return localcapture.ErrConflictSentinel
 	}
 	if *prepareUpgradeFlag {
-		return prepareUpgrade(*socketPath, *dbPath, *helperPath, *identifier, executable)
+		servicePath := executable
+		if *upgradeServicePath != "" {
+			servicePath = *upgradeServicePath
+		}
+		return prepareUpgrade(*socketPath, *dbPath, *helperPath, *identifier, servicePath)
 	}
 	if *finishUpgradeFlag {
 		return finishUpgrade(*socketPath, *dbPath, *helperPath, *identifier, executable)

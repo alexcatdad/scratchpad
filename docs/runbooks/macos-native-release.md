@@ -125,7 +125,7 @@ node scripts/release-cask.mjs v1.0.0 \
   /path/to/homebrew-tap
 ```
 
-This writes `Casks/scratchpad.rb` in the supplied local tap checkout, computes its SHA-256, and refuses a version downgrade. It does not publish or update the remote tap. The cask is a draft and is not safe for upgrades yet: automatic recovery across Homebrew rollback and service restart is unresolved, so do not publish or use it for installed upgrade acceptance.
+This writes `Casks/scratchpad.rb` in the supplied local tap checkout, computes its SHA-256, and refuses a version downgrade. It does not publish or update the remote tap. The cask prepares the collector before replacement, keeps a private Homebrew transaction lock until the `brew` process exits, and leaves service recovery to the installed app after the transaction is complete.
 
 The existing collector executable provides the upgrade handoff used by a future cask hook:
 
@@ -135,6 +135,10 @@ The existing collector executable provides the upgrade handoff used by a future 
 /Applications/Scratchpad.app/Contents/Helpers/scratchpad-service --finish-upgrade
 ```
 
-`--prepare-upgrade` drains an active collector and records whether it was running or paused; a saved Stop is preserved and is never cleared by the handoff. The private marker also prevents an already-running MCP client from auto-starting the old collector during replacement. `--finish-upgrade` starts the installed collector only when the marker records prior activity, waits for readiness, and removes the marker after success. A failed restart leaves the marker for retry. If Homebrew rolls back after prepare, run `--finish-upgrade` from the restored app to recover the prior service. The cask draft does not yet invoke these commands: postflight occurs before Homebrew has proved final transaction success, so automatic rollback-safe service restart remains unresolved.
+The cask's `uninstall_preflight` invokes `--prepare-upgrade` through the currently installed helper before Homebrew moves the old bundle. The new cask's `preflight` repeats preparation idempotently and covers a first install or an older cask without the handoff hook. Preparation drains a running or paused collector and records whether it should resume; saved Stop remains stopped. The marker blocks MCP auto-start throughout replacement. The cask holds `~/Library/Application Support/Scratchpad/homebrew-upgrade.lock` until Homebrew exits, so `--finish-upgrade` returns a retryable pending result while Homebrew may still roll back. No cask postflight starts the service.
+
+The tray app checks for the marker on launch and during its existing refresh cycle. It retries `--finish-upgrade` after the Homebrew lock is released. Successful upgrades and failed upgrades therefore use the helper from whichever bundle Homebrew leaves installed. The finish command starts the collector only when preparation recorded prior activity, waits for readiness, and removes the marker after success; a failed restart leaves the marker for retry. If the app is not opened automatically after a rollback, launch the restored app or run `--finish-upgrade` from that bundle. The same recovery runs after reinstalling a cask that was uninstalled while the collector was active. Queue data, credentials and lifecycle settings remain in the user's application support directory.
+
+This recovery path is part of the first published cask release. Upgrades from earlier development bundles that lack the tray recovery loop are not supported.
 
 Before distribution, retain the notarization submission ID and accepted result in the controlled release record. Installed acceptance is a separate step: on a disposable macOS account or machine, verify first launch, login-item approval, Start/Pause/Stop/Quit persistence, local key access, synthetic queued receipts, authenticated online verification, MCP client restart, offline capture behavior, Homebrew upgrade, queue compatibility and failed-upgrade recovery. Do not use real capture content in fixtures. Do not claim installed acceptance from portable tests or successful notarization alone.

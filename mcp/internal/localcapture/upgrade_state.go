@@ -12,6 +12,10 @@ import (
 
 const upgradeStateVersion = 1
 
+// UpgradePendingExitCode is returned by --finish-upgrade while Homebrew still
+// owns the replacement lock. Callers may retry without changing saved state.
+const UpgradePendingExitCode = 75
+
 // UpgradeState records only the service identity and whether it was active
 // before an application replacement. It never contains queue data or keys.
 type UpgradeState struct {
@@ -113,6 +117,42 @@ func AcquireUpgradeFinishLock() (func(), error) {
 		_ = file.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
 			return nil, ErrConflictSentinel
+		}
+		return nil, ErrStorageFailedSentinel
+	}
+	return func() {
+		_ = syscall.Flock(fd, syscall.LOCK_UN)
+		_ = file.Close()
+	}, nil
+}
+
+// AcquireHomebrewUpgradeLock returns immediately with ErrUpgradePendingSentinel while
+// Homebrew is replacing the app. Cask hooks hold this same advisory lock until
+// the Homebrew process exits, including its rollback path.
+func AcquireHomebrewUpgradeLock() (func(), error) {
+	path, err := UpgradeStatePath()
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Dir(path)
+	if err = os.MkdirAll(dir, 0700); err != nil || securePrivateDirectory(dir) != nil {
+		return nil, ErrStorageFailedSentinel
+	}
+	lockPath := filepath.Join(dir, "homebrew-upgrade.lock")
+	fd, err := syscall.Open(lockPath, syscall.O_CREAT|syscall.O_RDWR|syscall.O_CLOEXEC|syscall.O_NOFOLLOW, 0600)
+	if err != nil {
+		return nil, ErrStorageFailedSentinel
+	}
+	file := os.NewFile(uintptr(fd), lockPath)
+	info, err := file.Stat()
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0077 != 0 || !ownedByCurrentUser(info) {
+		_ = file.Close()
+		return nil, ErrStorageFailedSentinel
+	}
+	if err = syscall.Flock(fd, syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		_ = file.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
+			return nil, ErrUpgradePendingSentinel
 		}
 		return nil, ErrStorageFailedSentinel
 	}

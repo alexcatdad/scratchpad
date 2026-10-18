@@ -61,7 +61,7 @@ exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 			}
 			t.Setenv("SCRATCHPAD_UPGRADE_TEST_KEY", keyPath)
 			t.Setenv("SCRATCHPAD_UPGRADE_TEST_CALLS", keyCalls)
-			service := startUpgradeAcceptanceService(t, bin, database, socket, keyHelper)
+			service := startUpgradeAcceptanceService(t, bin, database, socket, keyHelper, false)
 			if err := startTrackedService(t, service); err != nil {
 				t.Fatal(err)
 			}
@@ -112,6 +112,16 @@ exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 				awaitUpgradeAcceptanceExit(t, exits)
 			}
 
+			releaseBrewLock, err := localcapture.AcquireHomebrewUpgradeLock()
+			if err != nil {
+				t.Fatalf("acquire synthetic Homebrew transaction lock: %v", err)
+			}
+			brewLockActive := true
+			defer func() {
+				if brewLockActive {
+					releaseBrewLock()
+				}
+			}()
 			prepareArgs := []string{"--prepare-upgrade", "--database", database, "--socket", socket, "--key-helper", keyHelper, "--key-identifier", upgradeAcceptanceKeyID}
 			if output, err := runUpgradeAcceptanceCommand(bin, prepareArgs...); err != nil {
 				t.Fatalf("prepare replacement: %v: %s", err, output)
@@ -126,6 +136,44 @@ exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 			if _, err = os.Stat(statePath); err != nil {
 				t.Fatalf("prepare did not leave recovery marker: %v", err)
 			}
+			if initialLifecycle == "paused" {
+				// Simulate a process that bypassed the ordinary-start fence after
+				// prepare. Retrying prepare must quiesce it while keeping the saved
+				// pause intent from the original marker.
+				resumedService := startUpgradeAcceptanceService(t, bin, database, socket, keyHelper, true)
+				if err := startTrackedService(t, resumedService); err != nil {
+					t.Fatalf("start synthetic service during replacement: %v", err)
+				}
+				resumedExits := watchUpgradeAcceptanceService(resumedService)
+				waitForUpgradeLifecycle(t, client, resumedService, localcapture.LifecyclePaused)
+				if output, err := runUpgradeAcceptanceCommand(bin, prepareArgs...); err != nil {
+					t.Fatalf("repeated prepare did not drain the service: %v: %s", err, output)
+				}
+				awaitUpgradeAcceptanceExit(t, resumedExits)
+			} else if output, err := runUpgradeAcceptanceCommand(bin, prepareArgs...); err != nil {
+				t.Fatalf("repeated prepare did not preserve the existing handoff: %v: %s", err, output)
+			}
+			state, stateErr := localcapture.ReadUpgradeState()
+			if stateErr != nil || state == nil || state.Restart != (initialLifecycle != "stopped") {
+				t.Fatalf("repeated prepare changed the original restart intent: state=%+v err=%v", state, stateErr)
+			}
+			pendingFinishArgs := []string{"--finish-upgrade", "--database", database, "--socket", socket, "--key-helper", keyHelper, "--key-identifier", upgradeAcceptanceKeyID}
+			if output, finishErr := runUpgradeAcceptanceCommand(bin, pendingFinishArgs...); finishErr == nil {
+				t.Fatalf("finish unexpectedly ran while Homebrew still held the transaction lock: %s", output)
+			} else {
+				var exit *exec.ExitError
+				if !errors.As(finishErr, &exit) || exit.ExitCode() != localcapture.UpgradePendingExitCode {
+					t.Fatalf("finish did not report retryable Homebrew contention: err=%v output=%s", finishErr, output)
+				}
+			}
+			if _, markerErr := os.Stat(statePath); markerErr != nil {
+				t.Fatalf("finish during Homebrew transaction discarded its marker: %v", markerErr)
+			}
+			if _, statusErr := client.Status(context.Background()); !errors.Is(statusErr, localcapture.ErrServiceStoppedSentinel) {
+				t.Fatalf("finish during Homebrew transaction restarted the collector: %v", statusErr)
+			}
+			releaseBrewLock()
+			brewLockActive = false
 
 			if initialLifecycle != "stopped" {
 				blockedArgs := []string{"--database", database, "--socket", socket, "--key-helper", keyHelper, "--key-identifier", upgradeAcceptanceKeyID}
@@ -142,6 +190,29 @@ exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 				}
 				if _, markerErr := os.Stat(statePath); markerErr != nil {
 					t.Fatalf("failed recovery discarded its marker: %v", markerErr)
+				}
+
+				if initialLifecycle == "paused" {
+					// Keep the installed executable valid, but make the replacement
+					// bundle's helper fail at the same path. This exercises finish's
+					// restart and marker-retention path before restoring the old helper.
+					oldHelper, readErr := os.ReadFile(keyHelper)
+					if readErr != nil {
+						t.Fatalf("save installed key helper for rollback fixture: %v", readErr)
+					}
+					if writeErr := os.WriteFile(keyHelper, []byte("#!/bin/sh\nexit 23\n"), 0700); writeErr != nil {
+						t.Fatalf("install failing replacement helper: %v", writeErr)
+					}
+					failedReplacementFinishArgs := []string{"--finish-upgrade", "--database", database, "--socket", socket, "--key-helper", keyHelper, "--key-identifier", upgradeAcceptanceKeyID}
+					if output, finishErr := runUpgradeAcceptanceCommand(bin, failedReplacementFinishArgs...); finishErr == nil {
+						t.Fatalf("finish unexpectedly accepted the broken replacement helper: %s", output)
+					}
+					if _, markerErr := os.Stat(statePath); markerErr != nil {
+						t.Fatalf("failed replacement restart discarded its recovery marker: %v", markerErr)
+					}
+					if writeErr := os.WriteFile(keyHelper, oldHelper, 0700); writeErr != nil {
+						t.Fatalf("restore previous installed helper: %v", writeErr)
+					}
 				}
 			}
 
@@ -189,11 +260,15 @@ exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 	}
 }
 
-func startUpgradeAcceptanceService(t *testing.T, bin, database, socket, helper string) *startedService {
+func startUpgradeAcceptanceService(t *testing.T, bin, database, socket, helper string, upgradeResume bool) *startedService {
 	t.Helper()
+	args := []string{"--database", database, "--socket", socket, "--key-helper", helper, "--key-identifier", upgradeAcceptanceKeyID}
+	if upgradeResume {
+		args = append([]string{"--upgrade-resume"}, args...)
+	}
 	output := &safeBuffer{}
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, bin, "--database", database, "--socket", socket, "--key-helper", helper, "--key-identifier", upgradeAcceptanceKeyID)
+	cmd := exec.CommandContext(ctx, bin, args...)
 	cmd.Env = os.Environ()
 	cmd.Stdout, cmd.Stderr = output, output
 	return &startedService{cmd: cmd, output: output, cancel: cancel, done: make(chan struct{})}

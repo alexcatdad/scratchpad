@@ -41,16 +41,35 @@ func prepareUpgrade(socketPath, databasePath, helperPath, keyIdentifier, service
 		Version: 1, ServicePath: servicePath, SocketPath: socketPath,
 		DatabasePath: databasePath, KeyIdentifier: keyIdentifier,
 	}
+	existing, stateErr := localcapture.ReadUpgradeState()
+	if stateErr != nil {
+		_ = guard.Close()
+		return stateErr
+	}
+	if existing != nil {
+		if existing.ServicePath != state.ServicePath || existing.SocketPath != state.SocketPath || existing.DatabasePath != state.DatabasePath || existing.KeyIdentifier != state.KeyIdentifier {
+			_ = guard.Close()
+			return errors.New("upgrade marker does not match this Scratchpad installation")
+		}
+		// A prior prepare may have written the marker and then been interrupted
+		// before quiescing. Preserve the original lifecycle decision, but continue
+		// inspecting and draining the service on every retry.
+		state = *existing
+	}
 	quiesceActive := false
 	client := localcapture.NewClient(socketPath)
 	client.Timeout = 10 * time.Second
 	if status, statusErr := client.Status(context.Background()); statusErr == nil {
 		switch status.Lifecycle {
 		case localcapture.LifecycleRunning, localcapture.LifecyclePaused:
-			state.Restart = true
+			if existing == nil {
+				state.Restart = true
+			}
 			quiesceActive = true
 		case localcapture.LifecycleStopped:
-			state.Restart = false
+			if existing == nil {
+				state.Restart = false
+			}
 			quiesceActive = true
 		default:
 			_ = guard.Close()
@@ -67,9 +86,11 @@ func prepareUpgrade(socketPath, databasePath, helperPath, keyIdentifier, service
 		_ = guard.Close()
 		return statusErr
 	}
-	if err = localcapture.WriteUpgradeState(state); err != nil {
-		_ = guard.Close()
-		return err
+	if existing == nil {
+		if err = localcapture.WriteUpgradeState(state); err != nil {
+			_ = guard.Close()
+			return err
+		}
 	}
 	if err = guard.Close(); err != nil {
 		_ = localcapture.ClearUpgradeState()
@@ -118,6 +139,11 @@ func finishUpgrade(socketPath, databasePath, helperPath, keyIdentifier, serviceP
 	if state == nil {
 		return nil
 	}
+	releaseHomebrewLock, err := localcapture.AcquireHomebrewUpgradeLock()
+	if err != nil {
+		return err
+	}
+	defer releaseHomebrewLock()
 	currentService, err := filepath.Abs(servicePath)
 	if err != nil {
 		return localcapture.ErrStorageFailedSentinel
