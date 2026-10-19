@@ -93,6 +93,7 @@ var (
 	ErrDiscardNotAllowedSentinel = errors.New("receipt cannot be discarded")
 	ErrProjectSelectionSentinel  = errors.New("explicit project selection required")
 	ErrConflictSentinel          = errors.New("capture request identity conflicts with prior content")
+	ErrUpgradePendingSentinel    = errors.New("application upgrade is still in progress")
 	ErrProtocolVersionSentinel   = errors.New("unsupported local service protocol version")
 	ErrUnauthorizedPeerSentinel  = errors.New("local service peer is not authorized")
 	ErrUnknownOperationSentinel  = errors.New("unknown local service operation")

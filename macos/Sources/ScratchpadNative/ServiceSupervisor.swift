@@ -11,6 +11,13 @@ public struct ServiceSupervisor {
         bundle.bundleURL.appending(path: "Contents/Helpers/\(serviceExecutable)")
     }
 
+    public static var hasPendingUpgrade: Bool {
+        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+            return false
+        }
+        return FileManager.default.fileExists(atPath: support.appending(path: "Scratchpad/upgrade-in-progress.json").path)
+    }
+
     /// Start is deliberately an explicit UI action. It starts the bundled
     /// service with the one-shot flag that permits clearing its stopped state.
     @discardableResult
@@ -18,11 +25,9 @@ public struct ServiceSupervisor {
         try launch(bundle: bundle, arguments: ["--explicit-start"], onTermination: onTermination)
     }
 
-    /// Used only when restoring the service after an updater handoff. The
-    /// service reads durable Pause/Stop state and cannot clear Stop here.
     @discardableResult
-    public func launchRespectingPersistentState(bundle: Bundle = .main) throws -> Process {
-        try launch(bundle: bundle, arguments: [])
+    public func finishUpgrade(bundle: Bundle = .main, onTermination: (@Sendable (Int32) -> Void)? = nil) throws -> Process {
+        try launch(bundle: bundle, arguments: ["--finish-upgrade"], onTermination: onTermination)
     }
 
     @discardableResult

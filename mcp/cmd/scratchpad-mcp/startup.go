@@ -63,6 +63,10 @@ func ensureCollector(ctx context.Context, socketPath string, start collectorStar
 }
 
 func ensureCollectorWithClient(ctx context.Context, socketPath string, client collectorStatusClient, start collectorStarter) error {
+	upgrading, upgradeErr := localcapture.UpgradeInProgress()
+	if upgradeErr != nil || upgrading {
+		return errors.New("Scratchpad collector is being replaced; retry after the app upgrade completes.")
+	}
 	startupContext, cancel := context.WithTimeout(ctx, collectorStartupTimeout)
 	defer cancel()
 	ctx = startupContext

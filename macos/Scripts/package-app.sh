@@ -96,7 +96,7 @@ mkdir -p "$stage_root/helpers"
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
 
-mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Frameworks" "$candidate/Contents/Resources"
+mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Resources"
 cp "$bin/Scratchpad" "$candidate/Contents/MacOS/Scratchpad"
 cp "$bin/scratchpad-keychain" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"
 cp "$repo_root/macos/Resources/KeychainHelper-Info.plist" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
@@ -108,9 +108,6 @@ cp "$repo_root/macos/Resources/ScratchpadTrayIcon.png" "$candidate/Contents/Reso
 cp "$repo_root/macos/Resources/ScratchpadTrayIcon@2x.png" "$candidate/Contents/Resources/ScratchpadTrayIcon@2x.png"
 cp "$repo_root/macos/Resources/com.alexcatdad.scratchpad.service.plist" "$candidate/Contents/Library/LaunchAgents/com.alexcatdad.scratchpad.service.plist"
 
-framework=$(find "$repo_root/macos/.build/artifacts" -type d -name Sparkle.framework -print -quit 2>/dev/null || true)
-test -n "$framework" || { echo "SwiftPM did not produce Sparkle.framework" >&2; exit 1; }
-ditto "$framework" "$candidate/Contents/Frameworks/Sparkle.framework"
 sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
   "$candidate/Contents/MacOS/Scratchpad" "$repo_root" "$developer_dir"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Info.plist"
@@ -118,30 +115,21 @@ sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 
-if [ -n "${SPARKLE_FEED_URL:-}" ]; then
-  /usr/libexec/PlistBuddy -c "Add :SUFeedURL string $SPARKLE_FEED_URL" "$candidate/Contents/Info.plist"
-fi
-if [ -n "${SPARKLE_PUBLIC_KEY:-}" ]; then
-  /usr/libexec/PlistBuddy -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_KEY" "$candidate/Contents/Info.plist"
-fi
 
 plutil -lint "$candidate/Contents/Info.plist" "$candidate/Contents/Library/LaunchAgents/com.alexcatdad.scratchpad.service.plist"
 plutil -lint "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 "$repo_root/macos/Scripts/validate-bundle.sh" "$candidate"
+"$repo_root/macos/Scripts/validate-release.sh" "$candidate"
 
 if [ -n "${SIGNING_IDENTITY:-}" ]; then
   cp "$KEYCHAIN_PROFILE" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/embedded.provisionprofile"
-  # Sign nested Sparkle code from the deepest bundle outward. The app is signed
-  # last, so its resource seal covers the finished helper and framework layout.
-  sh "$repo_root/macos/Scripts/sign-sparkle-framework.sh" \
-    "$candidate/Contents/Frameworks/Sparkle.framework" "$SIGNING_IDENTITY"
+  # Sign the app last so its resource seal covers the finished helpers.
   codesign --force --options runtime --timestamp --entitlements "$stage_root/keychain-access.entitlements" --sign "$SIGNING_IDENTITY" "$candidate/Contents/Helpers/scratchpad-keychain.app"
   helper_team=$(codesign -dv --verbose=4 "$candidate/Contents/Helpers/scratchpad-keychain.app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
   [ "$helper_team" = "$profile_team" ] || { echo "KEYCHAIN_PROFILE team does not match SIGNING_IDENTITY" >&2; exit 1; }
   for helper in "$candidate/Contents/Helpers/scratchpad-mcp" "$candidate/Contents/Helpers/scratchpad-service"; do
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$helper"
   done
-  codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$candidate/Contents/Frameworks/Sparkle.framework"
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$candidate"
   codesign --verify --deep --strict --verbose=2 "$candidate"
 fi

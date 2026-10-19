@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -27,6 +28,11 @@ import (
 )
 
 var binary, mcpBinary, serviceBinary, integrationBinary string
+
+const (
+	mcpBinaryOverrideEnv     = "SCRATCHPAD_TEST_MCP_BINARY"
+	serviceBinaryOverrideEnv = "SCRATCHPAD_TEST_SERVICE_BINARY"
+)
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "scratchpad-go-tests-")
@@ -51,7 +57,32 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	mcpBinary, serviceBinary, integrationBinary = filepath.Join(helperDir, "scratchpad-mcp"), filepath.Join(helperDir, "scratchpad-service"), filepath.Join(dir, "integration")
-	for _, target := range []struct{ output, pkg string }{{mcpBinary, "./cmd/scratchpad-mcp"}, {serviceBinary, "./cmd/scratchpad-service"}, {integrationBinary, "./integration"}} {
+	for _, candidate := range []struct {
+		name   string
+		env    string
+		target *string
+	}{{"scratchpad-mcp", mcpBinaryOverrideEnv, &mcpBinary}, {"scratchpad-service", serviceBinaryOverrideEnv, &serviceBinary}} {
+		value, supplied := os.LookupEnv(candidate.env)
+		if !supplied {
+			continue
+		}
+		path, digest, err := validateCandidateBinary(value)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "invalid %s override from %s: %v\n", candidate.name, candidate.env, err)
+			_ = os.RemoveAll(dir)
+			os.Exit(1)
+		}
+		*candidate.target = path
+		fmt.Fprintf(os.Stderr, "using supplied %s candidate: %s sha256=%s\n", candidate.name, path, digest)
+	}
+	for _, target := range []struct {
+		output, pkg, overrideEnv string
+	}{{mcpBinary, "./cmd/scratchpad-mcp", mcpBinaryOverrideEnv}, {serviceBinary, "./cmd/scratchpad-service", serviceBinaryOverrideEnv}, {integrationBinary, "./integration", ""}} {
+		if target.overrideEnv != "" {
+			if _, supplied := os.LookupEnv(target.overrideEnv); supplied {
+				continue
+			}
+		}
 		build := exec.Command("go", "build", "-race", "-o", target.output, target.pkg)
 		build.Dir = "../mcp"
 		build.Stdout, build.Stderr = os.Stdout, os.Stderr
@@ -63,6 +94,33 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)
+}
+
+func validateCandidateBinary(path string) (string, string, error) {
+	if path == "" {
+		return "", "", errors.New("path is empty")
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", fmt.Errorf("resolve path: %w", err)
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", "", fmt.Errorf("stat path: %w", err)
+	}
+	if !info.Mode().IsRegular() || info.Mode().Perm()&0111 == 0 {
+		return "", "", errors.New("path must identify an executable regular file")
+	}
+	file, err := os.Open(abs)
+	if err != nil {
+		return "", "", fmt.Errorf("open binary: %w", err)
+	}
+	defer file.Close()
+	hash := sha256.New()
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", "", fmt.Errorf("hash binary: %w", err)
+	}
+	return abs, hex.EncodeToString(hash.Sum(nil)), nil
 }
 
 func TestFreshSQLiteMigrationIsRepeatable(t *testing.T) {

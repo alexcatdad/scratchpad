@@ -46,22 +46,6 @@ public struct ServiceLifecycleObservationRevision: Sendable {
         }
     }
 
-    public mutating func beginUpdaterQuiescence() -> Int {
-        value += 1
-        pendingIntent = nil
-        suppressionBeforeLifecycle = nil
-        absenceSuppressed = true
-        return value
-    }
-
-    public mutating func finishUpdaterRecovery() -> Int {
-        value += 1
-        pendingIntent = nil
-        suppressionBeforeLifecycle = nil
-        absenceSuppressed = false
-        return value
-    }
-
     public mutating func finishLifecycle(_ observation: Int, operation: String, succeeded: Bool) -> Bool {
         guard finishLifecycle(observation) else { return false }
         if operation == "stop", succeeded {

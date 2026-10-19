@@ -65,6 +65,27 @@ func TestCollectorReadinessAcceptsRunningAndPaused(t *testing.T) {
 	}
 }
 
+func TestEnsureCollectorDoesNotAutostartDuringUpgrade(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", "")
+	if err := localcapture.WriteUpgradeState(localcapture.UpgradeState{
+		Version: 1, ServicePath: "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-service",
+		SocketPath: "/tmp/scratchpad-test/service.sock", DatabasePath: "/tmp/scratchpad-test/captures.sqlite",
+		KeyIdentifier: "com.alexcatdad.scratchpad.capture-queue.v1", Restart: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeCollectorClient{status: readyCollector(localcapture.LifecycleRunning)}
+	started := false
+	err := ensureCollectorWithClient(context.Background(), "synthetic.sock", client, func(string) (<-chan error, error) {
+		started = true
+		return nil, nil
+	})
+	if err == nil || started || !strings.Contains(err.Error(), "being replaced") {
+		t.Fatalf("upgrade gate err=%v, started=%t", err, started)
+	}
+}
+
 func TestEnsureCollectorDoesNotClearPersistentStop(t *testing.T) {
 	client := &fakeCollectorClient{err: localcapture.ErrServiceStoppedSentinel}
 	starts := 0

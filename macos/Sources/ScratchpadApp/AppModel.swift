@@ -28,6 +28,7 @@ final class AppModel: ObservableObject {
     )
     private var refreshTimer: Timer?
     private var startupProcess: Process?
+    private var upgradeRecoveryProcess: Process?
     private var configurationRevision = 0
     private var queueVisible = false
     private var lastQueueRefresh = Date.distantPast
@@ -49,15 +50,9 @@ final class AppModel: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "serviceAbsenceSuppressed"),
-           !defaults.bool(forKey: "restartServiceAfterSparkleUpdate"),
            defaults.bool(forKey: "serviceExpectedToRun") {
             defaults.set(false, forKey: "serviceAbsenceSuppressed")
             defaults.set(defaults.integer(forKey: "serviceLifecycleRevision") + 1, forKey: "serviceLifecycleRevision")
-        }
-        if UserDefaults.standard.bool(forKey: "restartServiceAfterSparkleUpdate") {
-            Task { @MainActor [weak self] in
-                await self?.recoverServiceAfterUpdaterRestart()
-            }
         }
         refreshTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
             Task { @MainActor in
@@ -68,9 +63,11 @@ final class AppModel: ObservableObject {
                 self.loadReceipts()
             }
         }
+        recoverUpgradeIfNeeded()
     }
 
     func refresh() {
+        recoverUpgradeIfNeeded()
         _ = currentObservationRevision()
         guard observationRevision.canRefresh else { return }
         let revision = currentObservationRevision()
@@ -93,6 +90,24 @@ final class AppModel: ObservableObject {
                     absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
                 ))
             }
+        }
+    }
+
+    private func recoverUpgradeIfNeeded() {
+        guard upgradeRecoveryProcess == nil, ServiceSupervisor.hasPendingUpgrade else { return }
+        do {
+            upgradeRecoveryProcess = try supervisor.finishUpgrade { [weak self] exitCode in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.upgradeRecoveryProcess = nil
+                    if exitCode != 0 && exitCode != Int32(75) {
+                        self.errorMessage = "Scratchpad could not finish the app update. It will retry when the tray refreshes."
+                    }
+                    if exitCode == 0 { self.refresh() }
+                }
+            }
+        } catch {
+            errorMessage = "Scratchpad could not start update recovery. It will retry when the tray refreshes."
         }
     }
 
@@ -335,17 +350,6 @@ final class AppModel: ObservableObject {
         defaults.set(observationRevision.absenceSuppressed, forKey: "serviceAbsenceSuppressed")
     }
 
-    private func recoverServiceAfterUpdaterRestart() async {
-        let failure = await Task.detached {
-            UpdateCoordinator.restoreServiceRespectingPersistentState()
-        }.value
-        UserDefaults.standard.set(false, forKey: "restartServiceAfterSparkleUpdate")
-        _ = currentObservationRevision()
-        _ = observationRevision.finishUpdaterRecovery()
-        persistLifecyclePolicy()
-        if let failure { errorMessage = failure }
-        refresh()
-    }
     func discard(_ receipt: Receipt) {
         let client = self.client
         perform({ try client.call("discard_receipt", body: ReceiptBody(receiptId: receipt.receiptId), as: Receipt.self) }) { _ in

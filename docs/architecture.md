@@ -1114,3 +1114,7 @@ resolution and existing optional AI operations use an allowlisted collector IPC
 request, with bounded execution and response size. No direct-server fallback
 exists when the collector is unavailable. Offline reads report unavailability;
 pending captures retain their original server and credential binding.
+
+## Accepted clarification: Homebrew-managed macOS app updates
+
+The macOS app is installed and upgraded through a Homebrew cask in the project tap. This replaces the earlier in-app updater direction: no Sparkle dependency, appcast, update-signing key or in-app update controls are required. Developer ID signing and notarization remain required. Upgrade acceptance must preserve the durable queue, credentials and settings and verify the updated collector starts. Cask publication and installed upgrade validation remain separate release work.

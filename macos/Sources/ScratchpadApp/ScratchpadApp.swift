@@ -4,7 +4,6 @@ import ScratchpadNative
 @main
 struct ScratchpadApp: App {
     @StateObject private var model = AppModel()
-    @StateObject private var updates = UpdateCoordinator()
     @Environment(\.openWindow) private var openWindow
     private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL)
 
@@ -12,7 +11,6 @@ struct ScratchpadApp: App {
         MenuBarExtra {
             MenuContent()
                 .environmentObject(model)
-                .environmentObject(updates)
                 .onAppear { model.refresh() }
         } label: {
             if let image = trayIcon {
@@ -32,7 +30,6 @@ struct ScratchpadApp: App {
         WindowGroup("Scratchpad", id: "workspace") {
             WorkspaceView()
                 .environmentObject(model)
-                .environmentObject(updates)
                 .frame(minWidth: 740, minHeight: 480)
         }
         .defaultSize(width: 860, height: 590)
@@ -120,7 +117,7 @@ struct MenuContent: View {
     }
     private func statusHeadline(_ status: ServiceStatus) -> String {
         if status.lifecycle == "stopped" { return "Service stopped" }
-        if status.lifecycle == "quiescing" { return "Preparing update" }
+        if status.lifecycle == "quiescing" { return "Service shutting down" }
         if !status.keyAvailable || status.storageAvailable == false { return "Local saving unavailable" }
         if status.lifecycle == "paused" { return "Delivery paused" }
         switch status.connection?.effectiveState() {

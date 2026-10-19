@@ -153,7 +153,7 @@ dev_executable="$dev_app/Contents/MacOS/Scratchpad"
   ! "$PLIST_BUDDY_BIN" -c 'Print :SUFeedURL' "$dev_app/Contents/Info.plist" >/dev/null 2>&1
   ! "$PLIST_BUDDY_BIN" -c 'Print :SUPublicEDKey' "$dev_app/Contents/Info.plist" >/dev/null 2>&1
 }
-[ -d "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo 'nested framework was not preserved' >&2; exit 1; }
+[ ! -e "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo 'retired updater was preserved' >&2; exit 1; }
 [ -f "$dev_app/Contents/Helpers/scratchpad-service" ] || { echo 'service helper was not preserved' >&2; exit 1; }
 [ "$(cat "$dev_app/Contents/Helpers/scratchpad-service")" = service ] || { echo 'default UI build replaced the service helper' >&2; exit 1; }
 [ "$(cat "$dev_app/Contents/Helpers/scratchpad-mcp")" = mcp ] || { echo 'default UI build replaced the MCP helper' >&2; exit 1; }
@@ -174,7 +174,7 @@ export GO_BUILD_CONTENT=rebuilt-helper
 [ "$(cat "$dev_app/Contents/Helpers/scratchpad-service")" = rebuilt-helper ] || { echo '--rebuild-helpers did not replace the service helper' >&2; exit 1; }
 [ "$(cat "$dev_app/Contents/Helpers/scratchpad-mcp")" = rebuilt-helper ] || { echo '--rebuild-helpers did not replace the MCP helper' >&2; exit 1; }
 [ "$(cat "$dev_app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain")" = helper ] || { echo '--rebuild-helpers changed the Keychain helper' >&2; exit 1; }
-[ -d "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo '--rebuild-helpers changed Sparkle' >&2; exit 1; }
+[ ! -e "$dev_app/Contents/Frameworks/Sparkle.framework" ] || { echo 'helper rebuild restored the retired updater' >&2; exit 1; }
 grep -Fq 'go build -C ' "$log" || { echo '--rebuild-helpers did not build Go helpers' >&2; exit 1; }
 grep -Fq -- '-X main.version=dev -X main.buildNumber=dev' "$log" || { echo '--rebuild-helpers did not use development metadata' >&2; exit 1; }
 grep -Eq '^codesign --force --sign - --options 0 .*/Contents/Helpers/scratchpad-service$' "$log" || { echo '--rebuild-helpers did not ad-hoc sign the service' >&2; exit 1; }
