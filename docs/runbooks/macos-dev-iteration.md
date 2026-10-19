@@ -35,6 +35,9 @@ script.
 
 The dev bundle uses `com.alexcatdad.scratchpad.dev`, so its standard
 `UserDefaults` are separate from the release app.
+Its menu-bar icon has a visible `DEV` label, and its menu and default workspace
+title use `Scratchpad DEV`. Use these labels to distinguish it from the
+installed app when both are running.
 The rebuilt menu app and outer dev bundle receive local ad-hoc signatures; the signed Keychain helper copied from the seed is preserved. The retired updater framework is removed when reusing an older seed.
 This is a local UI iteration bundle, not a distributable or notarized release.
 Service and MCP changes can use the opt-in helper rebuild path, which builds
@@ -69,6 +72,14 @@ Run the focused shell workflow test with:
 ```sh
 macos/Scripts/test-dev-app.sh
 ```
+
+## Sidebar navigation regression
+
+Keep the sidebar row identity type equal to its selection value type
+(`WorkspacePage`). SwiftPM policy tests do not exercise rendered selection.
+In the development workspace, verify that Pending captures starts selected,
+then click Settings and Projects and confirm both the selection highlight and
+detail content change. Return to Settings without changing configuration.
 
 ## Signing-key fallback regression
 
