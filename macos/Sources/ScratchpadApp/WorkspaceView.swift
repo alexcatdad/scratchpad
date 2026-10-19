@@ -7,7 +7,7 @@ private enum WorkspacePage: String, CaseIterable, Identifiable {
     case setup = "MCP setup"
     case authentication = "Authentication"
     case settings = "Settings"
-    var id: String { rawValue }
+    var id: Self { self }
     var icon: String {
         switch self {
         case .queue: "tray"
@@ -27,7 +27,7 @@ struct WorkspaceView: View {
             List(WorkspacePage.allCases, selection: $page) { item in
                 Label(item.rawValue, systemImage: item.icon).tag(item as WorkspacePage?)
             }
-            .navigationTitle("Scratchpad")
+            .navigationTitle(AppIdentity.displayName)
             .safeAreaInset(edge: .bottom) {
                 VStack(alignment: .leading, spacing: 4) {
                     Label(connectionLabel, systemImage: connectionIcon)

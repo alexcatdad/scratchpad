@@ -1,6 +1,11 @@
 import SwiftUI
 import ScratchpadNative
 
+enum AppIdentity {
+    static let isDevelopment = Bundle.main.bundleIdentifier == "com.alexcatdad.scratchpad.dev"
+    static let displayName = isDevelopment ? "Scratchpad DEV" : "Scratchpad"
+}
+
 @main
 struct ScratchpadApp: App {
     @StateObject private var model = AppModel()
@@ -13,21 +18,26 @@ struct ScratchpadApp: App {
                 .environmentObject(model)
                 .onAppear { model.refresh() }
         } label: {
-            if let image = trayIcon {
-                Image(nsImage: image)
-                    .renderingMode(.template)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: 18, height: 18)
-                    .accessibilityLabel("Scratchpad")
-            } else {
-                Image(systemName: "pawprint.fill")
-                    .accessibilityLabel("Scratchpad")
+            HStack(spacing: 4) {
+                if let image = trayIcon {
+                    Image(nsImage: image)
+                        .renderingMode(.template)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 18, height: 18)
+                        .accessibilityLabel(AppIdentity.displayName)
+                } else {
+                    Image(systemName: "pawprint.fill")
+                        .accessibilityLabel(AppIdentity.displayName)
+                }
+                if AppIdentity.isDevelopment {
+                    Text("DEV").font(.caption2.weight(.semibold))
+                }
             }
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup("Scratchpad", id: "workspace") {
+        WindowGroup(AppIdentity.displayName, id: "workspace") {
             WorkspaceView()
                 .environmentObject(model)
                 .frame(minWidth: 740, minHeight: 480)
@@ -49,7 +59,7 @@ struct MenuContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Scratchpad").font(.headline)
+                Text(AppIdentity.displayName).font(.headline)
                 Spacer()
                 if totalWaiting > 0 { Text("\(totalWaiting) waiting").font(.caption).foregroundStyle(.secondary) }
             }
