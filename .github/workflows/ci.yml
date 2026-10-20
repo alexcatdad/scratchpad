@@ -358,6 +358,7 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - run: npm run build -w @scratchpad/web
       - name: Build Go browser and MCP fixtures before acceptance timeouts
         run: |
           go -C backend build -o "$RUNNER_TEMP/scratchpad-e2e-server" ./cmd/scratchpad-server

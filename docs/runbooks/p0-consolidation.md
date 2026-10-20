@@ -105,6 +105,12 @@ collector/offline-delivery acceptance.
   wait for API and dashboard readiness, and inspect both container log streams.
   Three affected workflow/harness browser tests, targeted typechecks, lint,
   actionlint, shellcheck and Hadolint passed locally.
+- At `9044c9ad4694d6f1f6d29436117624248fdc5e0e`, canonical PostgreSQL 18,
+  pgvector, Go backend shards/aggregate, MCP, native Go browser/container,
+  macOS and synthetic local-capture checks passed. The retained web/Docker
+  lanes exposed two fixture prerequisites: the Docker lane also needs a local
+  renderer build, and private-AI acceptance must wait for dashboard readiness.
+  Those corrections retain the original behavioral assertions and deadlines.
 - Final retirement, combined-head reviews, CI and merged-main gates remain pending.
 
 ## Production gate

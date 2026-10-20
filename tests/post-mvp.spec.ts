@@ -331,14 +331,17 @@ async function startApplication() {
             signal: AbortSignal.timeout(2000),
           });
           if (ready.status !== 200) logs += await ready.text();
-          return ready.status;
+          const dashboard = await fetch(origin, {
+            signal: AbortSignal.timeout(2000),
+          });
+          return ready.status === 200 && dashboard.ok;
         } catch {
-          return 0;
+          return false;
         }
       },
       { timeout: 30000, message: "Disposable production server must be ready" },
     )
-    .toBe(200)
+    .toBe(true)
     .catch((error) => {
       throw new Error(`${error.message}\n${logs.slice(-4000)}`);
     });
