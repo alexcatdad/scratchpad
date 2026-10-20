@@ -124,6 +124,13 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Fetch the pinned TypeScript rollback source
+        run: |
+          revision=0990411697f9eda7c535acf0d2f0697d7ae6f149
+          if ! git cat-file -e "$revision^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$revision"
+          fi
+          test "$(git rev-parse "$revision^{commit}")" = "$revision"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: backend/go.mod
@@ -209,10 +216,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Build default Go image and retained TypeScript rollback image
+      - name: Build default Go image and historical TypeScript rollback image
         run: |
           docker --context default build -t scratchpad-go:ci .
-          docker --context default build --target typescript-runtime -t scratchpad-retained:ci .
+          TEST_DOCKER_CONTEXT=default bash scripts/build-rollback-fixture.sh scratchpad-retained:ci
       - name: Verify Go image browser access and operational restore
         run: npx playwright test --project=go-container
         env:

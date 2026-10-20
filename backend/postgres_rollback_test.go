@@ -26,6 +26,7 @@ func retainedTypeScriptAPI(t *testing.T, databaseURL string, readyStatus int) st
 	if err != nil {
 		t.Fatal(err)
 	}
+	apiURL := historicalAPIURL(t)
 	loader := filepath.Join(root, "node_modules/tsx/dist/cli.mjs")
 	if _, err = os.Stat(loader); err != nil {
 		t.Fatal("npm ci is required for retained TypeScript rollback verification")
@@ -39,7 +40,7 @@ func retainedTypeScriptAPI(t *testing.T, databaseURL string, readyStatus int) st
 	origin := "http://" + address
 	cmd := exec.Command("node", "--import", "tsx", filepath.Join(root, "tests/typescript-api-fixture.ts"))
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_PUBLIC_URL="+origin, "SCRATCHPAD_GITHUB_CLIENT_ID=", "SCRATCHPAD_GITHUB_CLIENT_SECRET=")
+	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_PUBLIC_URL="+origin, "SCRATCHPAD_LEGACY_API_MODULE="+apiURL, "SCRATCHPAD_GITHUB_CLIENT_ID=", "SCRATCHPAD_GITHUB_CLIENT_SECRET=")
 	if err = cmd.Start(); err != nil {
 		t.Fatal("retained TypeScript API process did not start")
 	}
