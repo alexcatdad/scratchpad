@@ -9,7 +9,11 @@ import (
 )
 
 func TestGeneratedClientsCallAuthenticatedGoBackend(t *testing.T) {
-	for _, engine := range []string{"sqlite", "postgres"} {
+	engines := []string{"sqlite"}
+	if os.Getenv("TEST_POSTGRES_URL") != "" {
+		engines = append(engines, "postgres")
+	}
+	for _, engine := range engines {
 		t.Run(engine, func(t *testing.T) {
 			version, err := exec.Command("node", "--version").Output()
 			if err != nil || !strings.HasPrefix(string(version), "v24.") {

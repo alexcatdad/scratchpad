@@ -4,7 +4,11 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 [Documentation](https://alexcatdad.github.io/scratchpad/) · [Product requirements](docs/prd.md) · [Architecture](docs/architecture.md) · [API](docs/api.md)
 
-## Status
+## Current source
+
+The default server is Go, with a retained React dashboard rendered privately by Node. Go owns authentication, persistence, migrations, HTTP APIs and optional AI/RAG. The local Go MCP/capture service and native macOS application keep their existing contracts. SQLite remains the default, with optional PostgreSQL. See [P0 acceptance](docs/runbooks/p0-consolidation.md) for retirement and delivery gates; code defaults do not authorize a live production cutover.
+
+## Published release history
 
 Scratchpad v0.3.0 includes the TanStack Start dashboard, SQLite API, passkey enrollment, SSH-authenticated Go stdio MCP, immutable captures, deterministic search, audited metadata and relationships, source provenance, JSONL import with diagnostics, native import/export, online SQLite backups, and optional repository mirroring. It adds optional PostgreSQL, persisted AI analysis jobs, source-linked suggestions and patterns, semantic retrieval, five private Markdown formats, and dashboard/MCP controls. SQLite and the capture/retrieval workflow remain useful without AI. This release additionally includes opt-in native pgvector similarity, public GitHub profile enrichment and generated TypeScript/Go HTTP clients; see [optional extension acceptance](docs/optional-readiness.md) for verification evidence. See [release verification](https://alexcatdad.github.io/scratchpad/guides/releases/) for publication and installation evidence; the [v0.1.3 MVP](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3) is historical acceptance evidence.
 
@@ -39,6 +43,11 @@ docker run -d --name scratchpad --restart unless-stopped \
 docker exec scratchpad npm run admin -- setup
 ```
 
+Source container commands use the installed Go binary through `npm run admin`;
+source development commands build/run the same Go CLI. Released v0.3.0 commands
+retain their historical TypeScript implementation. Before upgrading existing
+volumes, follow the [Go migration and rollback procedure](docs/runbooks/go-backend-migrations.md).
+
 Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. Additional passkeys and MCP public keys are enrolled in **Settings**. Never send a private key to the server.
 
 For a remote deployment, use your exact HTTPS origin and a TLS reverse proxy; keep the application port private. The [installation guide](https://alexcatdad.github.io/scratchpad/guides/installation/) includes a Compose configuration. The [deployment runbook](docs/runbooks/deployment.md) covers persistent-volume backup/restore, upgrades, and rollback.
@@ -62,10 +71,7 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
-Development listens on loopback by default. Private data directories, SQLite
-files and the configured database path remain denied by Vite even with an
-explicit wider `--host` override. Keep private runtime state outside served
-workspaces where practical.
+Development builds the dashboard and Go server, then starts Go on loopback port 3000 with a private UI-only renderer on port 4000. Database, GitHub and encryption configuration belong to Go. Stopping the command stops both processes. Keep private runtime state outside served workspaces.
 
 In another terminal, use the same absolute database path and public URL for the server and administrator command (see `.env.example`):
 
@@ -107,7 +113,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-From `mcp/`, also run `go vet ./...` and `go test -race ./...`. The browser integration test uses disposable SQLite storage and a virtual passkey, then drives the real Go MCP through capture and server restart. No production authentication bypass is provided.
+Run `npm run test:backend` and `go -C backend vet ./...` for the Go API. From `mcp/`, also run `go vet ./...` and `go test -race ./...`. The browser integration test uses disposable SQLite storage and a virtual passkey, then drives the real Go MCP through capture and server restart. No production authentication bypass is provided.
 
 GitHub Actions checks the application, documentation, Go code and Docker image. GitHub Pages hosts only the public static documentation, never the private application or its records.
 

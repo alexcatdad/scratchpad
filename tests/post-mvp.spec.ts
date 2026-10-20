@@ -1,11 +1,17 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import postgres from "postgres";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 
 type Entity = { id: string; version: number; [key: string]: unknown };
 type Project = Entity & { settings: Record<string, unknown> };
@@ -25,6 +31,10 @@ type CompletionInput = {
 
 const root = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(resolve(tmpdir(), "scratchpad-post-mvp-"));
+const installationKey = resolve(temporary, "installation-key");
+writeFileSync(installationKey, `${Buffer.alloc(32, 44).toString("base64")}\n`, {
+  mode: 0o600,
+});
 const origin = "http://localhost:3101";
 const dockerMode = process.env.SCRATCHPAD_E2E_DOCKER === "1";
 const postgresMode = process.env.SCRATCHPAD_E2E_POSTGRES === "1";
@@ -38,12 +48,16 @@ let containerCreated = false;
 let volumeCreated = false;
 const environment = {
   ...process.env,
-  PORT: "3101",
+  SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3101",
+  SCRATCHPAD_UI_PORT: "4101",
+  SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4101",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
   SCRATCHPAD_DATABASE_URL: "",
+  SCRATCHPAD_ENCRYPTION_KEY_FILE: installationKey,
 };
 let application: ChildProcess | undefined;
+const serverBinary = resolve(temporary, "scratchpad-server");
 let provider: Server | undefined;
 let providerUrl = "";
 let logs = "";
@@ -81,6 +95,17 @@ async function startProvider() {
     const body = JSON.parse(raw) as {
       input?: string[];
       messages?: { content: string }[];
+      response_format?: {
+        json_schema?: {
+          schema?: {
+            properties?: {
+              artifacts?: {
+                items?: { properties?: { kind?: { enum?: string[] } } };
+              };
+            };
+          };
+        };
+      };
     };
     outgoing.setHeader("Content-Type", "application/json");
     if (incoming.url === "/v1/embeddings") {
@@ -114,7 +139,6 @@ async function startProvider() {
     }
     const records = input.records ?? [];
     const ids = records.map((record) => record.id);
-    const system = body.messages?.[0]?.content ?? "";
     const artifact = (
       kind: string,
       title: string,
@@ -138,34 +162,44 @@ async function startProvider() {
       },
       sourceRecordIds,
     });
-    const artifacts = system.startsWith("Create a ")
-      ? [
-          {
-            ...artifact(
-              "export",
-              `Synthetic ${input.requestedFormat} document`,
+    const requestedKinds =
+      body.response_format?.json_schema?.schema?.properties?.artifacts?.items
+        ?.properties?.kind?.enum;
+    const artifacts =
+      requestedKinds?.length === 1 && requestedKinds[0] === "export"
+        ? [
+            {
+              ...artifact(
+                "export",
+                `Synthetic ${input.requestedFormat} document`,
+                ids.slice(0, 1),
+              ),
+              content: {
+                text: "Synthetic private document",
+                markdown: `# Synthetic ${input.requestedFormat}\n\nObserved: preserve CI investigations.\n\nUncertain: proposed next steps require review.\n`,
+              },
+            },
+          ]
+        : [
+            artifact("summary", "Synthetic evidence summary"),
+            artifact(
+              "classification",
+              "Synthetic CI classification",
               ids.slice(0, 1),
             ),
-            content: {
-              text: "Synthetic private document",
-              markdown: `# Synthetic ${input.requestedFormat}\n\nObserved: preserve CI investigations.\n\nUncertain: proposed next steps require review.\n`,
-            },
-          },
-        ]
-      : [
-          artifact("summary", "Synthetic evidence summary"),
-          artifact(
-            "classification",
-            "Synthetic CI classification",
-            ids.slice(0, 1),
-          ),
-          artifact("duplicate_candidate", "Synthetic duplicate investigation"),
-          artifact("relationship_candidate", "Synthetic related decisions"),
-          artifact("contradiction", "Synthetic conflicting trade-offs"),
-          artifact("cluster", "Synthetic CI topic cluster"),
-          artifact("pattern", "Synthetic recurring CI pattern"),
-          artifact("recommendation", "Synthetic consolidation recommendation"),
-        ];
+            artifact(
+              "duplicate_candidate",
+              "Synthetic duplicate investigation",
+            ),
+            artifact("relationship_candidate", "Synthetic related decisions"),
+            artifact("contradiction", "Synthetic conflicting trade-offs"),
+            artifact("cluster", "Synthetic CI topic cluster"),
+            artifact("pattern", "Synthetic recurring CI pattern"),
+            artifact(
+              "recommendation",
+              "Synthetic consolidation recommendation",
+            ),
+          ];
     outgoing.end(
       JSON.stringify({
         choices: [{ message: { content: JSON.stringify({ artifacts }) } }],
@@ -197,17 +231,15 @@ function command(binary: string, args: string[]) {
   });
 }
 function setupToken() {
-  return dockerMode
-    ? command("docker", ["exec", runId, "npm", "run", "admin", "--", "setup"])
-    : execFileSync(
-        process.execPath,
-        [
-          resolve(root, "node_modules/tsx/dist/cli.mjs"),
-          "src/server/admin.ts",
-          "setup",
-        ],
-        { cwd: resolve(root, "apps/web"), env: environment, encoding: "utf8" },
-      );
+  if (dockerMode)
+    return command("docker", [
+      "exec",
+      runId,
+      "/usr/local/bin/scratchpad-server",
+      "setup",
+    ]);
+  buildGoServer(root, serverBinary, environment);
+  return runGoAdmin(serverBinary, ["setup"], environment, root);
 }
 async function createDatabase() {
   if (!postgresMode) return;
@@ -244,6 +276,17 @@ async function startApplication() {
     volumeCreated = true;
     command("docker", [
       "run",
+      "--rm",
+      "--volume",
+      `${volume}:/data`,
+      "--entrypoint",
+      "node",
+      dockerImage,
+      "-e",
+      "require('node:fs').writeFileSync('/data/installation-key',Buffer.alloc(32,44).toString('base64')+'\\n',{mode:0o600})",
+    ]);
+    command("docker", [
+      "run",
       "--detach",
       "--name",
       runId,
@@ -255,6 +298,8 @@ async function startApplication() {
       `SCRATCHPAD_PUBLIC_URL=${origin}`,
       "--env",
       "SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite",
+      "--env",
+      "SCRATCHPAD_ENCRYPTION_KEY_FILE=/data/installation-key",
       ...(postgresMode
         ? [
             "--env",
@@ -266,16 +311,12 @@ async function startApplication() {
       dockerImage,
     ]);
     containerCreated = true;
-  } else
-    application = spawn(
-      process.execPath,
-      [resolve(root, "apps/web/server.mjs")],
-      {
-        cwd: resolve(root, "apps/web"),
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+  } else {
+    buildGoServer(root, serverBinary, environment);
+    application = startGoServer(root, serverBinary, environment, (value) => {
+      logs += value.toString();
+    });
+  }
   application?.stdout?.on("data", (value) => {
     logs += value;
   });
@@ -290,14 +331,17 @@ async function startApplication() {
             signal: AbortSignal.timeout(2000),
           });
           if (ready.status !== 200) logs += await ready.text();
-          return ready.status;
+          const dashboard = await fetch(origin, {
+            signal: AbortSignal.timeout(2000),
+          });
+          return ready.status === 200 && dashboard.ok;
         } catch {
-          return 0;
+          return false;
         }
       },
       { timeout: 30000, message: "Disposable production server must be ready" },
     )
-    .toBe(200)
+    .toBe(true)
     .catch((error) => {
       throw new Error(`${error.message}\n${logs.slice(-4000)}`);
     });
@@ -312,16 +356,9 @@ async function stopApplication() {
     command("docker", ["volume", "rm", volume]);
     volumeCreated = false;
   }
-  if (!application || application.exitCode !== null) return;
   const child = application;
-  const exited = new Promise<void>((done) => child.once("exit", () => done()));
-  child.kill("SIGTERM");
-  const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-  try {
-    await exited;
-  } finally {
-    clearTimeout(timer);
-  }
+  application = undefined;
+  await stopGoServer(child);
 }
 async function awaitJobs(page: Page) {
   expectedJobCount++;

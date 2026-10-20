@@ -54,7 +54,7 @@ After linking, your laptop and VMs can use synchronized published SSH authentica
 
 ## Develop from source
 
-Use Node.js **24.21.0** from `.node-version`, npm, Git, and OpenSSH `ssh-keygen`. Building the MCP also requires Go **1.27.2**. Docker Compose is an alternative for running the server.
+Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.2**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
 
 Clone [the repository](https://github.com/alexcatdad/scratchpad) and run these commands from its root:
 
@@ -65,7 +65,7 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
-Open [localhost:3000](http://localhost:3000). Keep the terminal running. In a second terminal at the repository root, set the same configuration and generate the owner setup token:
+`npm run dev` builds Go and the dashboard, then starts the public Go API on loopback port 3000 and a private UI-only renderer on port 4000. Stopping it stops both processes. Open [localhost:3000](http://localhost:3000). Keep the terminal running. In a second terminal at the repository root, set the same configuration and generate the owner setup token:
 
 ```sh
 export SCRATCHPAD_PUBLIC_URL=http://localhost:3000
@@ -123,7 +123,7 @@ npm test
 npm run build
 ```
 
-The Go module has its own checks, documented in its README. Run those when changing MCP code.
+Also run `npm run test:backend`, `go -C backend vet ./...`, `go -C mcp test -race ./...` and `go -C mcp vet ./...`. Existing installations must follow the [Go migration procedure](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/go-backend-migrations.md) before switching images; schema-1 rollback requires its matching pre-upgrade snapshot and retained key.
 
 ## Work on the docs
 

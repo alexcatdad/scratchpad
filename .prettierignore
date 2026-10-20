@@ -19,3 +19,5 @@ package-lock.json
 **/*.go
 **/go.sum
 **/go.mod
+
+session-progress

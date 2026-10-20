@@ -1,16 +1,22 @@
 /** Optional private-source acceptance. No source text, file paths, or original IDs are printed. */
 
 import { spawnSync } from "node:child_process";
-import { createHash, randomBytes } from "node:crypto";
-import { once } from "node:events";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { createServer } from "node:http";
-import { createApi } from "../apps/web/src/server/api";
-import {
-  canonical,
-  type Entity,
-  type JsonObject,
-} from "../apps/web/src/server/domain";
+import { resolve } from "node:path";
+
+type JsonObject = Record<string, unknown>;
+type Entity = JsonObject & { id: string; version: number };
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
+const root = resolve(import.meta.dirname, "..");
 
 function options(): Map<string, string> {
   const args = process.argv.slice(2),
@@ -92,53 +98,46 @@ function gitHistory(repo: string): JsonObject {
 
 async function main() {
   const args = options();
-  const token = randomBytes(32).toString("base64url");
-  let api: ReturnType<typeof createApi> | undefined;
-  const server = createServer(async (request, response) => {
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request)
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-      const headers = new Headers();
-      for (const [key, value] of Object.entries(request.headers))
-        if (value !== undefined)
-          headers.set(key, Array.isArray(value) ? value.join(",") : value);
-      if (!api) throw new Error("Isolated API is not ready.");
-      const result = await api.handleRequest(
-        new Request(`http://localhost${request.url}`, {
-          method: request.method,
-          headers,
-          body: chunks.length ? Buffer.concat(chunks) : undefined,
-        }),
-      );
-      response.writeHead(
-        result.status,
-        Object.fromEntries(result.headers.entries()),
-      );
-      response.end(Buffer.from(await result.arrayBuffer()));
-    } catch {
-      response.writeHead(500, { "Content-Type": "application/json" });
-      response.end('{"error":{"code":"VALIDATION_TRANSPORT_FAILED"}}');
-    }
-  });
-  server.listen(0, "127.0.0.1");
-  await once(server, "listening");
-  const address = server.address();
-  if (!address || typeof address === "string")
-    throw new Error("Unable to create isolated loopback transport.");
-  const endpoint = `http://127.0.0.1:${address.port}`;
-  api = createApi({ databasePath: ":memory:", origin: endpoint });
-  // This credential belongs only to the disposable validation database, never a live instance.
-  await api.store.insert("credential", {
-    id: "isolated-validation",
-    kind: "ssh",
-  });
-  await api.store.insert("session", {
-    id: createHash("sha256").update(token).digest("hex"),
-    credentialId: "isolated-validation",
-    browser: false,
-    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
-  });
+  const endpoint = process.env.SCRATCHPAD_HISTORY_FIXTURE_URL;
+  const token = process.env.SCRATCHPAD_HISTORY_FIXTURE_TOKEN;
+  if (!endpoint || !token) {
+    const fixtureArgs = JSON.stringify([...args.entries()].flat());
+    const run = spawnSync(
+      "go",
+      [
+        "-C",
+        "backend",
+        "test",
+        "-run",
+        "^TestPrivateHistoryAcceptance$",
+        "-count=1",
+        "-v",
+      ],
+      {
+        cwd: root,
+        encoding: "utf8",
+        maxBuffer: 16 * 1024 * 1024,
+        env: { ...process.env, SCRATCHPAD_HISTORY_ARGS_JSON: fixtureArgs },
+      },
+    );
+    if (run.status !== 0) throw new Error("Isolated Go validation failed.");
+    const result = run.stdout
+      .split("\n")
+      .find((line) => line.includes("result={"));
+    if (!result) throw new Error("Isolated Go validation produced no result.");
+    console.log(
+      JSON.stringify(
+        JSON.parse(result.slice(result.indexOf("result=") + 7)),
+        null,
+        2,
+      ),
+    );
+    return;
+  }
+  if (!/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(endpoint))
+    throw new Error(
+      "Private history requires the isolated Go loopback fixture.",
+    );
   const call = async (
     path: string,
     method = "GET",
@@ -146,6 +145,7 @@ async function main() {
   ): Promise<JsonObject> => {
     const response = await fetch(`${endpoint}/api/v1${path}`, {
       method,
+      redirect: "error",
       headers: { Authorization: `Bearer ${token}` },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
@@ -169,7 +169,8 @@ async function main() {
       jsonl: text,
       sourceName: "private-validation.jsonl",
     });
-    const records = ((await api?.store.list("record")) ?? []).filter(
+    const exported = await call("/export", "POST", {});
+    const records = ((exported.data as JsonObject).record as Entity[]).filter(
       (record) => record.projectId === project.id,
     );
     const lines = text.split(/\r?\n/);
@@ -231,7 +232,7 @@ async function main() {
       structuredRelationships: relationships,
     };
   };
-  try {
+  {
     const usb = await load("technical-history", args.get("--usb-log") ?? "");
     const metadata = await search(usb.project.id, ["metadata"]);
     const throughput = await search(usb.project.id, [
@@ -366,12 +367,7 @@ async function main() {
       acceptance:
         "No overall MVP pass is inferred from keyword matches. Review source evidence locally; missing history must remain missing.",
     };
-    console.log(JSON.stringify(result, null, 2));
-  } finally {
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-    await api.close();
+    console.log(JSON.stringify(result));
   }
 }
 main().catch((error) => {

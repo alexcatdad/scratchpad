@@ -1,7 +1,7 @@
 # Go PostgreSQL RAG
 
 Issue #36 introduces passage RAG separately from the existing whole-record
-semantic search. The Go development backend supports authenticated prerequisite
+semantic search. The Go backend supports authenticated prerequisite
 discovery, per-record durable passage indexing, versioned rebuild and bounded
 semantic evidence, atomic capture enqueue and eligible-history reconciliation.
 Healthy partial indexes also retain raw lexical evidence. Retrieval evaluation
@@ -36,9 +36,8 @@ available without enqueuing unusable passage work. Explicit passage indexing and
 coverage report `RAG_UNAVAILABLE`; retrieval returns lexical fallback. Restoring a
 compatible configuration allows preserved sources to be reconciled normally.
 
-The existing TypeScript application remains the supported runtime until full
-backend parity and delivery acceptance. This new route is Go-only during that
-transition. Discovery does not rewrite records or install an extension.
+Go is the default source runtime. Published artifacts and existing deployments
+require separate version and acceptance verification. Discovery does not rewrite records or install an extension.
 
 ## Index and rebuild a source
 

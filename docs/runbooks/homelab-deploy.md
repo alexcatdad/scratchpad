@@ -37,11 +37,11 @@ in a reviewed local copy of the Kustomize overlay. Apply only after the owner ha
 reviewed the target cluster and namespace:
 
 ```sh
-kubectl config current-context
-kubectl -n app-scratchpad diff -k deploy/kubernetes
-kubectl -n app-scratchpad apply -k deploy/kubernetes
-kubectl -n app-scratchpad rollout status deployment/scratchpad --timeout=10m
-kubectl -n app-scratchpad get service/scratchpad
+: "${KUBE_CONTEXT:?Set the reviewed Kubernetes context}"
+kubectl --context "$KUBE_CONTEXT" -n app-scratchpad diff -k deploy/kubernetes
+kubectl --context "$KUBE_CONTEXT" -n app-scratchpad apply -k deploy/kubernetes
+kubectl --context "$KUBE_CONTEXT" -n app-scratchpad rollout status deployment/scratchpad --timeout=10m
+kubectl --context "$KUBE_CONTEXT" -n app-scratchpad get service/scratchpad
 ```
 
 The checked-in image placeholder intentionally cannot start a workload. Do not
@@ -72,14 +72,18 @@ schema beyond what the retained TypeScript runtime accepts; do not treat the
 first Go image rollout as a routine image update.
 
 For an approved switch, record the existing Deployment revision and its exact
-container `command`/`args` before any change. Complete the selected Go image's
-migration Job against the existing database using the approved table-owner
-credential, then run the guarded rollout helper with
+container `command`/`args` and replica count before any change. Enter the approved
+maintenance window, fence incoming writes, and stop every existing database
+writer as described below. Complete the selected Go image's migration Job against
+the existing database using the approved table-owner credential, then run the
+guarded rollout helper while the Deployment remains scaled to zero with
 `SCRATCHPAD_RUNTIME_SWITCH_APPROVED=yes` and `--switch-to-go`. That operation
 sets the digest and removes only the selected container's command/args so the
 image's `go-runtime` entrypoint starts. Its preflight requires the existing key
 Secret/path and PVC mapping to match. A normal `--apply` preserves command and
-args and is for image updates within the already selected runtime.
+args and is for image updates within the already selected runtime. Restore the
+recorded replica count only after selecting the Go image and entrypoint, then
+wait for readiness and verify authenticated acceptance before reopening access.
 
 To return to the retained TypeScript runtime, first restore the matching
 pre-switch database snapshot into a separate database/PVC and prepare a reviewed
@@ -97,8 +101,27 @@ required to read encrypted settings from the restored snapshot.
    verified pre-change database backup. Back up the database using its native
    tool and store the archive outside the database volume under the existing
    encrypted backup policy.
-2. For PostgreSQL, run the selected image's one-off migration Job before changing
-   the Deployment. The checked-in migration Job requires a non-empty PostgreSQL
+2. Enter an owner-approved maintenance window and fence public/client write
+   admission. Record the current Deployment replica count and stop all writers,
+   including other workloads or scheduled jobs using the same database. Suspend
+   any reconciler that would restart the old runtime during maintenance. For the
+   reviewed application Deployment:
+
+   ```sh
+   : "${KUBE_CONTEXT:?}" "${KUBE_NAMESPACE:?}" "${KUBE_DEPLOYMENT:?}"
+   replicas=$(kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" \
+     get deployment "$KUBE_DEPLOYMENT" -o jsonpath='{.spec.replicas}')
+   kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" \
+     scale "deployment/$KUBE_DEPLOYMENT" --replicas=0
+   ```
+
+   Verify that its pods have terminated and no other writer remains before
+   taking the final consistent pre-change backup or running migrations. Keep
+   the old runtime stopped throughout migration and Go selection. A failed
+   migration does not authorize restarting an old binary against changed data.
+
+3. For PostgreSQL, run the selected image's one-off migration Job while writers
+   remain stopped. The checked-in migration Job requires a non-empty PostgreSQL
    database URL from `scratchpad-migration`; it refuses to run against SQLite.
    Map `scratchpad-migration` to the already approved table-owner database
    credential through the cluster's secret delivery process. Never put its value
@@ -122,7 +145,7 @@ required to read encrypted settings from the restored snapshot.
    ```
 
    Confirm the Job used the intended image digest and exited successfully. If it
-   fails or times out, leave the Deployment unchanged and follow the migration
+   fails or times out, keep the Deployment stopped and follow the migration
    runbook. Record the protected backup reference and migration outcome for the
    rollout preflight. For SQLite, do not use this Job: stop every writer and run
    `scratchpad-server migrate` against the reviewed existing PVC/database path
@@ -130,13 +153,26 @@ required to read encrypted settings from the restored snapshot.
    restarted. See [go-backend-migrations.md](go-backend-migrations.md) for the
    SQLite storage and migration boundaries.
 
-3. Change only the existing Deployment container image to the selected digest
+4. Change only the existing Deployment container image to the selected digest
    after the owner has approved the live cutover. Retain the same runtime
-   settings, installation-key Secret, PVC, Service and ingress. Wait for the
-   rollout and require `GET /ready` to report the expected database engine.
-4. Verify authenticated browser sign-in, an existing record, MCP read/capture,
-   and persistence after pod restart before declaring acceptance.
-5. If rollout or acceptance fails before any new writes, restore the recorded
+   settings, installation-key Secret, PVC, Service and ingress. For an approved
+   runtime switch use `--switch-to-go` to clear the old command/args. Keep zero
+   replicas until this selection is complete; the helper's rollout check at zero
+   replicas is not startup acceptance. Then restore the recorded replica count:
+
+   ```sh
+   kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" \
+     scale "deployment/$KUBE_DEPLOYMENT" --replicas="$replicas"
+   kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" \
+     rollout status "deployment/$KUBE_DEPLOYMENT" --timeout=10m
+   ```
+
+   Require `GET /ready` to report the expected database engine.
+
+5. Verify authenticated browser sign-in, an existing record, controlled MCP
+   read/capture, and persistence after pod restart before reopening client access
+   and resuming the recorded reconciler state.
+6. If rollout or acceptance fails before any new writes, restore the recorded
    image digest and wait for readiness. If the new image migrated schema or
    accepted writes, restore the pre-change database into a separate database or
    isolated PVC using the native database restore procedure, then point the

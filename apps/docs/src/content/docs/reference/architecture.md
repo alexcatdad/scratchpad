@@ -1,35 +1,35 @@
 ---
 title: Architecture
-description: Components, ownership boundaries, and the first vertical slice.
+description: Current Go backend, retained dashboard and local capture boundaries.
 ---
 
-Scratchpad has two runtime components and one documentation site.
+Current source uses a Go backend and retains the React/TypeScript dashboard.
+Published releases and installed deployments have separate acceptance evidence.
 
 ```text
-Coding agent
-    │ stdio
-Local Go MCP ─── optional JSONL mirror in the checkout
-    │ HTTP API
-TypeScript server + browser dashboard
-    │
-SQLite or optional PostgreSQL
+Coding agent -> local Go stdio MCP
+  -> private Go capture service / encrypted queue
+  -> HTTPS Go API -> SQLite or PostgreSQL
+       -> private Node renderer -> React dashboard
+       -> optional completion / embedding providers
 ```
 
-The public documentation site runs independently on GitHub Pages. It does not connect to a private instance or carry user records.
+Go owns authentication, API/business logic, persistence/migrations, project
+resolution, capture, search/context, audit, relationships, imports/exports and
+background jobs. Node renders dashboard pages in UI-only mode on loopback; it
+receives no credential or database authority. Go owns public cookies, health and
+readiness. Renderer failure does not disable the API.
 
-## Server
+The native macOS app owns collector configuration, credentials and lifecycle.
+Its bundled MCP requires only its command path. Captures first enter encrypted
+durable local storage: pending receipts are local; delivered receipts retain
+central IDs. Offline reads fail explicitly. Optional repository mirrors follow
+central persistence and never commit/push automatically.
 
-The server uses Node.js 24 LTS, TypeScript, React, TanStack Start, and Drizzle ORM. It owns authentication, project resolution, record validation and persistence, search, retry semantics, audit history, and optional persisted processing jobs.
-
-SQLite is the default. v0.2.0 implements optional PostgreSQL behind the same server API. There is no mandatory cache, queue, vector service, or AI service.
-
-## Local MCP
-
-The Go process owns local integration: Git discovery, signing, HTTP communication, and eligible mirror writes. It does not own central storage or duplicate server business logic.
-
-The HTTP contract connects the two languages. Neither side imports the other's internal types.
-
-## Knowledge layers
+SQLite is the default. PostgreSQL and pgvector passage RAG are optional. Core
+memory works without AI; background jobs and schedules are database-backed.
+Provider secrets require a separately retained installation-key file. Restoring
+encrypted settings requires that same key, without replacing existing credentials.
 
 | Layer   | Meaning                                | Change policy                                             |
 | ------- | -------------------------------------- | --------------------------------------------------------- |
@@ -37,10 +37,16 @@ The HTTP contract connects the two languages. Neither side imports the other's i
 | Curated | Deliberately maintained interpretation | Audited edits with conflict detection                     |
 | Derived | Generated summaries or relationships   | Explicit provenance; never silently replaces raw evidence |
 
-## First milestone
+One installation still has one owner with multiple credentials: passkeys, SSH
+proof, administrator recovery and optional GitHub owner OAuth. GitHub App identity,
+users/teams, project membership, user-bound agent credentials and permission-aware
+retrieval are **planned P1 work**, not current multi-user authorization.
 
-Prove project discovery, authentication, capture, durable SQLite storage, browser visibility, and retrieval from a new agent session. Include failures and retries. A passing isolated unit test is not proof of this complete path.
+Scratchpad owns application images, manifests, migrations, credential integration
+and recovery procedures. Generic platform infrastructure remains external.
+Production cutover is separately authorized after disposable restore validation;
+a main-branch merge does not establish deployed acceptance.
 
-See [optional AI](/scratchpad/guides/ai/) for database-backed jobs, source-linked suggestions, semantic search and private documents, and [PostgreSQL](/scratchpad/guides/postgresql/) for its operational setup.
-
-The [full architecture baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/architecture.md) includes accepted clarifications and later V1 capabilities.
+See the [authoritative architecture](https://github.com/alexcatdad/scratchpad/blob/main/docs/architecture.md),
+[P0 acceptance](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/p0-consolidation.md),
+[optional AI](/scratchpad/guides/ai/) and [PostgreSQL operations](/scratchpad/guides/postgresql/).

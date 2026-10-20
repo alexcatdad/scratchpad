@@ -1,8 +1,10 @@
 import { createServer } from "node:http";
-import { createApi } from "../apps/web/src/server/api";
 
 // The retained API implementation runs in a real process and HTTP listener.
 // This fixture exercises API rollback, separately from dashboard rendering.
+const moduleUrl = process.env.SCRATCHPAD_LEGACY_API_MODULE;
+if (!moduleUrl) throw new Error("A historical API module is required");
+const { createApi } = await import(moduleUrl);
 const origin = process.env.SCRATCHPAD_PUBLIC_URL;
 if (!origin) throw new Error("A disposable public origin is required");
 const api = createApi({

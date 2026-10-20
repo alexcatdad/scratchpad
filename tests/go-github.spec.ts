@@ -1,6 +1,12 @@
 import { execFileSync, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { chmodSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { createServer as createHTTPServer } from "node:http";
 import { createServer as createHTTPSServer } from "node:https";
 import {
@@ -55,8 +61,10 @@ for (const engine of ["sqlite", "postgres"] as const) {
       signingKey,
     ]);
     const publicKey = readFileSync(`${signingKey}.pub`, "utf8").trim();
+    const certificates = join(dir, "certificates");
+    mkdirSync(certificates, { mode: 0o700 });
     const key = join(dir, "tls-key.pem");
-    const cert = join(dir, "tls-cert.pem");
+    const cert = join(certificates, "tls-cert.pem");
     execFileSync(
       "openssl",
       [
@@ -161,7 +169,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         HTTPS_PROXY: `http://127.0.0.1:${proxyAddress.port}`,
         NO_PROXY: "",
         SSL_CERT_FILE: cert,
-        SSL_CERT_DIR: dir,
+        SSL_CERT_DIR: certificates,
       };
       if (engine === "postgres") {
         databaseAdmin = postgres(process.env.TEST_POSTGRES_URL ?? "", {

@@ -39,4 +39,4 @@ Curated title, tags, summary, and archive status are editable metadata. Revision
 
 ## Machine-readable API
 
-The [OpenAPI 3.1 document](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) describes actual implemented routes, cookie/bearer authentication, request schemas and stable error envelopes. See [API implementation extensions](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) for optional AI and PostgreSQL behavior. Generated clients are optional; the HTTP contract remains the boundary between the Go MCP and TypeScript server.
+The [OpenAPI 3.1 document](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) describes actual implemented routes, cookie/bearer authentication, request schemas and stable error envelopes. See [API implementation extensions](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) for optional AI and PostgreSQL behavior. Generated clients are optional; the HTTP contract remains the boundary between the Go MCP and Go backend.

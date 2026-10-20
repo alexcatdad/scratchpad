@@ -35,17 +35,17 @@ generator's peer dependency and is not used to downgrade application compilation
 Update the contract, regenerate, then commit both clients together.
 
 `sdk:check` regenerates into temporary storage and rejects drift, then compiles both
-clients. `sdk:test` creates an isolated in-memory instance, provisions a disposable
-Ed25519 fixture credential, signs a real SSH challenge, obtains a token through generated
-HTTP operations and tests both clients against the actual API over TCP. It checks
-project resolution, capture/retrieval and typed unauthorized/missing-record errors.
-It neither contacts the owner's instance nor uses a fabricated session token.
+clients. `sdk:test` invokes the focused Go integration test, which starts a disposable
+Go API process against SQLite and runs both generated clients over HTTP. The test
+enrolls a synthetic SSH key through authenticated HTTP, proves possession, obtains a
+bearer token, and checks project resolution, capture/retrieval, plus typed unauthorized
+and missing-record errors. It never contacts the owner's instance or uses a fabricated
+session token. Set `TEST_POSTGRES_URL` to include the PostgreSQL engine case.
 
-The Go backend suite also runs these same generated TypeScript and Go consumers
-against actual Go subprocesses on SQLite and PostgreSQL. It enrolls a disposable
-SSH key through authenticated HTTP, then the SDK runner proves possession and
-obtains its own bearer token. It verifies typed failures as well as successful
-operations, including the compatible `RECORD_NOT_FOUND` error code.
+The SDK runner uses an externally supplied loopback origin and synthetic signing key.
+The Go test supplies both; the runner does not create a TypeScript database or server,
+and does not remove the caller's key. The optional PostgreSQL case uses the same Go
+process and generated clients.
 
 ```sh
 TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpad_test \
@@ -53,10 +53,9 @@ TEST_POSTGRES_URL=postgres://scratchpad:scratchpad-test@127.0.0.1:5432/scratchpa
 ```
 
 Run with the project Node 24 runtime and installed dependencies. Without the
-disposable PostgreSQL connection, its engine case explicitly skips. The SDK
-runner's external-fixture mode takes `SCRATCHPAD_SDK_TEST_URL` and
-`SCRATCHPAD_SDK_SIGNING_KEY`; the backend test supplies both. That mode never
-initializes a TypeScript database or server and never removes the caller's key.
+disposable PostgreSQL connection, its engine case explicitly skips. `npm run sdk:test`
+uses the SQLite case; the command above adds PostgreSQL when the test database is
+available.
 
 ## TypeScript usage
 

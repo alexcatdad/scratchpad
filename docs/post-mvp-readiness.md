@@ -1,5 +1,7 @@
 # Remaining product verification ledger
 
+> Historical implementation/acceptance ledger. Numbered PRD and architecture sections refer to the [archived baseline](archive/p0-baseline/prd.md). Use [current P0 acceptance](runbooks/p0-consolidation.md) for this consolidation.
+
 This ledger tracks the owner's request to build the rest of Scratchpad. Its authority is the current [PRD](prd.md), [architecture](architecture.md), [API contract](api.md), and accepted clarifications. The completed SQLite MVP is the starting point, not the completion definition for this work.
 
 ## Status and evidence rules

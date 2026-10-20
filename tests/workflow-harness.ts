@@ -1,15 +1,23 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 export const root = resolve(import.meta.dirname, "..");
 export function createWorkflowHarness() {
   const temporary = mkdtempSync(resolve(tmpdir(), "scratchpad-e2e-"));
   const origin = "http://localhost:3100";
   const environment = {
     ...process.env,
-    PORT: "3100",
+    SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3100",
+    SCRATCHPAD_UI_PORT: "4100",
+    SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4100",
     SCRATCHPAD_PUBLIC_URL: origin,
     SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
     SCRATCHPAD_DATABASE_URL: process.env.SCRATCHPAD_E2E_DATABASE_URL ?? "",
@@ -26,6 +34,7 @@ export function createWorkflowHarness() {
   let activeContainer: string | undefined;
   let server: ChildProcess | undefined;
   let logs = "";
+  const binary = resolve(temporary, "scratchpad-server");
   function createVolume(name: string) {
     command("docker", ["volume", "create", name]);
     ownedVolumes.add(name);
@@ -59,16 +68,9 @@ export function createWorkflowHarness() {
         dockerImage,
       ]);
     } else {
-      server = spawn(process.execPath, [resolve(root, "apps/web/server.mjs")], {
-        cwd: resolve(root, "apps/web"),
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      server.stdout?.on("data", (data) => {
-        logs += data;
-      });
-      server.stderr?.on("data", (data) => {
-        logs += data;
+      buildGoServer(root, binary, environment);
+      server = startGoServer(root, binary, environment, (data) => {
+        logs += data.toString();
       });
     }
     const deadline = Date.now() + 30_000;
@@ -79,6 +81,11 @@ export function createWorkflowHarness() {
             await fetch(`${origin}/ready`, {
               signal: AbortSignal.timeout(2_000),
             })
+          ).ok &&
+          (
+            await fetch(origin, {
+              signal: AbortSignal.timeout(2_000),
+            })
           ).ok
         )
           return;
@@ -87,8 +94,7 @@ export function createWorkflowHarness() {
       }
       await new Promise((r) => setTimeout(r, 100));
     }
-    if (dockerMode && activeContainer)
-      logs += command("docker", ["logs", activeContainer]);
+    if (dockerMode && activeContainer) logs += readLogs();
     throw new Error(`Server did not start: ${logs}`);
   }
   async function stop() {
@@ -103,17 +109,7 @@ export function createWorkflowHarness() {
     }
     const child = server;
     server = undefined;
-    if (!child || child.exitCode !== null || child.signalCode !== null) return;
-    const exited = new Promise<void>((done) =>
-      child.once("exit", () => done()),
-    );
-    child.kill("SIGTERM");
-    const timer = setTimeout(() => child.kill("SIGKILL"), 5_000);
-    try {
-      await exited;
-    } finally {
-      clearTimeout(timer);
-    }
+    await stopGoServer(child);
   }
   function admin(...args: string[]) {
     if (dockerMode) {
@@ -121,22 +117,12 @@ export function createWorkflowHarness() {
       return command("docker", [
         "exec",
         activeContainer,
-        "npm",
-        "run",
-        "admin",
-        "--",
+        "/usr/local/bin/scratchpad-server",
         ...args,
       ]);
     }
-    return command(
-      process.execPath,
-      [
-        resolve(root, "node_modules/tsx/dist/cli.mjs"),
-        "src/server/admin.ts",
-        ...args,
-      ],
-      resolve(root, "apps/web"),
-    );
+    buildGoServer(root, binary, environment);
+    return runGoAdmin(binary, args, environment, root);
   }
   async function restartOrRestore() {
     if (!dockerMode || postgresMode) {
@@ -174,6 +160,19 @@ export function createWorkflowHarness() {
     });
   }
 
+  function readLogs() {
+    if (!dockerMode || !activeContainer) return logs;
+    const result = spawnSync("docker", ["logs", activeContainer], {
+      cwd: root,
+      env: environment,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error("Could not read container logs");
+    return result.stdout + result.stderr;
+  }
+
   function cleanupDocker() {
     for (const name of ownedContainers) {
       try {
@@ -199,9 +198,6 @@ export function createWorkflowHarness() {
     restartOrRestore,
     command,
     cleanupDocker,
-    readLogs: () =>
-      dockerMode && activeContainer
-        ? command("docker", ["logs", activeContainer])
-        : logs,
+    readLogs,
   };
 }

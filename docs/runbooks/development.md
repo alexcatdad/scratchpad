@@ -1,39 +1,57 @@
 # Development
 
-## Scope and ownership
+Use the versions pinned in `.node-version`, `backend/go.mod` and `mcp/go.mod`.
+The Go backend owns application behavior; `apps/web` retains React and its private
+Node renderer, `apps/docs` contains static public documentation, `mcp` contains
+the Go stdio MCP/capture service, and `macos` contains the native app.
 
-Implement the accepted PRD and addenda using npm workspaces: `apps/web` for TanStack Start and API, `apps/docs` for Astro/Starlight, and `mcp` for the Go stdio server. Initial parallel ownership: server agent owns `apps/web/src/server`; MCP agent owns `mcp`; docs agent owns `apps/docs`; primary agent owns integration, UI, root tooling and CI.
+## Authenticated SQLite loop
 
-## Procedure
+1. Inspect Git status and read current PRD, architecture and API contracts.
+2. Run `npm ci`. When adding/upgrading dependencies, verify stable maintained
+   versions and pin them exactly; ordinary work retains the lockfile.
+3. Set `SCRATCHPAD_PUBLIC_URL=http://localhost:3000` and an absolute private
+   `SCRATCHPAD_DATABASE_PATH`. Run `npm run dev` from the repository root. It
+   builds the dashboard and Go executable, then starts the Go public listener and
+   private UI-only renderer. Stop it normally to stop both owned processes.
+4. In a second terminal with the same configuration, run `npm run admin -- setup`
+   for a fresh installation. Existing owners sign in or explicitly use `recover`.
+   The command prints a single-use token; keep its output private.
+5. Open the public Go origin and enroll/sign in. Verify actual capture, retrieval
+   and restart behavior before claiming the authenticated loop works.
 
-1. Inspect Git status, read canonical specs and contributor instructions.
-2. Verify latest stable dependency versions from npm/Go registries and official documentation; pin selected versions. Use Node 24's latest LTS patch as specified by the architecture.
-3. Install with `npm ci`; work on the web app with `npm run dev`, docs with `npm run docs:dev`.
-4. Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`; run `go test -race ./...` and `go vet ./...` inside `mcp`.
-5. Build and exercise the local container with `docker compose up --build`. Use disposable persistent volumes for integration tests, never a real user's data.
-6. Verify browser and real stdio MCP flows, including auth, capture/retrieval, failure behavior and persistence across restart.
-7. Commit coherent checked changes often; run GitHub Actions against the committed revision. Pages is a static public presentation/docs target, never the private application or its data.
+Database/provider/GitHub settings belong to Go. The renderer receives no database
+URL, provider encryption key or OAuth secret. Do not run development against an
+installation containing owner history. PostgreSQL tests need a disposable database
+with fixture-creation permission, not production credentials.
 
-## Completion evidence
+## Verification
 
-Track verified commands and outstanding work in handoffs and decision records. The initial repository had only six documentation files and two local commits; GitHub repository was public and empty when implementation began. No release artifact or deployment exists merely because a workflow is present.
+Run `npm run lint`, `npm run typecheck`, `npm test`, `npm run build`, generated
+SDK checks, `go -C backend vet ./...`, `npm run test:backend`,
+`go -C mcp vet ./...` and `go -C mcp test -race ./...`. Use the real browser
+workflows with `npx playwright test --project=go-native`; configured PostgreSQL
+cases create/drop only their own databases. See [P0 verification](p0-consolidation.md)
+for the full acceptance boundary.
 
-## Dashboard integration checkpoint — 2026-09-29
+Select an explicit Docker test context; the configured context may be remote.
+Build the image and use the existing clean-container browser/restore fixtures with
+run-owned data. Stop/remove owned processes, containers and test data afterward.
+Never delete an existing database or persistent volume as test cleanup.
 
-The production web build and disposable Playwright workflow passed locally. Run `npm run build -w @scratchpad/web` followed by `npm run test:e2e` to exercise virtual passkey enrollment, browser capture and editing, SSH key enrollment, the real stdio MCP binary, and persistence across a server restart. The test creates and removes its own database and credentials; screenshots remain ignored under `test-results/`.
+`bash scripts/lint-infrastructure.sh` uses the pinned versions named in that
+script. GitHub Actions is the canonical runner, including PostgreSQL 18, pgvector,
+container and macOS lanes. A local passing test is separate from canonical CI,
+publication, installed-client acceptance and production rollout.
 
-Docker smoke verification of the final startup command, remote GitHub Actions runs, and live Pages deployment are still pending. This checkpoint does not establish full MVP or deployment acceptance.
+## Documentation and delivery
 
-## Infrastructure and publication
+Use `npm run docs:dev` for the independent public documentation site. Run
+`npm run check -w @scratchpad/docs` and `npm run build -w @scratchpad/docs` after
+documentation changes. Pages hosts static public guidance only, never instance
+records, credentials or private runtime details.
 
-Run `bash scripts/lint-infrastructure.sh` with actionlint 1.7.12, ShellCheck 0.11.0, and Docker. The script runs Hadolint 2.15.1 and skips only Debian package-version pinning (DL3008). Build `docker build -t scratchpad:ci .`, then run `bash scripts/docker-smoke.sh scratchpad:ci`; its disposable volume is removed on exit.
-
-Push main and inspect CI and Documentation runs for the exact commit using `gh run list` and `gh run view`. The current HTTPS CLI credential lacks workflow scope; the existing GitHub SSH identity can publish workflow changes with `git push git@github.com:alexcatdad/scratchpad.git main`. Pages uses GitHub Actions and serves <https://alexcatdad.github.io/scratchpad/>.
-
-The initial published checkpoint `1dcc374` passed CI and Documentation, including a successful Pages deployment. Local Docker readiness, protected-route rejection, HTML rendering, and restart passed. `npm outdated --workspaces --include-workspace-root` reported no outdated direct dependencies on 2026-09-29. Infrastructure lint and browser/MCP checks are now included in CI; validate their next published revision before claiming those remote gates passed.
-
-## Publish acceptance documentation
-
-The Pages guide `apps/docs/src/content/docs/guides/mvp-acceptance.md` presents MVP status, scenarios and the explicitly synthetic fixture. Keep its example aligned with `tests/fixtures/synthetic-paused-project.jsonl`; link the detailed repository ledger rather than publishing private inputs.
-
-Run `npm run lint`, `npm run check -w @scratchpad/docs` and `npm run build -w @scratchpad/docs`. After pushing, inspect the exact-commit CI and Documentation runs, then verify `/scratchpad/guides/mvp-acceptance/` on the public site. Check the sidebar entry and links on desktop and mobile. Documentation deployment and application release publication remain separate outcomes.
+Make coherent commits/PRs with scoped verification. Preserve current API/MCP,
+authentication, provenance and immutable history. Follow [deployment ownership](homelab-deploy.md)
+for images/manifests/upgrade/rollback and [Go migrations](go-backend-migrations.md)
+before any existing-volume upgrade. Code merge never authorizes live cutover.

@@ -11,22 +11,22 @@
     "node": ">=24.21.0"
   },
   "scripts": {
-    "dev": "npm run dev -w @scratchpad/web",
+    "dev": "node scripts/dev-go.mjs",
     "docs:dev": "npm run dev -w @scratchpad/docs",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs && npm run typecheck:history",
-    "typecheck:history": "npm exec -w @scratchpad/web -- tsc --ignoreConfig --noEmit --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck ../../scripts/validate-history.ts",
-    "test": "npm run test -w @scratchpad/web && node --test scripts/release-formula.test.mjs scripts/release-cask.test.mjs scripts/development-security.test.mjs scripts/backend-shard.test.mjs",
+    "typecheck:history": "npm exec -w @scratchpad/web -- tsc --ignoreConfig --noEmit --types node --target ES2022 --module ESNext --moduleResolution Bundler --lib ES2022,DOM --strict --esModuleInterop --skipLibCheck ../../scripts/validate-history.ts",
+    "test": "npm run test -w @scratchpad/web && node --test scripts/release-formula.test.mjs scripts/release-cask.test.mjs scripts/development-security.test.mjs scripts/backend-shard.test.mjs scripts/go-entrypoints.test.mjs",
     "lint": "biome check . && prettier --check . && markdownlint-cli2 && node scripts/check-decisions.mjs",
     "format": "biome check --write . && prettier --write .",
-    "admin": "npm exec -w @scratchpad/web -- tsx src/server/admin.ts",
+    "admin": "node scripts/admin-go.mjs",
     "test:e2e": "playwright test",
     "test:baseline": "playwright test tests/concurrent-agents.spec.ts",
     "test:backend": "go -C backend test -race -count=1 -timeout 20m ./...",
     "sdk:generate": "node scripts/generate-clients.mjs",
     "sdk:check": "node scripts/generate-clients.mjs --check && npm run typecheck -w @scratchpad/api-client && cd packages/clients/go && go test ./...",
     "sdk:build": "npm run build -w @scratchpad/api-client",
-    "sdk:test": "npm exec -w @scratchpad/web -- tsx ../../packages/clients/test.ts"
+    "sdk:test": "go -C backend test -run '^TestGeneratedClientsCallAuthenticatedGoBackend$' -count=1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
@@ -34,6 +34,13 @@
     "markdownlint-cli2": "0.23.3",
     "prettier": "3.9.9",
     "prettier-plugin-astro": "1.1.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "@simplewebauthn/server": "14.0.3",
+    "@types/better-sqlite3": "9.6.0",
+    "better-sqlite3": "13.0.3",
+    "drizzle-orm": "0.45.3",
+    "postgres": "3.4.9",
+    "tsx": "4.23.15",
+    "undici": "8.11.2"
   }
 }

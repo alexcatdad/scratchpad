@@ -1,6 +1,6 @@
 # Server development and operation
 
-The application server uses Node 24, SQLite, Drizzle, SimpleWebAuthn, and the system `ssh-keygen` verifier. Run commands from the repository root unless stated otherwise.
+The application server uses Go, SQLite or PostgreSQL, WebAuthn and the system `ssh-keygen` verifier. Node 24 renders the retained React dashboard privately. Run commands from the repository root unless stated otherwise.
 
 1. Install the pinned workspace dependencies with `npm ci`.
 2. Set `SCRATCHPAD_DATABASE_PATH` to persistent storage and `SCRATCHPAD_PUBLIC_URL` to the browser origin. HTTP is allowed only on localhost; remote deployments require HTTPS.
@@ -15,7 +15,7 @@ MCP signs the canonical version 2 JSON proof described in [the API contract](../
 
 Browser writes require the configured Origin and an HttpOnly, SameSite=Strict cookie. HTTPS instances additionally set Secure. MCP bearer credentials cannot enroll or revoke other credentials.
 
-Capture idempotency is scoped to the authenticated credential. Comparison includes the resolved project and normalized record payload, excluding rediscovered Git context so a mirror changing worktree dirtiness cannot break retries. The first capture retains its original Git context. Different idempotency keys deliberately create distinct records.
+Capture idempotency is scoped to the authenticated credential. Comparison includes the resolved project and normalized record payload, and the saved Git-context presence/content for current retry identities. Historical pre-versioned retry rows retain their original comparison rules. The first capture retains its original Git context. Different idempotency keys deliberately create distinct records.
 
 Mutable metadata, project settings, and relationship decisions require `expectedVersion` or `If-Match`; stale changes fail with `CONFLICT`. Raw captures never change. Search uses FTS5 with literal token matching and stable cursor pagination.
 

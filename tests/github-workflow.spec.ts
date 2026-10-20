@@ -1,130 +1,243 @@
 import { execFileSync, spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer, type Server } from "node:http";
-import { resolve } from "node:path";
+import { createHash, randomUUID } from "node:crypto";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { createServer as createHTTPServer, type Server } from "node:http";
+import { createServer as createHTTPSServer } from "node:https";
+import { createRequire } from "node:module";
+import { connect, type Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
-import { createApi } from "../apps/web/src/server/api";
 import { startDurableMcpService } from "./durable-mcp-service";
-import { createWorkflowHarness, root } from "./workflow-harness";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 
-const { cleanupDocker, command, start, stop, temporary } =
-  createWorkflowHarness();
-
-// Reuse the production frontend driver. Only the external GitHub service and
-// clock are synthetic; browser HTTP and subprocess MCP use the real API.
-const origin = "http://localhost:3102";
-let now = Date.now();
+const root = resolve(import.meta.dirname, "..");
+const temporary = mkdtempSync(join(tmpdir(), "scratchpad-github-workflow-"));
+chmodSync(temporary, 0o700);
+const databasePath = resolve(temporary, "github.sqlite");
+const serverBinary = resolve(temporary, "scratchpad-server");
+let environment: NodeJS.ProcessEnv;
+let command: (binary: string, args: string[], cwd?: string) => string;
+let server: ReturnType<typeof startGoServer> | undefined;
+let serverOutput = "";
+let admin: (...args: string[]) => string;
+let databaseAdmin: ReturnType<typeof postgres> | undefined;
+let databaseName: string | undefined;
+let databaseUrl: string | undefined;
+const originalDatabaseUrl = process.env.SCRATCHPAD_E2E_DATABASE_URL;
+const originalProxyEnvironment = {
+  HTTPS_PROXY: process.env.HTTPS_PROXY,
+  NO_PROXY: process.env.NO_PROXY,
+  SSL_CERT_FILE: process.env.SSL_CERT_FILE,
+  SSL_CERT_DIR: process.env.SSL_CERT_DIR,
+};
+let origin = "";
 let available = true;
 let published = true;
-let api: ReturnType<typeof createApi>;
+let github: ReturnType<typeof createHTTPSServer>;
 let proxy: Server;
-const key = resolve(temporary, "github-identity");
+const sockets = new Set<Socket>();
+let key: string;
 let stopDurableMcpService: (() => Promise<void>) | undefined;
 let publicKey: string;
 let extraPublicKey: string | undefined;
 let account = { id: 987654321, login: "synthetic-owner", type: "User" };
-let databaseUrl: string | undefined;
-let databaseAdmin: ReturnType<typeof postgres> | undefined;
-const databaseName = `scratchpad_github_e2e_${randomUUID().replaceAll("-", "")}`;
-function openApi() {
-  api = createApi({
-    origin,
-    databasePath: resolve(temporary, "github.sqlite"),
-    databaseUrl,
-    clock: () => now,
-    githubOAuth: {
-      clientId: "synthetic-client",
-      clientSecret: "synthetic-secret",
-    },
-    githubAuthFetch: async (input) => {
-      if (!available) return new Response("unavailable", { status: 503 });
-      const url = String(input);
-      if (url.endsWith("/access_token"))
-        return Response.json({
-          access_token: "synthetic-token",
-          token_type: "bearer",
-          scope: "",
-        });
-      if (url.includes("/keys?"))
-        return Response.json(
-          published
-            ? [
-                { id: 1, key: publicKey },
-                ...(extraPublicKey ? [{ id: 3, key: extraPublicKey }] : []),
-              ]
-            : [],
-        );
-      if (url.includes("/ssh_signing_keys?"))
-        return Response.json(published ? [{ id: 2, key: publicKey }] : []);
-      return Response.json(account);
-    },
+async function unusedPort(): Promise<number> {
+  return await new Promise((done) => {
+    const listener = createHTTPServer();
+    listener.listen(0, "127.0.0.1", () => {
+      const address = listener.address();
+      if (!address || typeof address === "string")
+        throw new Error("Missing port");
+      listener.close(() => done(address.port));
+    });
   });
 }
 test.beforeAll(async () => {
+  command = (binary, args, cwd = root) =>
+    execFileSync(binary, args, {
+      cwd,
+      encoding: "utf8",
+      timeout: 60_000,
+      ...(binary === "openssl" ? { stdio: "ignore" } : {}),
+    });
+  key = resolve(temporary, "github-identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   publicKey = readFileSync(`${key}.pub`, "utf8").trim();
-  await start();
-  if (process.env.SCRATCHPAD_E2E_DATABASE_URL) {
-    databaseAdmin = postgres(process.env.SCRATCHPAD_E2E_DATABASE_URL, {
-      max: 1,
-    });
-    await databaseAdmin.unsafe(`CREATE DATABASE "${databaseName}"`);
-    const url = new URL(process.env.SCRATCHPAD_E2E_DATABASE_URL);
-    url.pathname = `/${databaseName}`;
-    databaseUrl = url.toString();
-  }
-  openApi();
-  proxy = createServer(async (req, res) => {
-    try {
-      const chunks: Buffer[] = [];
-      for await (const chunk of req) chunks.push(Buffer.from(chunk));
-      const body = Buffer.concat(chunks);
-      const headers = new Headers();
-      for (const [name, value] of Object.entries(req.headers))
-        if (value)
-          headers.set(name, Array.isArray(value) ? value.join(", ") : value);
-      const response =
-        req.url?.startsWith("/api/") || req.url === "/ready"
-          ? await api.handleRequest(
-              new Request(`${origin}${req.url}`, {
-                method: req.method,
-                headers,
-                ...(body.length ? { body } : {}),
-              }),
-            )
-          : await fetch(`http://localhost:3100${req.url}`, { headers });
-      res.statusCode = response.status;
-      response.headers.forEach((value, name) => {
-        if (
-          name !== "set-cookie" &&
-          name !== "content-encoding" &&
-          name !== "content-length"
-        )
-          res.setHeader(name, value);
-      });
-      const cookies = response.headers.getSetCookie();
-      if (cookies.length) res.setHeader("set-cookie", cookies);
-      res.end(Buffer.from(await response.arrayBuffer()));
-    } catch (error) {
-      res.statusCode = 500;
-      res.end(String(error));
-    }
+  // Go scans every file in SSL_CERT_DIR. Keep database/sidecar files out:
+  // opening and closing their inodes would release this process's SQLite locks.
+  const certificates = resolve(temporary, "certificates");
+  mkdirSync(certificates, { mode: 0o700 });
+  const tlsKey = resolve(temporary, "github-tls-key.pem");
+  const tlsCert = resolve(certificates, "github-tls-cert.pem");
+  command("openssl", [
+    "req",
+    "-x509",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-days",
+    "1",
+    "-subj",
+    "/CN=Scratchpad GitHub fixture",
+    "-addext",
+    "subjectAltName=DNS:github.com,DNS:api.github.com",
+    "-keyout",
+    tlsKey,
+    "-out",
+    tlsCert,
+  ]);
+  github = createHTTPSServer(
+    { key: readFileSync(tlsKey), cert: readFileSync(tlsCert) },
+    (req, res) => {
+      if (!available) {
+        res.writeHead(503).end("unavailable");
+        return;
+      }
+      res.setHeader("Content-Type", "application/json");
+      if (req.url === "/login/oauth/access_token") {
+        res.end(
+          JSON.stringify({
+            access_token: "synthetic-token",
+            token_type: "bearer",
+            scope: "",
+          }),
+        );
+      } else if (
+        req.url === "/user" ||
+        req.url === `/user/${account.id}` ||
+        req.url === `/users/${account.login}`
+      )
+        res.end(JSON.stringify(account));
+      else if (req.url?.startsWith(`/users/${account.login}/keys`))
+        res.end(
+          JSON.stringify(
+            published
+              ? [
+                  { id: 1, key: publicKey },
+                  ...(extraPublicKey ? [{ id: 3, key: extraPublicKey }] : []),
+                ]
+              : [],
+          ),
+        );
+      else if (req.url?.startsWith(`/users/${account.login}/ssh_signing_keys`))
+        res.end(JSON.stringify(published ? [{ id: 2, key: publicKey }] : []));
+      else res.writeHead(404).end();
+    },
+  );
+  github.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
   });
-  await new Promise<void>((done) => proxy.listen(3102, done));
+  await new Promise<void>((done) => github.listen(0, "127.0.0.1", done));
+  const address = github.address();
+  if (!address || typeof address === "string")
+    throw new Error("Missing GitHub fixture port");
+  proxy = createHTTPServer((_req, res) => res.writeHead(403).end());
+  proxy.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
+  proxy.on("connect", (req, socket, head) => {
+    if (!["github.com:443", "api.github.com:443"].includes(req.url ?? "")) {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+      return;
+    }
+    const upstream = connect(address.port, "127.0.0.1", () => {
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      upstream.write(head);
+      socket.pipe(upstream);
+      upstream.pipe(socket);
+    });
+    upstream.on("error", () => socket.destroy());
+    socket.on("error", () => upstream.destroy());
+    socket.once("close", () => upstream.destroy());
+  });
+  await new Promise<void>((done) => proxy.listen(0, "127.0.0.1", done));
+  const proxyAddress = proxy.address();
+  if (!proxyAddress || typeof proxyAddress === "string")
+    throw new Error("Missing proxy port");
+  process.env.HTTPS_PROXY = `http://127.0.0.1:${proxyAddress.port}`;
+  process.env.NO_PROXY = "localhost,127.0.0.1,::1";
+  process.env.SSL_CERT_FILE = tlsCert;
+  process.env.SSL_CERT_DIR = certificates;
+  if (originalDatabaseUrl) {
+    databaseAdmin = postgres(originalDatabaseUrl, { max: 1 });
+    databaseName = `scratchpad_github_e2e_${randomUUID().replaceAll("-", "")}`;
+    await databaseAdmin.unsafe(`CREATE DATABASE "${databaseName}"`);
+    const database = new URL(originalDatabaseUrl);
+    database.pathname = `/${databaseName}`;
+    databaseUrl = process.env.SCRATCHPAD_E2E_DATABASE_URL = database.toString();
+  }
+  const port = await unusedPort();
+  const uiPort = await unusedPort();
+  origin = `http://localhost:${port}`;
+  environment = {
+    ...process.env,
+    SCRATCHPAD_DATABASE_PATH: databasePath,
+    SCRATCHPAD_DATABASE_URL: databaseUrl ?? "",
+    SCRATCHPAD_LISTEN_ADDR: `127.0.0.1:${port}`,
+    SCRATCHPAD_UI_PORT: String(uiPort),
+    SCRATCHPAD_PUBLIC_URL: origin,
+    SCRATCHPAD_DASHBOARD_URL: `http://127.0.0.1:${uiPort}`,
+    SCRATCHPAD_GITHUB_CLIENT_ID: "synthetic-client",
+    SCRATCHPAD_GITHUB_CLIENT_SECRET: "synthetic-secret",
+    HTTPS_PROXY: `http://127.0.0.1:${proxyAddress.port}`,
+    NO_PROXY: "localhost,127.0.0.1,::1",
+    SSL_CERT_FILE: tlsCert,
+    SSL_CERT_DIR: certificates,
+  };
+  buildGoServer(root, serverBinary, environment);
+  admin = (...args) => runGoAdmin(serverBinary, args, environment, root);
+  serverOutput = "";
+  server = startGoServer(root, serverBinary, environment, (chunk) => {
+    serverOutput += chunk.toString();
+  });
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await fetch(`${origin}/ready`)).ok && (await fetch(origin)).ok)
+        return;
+    } catch {}
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  throw new Error(
+    `Go GitHub workflow server did not become ready: ${serverOutput}`,
+  );
 });
 test.afterAll(async () => {
   await stopDurableMcpService?.();
-  if (proxy) await new Promise<void>((done) => proxy.close(() => done()));
-  await api?.close();
-  if (databaseAdmin) {
+  await stopGoServer(server);
+  if (databaseAdmin && databaseName) {
     await databaseAdmin.unsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
     await databaseAdmin.end();
   }
-  await stop();
-  cleanupDocker();
+  if (originalDatabaseUrl === undefined)
+    delete process.env.SCRATCHPAD_E2E_DATABASE_URL;
+  else process.env.SCRATCHPAD_E2E_DATABASE_URL = originalDatabaseUrl;
+  for (const [name, value] of Object.entries(originalProxyEnvironment)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+  for (const socket of sockets) socket.destroy();
+  if (proxy?.listening)
+    await new Promise<void>((done) => proxy.close(() => done()));
+  if (github?.listening)
+    await new Promise<void>((done) => github.close(() => done()));
   rmSync(temporary, { recursive: true, force: true });
 });
 
@@ -160,6 +273,22 @@ async function readProjects(token: string) {
   return await fetch(`${origin}/api/v1/projects`, {
     headers: { Authorization: `Bearer ${token}` },
   });
+}
+async function restartServer() {
+  await stopGoServer(server);
+  serverOutput = "";
+  server = startGoServer(root, serverBinary, environment, (chunk) => {
+    serverOutput += chunk.toString();
+  });
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await fetch(`${origin}/ready`)).ok && (await fetch(origin)).ok)
+        return;
+    } catch {}
+    await new Promise((done) => setTimeout(done, 50));
+  }
+  throw new Error(`Go GitHub workflow server did not restart: ${serverOutput}`);
 }
 async function realMcp(args: string[], env = process.env) {
   return await new Promise<string>((done, reject) => {
@@ -226,7 +355,7 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect((await fetch(`${origin}/ready`)).json()).resolves.toMatchObject({
     database: databaseUrl ? "postgres" : "sqlite",
   });
-  const token = await api.auth.createSetupToken();
+  const token = admin("setup").trim().split("\n").at(-1) ?? "";
   await page.goto(origin);
   await page.getByLabel("Setup or recovery token").fill(token);
   await page
@@ -243,6 +372,10 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect(
     page.getByText("@synthetic-owner", { exact: true }),
   ).toBeVisible();
+  const githubStatus = await (
+    await page.request.get(`${origin}/api/v1/auth/github`)
+  ).json();
+  expect(githubStatus.lastSyncError).toBeNull();
   await expect(
     page.getByText(/GitHub-managed · authentication, signing/),
   ).toBeVisible();
@@ -443,13 +576,80 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect(page.getByRole("alert").first()).toContainText(
     "GitHub is unavailable",
   );
-  now += 23 * 60 * 60 * 1000;
+  const updateEntityField = async (
+    kind: string,
+    id: string,
+    field: string,
+    value: string,
+  ) => {
+    if (databaseAdmin && databaseUrl) {
+      const client = postgres(databaseUrl, { max: 1 });
+      try {
+        await client.unsafe(
+          `UPDATE entities SET data=jsonb_set(data, ARRAY[$1]::text[], to_jsonb($2::text)) WHERE kind=$3 AND id=$4`,
+          [field, value, kind, id],
+        );
+      } finally {
+        await client.end();
+      }
+    } else {
+      const require = createRequire(resolve(root, "apps/web/package.json"));
+      const SQLite = require("better-sqlite3") as new (
+        file: string,
+      ) => {
+        prepare(sql: string): { run(...args: string[]): unknown };
+        close(): void;
+      };
+      const db = new SQLite(databasePath);
+      try {
+        db.prepare(
+          "UPDATE entities SET data=json_set(data, ?, ?) WHERE kind=? AND id=?",
+        ).run(`$.${field}`, value, kind, id);
+      } finally {
+        db.close();
+      }
+    }
+  };
+  await stopGoServer(server);
+  await updateEntityField(
+    "github_binding",
+    "owner",
+    "lastSuccessfulSyncAt",
+    new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString(),
+  );
+  await restartServer();
   const renewed = await machineSession();
   expect(renewed.status).toBe(200);
-  await api.close();
-  openApi();
+  await restartServer();
   expect(await realMcp([...args, "-phase", "verify"])).toContain("PASS verify");
-  now += 60 * 60 * 1000 + 1;
+  await stopGoServer(server);
+  await updateEntityField(
+    "github_binding",
+    "owner",
+    "lastSuccessfulSyncAt",
+    new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+  );
+  const sessionId = (value: string) =>
+    createHash("sha256").update(value).digest("hex");
+  await updateEntityField(
+    "session",
+    sessionId(renewed.token),
+    "expiresAt",
+    "2000-01-01T00:00:00.000Z",
+  );
+  const browserCookie = (await page.context().cookies(origin)).find(
+    (cookie) => cookie.name === "scratchpad_session",
+  );
+  expect(browserCookie).toBeDefined();
+  if (!browserCookie)
+    throw new Error("Authenticated browser cookie is missing");
+  await updateEntityField(
+    "session",
+    sessionId(browserCookie.value),
+    "expiresAt",
+    "2000-01-01T00:00:00.000Z",
+  );
+  await restartServer();
   expect((await readProjects(renewed.token)).status).toBe(401);
   expect((await machineSession()).status).toBe(401);
   await page.reload();
@@ -478,7 +678,6 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   ).toBeVisible();
   const restored = await machineSession();
   expect(restored.status).toBe(200);
-
   published = false;
   await page
     .getByRole("button", { name: "Synchronize keys", exact: true })
@@ -500,8 +699,7 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
     page.getByRole("button", { name: /^Unblock key / }),
   ).toBeVisible();
   expect((await readProjects(republished.token)).status).toBe(401);
-  await api.close();
-  openApi();
+  await restartServer();
   await page
     .getByRole("button", { name: "Synchronize keys", exact: true })
     .click();
@@ -512,9 +710,8 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await page.getByRole("button", { name: /^Unblock key / }).click();
   await expect(page.getByRole("button", { name: /^Block key / })).toBeVisible();
   expect((await machineSession()).status).toBe(200);
-
   // Recovery replaces the account binding without losing project memory.
-  const recovery = await api.auth.createSetupToken(true);
+  const recovery = admin("recover").trim().split("\n").at(-1) ?? "";
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page
     .getByRole("button", { name: "Recover access", exact: true })
@@ -524,9 +721,20 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await page
     .getByRole("button", { name: "Recover with GitHub", exact: true })
     .click();
+  await page.waitForURL(`${origin}/`);
+  await page.reload();
   await expect(
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
+  await expect
+    .poll(async () => {
+      const result = await page.evaluate(async () => {
+        const response = await fetch("/api/v1/auth/status");
+        return { status: response.status, body: await response.json() };
+      });
+      return result;
+    })
+    .toMatchObject({ status: 200, body: { authenticated: true } });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
   await expect(

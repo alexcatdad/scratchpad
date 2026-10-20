@@ -2,121 +2,36 @@ package backend_test
 
 import (
 	"encoding/json"
-	"net"
-	"net/http"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
-	"time"
 )
 
-func retainedLegacyImporter(t *testing.T) string {
-	t.Helper()
-	path, _ := portableInstance(t, "sqlite")
-	root, _ := filepath.Abs("..")
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	address := listener.Addr().String()
-	listener.Close()
-	origin := "http://" + address
-	apiPath, _ := json.Marshal(filepath.Join(root, "apps/web/src/server/api.ts"))
-	fixture := filepath.Join(t.TempDir(), "legacy-retained.mjs")
-	source := `import {createServer} from 'node:http';
-import {createApi} from ` + string(apiPath) + `;
-const origin=process.env.SCRATCHPAD_PUBLIC_URL;
-const api=createApi({origin,databasePath:process.env.SCRATCHPAD_DATABASE_PATH});
-const server=createServer(async(req,res)=>{try{
- const chunks=[];for await(const chunk of req)chunks.push(chunk);
- const headers=new Headers();for(const[name,value]of Object.entries(req.headers))if(value!==undefined)headers.set(name,String(value));
- const result=await api.handleRequest(new Request(new URL(req.url,origin),{method:req.method,headers,...(req.method==='GET'||req.method==='HEAD'?{}:{body:Buffer.concat(chunks)})}),req.socket.remoteAddress);
- res.writeHead(result.status,Object.fromEntries(result.headers));res.end(Buffer.from(await result.arrayBuffer()));
-}catch{res.writeHead(500).end();}});
-server.listen(Number(new URL(origin).port),'127.0.0.1');
-process.once('SIGTERM',()=>{server.close(async()=>{await api.close();process.exit(0);});server.closeAllConnections();});`
-	if err = os.WriteFile(fixture, []byte(source), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("node", "--import", filepath.Join(root, "node_modules/tsx/dist/loader.mjs"), fixture)
-	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_PATH="+path, "SCRATCHPAD_DATABASE_URL=", "SCRATCHPAD_PUBLIC_URL="+origin, "SCRATCHPAD_GITHUB_CLIENT_ID=", "SCRATCHPAD_GITHUB_CLIENT_SECRET=")
-	if err = cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	t.Cleanup(func() {
-		cmd.Process.Signal(syscall.SIGTERM)
-		select {
-		case err := <-done:
-			if err != nil {
-				t.Errorf("retained importer exit: %v", err)
-			}
-		case <-time.After(10 * time.Second):
-			cmd.Process.Kill()
-			<-done
-			t.Error("retained importer did not stop")
-		}
-	})
-	deadline := time.Now().Add(10 * time.Second)
-	for time.Now().Before(deadline) {
-		response, err := http.Get(origin + "/ready")
-		if err == nil {
-			response.Body.Close()
-			if response.StatusCode == 200 {
-				return origin
-			}
-		}
-		time.Sleep(20 * time.Millisecond)
-	}
-	t.Fatal("retained importer not ready")
-	return ""
-}
-
-func TestLegacyNumericIdentityMatchesRetainedImporterWithoutRoundingEvidence(t *testing.T) {
-	retained := retainedLegacyImporter(t)
-	status, resolved := projectRequest(t, retained, "POST", "/resolve-explicit", map[string]any{"name": "Numeric identity parity"}, restoredToken)
-	if status != 200 {
-		t.Fatal("retained project fixture failed")
-	}
-	project := resolved["project"].(map[string]any)["id"].(string)
+func TestLegacyNumericIdentityMatchesFrozenImporterGoldenWithoutRoundingEvidence(t *testing.T) {
+	expectedIDs := []string{"rec_import_7dc1b03262ff7e3260b3b48c1a932cdb", "rec_import_0019662da24309ccaa82795e402abe4b", "rec_import_90f5edc268591d04e81e3a17bdc2d8a5", "rec_import_cdbebfdc4dc3dc38e456e925f547be25", "rec_import_c0b903577bb0c95b5c1af374d7894ce5", "legacy_precise_retained", "rec_import_b191071429f5f6f8e024738188f26484", "rec_import_c073c570e7cb98817d1ae5bc3f41cbd3"}
+	expectedHashes := []string{"ab940a09a4911cbaf7a964be0e1acc21898f63ccac6f191fdff893c86929b352", "fc1854e6636456c891471af01f70b49807fde68f452500fbba446e7f3389d56c", "cd8aec818b6f5470d9fda3200217bbdd51059d1a46e705907fbdbc0559dcb505", "f47316233db2593768415c7701cbd924e8fa24d04fdd22cb7ae3b2054e950779", "1adc1c11a63bc4c858e4a05ef28538a21242dcc446b568cb769be9ff3d43e3a1", "c75a5b67906c8ad705b5acd2e8ad6c552d10a341395db48c0c98e340150f1ff2", "23f8dced41a3aca8758ffa18bb3a5b17815ff676e99b265d0b0fb310b2d9119f", "a04a0c512c8938dbe9e48f76702da0833820b9c9a40de6452b90e609e068c390"}
 	lines := []string{`{"finding":"Exponent evidence","n":1e2}`, `{"finding":"Decimal evidence","n":1.0}`, `{"finding":"Negative zero evidence","n":-0}`, `{"finding":"Small exponent evidence","n":1e-7}`, `{"finding":"Large exponent evidence","n":1e21}`, `{"id":"legacy_precise_retained","finding":"Exact raw evidence","payload":{"counter":9007199254740993}}`, `{"finding":"Anonymous precise identity","n":9007199254740993}`, `{"finding":"Overflow identity","n":1e400}`}
-	input := map[string]any{"format": "jsonl", "projectId": project, "sourceName": "numeric-parity.jsonl", "jsonl": strings.Join(lines, "\n")}
-	status, golden := curationRequest(t, retained, "POST", "/import", input)
-	if status != 200 || golden["imported"] != float64(len(lines)) {
-		t.Fatal("actual retained importer fixture failed")
-	}
-	_, archive := curationRequest(t, retained, "POST", "/export", map[string]any{})
-	fingerprints := map[string]any{}
-	for _, value := range archive["data"].(map[string]any)["record"].([]any) {
-		entry := value.(map[string]any)
-		fingerprints[entry["id"].(string)] = entry["provenance"].(map[string]any)["import"].(map[string]any)["sha256"]
-	}
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
-			projectEntry := archive["data"].(map[string]any)["project"]
-			status, _ := curationRequest(t, origin, "POST", "/import", map[string]any{"format": "scratchpad", "version": 1, "data": map[string]any{"project": projectEntry}})
+			project := "proj_portable"
+			status, _ := curationRequest(t, origin, "POST", "/import", portableArchive())
 			if status != 200 {
-				t.Fatal("Go project fixture failed")
+				t.Fatal("fixed project fixture failed")
 			}
+			input := map[string]any{"format": "jsonl", "projectId": project, "sourceName": "numeric-parity.jsonl", "jsonl": strings.Join(lines, "\n")}
 			status, result := curationRequest(t, origin, "POST", "/import", input)
 			if status != 200 {
 				t.Fatal("Go numerical import failed")
 			}
 			for i, value := range result["records"].([]any) {
-				if value.(map[string]any)["recordId"] != golden["records"].([]any)[i].(map[string]any)["recordId"] {
-					t.Fatalf("numeric identity differs from retained importer on line%d", i+1)
+				if value.(map[string]any)["recordId"] != expectedIDs[i] {
+					t.Fatalf("numeric identity differs from frozen legacy output on line %d: got %v want %v project %s", i+1, value.(map[string]any)["recordId"], expectedIDs[i], project)
 				}
 				id := value.(map[string]any)["recordId"].(string)
 				status, detail := numericArchiveRequest(t, origin, "GET", "/records/"+id, "")
-				if status != 200 || detail["record"].(map[string]any)["provenance"].(map[string]any)["import"].(map[string]any)["sha256"] != fingerprints[id] {
-					t.Fatal("source fingerprint differs from actual retained importer")
+				if status != 200 || detail["record"].(map[string]any)["provenance"].(map[string]any)["import"].(map[string]any)["sha256"] != expectedHashes[i] {
+					t.Fatal("source fingerprint differs from frozen legacy output")
 				}
 			}
 			id := result["records"].([]any)[0].(map[string]any)["recordId"].(string)
@@ -134,6 +49,10 @@ func TestLegacyNumericIdentityMatchesRetainedImporterWithoutRoundingEvidence(t *
 				t.Fatal("equivalent numeric spelling did not replay")
 			}
 			input["jsonl"] = strings.Join(lines, "\n")
+			status, archive := numericArchiveRequest(t, origin, "POST", "/export", `{}`)
+			if status != 200 {
+				t.Fatal("numeric archive export failed")
+			}
 			for _, withRawLine := range []bool{true, false} {
 				freshPath, freshURL := portableInstance(t, engine)
 				fresh := startServer(t, freshPath, freshURL)
