@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:net";
 import { expect, test } from "@playwright/test";
@@ -94,6 +94,8 @@ for (const scenario of [
       });
     });
     const origin = `http://localhost:${port}`;
+    let tunnel: ReturnType<typeof spawn> | undefined;
+    let tunnelClosed: Promise<void> | undefined;
     const run = (volume: string, selectedImage: string) => {
       const id = docker(
         "run",
@@ -141,6 +143,31 @@ for (const scenario of [
       return id;
     };
     try {
+      // Remote development daemons publish loopback ports on their own host.
+      // Use only an explicitly selected existing SSH transport; never run a shell.
+      const sshHost = process.env.TEST_DOCKER_SSH_HOST;
+      if (sshHost) {
+        if (!/^[A-Za-z0-9][A-Za-z0-9_.@-]*$/.test(sshHost))
+          throw new Error("Invalid explicit Docker SSH host");
+        tunnel = spawn(
+          "ssh",
+          [
+            "-N",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            "ExitOnForwardFailure=yes",
+            "-L",
+            `127.0.0.1:${port}:127.0.0.1:${port}`,
+            sshHost,
+          ],
+          { stdio: "ignore" },
+        );
+        tunnelClosed = new Promise((done, fail) => {
+          tunnel?.once("error", fail);
+          tunnel?.once("close", () => done());
+        });
+      }
       if (postgresRestore) {
         docker("network", "create", network);
         networkCreated = true;
@@ -850,9 +877,14 @@ for (const scenario of [
         stop(secretless, true);
       }
     } finally {
-      for (const id of containers) docker("rm", "-f", "-v", id);
-      for (const volume of volumes) docker("volume", "rm", volume);
-      if (networkCreated) docker("network", "rm", network);
+      try {
+        for (const id of containers) docker("rm", "-f", "-v", id);
+        for (const volume of volumes) docker("volume", "rm", volume);
+        if (networkCreated) docker("network", "rm", network);
+      } finally {
+        tunnel?.kill("SIGTERM");
+        await tunnelClosed;
+      }
     }
   });
 }

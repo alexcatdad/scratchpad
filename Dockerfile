@@ -38,9 +38,9 @@ FROM runtime-base AS go-runtime
 USER 0:0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u1 && rm -rf /var/lib/apt/lists/*
 USER 1000:1000
-ENV SCRATCHPAD_LISTEN_ADDR=0.0.0.0:3000 SCRATCHPAD_UI_PORT=4000
+ENV SCRATCHPAD_LISTEN_ADDR=0.0.0.0:3000 SCRATCHPAD_UI_PORT=4000 SCRATCHPAD_SERVER_BINARY=/usr/local/bin/scratchpad-server
 COPY --from=go-build --chown=node:node /scratchpad-server /usr/local/bin/scratchpad-server
-COPY --chown=node:node scripts/go-dashboard-runtime.mjs ./scripts/go-dashboard-runtime.mjs
+COPY --chown=node:node scripts/go-dashboard-runtime.mjs scripts/admin-go.mjs ./scripts/
 ENTRYPOINT ["node", "/app/scripts/go-dashboard-runtime.mjs", "/usr/local/bin/scratchpad-server"]
 CMD ["serve"]
 

@@ -6,52 +6,52 @@ import { join, resolve } from "node:path";
 const directory = mkdtempSync(join(tmpdir(), "scratchpad-dev-go-"));
 chmodSync(directory, 0o700);
 const binary = join(directory, "scratchpad-server");
-let child;
+let active;
+let deadline;
 let stopping = false;
+const grouped = process.platform !== "win32";
 
-function run(file, args, options = {}) {
-  return new Promise((done, reject) => {
-    const process = spawn(file, args, { stdio: "inherit", ...options });
-    process.once("error", reject);
-    process.once("close", (code) => done(code ?? 1));
-  });
-}
-
-async function cleanup() {
-  if (!child) return;
-  if (child.exitCode !== null || child.signalCode) return;
-  if (child.exitCode === null && !child.signalCode) child.kill("SIGTERM");
-  let timer;
+function signal(child, value) {
   try {
-    await Promise.race([
-      new Promise((done) => child.once("close", done)),
-      new Promise((done) => {
-        timer = setTimeout(() => {
-          if (child.exitCode === null && !child.signalCode)
-            child.kill("SIGKILL");
-          done();
-        }, 20_000);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
+    if (grouped) process.kill(-child.pid, value);
+    else child.kill(value);
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
   }
 }
-
 function stop() {
-  if (stopping) return;
   stopping = true;
-  void cleanup();
+  if (!active) return;
+  signal(active, "SIGTERM");
+  deadline ??= setTimeout(() => {
+    if (active) signal(active, "SIGKILL");
+  }, 20_000);
 }
-
 process.once("SIGINT", stop);
 process.once("SIGTERM", stop);
 
+async function run(file, args, env = process.env) {
+  if (stopping) return 0;
+  const child = spawn(file, args, { env, stdio: "inherit", detached: grouped });
+  active = child;
+  try {
+    return await new Promise((done, reject) => {
+      child.once("error", reject);
+      child.once("close", (code) => done(code ?? 1));
+    });
+  } finally {
+    // The build leader can exit before a descendant that ignored SIGTERM.
+    if (stopping && grouped && child.pid) signal(child, "SIGKILL");
+    clearTimeout(deadline);
+    deadline = undefined;
+    active = undefined;
+  }
+}
+
 try {
-  const buildCode = await run("npm", ["run", "build", "-w", "@scratchpad/web"]);
-  if (buildCode !== 0) process.exitCode = buildCode;
-  else {
-    const goCode = await run("go", [
+  let code = await run("npm", ["run", "build", "-w", "@scratchpad/web"]);
+  if (code === 0 && !stopping)
+    code = await run("go", [
       "-C",
       "backend",
       "build",
@@ -59,31 +59,20 @@ try {
       binary,
       "./cmd/scratchpad-server",
     ]);
-    if (goCode !== 0) process.exitCode = goCode;
-    else {
-      const env = {
+  if (code === 0 && !stopping)
+    code = await run(
+      process.execPath,
+      [resolve("scripts/go-dashboard-runtime.mjs"), binary, "serve"],
+      {
         ...process.env,
         SCRATCHPAD_LISTEN_ADDR:
           process.env.SCRATCHPAD_LISTEN_ADDR ?? "127.0.0.1:3000",
         SCRATCHPAD_PUBLIC_URL:
           process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
-        SCRATCHPAD_DASHBOARD_URL:
-          process.env.SCRATCHPAD_DASHBOARD_URL ?? "http://127.0.0.1:4000",
         SCRATCHPAD_UI_PORT: process.env.SCRATCHPAD_UI_PORT ?? "4000",
-      };
-      child = spawn(
-        process.execPath,
-        [resolve("scripts/go-dashboard-runtime.mjs"), binary, "serve"],
-        { env, stdio: "inherit" },
-      );
-      const code = await new Promise((done, reject) => {
-        child.once("error", reject);
-        child.once("close", done);
-      });
-      process.exitCode = stopping ? 0 : (code ?? 1);
-    }
-  }
+      },
+    );
+  process.exitCode = stopping ? 0 : code;
 } finally {
-  await cleanup();
   rmSync(directory, { recursive: true, force: true });
 }
