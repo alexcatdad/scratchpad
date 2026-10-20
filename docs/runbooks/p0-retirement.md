@@ -17,6 +17,28 @@ behavior evidence from CI, image, rollback, and deployed-runtime acceptance.
 | Private operator-history acceptance | `scripts/validate-history.ts` exercises a disposable Go SQLite process through HTTP | Keep this optional and local; never upload inputs or output artifacts to CI. |
 | Schema and database restoration | Go migration, schema validation, and portability suites | Keep the old-runtime refusal/restore test against the frozen legacy image until the rollback window closes. |
 
+## Replaced TypeScript server test coverage
+
+The removed server unit tests must not be treated as disposable just because the
+Go suite has similarly named tests. These named Go tests retain the behaviors that
+the retirement review identified:
+
+| Former TypeScript test area | Go behavior gates |
+| --- | --- |
+| `api.test.ts`, `auth-abuse.test.ts` | `TestRecordRequiresAuthentication`, `TestAuthTrustedProxySelectsNearestUntrustedClientAndRejectsSpoofing`, `TestTrustedProxyKeepsIndependentAuthRoutesEnrollmentAndRecoveryAvailable`, `TestCredentialRevocationStopsAgentAccess` |
+| `webauthn.test.ts`, `ssh-recipient.test.ts` | `TestHistoricalPasskeyLoginAndProofFailures`, `TestOwnerSetupAndRecoveryCLI`, `TestLocalSSHEnrollmentAllowsRealAgentRead`, `TestCredentialRevocationStopsAgentAccess` |
+| `context.test.ts`, `date-search.test.ts` | `TestProjectContextOrdersPreciseStateAndBoundsHistory`, `TestProjectContextKeepsHistoricalAndUnverifiedKnowledgeSeparate`, `TestSearchPreservesCuratedAndTemporalFilters` |
+| `imports.test.ts` | `TestLegacyJSONLMapsAllTypesWithoutDiscardingDisabledHistory`, `TestLegacyJSONLRetainsSourceEvidenceAndUnverifiedAuthority`, `TestLegacyJSONLRollsBackLateImportAuditFailure`, `TestLegacyNumericIdentityMatchesFrozenImporterGoldenWithoutRoundingEvidence`, `TestNativeArchiveReplayComparesExactNumericalMeaning` |
+| `github-access.test.ts`, `github-profile.test.ts` | `TestGithubOAuthEstablishesBrowserOwner`, `TestGithubCompleteKeySyncAndSSHLogin`, `TestGithubFailedSyncPreservesCompleteCache`, `TestGithubLocalBlocksAndIndependentUnlink`, `TestGithubStableAccountReplacementAndRecovery`, `TestPublicGithubProfileDoesNotAuthorizeOwner` |
+| `readiness.test.ts`, `sqlite-permissions.test.ts`, `postgres.test.ts`, `pgvector.test.ts` | `TestGoServerReadiness`, `TestSQLiteRejectsUnsafeFiles`, `TestUnsupportedSchemaIsRefusedWithoutChangingBackup`, database-specific startup/backup tests, and the pgvector container scenarios |
+| `ai.test.ts` | `TestProviderConfigurationChangeStopsFutureRequestsWithoutHoldingWrites`, `TestEncryptedProviderSecretSupportsRestartAndBlocksWrongKeys`, `TestAIConfigurationSupportsIfMatchAndRejectsInvalidChanges`, plus the AI job, completion, export and RAG suites |
+
+The browser acceptance remains `tests/go-dashboard.spec.ts` and the migrated
+GitHub/passkey workflow suites, which exercise a real Go process and real browser
+HTTP. Keep the server unit-test source available in the pinned rollback artifact
+only for the historical API refusal-and-restore proof; current product tests run
+against Go.
+
 ## Runtime and packaging gates
 
 The development entrypoint must launch the Go API and a renderer configured for
