@@ -1,1120 +1,188 @@
-# Scratchpad — V1 Architecture
+# Scratchpad architecture
 
-**Version:** 0.1  
-**Date:** 29 September 2026  
-**Status:** Initial implementation baseline
+Current source architecture, consolidated 20 October 2026. The [PRD](prd.md)
+defines product requirements; [API contracts](api.md) and [OpenAPI](openapi.json)
+define wire behavior. [Earlier architecture](archive/p0-baseline/architecture.md)
+and existing [ADRs](adr/0001-github-owner-access.md) preserve prior decisions.
+Published releases and installed deployments require their own version and
+acceptance evidence; source support does not imply a live cutover.
 
----
-
-## 1. Purpose
-
-This document defines the initial technical architecture for Scratchpad.
-
-The supported TypeScript runtime below is being replaced under issue #36. The
-accepted Go direction is consolidated in PRD §46 and the implementation boundary
-in this document's “Go backend replacement in progress” section. Go builds remain
-opt-in until parity, recovery and delivery acceptance pass.
-
-Scratchpad is a private, self-hosted developer-memory system with:
-
-- a central stateful application;
-- a browser dashboard;
-- a local stdio MCP;
-- optional repository dual-write;
-- optional AI capabilities;
-- SQLite as the default persistence layer;
-- PostgreSQL as an alternative persistence layer.
-
-The architecture prioritizes:
-
-- low operational complexity;
-- local/self-hosted deployment;
-- agent-first workflows;
-- restart safety;
-- immutable raw history;
-- optional rather than mandatory AI;
-- clear separation between local developer context and central application logic.
-
----
-
-## 2. System Overview
+## Runtime and trust boundaries
 
 ```text
-┌──────────────────────────────┐
-│ Coding Agent                 │
-│ Codex / ChatGPT / other MCP  │
-└──────────────┬───────────────┘
-               │ stdio
-               ▼
-┌──────────────────────────────┐
-│ scratchpad-mcp               │
-│ Go                           │
-│                              │
-│ - Git/project discovery      │
-│ - Git provenance             │
-│ - local durable capture IPC  │
-│ - online reads and mutations │
-└──────────────┬───────────────┘
-               │ private local socket
-               ▼
-┌──────────────────────────────┐
-│ scratchpad-service           │
-│ Go                           │
-│ - encrypted durable queue    │
-│ - SSH identity and delivery  │
-│ - receipt and status API     │
-└──────────────┬───────────────┘
-               │ HTTPS / HTTP
-               ▼
-┌─────────────────────────────────────────────┐
-│ Scratchpad Application                      │
-│ TypeScript / Node 24 / TanStack Start       │
-│                                             │
-│ ┌─────────────────────────────────────────┐ │
-│ │ HTTP API                                │ │
-│ │ Dashboard server functions             │ │
-│ │ WebAuthn                               │ │
-│ │ Project resolution                     │ │
-│ │ Record lifecycle                       │ │
-│ │ Search                                 │ │
-│ │ Audit                                  │ │
-│ │ Scheduler / jobs                       │ │
-│ └─────────────────────────────────────────┘ │
-│                    │                        │
-│                    ▼                        │
-│          SQLite / PostgreSQL                │
-└────────────────────┬────────────────────────┘
-                     │
-                     ▼
-        Optional OpenAI-compatible services
-          - LM Studio
-          - Ollama
-          - vLLM
-          - compatible remote APIs
+Coding agent
+  -> local Go stdio MCP (checkout discovery, provenance, mirror consent)
+  -> private local Go capture service (encrypted queue, receipts, SSH sessions)
+  -> HTTPS Go backend (authentication, API, persistence, workers)
+       -> SQLite or PostgreSQL
+       -> private loopback Node renderer -> React dashboard
+       -> optional OpenAI-compatible completion and embedding providers
 ```
 
----
-
-## 3. Technology Decisions
-
-### 3.1 Supported web application and API during replacement
-
-Use:
-
-- TypeScript;
-- Node.js 24 LTS;
-- TanStack Start;
-- React;
-- Drizzle ORM.
-
-TanStack Start owns:
-
-- dashboard routes;
-- dashboard server functions;
-- external HTTP API routes;
-- authentication endpoints;
-- configuration UI;
-- background-job integration.
-
-A separate HTTP framework is not required for the supported TypeScript runtime.
-The accepted replacement moves central API, authentication, persistence and jobs
-to Go, while retaining this React/TypeScript dashboard. Go owns the public API and
-the optional private Node process renders dashboard pages only; see the Go
-replacement section for implemented integration and outstanding acceptance.
-
----
-
-### 3.2 MCP
-
-The local MCP is a separate Go executable.
-
-Use:
-
-- Go;
-- official MCP Go SDK;
-- stdio transport.
-
-The MCP is intentionally thin.
-
-It owns integration with the local development environment but does not own Scratchpad business logic.
-
----
-
-### 3.3 Database
-
-Supported persistence engines:
-
-### Default
-
-SQLite.
-
-Recommended for normal single-user deployments.
-
-### Optional
-
-PostgreSQL.
-
-Useful where the owner prefers PostgreSQL, expects increased concurrency, or wants PostgreSQL-native extensions such as pgvector later.
-
-Both databases implement the same logical Scratchpad model.
-
-Transparent runtime migration between engines is not supported.
-
-Portability is provided by Scratchpad export/import.
-
----
-
-## 4. Application Boundaries
-
-### 4.1 Scratchpad server owns
-
-The central application owns:
-
-- project identities;
-- records;
-- record revisions;
-- relationships;
-- evidence;
-- audit history;
-- user profile;
-- credentials;
-- WebAuthn;
-- project settings;
-- search;
-- background-job state;
-- optional AI configuration;
-- derived knowledge;
-- imports and exports.
-
----
-
-### 4.2 MCP owns
-
-The MCP owns:
-
-- current working-directory discovery;
-- Git repository detection;
-- repository-root detection;
-- remote discovery;
-- repository-identity normalization;
-- branch discovery;
-- commit discovery;
-- worktree discovery;
-- developer SSH/signing-key access;
-- API authentication;
-- optional repository dual-write;
-- MCP protocol handling.
-
----
-
-### 4.3 MCP must not own
-
-The MCP must not independently decide:
-
-- project settings;
-- cross-project permissions;
-- AI configuration;
-- record lifecycle rules;
-- record relationship semantics;
-- canonical summaries;
-- retention;
-- audit history.
-
-These belong to the server.
-
----
-
-## 5. Project Resolution
-
-### 5.1 Git repositories
-
-When running inside Git:
-
-```text
-working directory
-      ↓
-git root
-      ↓
-remote candidates
-      ↓
-normalized repo identity
-      ↓
-Scratchpad project resolution
-```
-
-Example equivalent remotes:
-
-```text
-git@github.com:alexcatdad/scratchpad.git
-https://github.com/alexcatdad/scratchpad.git
-```
-
-normalize to the same project source identity:
-
-```text
-github.com/alexcatdad/scratchpad
-```
-
-The API maps that source identity to a stable internal project ID.
-
----
-
-### 5.2 Worktrees
-
-Multiple worktrees for the same repository map to one project.
-
-The individual record preserves:
-
-- branch;
-- commit;
-- worktree path or identifier where useful.
-
-Worktree identity never creates a new project automatically.
-
----
-
-### 5.3 Multiple remotes
-
-The MCP should use deterministic rules where possible.
-
-Suggested priority:
-
-1. `origin`;
-2. unique fetch remote;
-3. unique push remote;
-4. otherwise report ambiguity.
-
-If competing remotes could represent different projects, the MCP must not guess.
-
-It reports structured ambiguity to the agent.
-
-The agent asks the user.
-
----
-
-### 5.4 Non-Git environments
-
-Resolution hints, in order:
-
-1. known project manifest;
-2. package/project name;
-3. current directory name.
-
-These are weak identities.
-
-If the API cannot resolve them safely, it returns:
-
-```text
-PROJECT_IDENTITY_REQUIRED
-```
-
-The agent asks the user for a project name and retries.
-
----
-
-## 6. Authentication Architecture
-
-Scratchpad has one owner with multiple possible credentials.
-
-Credentials authenticate the owner, not separate user accounts.
-
----
-
-### 6.1 MCP authentication
-
-Preferred mechanism:
-
-```text
-MCP → request challenge
-API → versioned challenge with recipient, purpose and expiry
-MCP → signs canonical challenge using developer key
-API → verifies enrolled public key
-API → issues short-lived bearer token
-```
-
-The private key never enters the Scratchpad server.
-
-Potential credential sources:
-
-- existing SSH signing key;
-- SSH authentication key;
-- hardware-backed SSH key;
-- Scratchpad-generated local identity key as fallback.
-
----
-
-### 6.2 Browser authentication
-
-Use WebAuthn/passkeys.
-
-No password requirement.
-
-Browser authentication flow:
-
-```text
-browser
-  ↓
-WebAuthn challenge
-  ↓
-Touch ID / security key / passkey
-  ↓
-verified owner
-  ↓
-server-side session
-```
-
-Sessions use secure HTTP-only cookies.
-
----
-
-### 6.3 GitHub
-
-GitHub optionally authenticates the owner through a verified stable account
-binding, as specified in §32. Independent passkeys and administrator recovery
-remain available. A public GitHub profile snapshot grants no authentication
-authority and may enrich presentation with:
-
-- username;
-- avatar;
-- display name;
-- profile link;
-- public identity metadata.
-
-GitHub profile linkage must be visually distinct from authenticated identity.
-
----
-
-## 7. Stateful Application Model
-
-Scratchpad is a stateful application.
-
-Persistent state includes:
-
-- records;
-- projects;
-- revisions;
-- settings;
-- credentials;
-- sessions;
-- authentication challenges;
-- jobs;
-- derived data.
-
-The application process itself must be restart-safe.
-
-Required correctness must never depend solely on process memory.
-
-In-memory caching is allowed only when losing the cache changes performance rather than correctness.
-
----
-
-## 8. Record Architecture
-
-Scratchpad separates:
-
-```text
-RAW KNOWLEDGE
-      ↓
-CURATED KNOWLEDGE
-      ↓
-DERIVED KNOWLEDGE
-```
-
----
-
-### 8.1 Raw knowledge
-
-Raw captured records are immutable.
-
-Examples:
-
-- an explicit user decision;
-- an agent observation;
-- a failure;
-- a Q&A;
-- project state.
-
-Raw content is never automatically rewritten.
-
----
-
-### 8.2 Curated knowledge
-
-Human-curatable representations may include:
-
-- corrected titles;
-- tags;
-- relationships;
-- classifications;
-- summaries.
-
-Changes are mutable but fully audited.
-
----
-
-### 8.3 Derived knowledge
-
-Generated/rebuildable information includes:
-
-- embeddings;
-- clusters;
-- AI summaries;
-- similarity matches;
-- pattern suggestions;
-- duplicate candidates;
-- recommendation candidates.
-
-Derived data can be deleted and regenerated without losing authoritative history.
-
----
-
-## 9. Record Types
-
-V1 supports distinct types:
-
-```text
-decision
-adr
-business_decision
-finding
-qa
-failure
-constraint
-project_state
-```
-
-All share a common record envelope while supporting type-specific payloads.
-
----
-
-## 10. Dual-Write Architecture
-
-Central Scratchpad storage is authoritative.
-
-Repository writes are optional mirrors.
-
-Default repo-eligible types:
-
-```text
-decision
-adr
-business_decision
-```
-
-The MCP performs repository writes because it has direct local filesystem access.
-
-Flow:
-
-```text
-agent
-  ↓
-MCP
-  ├── central API write
-  └── optional repository write
-```
-
-The central record records whether repo mirroring succeeded.
-
-Repo-write failure must not destroy a successfully created central record.
-
-The API and MCP should return partial-success information clearly.
-
----
-
-## 11. Repository Mirror Format
-
-V1 should use a simple append-friendly structured format.
-
-Recommended initial representation:
-
-```text
-scratchpad/decisions.jsonl
-```
-
-or an equivalent configurable repository path.
-
-Each mirrored record contains:
-
-- stable Scratchpad record ID;
-- type;
-- title;
-- decision content;
-- rationale where applicable;
-- recorded date;
-- central provenance reference where practical.
-
-The repository representation is a mirror, not a second authority.
-
-Two-way synchronization is out of scope.
-
----
-
-## 12. Search Architecture
-
-Search has three levels.
-
-### 12.1 Structured filtering
-
-Always available.
-
-Filters include:
-
-- project;
-- type;
-- date;
-- tag;
-- source;
-- branch;
-- status;
-- relationship.
-
----
-
-### 12.2 Full-text search
-
-Always available.
-
-SQLite:
-
-```text
-FTS5
-```
-
-PostgreSQL:
-
-```text
-native full-text search
-```
-
----
-
-### 12.3 Semantic search
-
-Optional.
-
-Requires embeddings.
-
-Must not replace deterministic full-text search.
-
-Semantic results are derived search results.
-
----
-
-## 13. Background Jobs
-
-No Redis or external queue is required.
-
-Jobs are persisted in the application database.
-
-Conceptual schema:
-
-```text
-id
-type
-status
-payload
-run_after
-attempts
-started_at
-completed_at
-last_error
-created_at
-updated_at
-```
-
-A scheduler identifies runnable jobs.
-
-A worker leases and executes them.
-
-For V1, scheduler and worker may run inside the same application process.
-
-The job model must permit separating the worker later without schema redesign.
-
----
-
-## 14. Optional AI Architecture
-
-The AI layer uses an internal provider interface.
-
-Conceptually:
-
-```ts
-interface CompletionProvider {
-  complete(input: CompletionInput): Promise<CompletionResult>;
-}
-
-interface EmbeddingProvider {
-  embed(input: string[]): Promise<number[][]>;
-}
-```
-
-V1 supports OpenAI-compatible endpoints.
-
-Primary expected local use:
-
-```text
-LM Studio
-```
-
-Other compatible implementations may work without dedicated adapters.
-
----
-
-## 15. AI Safety Boundary
-
-AI processing may produce suggestions.
-
-It may not automatically:
-
-- delete raw data;
-- modify raw data;
-- mark a human decision accepted;
-- supersede a decision;
-- merge historical evidence destructively.
-
-AI output must include:
-
-- derivation metadata;
-- source record IDs;
-- model/provider metadata where useful;
-- generation timestamp.
-
----
-
-## 16. Cross-Project Analysis
-
-Cross-project analysis is an optional project capability.
-
-Per-project configuration:
-
-```text
-crossProjectAnalysis: enabled | disabled
-```
-
-External/client projects default to disabled.
-
-Cross-project jobs must filter out projects that do not permit participation before providing records to the model or similarity layer.
-
----
-
-## 17. Dashboard Architecture
-
-Primary screens expected for V1:
-
-```text
-/
-  overview
-
-/projects
-/projects/:id
-/projects/:id/records
-/projects/:id/settings
-
-/records/:id
-
-/search
-
-/settings
-/settings/auth
-/settings/ai
-/settings/export
-```
-
-Exact information architecture may evolve.
-
----
-
-## 18. Deployment Architecture
-
-### 18.1 SQLite deployment
-
-Minimum:
-
-```text
-Scratchpad container
-└── /data/scratchpad.sqlite
-```
-
-One image.
-
-One volume.
-
-No supporting service required.
-
----
-
-### 18.2 PostgreSQL deployment
-
-```text
-Scratchpad container
-      ↓
-PostgreSQL
-```
-
-Optional local LLM remains independent.
-
----
-
-### 18.3 AI-enabled deployment
-
-Example:
-
-```text
-Scratchpad
-   ↓
-LM Studio OpenAI-compatible endpoint
-```
-
-Scratchpad must remain healthy if the LLM endpoint is unavailable.
-
-AI jobs should fail/retry independently.
-
----
-
-## 19. CI
-
-GitHub Actions is used for Scratchpad itself.
-
-PR CI:
-
-```text
-TypeScript:
-- lint
-- typecheck
-- test
-- build
-
-Go:
-- fmt verification
-- lint
-- test
-- race tests where appropriate
-- govulncheck
-- build
-```
-
----
-
-## 20. Releases
-
-A release produces two independent deliverables.
-
-### Application
-
-```text
-ghcr.io/alexcatdad/scratchpad:<version>
-```
-
-### MCP
-
-GitHub Release binaries:
-
-```text
-scratchpad-mcp-darwin-arm64
-scratchpad-mcp-darwin-amd64
-scratchpad-mcp-linux-amd64
-scratchpad-mcp-linux-arm64
-```
-
-Plus:
-
-```text
-checksums.txt
-```
-
-macOS binaries are Developer ID signed and notarized locally by the owner. A draft release transfers those artifacts to CI, which verifies the expected signing team, Apple trust assessment, source revision, checksums, and rebuilt executable content before publication. Apple signing credentials remain in the local Keychain.
-
-The existing Homebrew tap is automatically updated.
-
----
-
-## 21. Source Repository Structure
-
-Recommended initial structure:
-
-```text
-scratchpad/
-├── apps/
-│   └── web/
-│       ├── app/
-│       ├── routes/
-│       ├── server/
-│       └── ...
-│
-├── mcp/
-│   ├── cmd/
-│   │   └── scratchpad-mcp/
-│   ├── internal/
-│   │   ├── api/
-│   │   ├── auth/
-│   │   ├── gitctx/
-│   │   ├── mirror/
-│   │   └── project/
-│   ├── go.mod
-│   └── go.sum
-│
-├── packages/
-│   ├── db/
-│   ├── domain/
-│   └── ai/
-│
-├── migrations/
-├── docs/
-│   ├── architecture.md
-│   ├── api.md
-│   └── decisions/
-│
-├── Dockerfile
-├── compose.yaml
-└── README.md
-```
-
-Go and TypeScript remain separate build domains.
-
-The API contract is their integration boundary.
-
----
-
-## 22. Architectural Constraints
-
-The following should remain true unless explicitly superseded:
-
-1. Scratchpad remains usable without AI.
-2. Scratchpad remains usable without PostgreSQL.
-3. Git is not the primary datastore.
-4. Raw captured records remain immutable.
-5. The MCP remains a thin local-integration layer.
-6. Business logic remains server-side.
-7. Repository mirroring remains optional.
-8. Project discovery normally requires no manual MCP project configuration.
-9. Browser and MCP authentication remain independent mechanisms.
-10. No enterprise multi-user architecture is required for V1.
-11. No external queue/cache/vector service is required for V1.
-12. Restarting the server must not lose required state.
-
----
-
-## 23. First Vertical Slice
-
-Implementation should first prove:
-
-```text
-agent
-→ stdio MCP
-→ detect Git repo
-→ authenticate
-→ POST record
-→ SQLite
-→ dashboard shows record
-```
-
-Before implementing:
-
-- embeddings;
-- AI cleanup;
-- Postgres;
-- pattern detection;
-- complex summaries.
-
-This vertical slice proves the central product architecture.
-
-## 24. Accepted clarification — owner enrollment and recovery
-
-Accepted by the owner on 2026-09-29 (decision `scratchpad-20260929-010`). This section supplements the supplied v0.1 baseline.
-
-- Use browser-first enrollment. An administrator command inside the container generates a short-lived, single-use setup token.
-- The owner opens the setup page at the configured public URL, presents the token, and registers the first passkey. Initial setup is disabled after enrollment.
-- Use SimpleWebAuthn for browser registration/authentication verification. Exact dependencies are verified and pinned during implementation.
-- Enroll additional passkeys and MCP public keys through the authenticated dashboard. MCP key enrollment requires proof of possession via a signed challenge; private keys remain local.
-- Lost-credential recovery uses a separate administrator command inside the container to authorize replacement-passkey registration. Recovery is explicit and audited, preserves project data, and does not reopen ordinary first-time setup.
-- Server administrative access is the recovery authority; no email delivery or external identity provider is required.
-
-Exact command names, endpoints, token lifetimes, and existing-session handling on recovery remain implementation details. This approval does not yet select the MCP signature encoding or token lifetime.
-
-## 25. Accepted clarification — simple MCP sessions
-
-Accepted on 2026-09-29 (decision `scratchpad-20260929-011`).
-
-The server issues a random, short-lived, single-use challenge. MCP signs it with an enrolled key; successful verification returns a session token. The session lasts up to 24 hours and the client keeps its token in MCP process memory. MCP restart requires authentication again. Credential revocation immediately invalidates associated sessions. No refresh-token mechanism is required initially.
-
-Server-side session validity and revocation state remain persistent and restart-safe, consistent with §7. Client memory storage does not imply server process-local session authority.
-
-This replaces the earlier unaccepted 15-minute-token proposal. Exact signature encoding, signed fields, challenge lifetime, and server token representation remain engineering details; the two-minute challenge suggestion was not adopted as a requirement.
-
-## 26. Accepted clarification — MCP working directory
-
-Accepted on 2026-09-29 (decision `scratchpad-20260929-012`).
-
-Use the MCP process launch directory as the default discovery context. Project-scoped tool calls may supply an optional `workingDirectory` override when the agent is operating elsewhere. The override applies to that call; it does not change a shared current-project setting. Resolve Git/project identity from the selected directory using the existing discovery rules and include the resolved project in results. Missing or ambiguous project identity still produces structured resolution errors. Stdio transport alone is not a guarantee that a client launches the server in the active project folder.
-
-The earlier proposal to require a directory on every call was not adopted.
-
-## 27. Accepted clarification — flexible typed capture
-
-Accepted on 2026-09-29 (decision `scratchpad-20260929-013`).
-
-Keep explicit typed MCP capture tools, with natural fields such as decision/rationale or question/answer. Persist their submitted fields as immutable payload plus common metadata. Generate readable content deterministically from those fields, without AI or requiring the caller to compose duplicate text. Server-owned IDs, receipt timestamps, and authenticated credential identity are assigned by the server; descriptive source attribution remains distinguishable from verified identity. Use the resolved project ID for both Git and non-Git record creation.
-
-Treat the initial payload shapes as an evolving starting point. Keep required fields minimal, add optional structure as real usage warrants, and preserve original captures when schemas or renderers evolve. Historical records must remain readable without rewriting raw evidence to satisfy a newer shape. Avoid freezing a comprehensive taxonomy or building a dynamic schema platform in advance of demonstrated needs. Exact schema-versioning and compatibility mechanics remain implementation details.
-
-## 28. Accepted clarification — retries and concurrent edits
-
-Accepted on 2026-09-29 (decision `scratchpad-20260929-014`). Retrying the same capture with the same request identity and content returns the existing record. Reusing that identity with changed content produces a conflict. Separate intentional captures remain separate even when text matches; do not perform automatic content-based deduplication.
-
-Mutable edits must detect stale revisions and return a conflict rather than silently overwrite intervening changes. No automatic merge is required. Raw captures remain immutable. Persist retry state as required by the API baseline; exact key scope, comparison rules, retention, and concurrency representation remain implementation details.
-
-## 29. Accepted clarification — simple local mirroring
-
-Accepted on 2026-09-29 (decision `scratchpad-20260929-015`).
-
-- Mirror only when both local MCP configuration and server-owned project settings permit it. Default eligible types remain `decision`, `adr`, and `business_decision`.
-- Persist centrally first, then append eligible captures to the repository JSONL file.
-- If the local write fails, keep the central record and report “saved centrally; mirror failed.” A retry must not duplicate either the central record or its local mirror.
-- Mirroring covers captures made through that MCP instance into its selected checkout. No automatic browser-to-repository synchronization is required.
-- Never automatically commit or push mirrored files.
-
-The central API remains authoritative. Exact append coordination and mirror-result reporting are implementation details to resolve when building mirroring.
-
-## 30. Accepted clarification — durable local tray capture
-
-Typed capture requests enter the private local capture service before the MCP
-acknowledges them. The service durably stores immutable payload, stable caller
-request identity, per-call project/Git snapshot and optional RFC3339Nano
-`clientSavedAt`; `recordedAt` remains server-owned and separate. Delivery
-re-authenticates the pinned server and SSH credential, records the authenticated
-credential identity before any possible server commit, and retries with that
-identity and request content. Re-enrolling the same key cannot silently change
-the retry scope.
-
-Central delivery requires `clientSavedAt-v1` in authenticated verification
-before resolving or submitting a capture. Older servers block delivery and
-retain the capture; local intake remains available without authentication or
-network access. Explicit tray verification performs an authenticated `GET
-/projects` read with the verified session before reporting connected. Periodic
-health probes perform authentication only. There is no direct MCP-to-server
-capture fallback if the service is unavailable or stopped. A stopped service
-rejects new intake. Pending responses expose a local receipt without
-inventing a central ID. Delivered responses expose durable central record and
-project IDs; full record/project/mirror objects are optional after a service
-restart. `get_record` remains the way to retrieve a central record. Search and
-non-capture mutations remain online-only.
-
-Pause prevents new delivery and retains queued items; Stop prevents new intake
-and delivery while preserving recoverable queue data. Configuration changes
-apply to new intake; existing queue items remain pinned to their original
-server and credential fingerprint. Repository mirroring remains optional and
-follows central success.
-
-## 31. Remaining-product implementation
-
-The source implementation extends the SQLite MVP with optional PostgreSQL, database-backed AI processing and intentional private document generation. Published v0.1.3 packages retain their original SQLite-only feature set; source support, canonical CI, release publication and deployment acceptance are separate evidence.
-
-### Persistence
-
-The supported TypeScript runtime uses an asynchronous Drizzle Store boundary
-with SQLite or PostgreSQL. The Go replacement uses its own database boundary and
-ordered migrations while preserving existing source history and contracts.
-`SCRATCHPAD_DATABASE_URL` selects PostgreSQL; otherwise SQLite remains the default.
-Domain behavior, authentication, retries, auditing and optimistic edits stay in the
-central server. Database-native full-text facilities implement deterministic
-retrieval. SQLite remains one file/volume; PostgreSQL requires a dedicated
-application database and its own operational backup tooling. Native export/import
-provides knowledge portability, not transparent live migration or credential
-migration.
-
-### Optional processing
-
-OpenAI-compatible completion and embedding adapters operate independently of core capture/search/readiness. Provider configuration is owner-controlled in the dashboard; global enablement alone does not authorize processing a project. Each project opts into AI, and cross-project analysis additionally requires its separate permission. External/client projects default to both permissions disabled. Consent is rechecked before provider requests, before persistence and when retrieving derived results.
-
-Jobs and schedules are database entities, with runnable time, attempt counts, leases and bounded failure/retry handling. The scheduler/worker currently runs inside the server process and can recover abandoned leased jobs after restart. No Redis or dedicated vector service is required. Embeddings store finite vectors together with source identity, model, dimensions and configuration fingerprint; incompatible or stale indexes cannot participate in similarity search.
-
-### Derivation and review
-
-Schema-validated completions produce source-linked summaries, classifications, duplicate/relationship/contradiction candidates, topic clusters, patterns and cleanup recommendations. Source record content is untrusted input, not instructions for the worker. Artifact review records an audit event and can create curated interpretation or an explicitly reviewed relationship/classification; original captures and historical lifecycle evidence remain immutable.
-
-The dashboard exposes provider/model/schedule/analysis settings, project participation, job visibility, semantic search, suggestion review and five private Markdown document formats. The MCP exposes server-backed processing, semantic retrieval, job inspection and document requests without duplicating provider business logic. The owner intentionally downloads and shares derived documents; generation never publishes the private instance.
-
-### Operations and evidence
-
-Portable knowledge exports include source/audit/derived knowledge and owner presentation, excluding authentication state, provider secrets, jobs and embeddings. Full operational backups preserve the entire selected database: SQLite's administrator snapshot command or PostgreSQL's `pg_dump`/`pg_restore`. Follow the respective runbooks and verify a restore in a disposable environment.
-
-Mock-provider browser acceptance proves application wiring, consent boundaries, review, downloads and failure isolation. Real selected-provider acceptance separately proves model interoperability and source-linked output. Neither substitutes for the other or for exact-revision canonical CI/release verification. Track final evidence in the remaining-product ledger.
-
-## 31. Optional extensions
-
-The owner requested these additions on 2 October 2026. PostgreSQL may explicitly opt into pgvector through `SCRATCHPAD_PGVECTOR=true`; the operator installs the extension in the application database. SQLite retains its existing comparator. A derived secondary vector table supports native exact cosine search after candidate eligibility checks. The original JSON embedding remains authoritative for rebuilds and precision preservation. Native vector float32 representation can differ slightly from the original JavaScript numbers; unsupported native vectors retain the existing comparator rather than being truncated. Approximate indexes are not enabled implicitly.
-
-Public GitHub profile enrichment uses the fixed public GitHub user API with bounded requests. An authenticated owner selects a username; the server stores a validated public snapshot separately from authentication state. Link, refresh and unlink use optimistic profile versioning and audited writes. GitHub downtime does not affect capture, sign-in or readiness.
-
-Generated TypeScript and Go clients are derived from OpenAPI, with deterministic regeneration and actual authenticated HTTP integration. Their source and build artifacts are independently consumable. They do not replace the MCP SDK or its HTTP compatibility boundary.
-
-## 32. Accepted clarification — GitHub owner authentication
-
-The accepted [owner-access ADR](adr/0001-github-owner-access.md) supersedes the presentation-only GitHub restriction in §6.3 and §31. GitHub OAuth browser authentication is optional alongside passkeys; both authenticate the same owner. The existing local SSH challenge remains the MCP boundary. A verified GitHub account binding and its synchronized SSH authentication/signing keys provide machine eligibility; an old public profile snapshot grants no authority.
-
-The central server owns OAuth state, account binding, synchronization and authorization. Persist stable GitHub account identity, complete normalized key snapshots, last-success time, local blocks, credential provenance and sessions in the selected database. Fetch both paginated categories completely before applying removals or advancing freshness. A failed endpoint/page or malformed response is a failed refresh, not an empty key set. Restart preserves freshness and blocks. Local blocking, detected removal and the 24-hour cache deadline apply to existing requests as well as new authentication.
-
-Synchronization runs every five minutes; public-key discovery does not require private GitHub repository access. Browser OAuth state is short-lived, single-use and bound to its initiating browser and action. Verify identity on the server through GitHub before binding/signing in; bind stable account ID rather than username. Keep authorization codes, OAuth secrets and tokens out of logs, public API responses and knowledge exports. Fixed GitHub endpoints and bounded response/pagination handling contain the external-service boundary.
-
-GitHub outages leave complete cached keys usable for at most 24 hours since last success, independently of the machine session's lifetime. Browser sign-in requires GitHub; independent passkeys and administrator recovery remain available. Unlinking requires fresh independent authentication; replacement requires fresh existing authentication. Both invalidate GitHub-derived sessions and permissions and preserve data and independent credentials. Do not silently convert credential provenance.
-
-Machine onboarding is an instruction-only skill using existing client configuration and SSH tooling. It verifies a real authenticated MCP read with explicit project scope. The HTTP API remains authoritative; no dedicated setup command, client OAuth secret or new machine authentication mechanism is introduced.
-
-## Accepted clarification: non-executing checkout discovery (2026-10-09)
-
-MCP checkout discovery requires a trusted installed Git 2.36 or later, disables core.fsmonitor, submodule recursion and status submodule summaries for every provenance command, and explicitly ignores submodule changes in status. Repository-selected filesystem monitor programs are never invoked by memory discovery. This preserves parent repository identity, branch, commit, root and parent worktree dirtiness; nested submodule dirtiness is intentionally outside the provenance snapshot. Unsupported or unparseable Git versions fail before inspecting the checkout. Explicit project IDs do not authorize running checkout helpers. Scope-only reads and AI operations with explicit IDs skip discovery; capture invocations retain trusted Git provenance and optional mirroring under the existing capture contract.
-
-### Accepted clarification: production request log privacy (2026-10-09)
-
-The production server entry point logs request method, pathname, response status and elapsed milliseconds without query strings, headers or bodies. Dashboard search terms and filters remain private input. Unhandled request errors produce fixed diagnostics rather than arbitrary exception text. Use the package start command and the same entry point in container/browser verification; the generic development/runtime CLI's full-URL logger does not provide this contract.
-
-## Accepted clarification: private SQLite storage
-
-Issue #21 requires owner-only live SQLite storage before opening the database. Startup creates private new storage and refuses unsafe existing directory/file ownership, mode, links or macOS ACLs with repair guidance. Backup directories follow the same boundary; unrelated parent directories are not modified. Runtime UID peers and administrators remain trusted. See [the storage runbook](runbooks/security-21-private-sqlite.md); PostgreSQL selection remains independent.
-
-## Go backend replacement in progress (issue 36)
-
-The Go RAG prerequisite interface uses `SCRATCHPAD_RAG_ENABLED` and authenticated
-`GET /api/v1/rag/status`. It checks the current application-schema pgvector
-extension without provisioning it, and preserves ordinary memory when unavailable.
-The Go backend also implements per-record leased passage indexing, independent
-embedding compatibility, versioned rebuild and bounded native semantic evidence.
-Automatic capture enqueue and eligible-history reconciliation are implemented.
-Bounded passage rank fusion and lexical outage/index fallback are implemented.
-Healthy partial-index retrieval merges raw lexical evidence before passage deduplication, rank fusion and budget selection. Retrieval evaluation remains incomplete. The stdio evidence tool is implemented. See [the RAG runbook](runbooks/go-rag.md).
-
-The accepted replacement direction is tracked in [issue 36](https://github.com/alexcatdad/scratchpad/issues/36). The separate `backend` Go executable currently implements migration/startup, recipient-bound SSH login, passkey setup/enrollment, discoverable login, administrator recovery, session logout, local SSH enrollment, credential revocation, project resolution/settings/versioned updates, immutable capture with durable retry identities, filtered lexical listing/search, deterministic project context, metadata/evidence/mirror and relationship curation, owner profile/public-GitHub presentation, native knowledge export/import, legacy JSONL import, schema-preserving online SQLite backup, encrypted AI configuration/provider verification, global settings, durable AI job enqueue/list/retry controls, recoverable embedding execution and legacy semantic retrieval, source/privacy-checked suggestion listing and review, leased analysis and private document generation, durable consent-aware scheduling, question-only captures and applicable linked-answer context, explicit bounded version-2 context, GitHub OAuth and published SSH-key synchronization, and authenticated record-detail reads, including restored sessions. GitHub access retains stable account identity, complete paginated authentication/signing-key snapshots, persistent local blocks, independent-credential unlinking and generation-based revocation. A bounded refresh worker checks persisted attempts every 30 seconds and refreshes due bindings after five minutes; failed synchronization never extends the 24-hour complete-cache lifetime. The existing TypeScript application remains the supported runtime until full behavioral parity is verified. Its schema-1 format is recognized by Go; Go migration 2 adds an entity ordering index, and migration 3 adds an atomically maintained context-header projection for selection before source-body hydration. Neither rewrites captures. The TypeScript executable refuses schema 2 and schema 3, so rollback requires the pre-upgrade schema-1 backup. See [the migration runbook](runbooks/go-backend-migrations.md) for implemented boundaries, verification and operational limits. Provider API keys now use versioned authenticated encryption with a retained deployment key file; legacy conversion is tracked independently of schema migration. Further retrieval evaluation, focused-query/performance work and full delivery acceptance remain required subsequent work. Compact context and question contracts are documented in the [context runbook](runbooks/go-context.md).
-
-The retained React dashboard can now be rendered by an optional private Node
-process in explicit UI-only mode, with Go owning the public origin and all API,
-health, readiness and authentication routes. Dashboard GET/HEAD requests use a
-fixed loopback renderer; credentials and forwarding identity are stripped, and
-renderer cookies cannot override Go sessions. UI-only mode refuses TypeScript
-backend initialization. The real browser workflow verifies enrollment, project
-creation, capture, record inspection and API availability after renderer shutdown.
-This same-host integration does not establish full dashboard parity or container
-cutover. See the [dashboard runbook](runbooks/go-dashboard.md).
-
-An opt-in Docker `go-runtime` target packages Go with the retained renderer and a
-launcher that forwards administrative commands, drains both serving processes on
-termination and stops the companion on child failure. The final default image
-continues to run TypeScript. Actual locally built image verification covers
-browser enrollment, capture, online SQLite backup and fresh-volume restoration;
-full release and rollback acceptance remains separate. See the
-[Go container runbook](runbooks/go-container.md).
-
-## Accepted clarification: app-owned MCP connection
-
-The bundled MCP is a local client of the app's collector. Coding tools need
-only its executable path. Server URL, SSH-key references, authentication and
-HTTP sessions belong to the collector; legacy MCP connection environment values
-are ignored. Checkout discovery and explicit repository mirror consent remain
-local to the invoking MCP. All capture types use durable intake. Reads, project
-resolution and existing optional AI operations use an allowlisted collector IPC
-request, with bounded execution and response size. No direct-server fallback
-exists when the collector is unavailable. Offline reads report unavailability;
-pending captures retain their original server and credential binding.
-
-## Accepted clarification: Homebrew-managed macOS app updates
-
-The macOS app is installed and upgraded through a Homebrew cask in the project tap. This replaces the earlier in-app updater direction: no Sparkle dependency, appcast, update-signing key or in-app update controls are required. Developer ID signing and notarization remain required. Upgrade acceptance must preserve the durable queue, credentials and settings and verify the updated collector starts. Cask publication and installed upgrade validation remain separate release work.
+The `backend` module is the authoritative implementation of application behavior.
+The Go process owns the public origin, `/api/v1`, `/health`, `/ready`, migrations,
+authentication, projects, captures, curation, audit, imports/exports and optional
+AI jobs. The default container and `npm run dev` select Go. The private renderer
+runs with `SCRATCHPAD_UI_ONLY=true`; it must not initialize a database or implement
+application behavior. Go strips credentials and forwarding identity before
+proxying dashboard GET/HEAD requests and prevents renderer cookies from replacing
+Go sessions. Renderer failure leaves the API available.
+
+The TypeScript implementation remains a temporary compatibility/rollback test
+reference while retirement acceptance is completed. It is not the default
+runtime. Its schema-1 restriction makes it unsuitable for running against a
+Go-upgraded database. Removing it requires preserved behavior-focused tests,
+including restored authentication, numeric import identity and old-schema refusal.
+Track that gate in the [P0 acceptance ledger](runbooks/p0-consolidation.md).
+
+The native macOS SwiftUI app manages collector configuration, credentials and
+lifecycle. Homebrew cask updates replace the earlier in-app updater direction;
+Developer ID signing, notarization and installed-upgrade acceptance remain
+required. The command-only bundled MCP receives operation results from the
+collector, never private keys or session tokens.
+
+## Identity and authorization
+
+One installation has one owner and multiple credentials. Independent passkeys,
+administrator setup/recovery, optional GitHub OAuth and manually enrolled SSH
+keys authenticate that owner. Git names and public profile snapshots are
+presentation only. The [owner-access ADR](adr/0001-github-owner-access.md) governs
+verified GitHub identity and synchronized published SSH keys.
+
+Browser sessions use HttpOnly, SameSite=Strict cookies with Secure on HTTPS.
+Machine sessions follow recipient-bound OpenSSH SSHSIG proof v2 and expire within
+24 hours. Challenges and hashed sessions persist through restart; revocation,
+credential provenance and local blocks are checked on every request. GitHub keys
+require complete authentication/signing-key snapshots every five minutes and
+expire 24 hours after the last complete successful refresh. Failed refreshes and
+restarts never extend freshness. Independent credentials and recovery remain
+available when GitHub is unavailable.
+
+The public origin must remain stable for passkeys and proof recipients. Neither
+Git transport credentials nor personal access tokens substitute for Scratchpad
+proof. The central server never receives client private keys. See
+[authentication operations](runbooks/github-oauth.md) and the
+[migration contract](runbooks/go-backend-migrations.md).
+
+## Captures, local delivery and provenance
+
+All eight typed captures enter the collector's private encrypted durable queue
+before acknowledgment. `saved_pending` means local intake with a receipt and no
+invented central ID; `delivered` retains central project/record IDs. Local intake
+works offline, while reads and non-capture operations require the central API.
+There is no direct-server capture fallback when the collector is unavailable.
+
+Delivery remains pinned to the original server, credential fingerprint, request
+identity, client save time and per-call checkout context. Authentication must
+advertise `clientSavedAt-v1` before central capture. Same identity and content
+replay the original capture; changed content conflicts. Separate intentional
+captures remain separate even when their text matches.
+
+Raw input, payloads, source claims, timestamps and provenance stay immutable.
+Server-assigned actor identity remains distinct from descriptive attribution.
+Curation creates revisions/audits; derived knowledge cites sources and never
+becomes an explicit decision automatically. Unknown historical payload fields
+and exact JSON numbers survive supported import/export and retrieval.
+
+Worktrees share normalized repository project identity while retaining checkout,
+branch and commit provenance. Git discovery uses trusted Git with executable
+repository hooks such as filesystem monitors disabled. Non-Git and ambiguous
+identities require explicit resolution. Optional repository mirrors require
+saved local consent and project permission, occur after central persistence,
+report failure independently and never commit or push automatically.
+
+## Persistence and migrations
+
+SQLite is the default: owner-private file/directory storage, WAL and bounded
+connections. PostgreSQL is optional with a dedicated application database and
+bounded pool. Both implement the same domain contracts. Full-text search uses
+SQLite FTS5 or PostgreSQL native facilities; ordinary memory needs neither AI nor
+pgvector. Export/import provides knowledge portability, not live engine migration
+or credential migration.
+
+Go recognizes historical schema 1. Ordered transactional migration 2 adds entity
+ordering and migration 3 adds indexed, trigger-maintained context headers.
+Optional PostgreSQL passage projections have their own prerequisites. Startup
+serializes migrations (`BEGIN IMMEDIATE` on SQLite and the shared transaction
+advisory lock on PostgreSQL), validates installed objects and refuses malformed
+or unsupported schemas without automatic repair. Migration markers and DDL commit
+together. Raw captures are not rewritten.
+
+An application role that does not own PostgreSQL tables cannot apply DDL. Run the
+image's `scratchpad-server migrate` with the explicitly scoped migration role
+before rollout, then serve with the ordinary application role. Readiness proves
+core storage/schema availability; it does not assert provider health, indexing
+coverage or complete application acceptance.
+
+The TypeScript schema-1 executable refuses Go schemas 2/3. Rollback to that
+artifact requires the verified pre-upgrade database snapshot, the retained
+installation key and the old artifact. Never delete migration markers or run old
+and new runtimes against the upgraded database. See
+[upgrade and recovery](runbooks/go-backend-migrations.md).
+
+## Optional AI and retrieval
+
+Database-backed leased jobs implement analysis, embeddings, private documents,
+schedules, restart recovery and bounded retries without Redis. Owner settings
+and per-project participation gate dispatch, persistence and retrieval. External
+projects default to AI and cross-project participation disabled. Configuration
+changes fence subsequent requests and discard incompatible outputs.
+
+Provider secrets use versioned authenticated encryption with a separately retained
+protected key file, `SCRATCHPAD_ENCRYPTION_KEY_FILE`. Never silently replace an
+installation key. Legacy plaintext conversion is separately reportable from
+schema upgrades. Missing/wrong keys block secret-dependent operations without
+plaintext fallback; ordinary memory and providers needing no token remain usable.
+Backups of encrypted settings require the same key. See
+[secret recovery](runbooks/go-secret-configuration.md).
+
+SQLite and PostgreSQL retain whole-record semantic search. Optional PostgreSQL
+passage RAG uses operator-installed pgvector and `SCRATCHPAD_RAG_ENABLED=true`.
+Durable per-record jobs index eligible history/new captures asynchronously.
+Passages, source hashes, UTF-16 locations and vectors are rebuildable derivatives;
+immutable captures remain authoritative. Changing completion models preserves
+compatible embedding generations.
+
+`retrieve_evidence` forwards bounded `/rag/retrieve` requests. Retrieval combines
+bounded lexical and exact semantic candidates through reciprocal rank fusion,
+deduplicates passages, applies live lifecycle/consent, and returns citations plus
+omission and coverage information. Lexical fallback handles provider/index
+unavailability. Explicit cross-project intent never overrides participation.
+Scores do not establish authority. See [RAG operations](runbooks/go-rag.md) and
+[compact context](runbooks/go-context.md).
+
+## Delivery and operational ownership
+
+Scratchpad owns its images, application manifests, workflows, migrations,
+credential-file interface and upgrade/backup/restore/rollback procedures. Generic
+cluster networking, storage provisioning, secret management and access policy
+remain platform responsibilities. Existing databases, persistent volumes,
+credentials, origins and installation keys must survive adoption.
+
+Container publication, code merge and live production rollout are distinct.
+Production migration/cutover requires reviewed operator authorization and a
+verified disposable restore. Restoring a pre-upgrade snapshot loses subsequent
+writes, so define the maintenance/write-admission boundary before cutover.
+[Deployment procedures](runbooks/homelab-deploy.md) own the executable steps.
+
+GitHub Actions is the canonical runner for Go race/vet/build, HTTP/MCP parity,
+frontend/docs/SDK checks, PostgreSQL 18, pgvector, container restore and macOS
+packaging. Local tests, canonical CI, published artifacts and deployed acceptance
+are separate claims. [P0 evidence](runbooks/p0-consolidation.md) records outstanding
+gates without implying acceptance from compilation alone.
+
+## Planned enterprise architecture — P1
+
+The following is planned and is not implemented authorization:
+
+- GitHub App user identity and repository installation integration;
+- multiple users, teams, organizations and project membership;
+- per-project read/write/administration authorization;
+- agent credentials bound to an individual user's eligible authority;
+- permission-aware search, exports, context and RAG, including derived inputs.
+
+Existing owner OAuth and published-key synchronization do not provide these
+capabilities. Future repository permissions need stable GitHub IDs, explicit
+Scratchpad enforcement, bounded revalidation and revocation, transfer/removal
+handling, and explicit sharing of previously personal history. No enterprise
+RBAC, GitHub App migration or new RAG feature is part of P0.

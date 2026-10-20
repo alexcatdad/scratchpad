@@ -11,3 +11,5 @@ data
 !.env.example
 playwright-report
 test-results
+
+session-progress

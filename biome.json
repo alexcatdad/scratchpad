@@ -16,7 +16,8 @@
       "!**/routeTree.gen.ts",
       "!**/go.sum",
       "!**/package-lock.json",
-      "!packages/clients/typescript/schema.ts"
+      "!packages/clients/typescript/schema.ts",
+      "!**/session-progress"
     ]
   },
   "formatter": {

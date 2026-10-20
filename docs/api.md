@@ -2,7 +2,7 @@
 
 **Version:** 0.1  
 **Date:** 29 September 2026  
-**Status:** Initial implementation contract
+**Status:** Current source HTTP/MCP contract; Go is the default backend
 
 ---
 
@@ -407,15 +407,14 @@ type FindingPayload = {
 ```ts
 type QAPayload = {
   question: string;
-  answer: string;
+  answer?: string;
 
   limitations?: string[];
 };
 ```
 
-This is the supported TypeScript full-pair shape. The opt-in Go backend also
-accepts an omitted `answer` for unresolved questions; a supplied answer must be
-nonempty. Applicable accepted `answers` relationships resolve separately captured
+The Go backend accepts an omitted `answer` for unresolved questions; a supplied
+answer must be nonempty. Full-pair input remains compatible. Applicable accepted `answers` relationships resolve separately captured
 answers without editing the question. See the compact-context contract below.
 
 ---
@@ -1520,7 +1519,7 @@ Everything else can build on this stable core.
 ## 58. Compatibility Rule
 
 The HTTP API is the contract between the local Go MCP, generated clients and the
-central application, including the opt-in Go replacement.
+central application, including the Go backend.
 
 Neither implementation may rely on internal types from the other language/runtime.
 
@@ -1588,7 +1587,7 @@ These additions document the current wire behavior while preserving the accepted
 - Native import accepts up to 64 MiB request bodies; JSONL text is capped at 32 Mi UTF-16 code units within that body limit. Other request bodies remain limited to 8 MiB. Imports are transactional and reject malformed native relationships, missing metadata, and conflicting identities.
 - Project context retains its original arrays and adds `currentState`, `stateHistory`, `applicableRecords`, `partiallySuperseded`, `historicalRecords`, and `requiresReview`. Contextual records include `applicability`, `replacedBy`, and historical-status annotations. Imported claims remain visibly unverified.
 - Record detail includes audit events for associated relationships and evidence as well as record mutations. Metadata revisions retain before/after snapshots.
-- `GET /ready` returns `503 DATABASE_NOT_READY` if the schema-1 marker or required persistence objects are unavailable or unsupported. Startup validates existing databases before applying configuration or DDL; unsupported or incomplete existing schemas are refused rather than silently repaired.
+- `GET /ready` returns `503 DATABASE_NOT_READY` if supported schema markers or required persistence objects are unavailable or unsupported. Startup validates existing databases before applying configuration or DDL; unsupported or incomplete existing schemas are refused rather than silently repaired.
 - Date bounds and context ordering compare timestamp instants, preserving user-supplied fractional-second precision. Bounds are inclusive; equivalent representations denote the same instant.
 
 Native export is a portable knowledge archive, excluding authentication state. Exported AI configuration audits omit previous and next snapshots; global-policy audit snapshots include only recognized policy fields. Stored audit history remains unchanged. The administrator's `backup <absolute-destination>` command creates a consistent full SQLite snapshot, including credential/session/retry state. Operational restore requires a stopped service and a fresh destination volume; see the server and deployment runbooks.
@@ -1629,7 +1628,7 @@ type AiSettings = {
 
 Go `analysisModes` accepts `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, and `recommendation`; an empty array disables analysis modes. Supplied `export` modes return HTTP 400 because documents require an explicit document job. Historical stored `export` entries are ignored in effective analysis settings without rewriting configuration at startup; ordinary memory, embedding and explicit document jobs remain available.
 
-The opt-in Go backend encrypts persisted reusable provider tokens and adds safe
+The Go backend encrypts persisted reusable provider tokens and adds safe
 `secretProtection.status` metadata: `protected`, `pending_conversion`,
 `unavailable`, or `not_required`. Secret-dependent calls with a missing/wrong key
 or invalid ciphertext return `SECRET_UNAVAILABLE` without provider dispatch or
@@ -1775,7 +1774,7 @@ Issue #22 retains central-first immutable capture and stable retry identities. O
 
 ## Go replacement addition: unresolved questions and compact context
 
-The development Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; the legacy TypeScript validator remains unchanged until cutover.
+The Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; the legacy TypeScript validator remains unchanged until cutover.
 
 The existing context response remains the default or explicit `version=1`. Explicit `version=2` returns distinct source previews, section references, lifecycle/authority/confidence, counts and truncation under response limits. The separate `/projects/{id}/context/compact` endpoint defaults to version 2 and supports generated SDKs without changing the legacy Go method signature. Limits are `limit` (1–100, default 20), `maxChars` (4096–64000 serialized UTF-8 bytes including newline, default 12000), and `previewChars` (32–2000 UTF-16 units, default 320). Current state is selected before history limits. Source detail remains available by ID. See [the contract and runbook](runbooks/go-context.md) for fields, omission reporting, compatibility and verification limits.
 
@@ -1788,7 +1787,7 @@ Authenticated `GET /rag/status` reports the separate new RAG prerequisite state:
 `SCRATCHPAD_RAG_ENABLED=true`; false or unset disables it. The live application
 schema must contain pgvector. The server does not install extensions, and missing
 RAG prerequisites do not disable ordinary memory or existing semantic search.
-This Go-only development addition is separate from the semantic passage routes
+This Go addition is separate from the semantic passage routes
 below and does not itself report indexing coverage. See [the RAG runbook](runbooks/go-rag.md) for verification and
 the remaining implementation boundaries.
 

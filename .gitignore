@@ -16,3 +16,5 @@ mcp/bin/
 .DS_Store
 .build/
 .swiftpm/
+
+/session-progress/
