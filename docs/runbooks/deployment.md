@@ -1,5 +1,9 @@
 # Single-owner Docker deployment
 
+The owner's Kubernetes deployment lifecycle is documented in
+[homelab-deploy.md](homelab-deploy.md). This Docker procedure applies to local
+and single-host installations.
+
 ## Scope
 
 Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. Published images are available from GHCR; the owner's Homebrew installation and local dashboard now use published v0.2.0. A locally built development image is a separate acceptance candidate and must not be described as a published release.

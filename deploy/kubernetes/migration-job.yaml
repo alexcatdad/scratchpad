@@ -1,0 +1,43 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  generateName: scratchpad-migrate-
+  namespace: app-scratchpad
+  labels:
+    app.kubernetes.io/name: scratchpad
+    app.kubernetes.io/component: migration
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scratchpad
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: migrate
+          image: ghcr.io/alexcatdad/scratchpad@sha256:replace-with-published-digest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SCRATCHPAD_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: scratchpad-migration
+                  key: SCRATCHPAD_DATABASE_URL
+                  optional: false
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - >-
+              case "${SCRATCHPAD_DATABASE_URL:-}" in
+                postgres://*|postgresql://*) exec /usr/local/bin/scratchpad-server migrate ;;
+                *) echo 'SCRATCHPAD_DATABASE_URL must select PostgreSQL for this migration Job.' >&2; exit 1 ;;
+              esac
