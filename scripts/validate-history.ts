@@ -2,8 +2,8 @@
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { resolve } from "node:path";
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 type JsonObject = Record<string, unknown>;
 type Entity = JsonObject & { id: string; version: number };
@@ -104,7 +104,15 @@ async function main() {
     const fixtureArgs = JSON.stringify([...args.entries()].flat());
     const run = spawnSync(
       "go",
-      ["-C", "backend", "test", "-run", "^TestPrivateHistoryAcceptance$", "-count=1", "-v"],
+      [
+        "-C",
+        "backend",
+        "test",
+        "-run",
+        "^TestPrivateHistoryAcceptance$",
+        "-count=1",
+        "-v",
+      ],
       {
         cwd: root,
         encoding: "utf8",
@@ -113,11 +121,21 @@ async function main() {
       },
     );
     if (run.status !== 0) throw new Error("Isolated Go validation failed.");
-    const result = run.stdout.split("\n").find((line) => line.includes("result={"));
+    const result = run.stdout
+      .split("\n")
+      .find((line) => line.includes("result={"));
     if (!result) throw new Error("Isolated Go validation produced no result.");
-    console.log(JSON.stringify(JSON.parse(result.slice(result.indexOf("result=") + 7)), null, 2));
+    console.log(
+      JSON.stringify(
+        JSON.parse(result.slice(result.indexOf("result=") + 7)),
+        null,
+        2,
+      ),
+    );
     return;
   }
+  if (!/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(endpoint))
+    throw new Error("Private history requires the isolated Go loopback fixture.");
   const call = async (
     path: string,
     method = "GET",
@@ -125,6 +143,7 @@ async function main() {
   ): Promise<JsonObject> => {
     const response = await fetch(`${endpoint}/api/v1${path}`, {
       method,
+      redirect: "error",
       headers: { Authorization: `Bearer ${token}` },
       body: body === undefined ? undefined : JSON.stringify(body),
     });

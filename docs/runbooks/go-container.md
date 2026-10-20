@@ -4,7 +4,9 @@ The default final `runtime` target selects the Go backend and private React
 renderer; `go-runtime` names the same implementation explicitly. Rebuilding an
 existing Compose installation therefore requires the reviewed migration procedure
 before replacing its container. Code defaults do not authorize a live cutover.
-The temporary `typescript-runtime` target exists only for rollback verification.
+Rollback verification extracts a pinned historical Git revision into a private
+temporary build context. The current Dockerfile contains no TypeScript backend
+target, source implementation or backend-only runtime dependencies.
 Canonical CI, release artifacts and deployed acceptance remain separate gates.
 
 Use an explicitly selected local disposable Docker context. Inspect its endpoint
@@ -13,7 +15,7 @@ first; do not rely on the current context, which may target a live remote host.
 ```sh
 docker context inspect LOCAL_CONTEXT --format '{{.Endpoints.docker.Host}}'
 docker --context LOCAL_CONTEXT build --target go-runtime -t scratchpad-go:local .
-docker --context LOCAL_CONTEXT build --target typescript-runtime -t scratchpad-retained:local .
+TEST_DOCKER_CONTEXT=LOCAL_CONTEXT bash scripts/build-rollback-fixture.sh scratchpad-retained:local
 TEST_DOCKER_CONTEXT=LOCAL_CONTEXT TEST_GO_IMAGE=scratchpad-go:local \
 TEST_RETAINED_IMAGE=scratchpad-retained:local \
   npx playwright test tests/go-container.spec.ts

@@ -1,8 +1,6 @@
 # Project readiness review
 
-> Historical implementation/acceptance ledger. Numbered PRD and architecture sections refer to the [archived baseline](../archive/p0-baseline/prd.md). Use [current P0 acceptance](p0-consolidation.md) for this consolidation.
-
-> Current authority: user-supplied originals are preserved verbatim in `docs/prd.md`, `docs/architecture.md`, and `docs/api.md`. Earlier reviews are historical. See “Architecture and API baseline reconciliation” at the end for the latest development assessment.
+> Historical implementation/acceptance ledger. Numbered PRD and architecture sections refer to the [archived baseline](../archive/p0-baseline/prd.md). Use [current P0 acceptance](p0-consolidation.md) for this consolidation. This review predates the consolidated Go specifications; its implementation checkpoints are historical evidence.
 
 ## Purpose
 

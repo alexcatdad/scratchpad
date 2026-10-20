@@ -4,7 +4,7 @@ const handle = () =>
   Response.json(
     {
       error: {
-        code: "GO_API_REQUIRED",
+        code: "DASHBOARD_ONLY",
         message: "API requests must use the configured Go API origin.",
       },
     },
