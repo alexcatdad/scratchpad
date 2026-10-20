@@ -22,7 +22,7 @@ the listed merge order. Production cutover is a separately authorized operation.
 
 ## Acceptance checklist
 
-- [ ] SP-01: relevant #41 changes merged, valid schemas accepted, altered FTS/RAG
+- [x] SP-01: relevant #41 changes merged, valid schemas accepted, altered FTS/RAG
       projections rejected safely, disposable migration/restore verified.
 - [ ] SP-02: relevant #42 changes merged, Go default image/dev/admin, launcher
       shutdown and credential isolation verified, release packaging retained.
@@ -73,6 +73,9 @@ collector/offline-delivery acceptance.
 - Deployment replacement [#51](https://github.com/alexcatdad/scratchpad/pull/51)
   merged as `96e9648b1ec9b5b0db31935ac33a8d83e8e20147`; all required CI checks
   passed. Its manual publication workflow performs no live rollout.
+- Schema replacement [#52](https://github.com/alexcatdad/scratchpad/pull/52)
+  merged as `9b124b139ffb560c2f08fb3cff8d2bbf908d8056` with required checks
+  passing, including PostgreSQL 18. Superseded #41 is closed; its branch is retained.
 - The default Go image passed seven actual-container scenarios: SQLite,
   PostgreSQL, pgvector, encrypted-settings restoration, and historical
   TypeScript rollback with preserved authentication on SQLite and PostgreSQL.
@@ -87,9 +90,10 @@ collector/offline-delivery acceptance.
   schema, numeric identity and historical PostgreSQL rollback race tests passed.
 - React/docs builds, frontend/docs typechecks, lint and entrypoint lifecycle
   tests passed with Node 24.21.0 before final source retirement.
-- A local combined backend run reached its 20-minute timeout. It does not count
-  as full acceptance; the canonical PostgreSQL 18 CI shards remain required at
-  the final reviewed head.
+- The full post-retirement SQLite backend race suite passed in 799 seconds with
+  Node 24.21.0. A prior combined SQLite/PostgreSQL 17 run reached its 20-minute
+  timeout and does not count as full acceptance. Canonical PostgreSQL 18 CI
+  shards remain required at the final reviewed head.
 - Final retirement, combined-head reviews, CI and merged-main gates remain pending.
 
 ## Production gate

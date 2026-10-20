@@ -1,17 +1,29 @@
 import { execFileSync, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { createServer as createHTTPServer, type Server } from "node:http";
 import { createServer as createHTTPSServer } from "node:https";
+import { createRequire } from "node:module";
 import { connect, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { expect, test } from "@playwright/test";
-import { createRequire } from "node:module";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
 import { startDurableMcpService } from "./durable-mcp-service";
-import { buildGoServer, runGoAdmin, startGoServer, stopGoServer } from "./go-test-server";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 
 const root = resolve(import.meta.dirname, "..");
 const temporary = mkdtempSync(join(tmpdir(), "scratchpad-github-workflow-"));
@@ -26,7 +38,7 @@ let admin: (...args: string[]) => string;
 let databaseAdmin: ReturnType<typeof postgres> | undefined;
 let databaseName: string | undefined;
 let databaseUrl: string | undefined;
-let originalDatabaseUrl: string | undefined;
+const originalDatabaseUrl = process.env.SCRATCHPAD_E2E_DATABASE_URL;
 const originalProxyEnvironment = {
   HTTPS_PROXY: process.env.HTTPS_PROXY,
   NO_PROXY: process.env.NO_PROXY,
@@ -49,53 +61,116 @@ async function unusedPort(): Promise<number> {
     const listener = createHTTPServer();
     listener.listen(0, "127.0.0.1", () => {
       const address = listener.address();
-      if (!address || typeof address === "string") throw new Error("Missing port");
+      if (!address || typeof address === "string")
+        throw new Error("Missing port");
       listener.close(() => done(address.port));
     });
   });
 }
 test.beforeAll(async () => {
-  command = (binary, args, cwd = root) => execFileSync(binary, args, { cwd, encoding: "utf8", timeout: 60_000, ...(binary === "openssl" ? { stdio: "ignore" } : {}) });
+  command = (binary, args, cwd = root) =>
+    execFileSync(binary, args, {
+      cwd,
+      encoding: "utf8",
+      timeout: 60_000,
+      ...(binary === "openssl" ? { stdio: "ignore" } : {}),
+    });
   key = resolve(temporary, "github-identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   publicKey = readFileSync(`${key}.pub`, "utf8").trim();
   const tlsKey = resolve(temporary, "github-tls-key.pem");
   const tlsCert = resolve(temporary, "github-tls-cert.pem");
-  command("openssl", ["req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1", "-subj", "/CN=Scratchpad GitHub fixture", "-addext", "subjectAltName=DNS:github.com,DNS:api.github.com", "-keyout", tlsKey, "-out", tlsCert]);
-  github = createHTTPSServer({ key: readFileSync(tlsKey), cert: readFileSync(tlsCert) }, (req, res) => {
-    if (!available) { res.writeHead(503).end("unavailable"); return; }
-    res.setHeader("Content-Type", "application/json");
-    if (req.url === "/login/oauth/access_token") {
-      res.end(JSON.stringify({ access_token: "synthetic-token", token_type: "bearer", scope: "" }));
-    } else if (
-      req.url === "/user" ||
-      req.url === `/user/${account.id}` ||
-      req.url === `/users/${account.login}`
-    )
-      res.end(JSON.stringify(account));
-    else if (req.url?.startsWith(`/users/${account.login}/keys`)) res.end(JSON.stringify(published ? [{ id: 1, key: publicKey }, ...(extraPublicKey ? [{ id: 3, key: extraPublicKey }] : [])] : []));
-    else if (req.url?.startsWith(`/users/${account.login}/ssh_signing_keys`)) res.end(JSON.stringify(published ? [{ id: 2, key: publicKey }] : []));
-    else res.writeHead(404).end();
+  command("openssl", [
+    "req",
+    "-x509",
+    "-newkey",
+    "rsa:2048",
+    "-nodes",
+    "-days",
+    "1",
+    "-subj",
+    "/CN=Scratchpad GitHub fixture",
+    "-addext",
+    "subjectAltName=DNS:github.com,DNS:api.github.com",
+    "-keyout",
+    tlsKey,
+    "-out",
+    tlsCert,
+  ]);
+  github = createHTTPSServer(
+    { key: readFileSync(tlsKey), cert: readFileSync(tlsCert) },
+    (req, res) => {
+      if (!available) {
+        res.writeHead(503).end("unavailable");
+        return;
+      }
+      res.setHeader("Content-Type", "application/json");
+      if (req.url === "/login/oauth/access_token") {
+        res.end(
+          JSON.stringify({
+            access_token: "synthetic-token",
+            token_type: "bearer",
+            scope: "",
+          }),
+        );
+      } else if (
+        req.url === "/user" ||
+        req.url === `/user/${account.id}` ||
+        req.url === `/users/${account.login}`
+      )
+        res.end(JSON.stringify(account));
+      else if (req.url?.startsWith(`/users/${account.login}/keys`))
+        res.end(
+          JSON.stringify(
+            published
+              ? [
+                  { id: 1, key: publicKey },
+                  ...(extraPublicKey ? [{ id: 3, key: extraPublicKey }] : []),
+                ]
+              : [],
+          ),
+        );
+      else if (req.url?.startsWith(`/users/${account.login}/ssh_signing_keys`))
+        res.end(JSON.stringify(published ? [{ id: 2, key: publicKey }] : []));
+      else res.writeHead(404).end();
+    },
+  );
+  github.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
   });
-  github.on("connection", (socket) => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
   await new Promise<void>((done) => github.listen(0, "127.0.0.1", done));
   const address = github.address();
-  if (!address || typeof address === "string") throw new Error("Missing GitHub fixture port");
+  if (!address || typeof address === "string")
+    throw new Error("Missing GitHub fixture port");
   proxy = createHTTPServer((_req, res) => res.writeHead(403).end());
-  proxy.on("connection", (socket) => { sockets.add(socket); socket.once("close", () => sockets.delete(socket)); });
+  proxy.on("connection", (socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+  });
   proxy.on("connect", (req, socket, head) => {
-    if (!["github.com:443", "api.github.com:443"].includes(req.url ?? "")) { socket.end("HTTP/1.1 403 Forbidden\r\n\r\n"); return; }
-    const upstream = connect(address.port, "127.0.0.1", () => { socket.write("HTTP/1.1 200 Connection Established\r\n\r\n"); upstream.write(head); socket.pipe(upstream); upstream.pipe(socket); });
-    upstream.on("error", () => socket.destroy()); socket.on("error", () => upstream.destroy()); socket.once("close", () => upstream.destroy());
+    if (!["github.com:443", "api.github.com:443"].includes(req.url ?? "")) {
+      socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+      return;
+    }
+    const upstream = connect(address.port, "127.0.0.1", () => {
+      socket.write("HTTP/1.1 200 Connection Established\r\n\r\n");
+      upstream.write(head);
+      socket.pipe(upstream);
+      upstream.pipe(socket);
+    });
+    upstream.on("error", () => socket.destroy());
+    socket.on("error", () => upstream.destroy());
+    socket.once("close", () => upstream.destroy());
   });
   await new Promise<void>((done) => proxy.listen(0, "127.0.0.1", done));
   const proxyAddress = proxy.address();
-  if (!proxyAddress || typeof proxyAddress === "string") throw new Error("Missing proxy port");
+  if (!proxyAddress || typeof proxyAddress === "string")
+    throw new Error("Missing proxy port");
   process.env.HTTPS_PROXY = `http://127.0.0.1:${proxyAddress.port}`;
   process.env.NO_PROXY = "localhost,127.0.0.1,::1";
   process.env.SSL_CERT_FILE = tlsCert;
   process.env.SSL_CERT_DIR = temporary;
-  originalDatabaseUrl = process.env.SCRATCHPAD_E2E_DATABASE_URL;
   if (originalDatabaseUrl) {
     databaseAdmin = postgres(originalDatabaseUrl, { max: 1 });
     databaseName = `scratchpad_github_e2e_${randomUUID().replaceAll("-", "")}`;
@@ -131,14 +206,14 @@ test.beforeAll(async () => {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      if (
-        (await fetch(`${origin}/ready`)).ok &&
-        (await fetch(origin)).ok
-      ) return;
+      if ((await fetch(`${origin}/ready`)).ok && (await fetch(origin)).ok)
+        return;
     } catch {}
     await new Promise((done) => setTimeout(done, 50));
   }
-  throw new Error(`Go GitHub workflow server did not become ready: ${serverOutput}`);
+  throw new Error(
+    `Go GitHub workflow server did not become ready: ${serverOutput}`,
+  );
 });
 test.afterAll(async () => {
   await stopDurableMcpService?.();
@@ -147,7 +222,8 @@ test.afterAll(async () => {
     await databaseAdmin.unsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
     await databaseAdmin.end();
   }
-  if (originalDatabaseUrl === undefined) delete process.env.SCRATCHPAD_E2E_DATABASE_URL;
+  if (originalDatabaseUrl === undefined)
+    delete process.env.SCRATCHPAD_E2E_DATABASE_URL;
   else process.env.SCRATCHPAD_E2E_DATABASE_URL = originalDatabaseUrl;
   for (const [name, value] of Object.entries(originalProxyEnvironment)) {
     if (value === undefined) delete process.env[name];
@@ -203,10 +279,8 @@ async function restartServer() {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      if (
-        (await fetch(`${origin}/ready`)).ok &&
-        (await fetch(origin)).ok
-      ) return;
+      if ((await fetch(`${origin}/ready`)).ok && (await fetch(origin)).ok)
+        return;
     } catch {}
     await new Promise((done) => setTimeout(done, 50));
   }
@@ -294,7 +368,9 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect(
     page.getByText("@synthetic-owner", { exact: true }),
   ).toBeVisible();
-  const githubStatus = await (await page.request.get(`${origin}/api/v1/auth/github`)).json();
+  const githubStatus = await (
+    await page.request.get(`${origin}/api/v1/auth/github`)
+  ).json();
   expect(githubStatus.lastSyncError).toBeNull();
   await expect(
     page.getByText(/GitHub-managed · authentication, signing/),
@@ -496,40 +572,79 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   await expect(page.getByRole("alert").first()).toContainText(
     "GitHub is unavailable",
   );
-  const updateEntityField = async (kind: string, id: string, field: string, value: string) => {
+  const updateEntityField = async (
+    kind: string,
+    id: string,
+    field: string,
+    value: string,
+  ) => {
     if (databaseAdmin && databaseUrl) {
       const client = postgres(databaseUrl, { max: 1 });
       try {
-        await client.unsafe(`UPDATE entities SET data=jsonb_set(data, ARRAY[$1]::text[], to_jsonb($2::text)) WHERE kind=$3 AND id=$4`, [field, value, kind, id]);
-      } finally { await client.end(); }
+        await client.unsafe(
+          `UPDATE entities SET data=jsonb_set(data, ARRAY[$1]::text[], to_jsonb($2::text)) WHERE kind=$3 AND id=$4`,
+          [field, value, kind, id],
+        );
+      } finally {
+        await client.end();
+      }
     } else {
       const require = createRequire(resolve(root, "apps/web/package.json"));
-      const SQLite = require("better-sqlite3") as new (file: string) => {
+      const SQLite = require("better-sqlite3") as new (
+        file: string,
+      ) => {
         prepare(sql: string): { run(...args: string[]): unknown };
         close(): void;
       };
-      const db = new SQLite(environment.SCRATCHPAD_DATABASE_PATH!);
+      const db = new SQLite(databasePath);
       try {
-        db.prepare("UPDATE entities SET data=json_set(data, ?, ?) WHERE kind=? AND id=?").run(`$.${field}`, value, kind, id);
+        db.prepare(
+          "UPDATE entities SET data=json_set(data, ?, ?) WHERE kind=? AND id=?",
+        ).run(`$.${field}`, value, kind, id);
       } finally {
         db.close();
       }
     }
   };
   await stopGoServer(server);
-  await updateEntityField("github_binding", "owner", "lastSuccessfulSyncAt", new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString());
+  await updateEntityField(
+    "github_binding",
+    "owner",
+    "lastSuccessfulSyncAt",
+    new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString(),
+  );
   await restartServer();
   const renewed = await machineSession();
   expect(renewed.status).toBe(200);
   await restartServer();
   expect(await realMcp([...args, "-phase", "verify"])).toContain("PASS verify");
   await stopGoServer(server);
-  await updateEntityField("github_binding", "owner", "lastSuccessfulSyncAt", new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString());
-  const sessionId = (value: string) => createHash("sha256").update(value).digest("hex");
-  await updateEntityField("session", sessionId(renewed.token), "expiresAt", "2000-01-01T00:00:00.000Z");
-  const browserCookie = (await page.context().cookies(origin)).find((cookie) => cookie.name === "scratchpad_session");
+  await updateEntityField(
+    "github_binding",
+    "owner",
+    "lastSuccessfulSyncAt",
+    new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString(),
+  );
+  const sessionId = (value: string) =>
+    createHash("sha256").update(value).digest("hex");
+  await updateEntityField(
+    "session",
+    sessionId(renewed.token),
+    "expiresAt",
+    "2000-01-01T00:00:00.000Z",
+  );
+  const browserCookie = (await page.context().cookies(origin)).find(
+    (cookie) => cookie.name === "scratchpad_session",
+  );
   expect(browserCookie).toBeDefined();
-  await updateEntityField("session", sessionId(browserCookie!.value), "expiresAt", "2000-01-01T00:00:00.000Z");
+  if (!browserCookie)
+    throw new Error("Authenticated browser cookie is missing");
+  await updateEntityField(
+    "session",
+    sessionId(browserCookie.value),
+    "expiresAt",
+    "2000-01-01T00:00:00.000Z",
+  );
   await restartServer();
   expect((await readProjects(renewed.token)).status).toBe(401);
   expect((await machineSession()).status).toBe(401);
