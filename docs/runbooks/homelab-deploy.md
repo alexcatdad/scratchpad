@@ -25,10 +25,11 @@ adopting an existing installation.
 
 For a new deployment where the existing key is held as a protected local file,
 `scripts/adopt-kubernetes-key.sh --check` verifies that the target Secret already
-exists without printing its data. To create a missing Secret from that existing
-key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`, `KEY_SECRET` and `KEY_FILE`, then
-set `SCRATCHPAD_KEY_ADOPTION_APPROVED=yes` and run `--apply`. It refuses to replace
-an existing Secret. This is key adoption, not key generation or rotation.
+exists and matches the protected file without printing either value. To create a
+missing Secret from that existing key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`,
+`KEY_SECRET` and `KEY_FILE`, then set `SCRATCHPAD_KEY_ADOPTION_APPROVED=yes` and
+run `--apply`. It refuses to replace an existing Secret. This is key adoption,
+not key generation or rotation.
 
 Select an immutable image reference from a successful Publish application image
 run (`ghcr.io/alexcatdad/scratchpad@sha256:...`) and replace the image placeholder
@@ -96,7 +97,9 @@ required to read encrypted settings from the restored snapshot.
    verified pre-change database backup. Back up the database using its native
    tool and store the archive outside the database volume under the existing
    encrypted backup policy.
-2. Run the selected image's one-off migration Job before changing the Deployment.
+2. For PostgreSQL, run the selected image's one-off migration Job before changing
+   the Deployment. The checked-in migration Job requires a non-empty PostgreSQL
+   database URL from `scratchpad-migration`; it refuses to run against SQLite.
    Map `scratchpad-migration` to the already approved table-owner database
    credential through the cluster's secret delivery process. Never put its value
    in the Job, command arguments, workflow inputs, output or repository. Render
@@ -121,7 +124,11 @@ required to read encrypted settings from the restored snapshot.
    Confirm the Job used the intended image digest and exited successfully. If it
    fails or times out, leave the Deployment unchanged and follow the migration
    runbook. Record the protected backup reference and migration outcome for the
-   rollout preflight.
+   rollout preflight. For SQLite, do not use this Job: stop every writer and run
+   `scratchpad-server migrate` against the reviewed existing PVC/database path
+   in an isolated one-off pod, then preserve that PVC when the Deployment is
+   restarted. See [go-backend-migrations.md](go-backend-migrations.md) for the
+   SQLite storage and migration boundaries.
 3. Change only the existing Deployment container image to the selected digest
    after the owner has approved the live cutover. Retain the same runtime
    settings, installation-key Secret, PVC, Service and ingress. Wait for the
