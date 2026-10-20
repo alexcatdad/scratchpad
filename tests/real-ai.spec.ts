@@ -1,10 +1,16 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import Database from "better-sqlite3";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 
 // Explicit opt-in: no external model service is required by ordinary CI.
 const enabled = process.env.SCRATCHPAD_REAL_AI === "1";
@@ -27,12 +33,15 @@ const dockerMode = process.env.SCRATCHPAD_E2E_DOCKER === "1";
 const runId = `scratchpad-real-ai-${randomUUID()}`;
 const environment = {
   ...process.env,
-  PORT: "3102",
+  SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3102",
+  SCRATCHPAD_UI_PORT: "4102",
+  SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4102",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: databasePath,
   SCRATCHPAD_DATABASE_URL: "",
 };
 let application: ChildProcess | undefined;
+const serverBinary = resolve(temporary || tmpdir(), "scratchpad-real-ai-server");
 let containerCreated = false;
 let logs = "";
 type Entity = { id: string; version: number; [key: string]: unknown };
@@ -80,12 +89,9 @@ function command(executable: string, args: string[]): string {
 }
 function setupToken(): string {
   const output = dockerMode
-    ? command("docker", ["exec", runId, "npm", "run", "admin", "--", "setup"])
-    : command(process.execPath, [
-        resolve(root, "node_modules/tsx/dist/cli.mjs"),
-        resolve(root, "apps/web/src/server/admin.ts"),
-        "setup",
-      ]);
+    ? command("docker", ["exec", runId, "/usr/local/bin/scratchpad-server", "setup"])
+    : (buildGoServer(root, serverBinary, environment),
+      runGoAdmin(serverBinary, ["setup"], environment, root));
   return output.trim().split("\n").at(-1) ?? "";
 }
 async function waitForJob(page: Page, key: string): Promise<Job> {
@@ -136,20 +142,9 @@ test.describe("real local Qwen processing", () => {
       ]);
       containerCreated = true;
     } else {
-      application = spawn(
-        process.execPath,
-        [resolve(root, "apps/web/server.mjs")],
-        {
-          cwd: resolve(root, "apps/web"),
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
-      application.stdout?.on("data", (value) => {
-        logs += value;
-      });
-      application.stderr?.on("data", (value) => {
-        logs += value;
+      buildGoServer(root, serverBinary, environment);
+      application = startGoServer(root, serverBinary, environment, (value) => {
+        logs += value.toString();
       });
     }
     await expect
@@ -174,19 +169,9 @@ test.describe("real local Qwen processing", () => {
       command("docker", ["rm", "--force", "--volumes", runId]);
       containerCreated = false;
     }
-    if (application && application.exitCode === null) {
-      const child = application;
-      const exited = new Promise<void>((done) =>
-        child.once("exit", () => done()),
-      );
-      child.kill("SIGTERM");
-      const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-      try {
-        await exited;
-      } finally {
-        clearTimeout(timer);
-      }
-    }
+    const child = application;
+    application = undefined;
+    await stopGoServer(child);
     if (temporary) rmSync(temporary, { recursive: true, force: true });
   });
   test("authenticated application generates cited insights, 2560-dimensional semantic matches and a private project handoff", async ({

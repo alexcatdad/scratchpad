@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -6,6 +6,12 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import postgres from "postgres";
+import {
+  buildGoServer,
+  runGoAdmin,
+  startGoServer,
+  stopGoServer,
+} from "./go-test-server";
 
 type Entity = { id: string; version: number; [key: string]: unknown };
 type Project = Entity & { settings: Record<string, unknown> };
@@ -38,12 +44,15 @@ let containerCreated = false;
 let volumeCreated = false;
 const environment = {
   ...process.env,
-  PORT: "3101",
+  SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3101",
+  SCRATCHPAD_UI_PORT: "4101",
+  SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4101",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
   SCRATCHPAD_DATABASE_URL: "",
 };
 let application: ChildProcess | undefined;
+const serverBinary = resolve(temporary, "scratchpad-server");
 let provider: Server | undefined;
 let providerUrl = "";
 let logs = "";
@@ -198,16 +207,9 @@ function command(binary: string, args: string[]) {
 }
 function setupToken() {
   return dockerMode
-    ? command("docker", ["exec", runId, "npm", "run", "admin", "--", "setup"])
-    : execFileSync(
-        process.execPath,
-        [
-          resolve(root, "node_modules/tsx/dist/cli.mjs"),
-          "src/server/admin.ts",
-          "setup",
-        ],
-        { cwd: resolve(root, "apps/web"), env: environment, encoding: "utf8" },
-      );
+    ? command("docker", ["exec", runId, "/usr/local/bin/scratchpad-server", "setup"])
+    : (buildGoServer(root, serverBinary, environment),
+      runGoAdmin(serverBinary, ["setup"], environment, root));
 }
 async function createDatabase() {
   if (!postgresMode) return;
@@ -266,16 +268,12 @@ async function startApplication() {
       dockerImage,
     ]);
     containerCreated = true;
-  } else
-    application = spawn(
-      process.execPath,
-      [resolve(root, "apps/web/server.mjs")],
-      {
-        cwd: resolve(root, "apps/web"),
-        env: environment,
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
+  } else {
+    buildGoServer(root, serverBinary, environment);
+    application = startGoServer(root, serverBinary, environment, (value) => {
+      logs += value.toString();
+    });
+  }
   application?.stdout?.on("data", (value) => {
     logs += value;
   });
@@ -312,16 +310,9 @@ async function stopApplication() {
     command("docker", ["volume", "rm", volume]);
     volumeCreated = false;
   }
-  if (!application || application.exitCode !== null) return;
   const child = application;
-  const exited = new Promise<void>((done) => child.once("exit", () => done()));
-  child.kill("SIGTERM");
-  const timer = setTimeout(() => child.kill("SIGKILL"), 5000);
-  try {
-    await exited;
-  } finally {
-    clearTimeout(timer);
-  }
+  application = undefined;
+  await stopGoServer(child);
 }
 async function awaitJobs(page: Page) {
   expectedJobCount++;
