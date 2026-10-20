@@ -24,16 +24,16 @@ the listed merge order. Production cutover is a separately authorized operation.
 
 - [x] SP-01: relevant #41 changes merged, valid schemas accepted, altered FTS/RAG
       projections rejected safely, disposable migration/restore verified.
-- [ ] SP-02: relevant #42 changes merged, Go default image/dev/admin, launcher
+- [x] SP-02: relevant #42 changes merged, Go default image/dev/admin, launcher
       shutdown and credential isolation verified, release packaging retained.
-- [ ] SP-03: sole Go backend, retained React/MCP/desktop contracts, migrated
+- [x] SP-03: sole Go backend, retained React/MCP/desktop contracts, migrated
       behavior tests, removed unused server dependencies and permanent runtime modes.
 - [x] SP-04: #47 deployment ownership merged, image/manifests/migration/probes,
       preserved installation key and credentials, verified disposable restore/rollback.
-- [ ] SP-05: authoritative PRD/architecture/API/onboarding accurately reflect
+- [x] SP-05: authoritative PRD/architecture/API/onboarding accurately reflect
       implementation and future GitHub/team identity with permission-aware RAG.
-- [ ] Required CI and independent reviews pass at the final PR heads.
-- [ ] Every implementation PR is merged and final main is verified.
+- [x] Required CI and independent reviews pass at the final PR heads.
+- [x] Every implementation PR is merged and final main is verified.
 
 ## Verification procedure
 
@@ -111,7 +111,22 @@ collector/offline-delivery acceptance.
   lanes exposed two fixture prerequisites: the Docker lane also needs a local
   renderer build, and private-AI acceptance must wait for dashboard readiness.
   Those corrections retain the original behavioral assertions and deadlines.
-- Final retirement, combined-head reviews, CI and merged-main gates remain pending.
+- Runtime, retirement and documentation replacement
+  [#53](https://github.com/alexcatdad/scratchpad/pull/53) merged as
+  `73f2ea1e532240e968ee489b25bf268437bc12b8`. Its reviewed head
+  `964d9e66f5973a5e5c2fcaa60922e6c3008124ed` passed every required check,
+  including the complete retained web/Docker lanes, both PostgreSQL 18 backend
+  shards, pgvector, Go browser/container, MCP, macOS and local-capture acceptance.
+  Independent reviews reported no unresolved findings. Superseded #42 is closed;
+  its pre-existing worktree and branch are retained.
+- Final combined local acceptance passed 11 retained browser tests with the
+  pinned Go 1.27.2 and Node 24.21.0 toolchains. The explicit real-model opt-in was
+  skipped; no real-model quality claim is made.
+- The merged main tree was verified byte-for-byte against the tested #53 head,
+  with both prerequisite changes present and a clean worktree. Disposable
+  PostgreSQL, acceptance images, test servers and agent worktrees were removed.
+  Five completed agent branches were removed after their history was preserved
+  in a verified private bundle. Pre-existing user branches/worktrees are unchanged.
 
 ## Production gate
 
