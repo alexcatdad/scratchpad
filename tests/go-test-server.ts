@@ -1,5 +1,5 @@
 import { type ChildProcess, execFileSync, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { copyFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
 export function buildGoServer(
@@ -7,6 +7,9 @@ export function buildGoServer(
   destination: string,
   env: NodeJS.ProcessEnv,
 ) {
+  if (!existsSync(destination) && env.SCRATCHPAD_E2E_SERVER_BINARY) {
+    copyFileSync(resolve(root, env.SCRATCHPAD_E2E_SERVER_BINARY), destination);
+  }
   if (!existsSync(destination))
     execFileSync(
       "go",

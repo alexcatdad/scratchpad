@@ -14,8 +14,7 @@ COPY packages/clients/typescript/package.json packages/clients/typescript/packag
 COPY packages/clients/generator/package.json packages/clients/generator/package.json
 RUN npm ci --workspace @scratchpad/web
 COPY apps/web apps/web
-RUN npm run build -w @scratchpad/web
-RUN npm prune --omit=dev --workspace @scratchpad/web
+RUN npm run build -w @scratchpad/web && npm prune --omit=dev --workspace @scratchpad/web
 
 FROM node:24.21.0-bookworm-slim AS runtime-base
 ENV NODE_ENV=production PORT=3000 SCRATCHPAD_DATABASE_PATH=/data/scratchpad.sqlite

@@ -57,7 +57,14 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
+      - name: Build Go browser and MCP fixtures before acceptance timeouts
+        run: |
+          go -C backend build -o "$RUNNER_TEMP/scratchpad-e2e-server" ./cmd/scratchpad-server
+          go -C mcp build -o "$RUNNER_TEMP/scratchpad-e2e-mcp" ./cmd/scratchpad-mcp
       - run: npm run test:e2e -- --project=retained
+        env:
+          SCRATCHPAD_E2E_SERVER_BINARY: ${{ runner.temp }}/scratchpad-e2e-server
+          SCRATCHPAD_E2E_MCP_BINARY: ${{ runner.temp }}/scratchpad-e2e-mcp
       - name: Retain concurrent-agent workload measurements
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -258,10 +265,16 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npx playwright install --with-deps chromium
       - run: npm run build -w @scratchpad/web
+      - name: Build Go browser and MCP fixtures before acceptance timeouts
+        run: |
+          go -C backend build -o "$RUNNER_TEMP/scratchpad-e2e-server" ./cmd/scratchpad-server
+          go -C mcp build -o "$RUNNER_TEMP/scratchpad-e2e-mcp" ./cmd/scratchpad-mcp
       - name: Verify authenticated PostgreSQL browser and stdio MCP persistence
         run: npx playwright test tests/workflow.spec.ts tests/github-workflow.spec.ts tests/workflow-harness.spec.ts tests/concurrent-agents.spec.ts
         env:
           SCRATCHPAD_E2E_DATABASE_URL: ${{ env.TEST_POSTGRES_URL }}
+          SCRATCHPAD_E2E_SERVER_BINARY: ${{ runner.temp }}/scratchpad-e2e-server
+          SCRATCHPAD_E2E_MCP_BINARY: ${{ runner.temp }}/scratchpad-e2e-mcp
       - name: Retain concurrent-agent PostgreSQL measurements
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -293,22 +306,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          cache: npm
-      - run: npm ci
-      - name: Verify native vector ranking, consent, rebuild and readiness
-        run: npm run test -w @scratchpad/web -- src/server/pgvector.test.ts
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: backend/go.mod
           cache-dependency-path: |
             backend/go.sum
             mcp/go.sum
-      - name: Verify Go RAG availability with native pgvector
+      - name: Verify Go vector ranking, consent, rebuild and readiness
         shell: bash
-        run: go -C backend test -json -race -count=1 -run TestRAG ./... | tee "$RUNNER_TEMP/go-pgvector-tests.jsonl"
+        run: go -C backend test -json -race -count=1 -run 'RAG|Semantic|Embedding|Passage' ./... | tee "$RUNNER_TEMP/go-pgvector-tests.jsonl"
         env:
           GORACE: atexit_sleep_ms=0
           TEST_POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
@@ -352,10 +358,16 @@ jobs:
           cache-dependency-path: mcp/go.sum
       - run: npm ci
       - run: npx playwright install --with-deps chromium
+      - name: Build Go browser and MCP fixtures before acceptance timeouts
+        run: |
+          go -C backend build -o "$RUNNER_TEMP/scratchpad-e2e-server" ./cmd/scratchpad-server
+          go -C mcp build -o "$RUNNER_TEMP/scratchpad-e2e-mcp" ./cmd/scratchpad-mcp
       - name: Verify browser and MCP against container backup restore
         run: npm run test:e2e -- --project=retained
         env:
           SCRATCHPAD_E2E_DOCKER: "1"
+          SCRATCHPAD_E2E_SERVER_BINARY: ${{ runner.temp }}/scratchpad-e2e-server
+          SCRATCHPAD_E2E_MCP_BINARY: ${{ runner.temp }}/scratchpad-e2e-mcp
       - name: Retain concurrent-agent container measurements
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -1,4 +1,4 @@
-import { type ChildProcess, execFileSync } from "node:child_process";
+import { type ChildProcess, execFileSync, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -81,6 +81,11 @@ export function createWorkflowHarness() {
             await fetch(`${origin}/ready`, {
               signal: AbortSignal.timeout(2_000),
             })
+          ).ok &&
+          (
+            await fetch(origin, {
+              signal: AbortSignal.timeout(2_000),
+            })
           ).ok
         )
           return;
@@ -89,8 +94,7 @@ export function createWorkflowHarness() {
       }
       await new Promise((r) => setTimeout(r, 100));
     }
-    if (dockerMode && activeContainer)
-      logs += command("docker", ["logs", activeContainer]);
+    if (dockerMode && activeContainer) logs += readLogs();
     throw new Error(`Server did not start: ${logs}`);
   }
   async function stop() {
@@ -156,6 +160,19 @@ export function createWorkflowHarness() {
     });
   }
 
+  function readLogs() {
+    if (!dockerMode || !activeContainer) return logs;
+    const result = spawnSync("docker", ["logs", activeContainer], {
+      cwd: root,
+      env: environment,
+      encoding: "utf8",
+      timeout: 60_000,
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error("Could not read container logs");
+    return result.stdout + result.stderr;
+  }
+
   function cleanupDocker() {
     for (const name of ownedContainers) {
       try {
@@ -181,9 +198,6 @@ export function createWorkflowHarness() {
     restartOrRestore,
     command,
     cleanupDocker,
-    readLogs: () =>
-      dockerMode && activeContainer
-        ? command("docker", ["logs", activeContainer])
-        : logs,
+    readLogs,
   };
 }
