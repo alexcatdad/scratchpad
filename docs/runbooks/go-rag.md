@@ -82,9 +82,12 @@ transaction. `rag_projection_migrations` versions the optional `rag_passages`
 table independently of core schema 2. The marker and table creation commit
 together; competing instances use the existing PostgreSQL advisory lock.
 
-Unknown versions, malformed timestamps and missing required projection objects
-are refused without automatic repair. Disable the optional RAG feature to access
-ordinary memory while preparing an authorized projection recovery. Retain the
+Unknown versions, malformed timestamps and malformed projection schemas are
+refused without automatic repair. Startup validates the migration marker,
+ordered column types and nullability, primary/check constraints, unconstrained
+vector type and exact source-scope index. The SQLite core schema also validates
+the stored FTS5 definition. Disable the optional RAG feature to access ordinary
+memory while preparing an authorized projection recovery. Retain the
 database for operational restore; knowledge exports contain original knowledge,
 not vector projections or operational jobs. Native PostgreSQL dump/restore tests
 now verify passage coverage and retrieval after restoration, including unavailable
