@@ -1,70 +1,166 @@
-# Production deployment on the owner's homelab
+# Kubernetes deployment lifecycle
 
-The owner instance runs on the owner's homelab Kubernetes. Merging to `main`
-deploys it: after **CI** passes on a push to `main`, the **Deploy** workflow
-calls the reusable `alexcatdad/ci-actions` rollout workflow (pinned by commit)
-on a dedicated homelab runner. Private host details, the database restore
-procedure and the operator steps live in the homelab infrastructure
-repository, not here.
+Scratchpad owns its image publication workflow, application manifests, migration
+instructions and recovery procedure. Publishing an image does not deploy it.
+`.github/workflows/deploy.yml` is manually dispatched from `main`, verifies the
+selected commit is on `main` and has successful canonical CI, and publishes the
+`go-runtime` image to GHCR with provenance and an immutable digest. It has no
+cluster credentials and makes no Kubernetes changes.
 
-## What one deployment does
+The manifests under `deploy/kubernetes/` describe a single-replica application,
+ClusterIP Service and SQLite PVC. They reference operator-managed ConfigMap and
+Secrets; no credential values or Secret objects are committed. The installation
+key is mounted read-only from `scratchpad-encryption-key` at the path consumed by
+Go. The application runs as UID/GID 1000. A PostgreSQL installation sets
+`SCRATCHPAD_DATABASE_URL` in its runtime Secret; SQLite uses the mounted PVC.
 
-1. Builds the `go-runtime` target of the merged commit's `Dockerfile` with
-   the homelab's shared BuildKit and pushes it to the homelab registry by
-   digest. The image contains both the Go server and the retained TypeScript
-   runtime; the operator-owned Deployment command decides which one runs.
-2. Waits for a host-side logical dump of the production PostgreSQL database.
-   The runner has no database credential; if the dump is refused (for example
-   during the nightly backup window) nothing is changed and the run fails.
-3. Changes only the container image of the existing Deployment. Command,
-   credentials, volumes, probes and resources stay operator-owned, and an
-   admission policy rejects anything else from CI.
-4. Waits for the rollout (the Deployment uses `Recreate`: Scratchpad and its
-   MCP endpoint are unavailable for roughly the startup time, typically under
-   a minute), then requires `GET /ready` to answer 200 with
-   `"database":"postgres"`.
-5. On any failure after the image change, restores the previous image and
-   waits for it to become available again.
+## New installation
 
-`deploy/app.json` describes the target. The runner refuses every job except
-this repository's `.github/workflows/deploy.yml` on `main`, started by
-`workflow_run` or an owner `workflow_dispatch`; pull requests never reach it.
+First provision the namespace, `scratchpad-config` ConfigMap, `scratchpad-runtime`
+Secret, `scratchpad-encryption-key` Secret and storage class/PVC policy through
+the owner's approved secret and cluster process. The database URL and key must
+be supplied through protected files or secret delivery; never put their contents
+in this repository or command output. Do not generate an installation key when
+adopting an existing installation.
 
-## Redeploy or roll back by hand
+For a new deployment where the existing key is held as a protected local file,
+`scripts/adopt-kubernetes-key.sh --check` verifies that the target Secret already
+exists and matches the protected file without printing either value. To create a
+missing Secret from that existing key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`,
+`KEY_SECRET` and `KEY_FILE`, then set `SCRATCHPAD_KEY_ADOPTION_APPROVED=yes` and
+run `--apply`. It refuses to replace an existing Secret. This is key adoption,
+not key generation or rotation.
 
-Run **Deploy** from `main` with `image` set to a digest-pinned image, for
-example the `previous` value in an earlier run's summary. An empty `image`
-rebuilds `main`. Only the repository owner can dispatch it.
+Select an immutable image reference from a successful Publish application image
+run (`ghcr.io/alexcatdad/scratchpad@sha256:...`) and replace the image placeholder
+in a reviewed local copy of the Kustomize overlay. Apply only after the owner has
+reviewed the target cluster and namespace:
 
-## Compatibility notes for each release
+```sh
+kubectl config current-context
+kubectl -n app-scratchpad diff -k deploy/kubernetes
+kubectl -n app-scratchpad apply -k deploy/kubernetes
+kubectl -n app-scratchpad rollout status deployment/scratchpad --timeout=10m
+kubectl -n app-scratchpad get service/scratchpad
+```
 
-- Schema changes run at startup (`store.ts` for the TypeScript runtime,
-  `backend/internal/persistence` for Go). A rollback runs the previous image
-  against the current schema, so keep schema changes additive or ship them
-  with an explicit down path; otherwise the database restore in the homelab
-  runbook is the recovery.
-- Switching the Deployment command from the TypeScript runtime to the Go
-  runtime is an operator step, not a CI deploy. It is one-way: Go migrates the
-  schema past version 1, which the TypeScript runtime refuses, and converts
-  stored provider secrets with the installation key. After the switch, the
-  automatic rollback only helps between Go images; returning to TypeScript
-  needs the pre-switch database dump. See
-  [go-backend-migrations.md](go-backend-migrations.md) and
-  [go-secret-configuration.md](go-secret-configuration.md).
-- Production connects as an application role that reads and writes data but
-  does not own the tables, so the Go server cannot apply schema migrations at
-  startup. Before CI deploys a release that adds a Go migration, the homelab
-  operator runs `scratchpad-server migrate` from that image on the host as the
-  table-owning role. Without that step the new pod fails readiness with
-  `DATABASE_NOT_READY (permission, SQLSTATE 42501)`, the migration rolls back
-  and CI restores the previous Go image. Startup failures name a class
-  (`permission`, `authentication`, `connection`, `schema`, `storage`,
-  `database` or `unknown`, with the PostgreSQL SQLSTATE when there is one) and
-  never the database URL or credentials. PostgreSQL URL `options` keep their
-  spaces, so `options=-c role=<owner>` selects the owning role.
-- Releases that change the MCP or SSH proof protocol (for example security
-  ticket 13, proof v2) need the matching MCP client installed by the owner at
-  the same time.
-- `SCRATCHPAD_PUBLIC_URL`, `SCRATCHPAD_TRUSTED_PROXIES` and the optional GitHub
-  sign-in settings come from the homelab's private runtime configuration, not
-  from this repository.
+The checked-in image placeholder intentionally cannot start a workload. Do not
+apply it unchanged. Keep the configured public URL and trusted proxy list aligned
+with the existing private ingress. Readiness is a database connection check, not
+proof of authenticated application acceptance.
+
+## Adopt an existing installation
+
+Before applying any workload manifest, record and map the live Deployment's
+namespace/name/container, image digest, command/args, Service selector and port,
+ConfigMap/Secret references, database endpoint, key Secret name/key, PVC claim,
+probes, resources, service account, security context, ingress and rollout
+strategy. Use authorized read-only cluster access. The checked-in base is a new
+installation shape, not an instruction to replace an existing live spec.
+
+Preserve the current database and role credentials, the existing encryption-key
+Secret contents, PVC identity and all unrelated pod settings. Map existing names
+to the manifest references in a reviewed local overlay. Never run a Secret
+creation command against an existing key name, rotate or regenerate the key, or
+recreate/resize/delete a bound PVC as part of adoption. Confirm the mounted key
+file still resolves to the retained installation key without printing it. If a
+safe mapping cannot be made, stop before applying manifests.
+
+Any TypeScript-to-Go switch requires separate owner approval after Go parity,
+release, backup/restore and production acceptance gates pass. Go advances the
+schema beyond what the retained TypeScript runtime accepts; do not treat the
+first Go image rollout as a routine image update.
+
+For an approved switch, record the existing Deployment revision and its exact
+container `command`/`args` before any change. Complete the selected Go image's
+migration Job against the existing database using the approved table-owner
+credential, then run the guarded rollout helper with
+`SCRATCHPAD_RUNTIME_SWITCH_APPROVED=yes` and `--switch-to-go`. That operation
+sets the digest and removes only the selected container's command/args so the
+image's `go-runtime` entrypoint starts. Its preflight requires the existing key
+Secret/path and PVC mapping to match. A normal `--apply` preserves command and
+args and is for image updates within the already selected runtime.
+
+To return to the retained TypeScript runtime, first restore the matching
+pre-switch database snapshot into a separate database/PVC and prepare a reviewed
+runtime configuration pointing at that restored state. Then select the recorded
+TypeScript Deployment revision (including its original command/args) and verify
+readiness and authenticated reads before routing traffic back. Keep the migrated
+database and failed Go workload intact. Never restore the old image against the
+Go-migrated schema or replace the installation-key Secret; the same key is
+required to read encrypted settings from the restored snapshot.
+
+## Release, migration and rollback
+
+1. Select a published digest from the exact source commit whose CI passed. Review
+   the release's schema and runtime notes. Keep the current image digest and a
+   verified pre-change database backup. Back up the database using its native
+   tool and store the archive outside the database volume under the existing
+   encrypted backup policy.
+2. For PostgreSQL, run the selected image's one-off migration Job before changing
+   the Deployment. The checked-in migration Job requires a non-empty PostgreSQL
+   database URL from `scratchpad-migration`; it refuses to run against SQLite.
+   Map `scratchpad-migration` to the already approved table-owner database
+   credential through the cluster's secret delivery process. Never put its value
+   in the Job, command arguments, workflow inputs, output or repository. Render
+   the checked-in Job with the chosen immutable image digest in a protected
+   temporary file, then create it and wait for completion:
+
+   ```sh
+   case "$SCRATCHPAD_IMAGE" in ghcr.io/alexcatdad/scratchpad@sha256:*) ;; *) exit 2 ;; esac
+   digest=${SCRATCHPAD_IMAGE##*@sha256:}
+   [ "${#digest}" -eq 64 ] || exit 2
+   case "$digest" in *[!0-9a-f]*|'') exit 2 ;; esac
+   umask 077
+   tmp_job=$(mktemp "${TMPDIR:-/tmp}/scratchpad-migrate.XXXXXX.yaml")
+   trap 'rm -f "$tmp_job"' EXIT HUP INT TERM
+   sed "s|ghcr.io/alexcatdad/scratchpad@sha256:replace-with-published-digest|$SCRATCHPAD_IMAGE|" \
+     deploy/kubernetes/migration-job.yaml > "$tmp_job"
+   job=$(kubectl --context "$KUBE_CONTEXT" create -f "$tmp_job" -o name)
+   kubectl --context "$KUBE_CONTEXT" -n app-scratchpad wait --for=condition=complete "$job" --timeout=10m
+   kubectl --context "$KUBE_CONTEXT" -n app-scratchpad logs "$job"
+   ```
+
+   Confirm the Job used the intended image digest and exited successfully. If it
+   fails or times out, leave the Deployment unchanged and follow the migration
+   runbook. Record the protected backup reference and migration outcome for the
+   rollout preflight. For SQLite, do not use this Job: stop every writer and run
+   `scratchpad-server migrate` against the reviewed existing PVC/database path
+   in an isolated one-off pod, then preserve that PVC when the Deployment is
+   restarted. See [go-backend-migrations.md](go-backend-migrations.md) for the
+   SQLite storage and migration boundaries.
+
+3. Change only the existing Deployment container image to the selected digest
+   after the owner has approved the live cutover. Retain the same runtime
+   settings, installation-key Secret, PVC, Service and ingress. Wait for the
+   rollout and require `GET /ready` to report the expected database engine.
+4. Verify authenticated browser sign-in, an existing record, MCP read/capture,
+   and persistence after pod restart before declaring acceptance.
+5. If rollout or acceptance fails before any new writes, restore the recorded
+   image digest and wait for readiness. If the new image migrated schema or
+   accepted writes, restore the pre-change database into a separate database or
+   isolated PVC using the native database restore procedure, then point the
+   previous image at that restored state. Do not point an old binary at a newer
+   schema or discard post-backup writes silently. Preserve the failed workload,
+   data and backup for diagnosis.
+
+For an existing deployment, run `scripts/rollout-kubernetes.sh --check` after
+setting its reviewed context, namespace, deployment/container, expected current
+image digest, existing key Secret/item/path and existing PVC. It performs read-only
+lookups and refuses a mismatched workload or mutable image. Only after the
+backup, selected-image migration and owner approval, set
+`SCRATCHPAD_BACKUP_REF`, `SCRATCHPAD_BACKUP_VERIFIED=yes`,
+`SCRATCHPAD_MIGRATION_STATE=complete`, and
+`SCRATCHPAD_CHANGE_APPROVED=yes`, then run `--apply`. The script changes only
+that container image and waits for rollout; it does not rotate Secrets, change
+PVCs or automatically roll back a potentially migrated database. If rollout
+fails, use the compatibility-aware recovery procedure above.
+
+For PostgreSQL use `pg_dump`/`pg_restore` with the existing approved backup
+workflow and owner/runtime role separation; see [postgres.md](postgres.md) and
+[go-backend-migrations.md](go-backend-migrations.md). For SQLite, stop all writers
+and restore the consistent database snapshot into a fresh PVC; see
+[deployment.md](deployment.md). Recover encrypted provider settings only with the
+same retained installation key documented in
+[go-secret-configuration.md](go-secret-configuration.md). Database snapshots do
+not include that key.

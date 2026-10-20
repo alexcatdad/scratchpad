@@ -190,16 +190,19 @@ func run() error {
 					observations <- observation{operation: operation, ms: elapsed, bytes: size, failed: failed}
 					return out, !failed
 				}
-				captured, ok := measure("capture", "record_finding", args, func(out map[string]any) bool {
-					record, _ := out["record"].(map[string]any)
-					id, _ := record["id"].(string)
-					payload, _ := record["payload"].(map[string]any)
-					return id != "" && record["projectId"] == projectID && record["title"] == args["title"] && payload["finding"] == args["finding"]
-				})
+				captureStarted := time.Now()
+				captured, size, captureErr := confirmCapture(ctx, func(callCtx context.Context, name string, arguments map[string]any) (map[string]any, int, error) {
+					return call(callCtx, session, name, arguments)
+				}, projectID, args, 15*time.Second)
+				observations <- observation{
+					operation: "capture", ms: float64(time.Since(captureStarted)) / float64(time.Millisecond),
+					bytes: size, failed: captureErr != nil,
+				}
+				ok := captureErr == nil
 				if !ok {
 					return
 				}
-				record := captured["record"].(map[string]any)
+				record := captured
 				sameRecord := func(out map[string]any) bool { return reflect.DeepEqual(out["record"], record) }
 				if _, ok = measure("retry", "record_finding", args, sameRecord); !ok {
 					return
@@ -267,6 +270,70 @@ func run() error {
 		return errors.New("workload failed; inspect operation error counts")
 	}
 	return nil
+}
+
+type toolCaller func(context.Context, string, map[string]any) (map[string]any, int, error)
+
+// confirmCapture treats the durable local receipt as the delivery authority. A
+// capture tool can correctly return saved_pending, or a delivered receipt without
+// the full central record after replay. Count capture only after the same receipt
+// is delivered and the authenticated public record read confirms the requested data.
+func confirmCapture(ctx context.Context, callTool toolCaller, projectID string, args map[string]any, timeout time.Duration) (map[string]any, int, error) {
+	initial, size, err := callTool(ctx, "record_finding", args)
+	if err != nil {
+		return nil, size, errors.New("capture call failed")
+	}
+	if initial["outcome"] != "saved_pending" && initial["outcome"] != "delivered" {
+		return nil, size, errors.New("capture returned an unsupported outcome")
+	}
+	receipt, _ := initial["receipt"].(map[string]any)
+	receiptID, _ := receipt["receiptId"].(string)
+	if receiptID == "" {
+		return nil, size, errors.New("capture omitted its durable receipt identity")
+	}
+
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if receipt["receiptId"] != receiptID {
+			return nil, size, errors.New("capture receipt identity changed")
+		}
+		switch receipt["state"] {
+		case "delivered":
+			centralID, _ := receipt["centralRecordId"].(string)
+			centralProjectID, _ := receipt["centralProjectId"].(string)
+			if centralID == "" || centralProjectID != projectID {
+				return nil, size, errors.New("delivered receipt omitted or changed central identity")
+			}
+			out, responseBytes, readErr := callTool(waitCtx, "get_record", map[string]any{"id": centralID})
+			size += responseBytes
+			if readErr != nil {
+				return nil, size, errors.New("delivered capture could not be read from the central API")
+			}
+			record, _ := out["record"].(map[string]any)
+			payload, _ := record["payload"].(map[string]any)
+			if record["id"] != centralID || record["projectId"] != projectID || record["title"] != args["title"] || payload["finding"] != args["finding"] {
+				return nil, size, errors.New("central record did not match the accepted capture")
+			}
+			return record, size, nil
+		case "pending":
+		default:
+			return nil, size, errors.New("capture receipt did not reach a deliverable state")
+		}
+		select {
+		case <-waitCtx.Done():
+			return nil, size, errors.New("capture receipt delivery timed out")
+		case <-ticker.C:
+		}
+		var responseBytes int
+		receipt, responseBytes, err = callTool(waitCtx, "get_capture_receipt", map[string]any{"receiptId": receiptID})
+		size += responseBytes
+		if err != nil {
+			return nil, size, errors.New("capture receipt lookup failed")
+		}
+	}
 }
 
 func captureArgs(projectID, marker string) map[string]any {

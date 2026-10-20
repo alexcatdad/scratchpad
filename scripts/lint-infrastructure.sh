@@ -11,6 +11,8 @@ fi
 shellcheck --version | grep -Fqx 'version: 0.11.0'
 actionlint
 shellcheck scripts/*.sh
+scripts/adopt-kubernetes-key.test.sh
+scripts/rollout-kubernetes.test.sh
 # Debian package snapshots are not pinned; exact package revisions disappear
 # from ordinary Debian mirrors. All other Dockerfile checks remain enabled.
 docker run --rm -i hadolint/hadolint:v2.15.1 hadolint --ignore DL3008 - < Dockerfile

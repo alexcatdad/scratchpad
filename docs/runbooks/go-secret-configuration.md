@@ -47,6 +47,12 @@ kubectl -n scratchpad create secret generic scratchpad-encryption-key \
   --from-file=installation-key='/absolute/private/scratchpad.key'
 ```
 
+For a Scratchpad deployment migration, use
+[`adopt-kubernetes-key.sh`](../../scripts/adopt-kubernetes-key.sh) to check an
+existing Secret or create it from the same protected key file only when absent.
+The helper refuses to overwrite an existing Secret. Never use it with a newly
+generated key when encrypted settings already exist.
+
 A projected mount can use a controlled read-only group. Adapt the UID/group to the actual Go workload:
 
 ```yaml
