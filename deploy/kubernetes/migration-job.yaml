@@ -25,9 +25,19 @@ spec:
         - name: migrate
           image: ghcr.io/alexcatdad/scratchpad@sha256:replace-with-published-digest
           imagePullPolicy: IfNotPresent
+          env:
+            - name: SCRATCHPAD_DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: scratchpad-migration
+                  key: SCRATCHPAD_DATABASE_URL
+                  optional: false
           command:
-            - /usr/local/bin/scratchpad-server
-            - migrate
-          envFrom:
-            - secretRef:
-                name: scratchpad-migration
+            - /bin/sh
+            - -c
+          args:
+            - >-
+              case "${SCRATCHPAD_DATABASE_URL:-}" in
+                postgres://*|postgresql://*) exec /usr/local/bin/scratchpad-server migrate ;;
+                *) echo 'SCRATCHPAD_DATABASE_URL must select PostgreSQL for this migration Job.' >&2; exit 1 ;;
+              esac

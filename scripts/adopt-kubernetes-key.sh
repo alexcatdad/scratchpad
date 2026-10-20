@@ -6,7 +6,7 @@ usage() {
 Usage: adopt-kubernetes-key.sh [--check|--apply]
 
 Required environment: KUBE_CONTEXT, KUBE_NAMESPACE, KEY_SECRET, KEY_FILE.
---check verifies the existing Secret without printing its data.
+--check verifies the existing Secret matches KEY_FILE without printing either.
 --apply creates the Secret from the supplied existing protected key file only
 when that Secret is absent. It refuses to overwrite or rotate an existing key.
 EOF
@@ -29,20 +29,6 @@ command -v kubectl >/dev/null 2>&1 || { echo 'kubectl is required.' >&2; exit 2;
 command -v jq >/dev/null 2>&1 || { echo 'jq is required.' >&2; exit 2; }
 actual_context=$(kubectl config current-context)
 [ "$actual_context" = "$KUBE_CONTEXT" ] || { echo 'Current Kubernetes context does not match KUBE_CONTEXT.' >&2; exit 1; }
-existing=$(kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" get secret "$KEY_SECRET" --ignore-not-found -o json)
-if printf '%s' "$existing" | jq -e '.metadata.name != null' >/dev/null; then
-  printf '%s' "$existing" | jq -e '.type == "Opaque" and (.data["installation-key"] | type == "string" and length > 0)' >/dev/null || {
-    echo 'The existing Secret is missing the expected key; it was not changed.' >&2
-    exit 1
-  }
-  echo 'Existing installation-key Secret is present; its data was not read to output or changed.'
-  [ "$mode" = --check ] && exit 0
-  echo 'Refusing to replace an existing installation-key Secret.' >&2
-  exit 1
-fi
-
-[ "$mode" = --apply ] || { echo 'Installation-key Secret is absent; no change made.' >&2; exit 1; }
-[ "${SCRATCHPAD_KEY_ADOPTION_APPROVED:-}" = yes ] || { echo 'Set SCRATCHPAD_KEY_ADOPTION_APPROVED=yes after owner approval.' >&2; exit 2; }
 [ -f "$KEY_FILE" ] && [ ! -L "$KEY_FILE" ] || { echo 'KEY_FILE must be a regular, non-symlink file.' >&2; exit 1; }
 case "$(uname -s)" in
   Darwin) mode_bits=$(stat -f '%Lp' "$KEY_FILE") ;;
@@ -55,6 +41,23 @@ trap 'rm -f "$tmp"' EXIT HUP INT TERM
 chmod 600 "$tmp"
 openssl base64 -d -in "$KEY_FILE" -out "$tmp" 2>/dev/null || { echo 'KEY_FILE is not valid base64 key material.' >&2; exit 1; }
 [ "$(wc -c < "$tmp" | tr -d ' ')" = 32 ] || { echo 'KEY_FILE must decode to exactly 32 bytes.' >&2; exit 1; }
+expected=$(base64 < "$KEY_FILE" | tr -d '\n')
+existing=$(kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" get secret "$KEY_SECRET" --ignore-not-found -o json)
+if printf '%s' "$existing" | jq -e '.metadata.name != null' >/dev/null; then
+  printf '%s' "$existing" | jq -e '.type == "Opaque" and (.data["installation-key"] | type == "string" and length > 0)' >/dev/null || {
+    echo 'The existing Secret is missing the expected key; it was not changed.' >&2
+    exit 1
+  }
+  actual=$(printf '%s' "$existing" | jq -er '.data["installation-key"]')
+  [ "$actual" = "$expected" ] || { echo 'Existing Secret does not match the supplied retained key file; it was not changed.' >&2; exit 1; }
+  echo 'Existing installation-key Secret matches the supplied key file; its data was not changed.'
+  [ "$mode" = --check ] && exit 0
+  echo 'Refusing to replace an existing installation-key Secret.' >&2
+  exit 1
+fi
+
+[ "$mode" = --apply ] || { echo 'Installation-key Secret is absent; no change made.' >&2; exit 1; }
+[ "${SCRATCHPAD_KEY_ADOPTION_APPROVED:-}" = yes ] || { echo 'Set SCRATCHPAD_KEY_ADOPTION_APPROVED=yes after owner approval.' >&2; exit 2; }
 rm -f "$tmp"
 trap - EXIT HUP INT TERM
 kubectl --context "$KUBE_CONTEXT" -n "$KUBE_NAMESPACE" create secret generic "$KEY_SECRET" \
