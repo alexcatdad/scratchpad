@@ -1532,7 +1532,7 @@ validation, authorization or consent checks.
 
 ## 59. Accepted clarification — enrollment contract requirements
 
-The owner accepted browser-first setup and administrator-controlled recovery on 2026-09-29; see architecture §24 and decision `scratchpad-20260929-010`.
+The owner accepted browser-first setup and administrator-controlled recovery on 2026-09-29; see [the historical architecture §24](archive/p0-baseline/architecture.md#24-accepted-clarification--owner-enrollment-and-recovery) and decision `scratchpad-20260929-010`.
 
 The authentication contract must additionally support initial setup-token redemption with first-passkey registration, authenticated credential enrollment with MCP proof of possession, and a separate audited replacement-passkey recovery flow. Setup/recovery capabilities are short-lived and single-use; initial setup stays disabled after owner enrollment. These flows must preserve project data and restart-safe authentication semantics. Their endpoint names and exact wire formats will be specified during implementation.
 
@@ -1774,7 +1774,7 @@ Issue #22 retains central-first immutable capture and stable retry identities. O
 
 ## Go replacement addition: unresolved questions and compact context
 
-The Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; the legacy TypeScript validator remains unchanged until cutover.
+The Go backend accepts question-only `qa` payloads with nonempty `question` and an omitted `answer`. Supplied answers remain nonempty strings. Capture answers separately and connect accepted `answers` relationships from answer to question; selected-project context resolves questions only from applicable, fully current, nonempty evidence. Suggested, archived, superseded, partial, unverified and out-of-scope sources do not resolve them. Original captures remain immutable. Full-pair QA remains supported; historical TypeScript artifacts required an answer and remain relevant only to pre-upgrade compatibility tests.
 
 The existing context response remains the default or explicit `version=1`. Explicit `version=2` returns distinct source previews, section references, lifecycle/authority/confidence, counts and truncation under response limits. The separate `/projects/{id}/context/compact` endpoint defaults to version 2 and supports generated SDKs without changing the legacy Go method signature. Limits are `limit` (1–100, default 20), `maxChars` (4096–64000 serialized UTF-8 bytes including newline, default 12000), and `previewChars` (32–2000 UTF-16 units, default 320). Current state is selected before history limits. Source detail remains available by ID. See [the contract and runbook](runbooks/go-context.md) for fields, omission reporting, compatibility and verification limits.
 

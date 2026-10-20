@@ -1,6 +1,6 @@
 # Go compact context and unresolved questions
 
-These additions implement issue [#36](https://github.com/alexcatdad/scratchpad/issues/36) in the development Go backend. The TypeScript application remains the supported runtime until full parity and delivery acceptance. This runbook does not authorize a live upgrade.
+These additions implement issue [#36](https://github.com/alexcatdad/scratchpad/issues/36) in the Go backend. Go is the default source runtime; published-release and deployed acceptance remain separate. This runbook does not authorize a live upgrade.
 
 ## Question capture and answer evidence
 
@@ -8,7 +8,7 @@ Go accepts `qa` captures with a required nonempty `payload.question` and an omit
 
 Capture a subsequent answer separately, then create an accepted `answers` relationship through `POST /api/v1/relationships`, from the answer record to the original question. Suggested relationships do not resolve questions until accepted. The original question is immutable. Context derives unresolved status from inline answer text or accepted, fully current, nonempty answer evidence in the selected project. Archived, superseded, partial, unverified, empty or out-of-scope answer sources do not resolve the question. Restoration of applicable evidence can resolve it again; a replacement needs its own answer relationship.
 
-The real stdio `record_qa` schema makes `answer` optional. Full-pair input still works against both runtimes; question-only input requires the Go backend until cutover. The supported TypeScript server's validator remains unchanged during this transition. Link/review operations retain their existing HTTP contract.
+The real stdio `record_qa` schema makes `answer` optional. Full-pair and question-only input are supported by Go. Historical schema-1 TypeScript artifacts required an answer. Link/review operations retain their existing HTTP contract.
 
 ## Explicit compact context
 

@@ -1,6 +1,6 @@
 # Go durable AI job controls
 
-The development Go backend implements `GET /api/v1/ai/jobs`, `POST /ai/jobs` and `POST /ai/jobs/{id}/retry`, plus embedding/analysis/export execution, automatic scheduling, `POST /search/semantic`, suggestion listing/review and `POST /summaries/export`. The TypeScript application remains the supported runtime until issue 36 passes full parity and delivery acceptance. Both manual and scheduled work execute under persisted leases.
+The Go backend implements `GET /api/v1/ai/jobs`, `POST /ai/jobs` and `POST /ai/jobs/{id}/retry`, plus embedding/analysis/export execution, automatic scheduling, `POST /search/semantic`, suggestion listing/review and `POST /summaries/export`. Go is the default source runtime; release and deployed acceptance remain separate. Both manual and scheduled work execute under persisted leases.
 
 Enqueue accepts `type: analyze | embed | export`, one `projectId` or explicit `projectIds`, optional `crossProject` and the existing export formats. It returns HTTP 202 with the persisted job. Jobs start queued with attempts zero, version one, a current run-after time and canonical selected project IDs. Default export format is `handoff`. Provider configuration must be enabled, and a configured token must be usable through the retained key; enqueue does not contact the provider or wait for model availability.
 
@@ -52,4 +52,4 @@ Completion workflows verify generated reviewable classification, all existing ar
 
 Scheduler workflows verify concurrent instances/restart, active cross-project deduplication, manual-only mode, real embedding-only processing and complete-cycle rollback on both engines. An operational SQLite restore preserves the deadline and existing job identity without rescheduling. SQL fault and historical-row fixtures are inputs; verification uses public jobs and retrieval.
 
-Next implement compact context/questions and PostgreSQL passage RAG. Broaden interruption/retry/restore evidence, integrate the dashboard/runtime and measure concurrent-agent performance before full parity and delivery acceptance.
+Compact context/questions, PostgreSQL passage RAG and dashboard integration are implemented. Validate interruption/retry/restore, concurrent-agent behavior and exact-revision delivery through the [P0 acceptance procedure](p0-consolidation.md).

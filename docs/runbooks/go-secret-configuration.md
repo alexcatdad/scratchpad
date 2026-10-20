@@ -1,6 +1,6 @@
 # Go provider configuration and retained secret keys
 
-The development Go backend now implements `GET/PATCH /api/v1/ai/settings` and `POST /api/v1/ai/test`. The existing TypeScript application remains the supported runtime until issue 36 passes complete parity and delivery acceptance. These instructions describe the Go implementation; they do not switch a deployed service.
+The Go backend now implements `GET/PATCH /api/v1/ai/settings` and `POST /api/v1/ai/test`. Go is the default source runtime. Published-release and deployed acceptance remain separate. These instructions describe the Go implementation; they do not switch a deployed service.
 
 AI configuration retains existing defaults, validation, numeric versions/`If-Match`, write-only token updates and safe before/after audits. Omit `apiKey` to preserve it, submit an empty string to remove it, or supply a new token to replace it. Configuration responses expose `apiKeyConfigured` and `secretProtection`, never token values or ciphertext. Key-only changes increment the persisted dispatch generation. Provider verification uses the existing synthetic embedding/completion flow; it validates bounded output, dimensions, indices, nonzero vectors and structured JSON. Request admission checks current authorization and generation under the write lock, releases the lock before waiting for the provider and stops subsequent requests/results after configuration changes. Redirects and vendor error bodies do not expose tokens.
 

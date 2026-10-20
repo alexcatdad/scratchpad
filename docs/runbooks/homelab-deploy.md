@@ -129,6 +129,7 @@ required to read encrypted settings from the restored snapshot.
    in an isolated one-off pod, then preserve that PVC when the Deployment is
    restarted. See [go-backend-migrations.md](go-backend-migrations.md) for the
    SQLite storage and migration boundaries.
+
 3. Change only the existing Deployment container image to the selected digest
    after the owner has approved the live cutover. Retain the same runtime
    settings, installation-key Secret, PVC, Service and ingress. Wait for the
