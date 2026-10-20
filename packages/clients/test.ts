@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sshNamespace, sshProof } from "../../apps/web/src/lib/ssh-proof.ts";
-import { createApi } from "../../apps/web/src/server/api.ts";
 import { createScratchpadClient as sourceClient } from "./typescript/index.ts";
 
 // Release acceptance uses the installed tarball with the same actual HTTP checks.
@@ -14,57 +12,19 @@ const createScratchpadClient: typeof sourceClient = process.env
   ? (await import(process.env.SCRATCHPAD_SDK_TS_MODULE)).createScratchpadClient
   : sourceClient;
 
-// A Go subprocess fixture can supply its enrolled disposable key and origin.
+// The Go integration test supplies a real server origin and enrolled key.
 const externalBaseUrl = process.env.SCRATCHPAD_SDK_TEST_URL;
-const api = externalBaseUrl
-  ? undefined
-  : createApi({ databasePath: ":memory:", origin: "http://localhost:3000" });
-await api?.store.insert("owner", { id: "owner", displayName: "SDK fixture" });
+const keyPath = process.env.SCRATCHPAD_SDK_SIGNING_KEY;
+assert(externalBaseUrl, "Run the SDK integration against the Go backend fixture");
+assert(keyPath, "The Go SDK fixture must provide its enrolled signing key");
 const directory = mkdtempSync(join(tmpdir(), "scratchpad-sdk-"));
-const keyPath = externalBaseUrl
-  ? process.env.SCRATCHPAD_SDK_SIGNING_KEY
-  : join(directory, "identity");
-assert(keyPath, "An external SDK fixture requires its enrolled signing key");
-if (!externalBaseUrl)
-  execFileSync("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", keyPath]);
 const publicKey = readFileSync(`${keyPath}.pub`, "utf8")
   .trim()
   .split(/\s+/)
   .slice(0, 2)
   .join(" ");
-await api?.store.insert("credential", {
-  id: "sdk-key",
-  kind: "ssh",
-  publicKey,
-});
-const server = api
-  ? createServer(async (request, response) => {
-      const chunks: Buffer[] = [];
-      for await (const chunk of request) chunks.push(Buffer.from(chunk));
-      const result = await api.handleRequest(
-        new Request(`http://localhost:3000${request.url}`, {
-          method: request.method,
-          headers: request.headers as Record<string, string>,
-          ...(!["GET", "HEAD"].includes(request.method ?? "GET")
-            ? { body: Buffer.concat(chunks) }
-            : {}),
-        }),
-      );
-      response.writeHead(result.status, Object.fromEntries(result.headers));
-      response.end(Buffer.from(await result.arrayBuffer()));
-    })
-  : undefined;
 try {
-  let baseUrl = externalBaseUrl;
-  if (server) {
-    await new Promise<void>((resolve) =>
-      server.listen(0, "127.0.0.1", resolve),
-    );
-    const address = server.address();
-    assert(address && typeof address === "object");
-    baseUrl = `http://127.0.0.1:${address.port}`;
-  }
-  assert(baseUrl);
+  const baseUrl = externalBaseUrl;
   const anonymous = createScratchpadClient({ baseUrl });
   const challenge = await anonymous.POST("/api/v1/auth/mcp/challenge", {
     body: { publicKey },
@@ -76,7 +36,7 @@ try {
     sshProof(
       challenge.data,
       publicKey,
-      externalBaseUrl ?? "http://localhost:3000",
+      baseUrl,
       "ssh_login",
     ),
   );
@@ -161,10 +121,5 @@ try {
     "Generated TypeScript and Go clients passed authenticated HTTP integration and typed failure checks.",
   );
 } finally {
-  if (server)
-    await new Promise<void>((resolve, reject) =>
-      server.close((error) => (error ? reject(error) : resolve())),
-    );
-  await api?.close();
   rmSync(directory, { recursive: true, force: true });
 }
