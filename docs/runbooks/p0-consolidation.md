@@ -83,8 +83,10 @@ collector/offline-delivery acceptance.
   `sha256:768567b8d83f357b8831ebb29e328dd481759f78a7c0cb81b452ae4655ad02ff`.
 - Seven native Go browser scenarios passed, including passkeys, GitHub OAuth,
   dashboard integration and restoration. The migrated workflow and private-AI
-  browser scenarios also passed. The broad GitHub lifecycle fixture remains a
-  retirement gate until its recovery scenario passes against Go.
+  browser scenarios also passed. The full GitHub lifecycle passed three
+  consecutive normal-build SQLite runs, including live setup/recovery, cached
+  access, revocation, passkeys and retained memory. Native GitHub browser tests
+  passed on SQLite and disposable PostgreSQL 17 after the fixture correction.
 - MCP race tests and 31 Swift tests passed, including real collector IPC.
   Generated-client checks and authenticated Go client calls passed. Focused
   schema, numeric identity and historical PostgreSQL rollback race tests passed.
@@ -94,6 +96,15 @@ collector/offline-delivery acceptance.
   Node 24.21.0. A prior combined SQLite/PostgreSQL 17 run reached its 20-minute
   timeout and does not count as full acceptance. Canonical PostgreSQL 18 CI
   shards remain required at the final reviewed head.
+- The migrated TLS fixtures now isolate their trusted certificate directory
+  from database files. A temporary syscall trace identified Go's certificate
+  loader opening and closing the database when `SSL_CERT_DIR` included it,
+  releasing process-held SQLite locks. The original live recovery assertions
+  and four-connection reader pool remain intact; no driver workaround is used.
+- Reviewed CI fixtures prebuild Go executables outside browser startup deadlines,
+  wait for API and dashboard readiness, and inspect both container log streams.
+  Three affected workflow/harness browser tests, targeted typechecks, lint,
+  actionlint, shellcheck and Hadolint passed locally.
 - Final retirement, combined-head reviews, CI and merged-main gates remain pending.
 
 ## Production gate

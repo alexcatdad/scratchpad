@@ -1,17 +1,18 @@
 # Go runtime and TypeScript backend retirement
 
 This runbook records the acceptance boundary for making the Go service the
-default and retiring the TypeScript API implementation. It separates local
+default and retiring the TypeScript API implementation. The current source has
+one Go API and a UI-only React renderer. This separates local
 behavior evidence from CI, image, rollback, and deployed-runtime acceptance.
 
 ## Behavior gates
 
-| Behavior                                                                                     | Go acceptance                                                                                                           | Remaining gap before deleting the legacy source                                                             |
+| Behavior                                                                                     | Go acceptance                                                                                                           | Acceptance requirement                                                                                      |
 | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Authenticated capture, projects, search, detail, curation, portability, AI/RAG and readiness | `backend/*_test.go`; SQLite and PostgreSQL service shards                                                               | Run the complete Node 24 backend suite on both database engines.                                            |
+| Authenticated capture, projects, search, detail, curation, portability, AI/RAG and readiness | `backend/*_test.go`; SQLite and PostgreSQL service shards                                                               | Run the complete Go backend suite on both database engines with the pinned Node renderer.                   |
 | Dashboard and passkey flows                                                                  | `tests/go-dashboard.spec.ts`, `tests/go-github.spec.ts`; `tests/workflow-harness.ts` starts the Go public process       | Run the full browser suite against the current built renderer and Go API.                                   |
 | Private AI settings and document/retrieval flows                                             | `tests/post-mvp.spec.ts`; `tests/real-ai.spec.ts` remains explicit opt-in                                               | Verify required encryption-key fixture and current renderer build.                                          |
-| GitHub OAuth, published key lifecycle, outages, and recovery                                 | `backend/github_test.go`; browser coverage in the Go GitHub suite                                                       | Preserve the lifecycle matrix before removing `tests/github-workflow.spec.ts`.                              |
+| GitHub OAuth, published key lifecycle, outages, and recovery                                 | `backend/github_test.go`; `tests/github-workflow.spec.ts`; native Go GitHub browser suite                               | Retain the complete lifecycle matrix against Go, with TLS trust files isolated from database files.         |
 | Generated TypeScript and Go clients                                                          | `backend/sdk_test.go` runs both clients against a Go process; `packages/clients/test.ts` requires that external fixture | `npm run sdk:test` must invoke the targeted Go test.                                                        |
 | Historical numeric JSONL identity and raw source preservation                                | `backend/legacy_numeric_identity_review_test.go` freezes TypeScript-emitted IDs and hashes for synthetic inputs         | Run both SQLite and PostgreSQL cases.                                                                       |
 | Private operator-history acceptance                                                          | `scripts/validate-history.ts` exercises a disposable Go SQLite process through HTTP                                     | Keep this optional and local; never upload inputs or output artifacts to CI.                                |

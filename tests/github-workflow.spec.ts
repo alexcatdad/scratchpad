@@ -78,8 +78,12 @@ test.beforeAll(async () => {
   key = resolve(temporary, "github-identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   publicKey = readFileSync(`${key}.pub`, "utf8").trim();
+  // Go scans every file in SSL_CERT_DIR. Keep database/sidecar files out:
+  // opening and closing their inodes would release this process's SQLite locks.
+  const certificates = resolve(temporary, "certificates");
+  mkdirSync(certificates, { mode: 0o700 });
   const tlsKey = resolve(temporary, "github-tls-key.pem");
-  const tlsCert = resolve(temporary, "github-tls-cert.pem");
+  const tlsCert = resolve(certificates, "github-tls-cert.pem");
   command("openssl", [
     "req",
     "-x509",
@@ -170,7 +174,7 @@ test.beforeAll(async () => {
   process.env.HTTPS_PROXY = `http://127.0.0.1:${proxyAddress.port}`;
   process.env.NO_PROXY = "localhost,127.0.0.1,::1";
   process.env.SSL_CERT_FILE = tlsCert;
-  process.env.SSL_CERT_DIR = temporary;
+  process.env.SSL_CERT_DIR = certificates;
   if (originalDatabaseUrl) {
     databaseAdmin = postgres(originalDatabaseUrl, { max: 1 });
     databaseName = `scratchpad_github_e2e_${randomUUID().replaceAll("-", "")}`;
@@ -195,7 +199,7 @@ test.beforeAll(async () => {
     HTTPS_PROXY: `http://127.0.0.1:${proxyAddress.port}`,
     NO_PROXY: "localhost,127.0.0.1,::1",
     SSL_CERT_FILE: tlsCert,
-    SSL_CERT_DIR: temporary,
+    SSL_CERT_DIR: certificates,
   };
   buildGoServer(root, serverBinary, environment);
   admin = (...args) => runGoAdmin(serverBinary, args, environment, root);
