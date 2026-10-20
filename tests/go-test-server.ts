@@ -1,14 +1,22 @@
-import { execFileSync, spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-export function buildGoServer(root: string, destination: string, env: NodeJS.ProcessEnv) {
+export function buildGoServer(
+  root: string,
+  destination: string,
+  env: NodeJS.ProcessEnv,
+) {
   if (!existsSync(destination))
-    execFileSync("go", ["build", "-o", destination, "./cmd/scratchpad-server"], {
-      cwd: resolve(root, "backend"),
-      env,
-      timeout: 60_000,
-    });
+    execFileSync(
+      "go",
+      ["build", "-o", destination, "./cmd/scratchpad-server"],
+      {
+        cwd: resolve(root, "backend"),
+        env,
+        timeout: 60_000,
+      },
+    );
   return destination;
 }
 

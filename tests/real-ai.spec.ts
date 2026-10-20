@@ -41,7 +41,10 @@ const environment = {
   SCRATCHPAD_DATABASE_URL: "",
 };
 let application: ChildProcess | undefined;
-const serverBinary = resolve(temporary || tmpdir(), "scratchpad-real-ai-server");
+const serverBinary = resolve(
+  temporary || tmpdir(),
+  "scratchpad-real-ai-server",
+);
 let containerCreated = false;
 let logs = "";
 type Entity = { id: string; version: number; [key: string]: unknown };
@@ -88,10 +91,15 @@ function command(executable: string, args: string[]): string {
   });
 }
 function setupToken(): string {
+  if (!dockerMode) buildGoServer(root, serverBinary, environment);
   const output = dockerMode
-    ? command("docker", ["exec", runId, "/usr/local/bin/scratchpad-server", "setup"])
-    : (buildGoServer(root, serverBinary, environment),
-      runGoAdmin(serverBinary, ["setup"], environment, root));
+    ? command("docker", [
+        "exec",
+        runId,
+        "/usr/local/bin/scratchpad-server",
+        "setup",
+      ])
+    : runGoAdmin(serverBinary, ["setup"], environment, root);
   return output.trim().split("\n").at(-1) ?? "";
 }
 async function waitForJob(page: Page, key: string): Promise<Job> {

@@ -15,7 +15,10 @@ const createScratchpadClient: typeof sourceClient = process.env
 // The Go integration test supplies a real server origin and enrolled key.
 const externalBaseUrl = process.env.SCRATCHPAD_SDK_TEST_URL;
 const keyPath = process.env.SCRATCHPAD_SDK_SIGNING_KEY;
-assert(externalBaseUrl, "Run the SDK integration against the Go backend fixture");
+assert(
+  externalBaseUrl,
+  "Run the SDK integration against the Go backend fixture",
+);
 assert(keyPath, "The Go SDK fixture must provide its enrolled signing key");
 const directory = mkdtempSync(join(tmpdir(), "scratchpad-sdk-"));
 const publicKey = readFileSync(`${keyPath}.pub`, "utf8")
@@ -33,12 +36,7 @@ try {
   const message = join(directory, "challenge");
   writeFileSync(
     message,
-    sshProof(
-      challenge.data,
-      publicKey,
-      baseUrl,
-      "ssh_login",
-    ),
+    sshProof(challenge.data, publicKey, baseUrl, "ssh_login"),
   );
   execFileSync("ssh-keygen", [
     "-Y",

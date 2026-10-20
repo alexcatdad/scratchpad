@@ -26,7 +26,7 @@
     "sdk:generate": "node scripts/generate-clients.mjs",
     "sdk:check": "node scripts/generate-clients.mjs --check && npm run typecheck -w @scratchpad/api-client && cd packages/clients/go && go test ./...",
     "sdk:build": "npm run build -w @scratchpad/api-client",
-    "sdk:test": "npm exec -w @scratchpad/web -- tsx ../../packages/clients/test.ts"
+    "sdk:test": "go -C backend test -run '^TestGeneratedClientsCallAuthenticatedGoBackend$' -count=1"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",

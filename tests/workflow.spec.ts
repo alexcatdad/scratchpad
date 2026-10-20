@@ -106,8 +106,24 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   expect(statuses).toEqual([200, 401]);
   await expect.poll(readLogs).not.toContain(markerId);
   await expect
-    .poll(readLogs)
-    .toMatch(/GET \/api\/v1\/records 200 \d+\.\d{2}ms/);
+    .poll(() =>
+      readLogs()
+        .split("\n")
+        .some((line) => {
+          try {
+            const entry = JSON.parse(line);
+            return (
+              entry.method === "GET" &&
+              entry.path === "/api/v1/records" &&
+              entry.status === 200 &&
+              typeof entry.durationMs === "number"
+            );
+          } catch {
+            return false;
+          }
+        }),
+    )
+    .toBe(true);
   expect(readLogs()).not.toContain(marker);
   expect(readLogs()).not.toContain(encodeURIComponent(marker));
   // Leave the URL-scoped private filters before continuing the workflow.
@@ -754,7 +770,11 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
       return;
     }
     const input = JSON.parse(body.messages.at(-1).content);
-    const isExport = String(body.messages[0].content).startsWith("Create a ");
+    const requestedKinds =
+      body.response_format?.json_schema?.schema?.properties?.artifacts?.items
+        ?.properties?.kind?.enum;
+    const isExport =
+      requestedKinds?.length === 1 && requestedKinds[0] === "export";
     const output = {
       artifacts: [
         {
