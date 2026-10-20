@@ -278,7 +278,7 @@ func (r *Runtime) probeConnection(ctx context.Context) {
 		r.noteConnectionFor(generation, code)
 		return
 	}
-	if canonicalURL(identity.ServerURL) != canonicalURL(c.ServerURL) || identity.CredentialID == "" {
+	if canonicalURL(identity.ServerURL) != canonicalURL(c.ServerURL) || identity.CredentialID == "" || !hasCapability(identity.CaptureCapabilities, CapabilityClientSavedAtV1) {
 		r.noteConnectionFor(generation, DeliveryServerIncompatible)
 		return
 	}
@@ -1047,7 +1047,7 @@ func (r *Runtime) VerifyConnection(ctx context.Context) (VerifyConnectionRespons
 		}
 		return VerifyConnectionResponse{}, err
 	}
-	if canonicalURL(identity.ServerURL) != canonicalURL(c.ServerURL) || identity.CredentialID == "" {
+	if canonicalURL(identity.ServerURL) != canonicalURL(c.ServerURL) || identity.CredentialID == "" || !hasCapability(identity.CaptureCapabilities, CapabilityClientSavedAtV1) {
 		if !r.noteConnectionFor(generation, DeliveryServerIncompatible) {
 			return VerifyConnectionResponse{}, ErrConflictSentinel
 		}

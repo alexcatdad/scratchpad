@@ -1849,6 +1849,62 @@ func TestUncertainDeliveryFreezesProjectSelectionAndLegacyServerIsBlocked(t *tes
 	}
 }
 
+func TestConnectionChecksPreserveCaptureCompatibility(t *testing.T) {
+	for _, explicit := range []bool{false, true} {
+		for _, compatible := range []bool{false, true} {
+			t.Run(fmt.Sprintf("explicit=%t/compatible=%t", explicit, compatible), func(t *testing.T) {
+				identity := testIdentity()
+				if !compatible {
+					identity.CaptureCapabilities = nil
+				}
+				adapter := &testAdapter{identity: identity}
+				r, _ := testDeferredRuntime(t, filepath.Join(t.TempDir(), "queue.sqlite"), &testKeys{}, adapter)
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Millisecond)
+				out, err := r.Capture(ctx, testRequest("compatibility", "Synthetic compatibility"))
+				cancel()
+				if err != nil {
+					t.Fatal(err)
+				}
+				if progressed, err := r.processOne(context.Background()); err != nil || !progressed {
+					t.Fatalf("delivery did not process capture: progressed=%t err=%v", progressed, err)
+				}
+				receipt, err := r.LookupReceipt(context.Background(), out.Receipt.ReceiptID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !compatible && (receipt.DeliveryCode != DeliveryServerIncompatible || adapter.calls.Load() != 0) {
+					t.Fatalf("legacy capture was not blocked before delivery: code=%s calls=%d", receipt.DeliveryCode, adapter.calls.Load())
+				}
+				if explicit {
+					_, err = r.VerifyConnection(context.Background())
+				} else {
+					r.probeConnection(context.Background())
+				}
+				status, statusErr := r.Status(context.Background())
+				if statusErr != nil {
+					t.Fatal(statusErr)
+				}
+				want := ConnectionServerIncompatible
+				if compatible {
+					want = ConnectionConnected
+				}
+				if status.Connection.State != want {
+					t.Fatalf("connection check changed capture compatibility: got=%s want=%s", status.Connection.State, want)
+				}
+				if compatible && err != nil {
+					t.Fatal(err)
+				}
+				if explicit && !compatible {
+					var failure *DeliveryFailure
+					if !errors.As(err, &failure) || failure.Code != DeliveryServerIncompatible {
+						t.Fatalf("verification did not reject legacy server: %v", err)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestPrivateIPCStatusAndPause(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "queue.sqlite")
 	keys := &testKeys{}
