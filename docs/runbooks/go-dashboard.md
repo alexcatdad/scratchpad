@@ -45,8 +45,8 @@ SQLite path. Provider and GitHub configuration also belong to Go.
 
 The renderer's `SCRATCHPAD_UI_ONLY=true` mode refuses backend initialization and
 returns `503 DASHBOARD_ONLY` for its API and readiness routes. Keep that listener
-private. The temporary TypeScript compatibility fixture is not a supported runtime mode;
-keep the renderer in UI-only mode.
+private. The pinned historical TypeScript rollback fixture is not a supported
+runtime mode; keep the renderer in UI-only mode.
 
 ## Boundaries and verification
 

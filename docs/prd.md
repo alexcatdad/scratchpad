@@ -28,9 +28,9 @@ native macOS application remain supported clients. SQLite is the default;
 PostgreSQL is an optional engine.
 
 Current source defaults are distinct from published release capabilities and
-installed-deployment acceptance. The TypeScript backend remains temporarily as
-compatibility/rollback test input until its behavior-preserving retirement gate
-passes. It is not the default runtime. Track completion in the
+installed-deployment acceptance. The TypeScript backend has been removed from
+the current source tree. Rollback tests extract its pinned historical revision
+into disposable fixtures; it is not a supported runtime mode. Track completion in the
 [P0 acceptance ledger](runbooks/p0-consolidation.md); never infer parity or a
 production cutover from an opt-in build or a passing compilation.
 

@@ -28,7 +28,7 @@ the listed merge order. Production cutover is a separately authorized operation.
       shutdown and credential isolation verified, release packaging retained.
 - [ ] SP-03: sole Go backend, retained React/MCP/desktop contracts, migrated
       behavior tests, removed unused server dependencies and permanent runtime modes.
-- [ ] SP-04: #47 deployment ownership merged, image/manifests/migration/probes,
+- [x] SP-04: #47 deployment ownership merged, image/manifests/migration/probes,
       preserved installation key and credentials, verified disposable restore/rollback.
 - [ ] SP-05: authoritative PRD/architecture/API/onboarding accurately reflect
       implementation and future GitHub/team identity with permission-aware RAG.
@@ -70,9 +70,27 @@ collector/offline-delivery acceptance.
 - Starting main: `0990411697f9eda7c535acf0d2f0697d7ae6f149`.
 - Focused projection checks passed on SQLite and disposable PostgreSQL 17.11 with
   pgvector. The PostgreSQL 18-only constraint fixture was skipped locally.
-- React production build and frontend/docs TypeScript checks passed locally with
-  Node 24.21.0 before retirement changes.
-- Full backend, browser, container, review and merged-main gates remain pending.
+- Deployment replacement [#51](https://github.com/alexcatdad/scratchpad/pull/51)
+  merged as `96e9648b1ec9b5b0db31935ac33a8d83e8e20147`; all required CI checks
+  passed. Its manual publication workflow performs no live rollout.
+- The default Go image passed seven actual-container scenarios: SQLite,
+  PostgreSQL, pgvector, encrypted-settings restoration, and historical
+  TypeScript rollback with preserved authentication on SQLite and PostgreSQL.
+  Accepted local image digest:
+  `sha256:768567b8d83f357b8831ebb29e328dd481759f78a7c0cb81b452ae4655ad02ff`.
+- Seven native Go browser scenarios passed, including passkeys, GitHub OAuth,
+  dashboard integration and restoration. The migrated workflow and private-AI
+  browser scenarios also passed. The broad GitHub lifecycle fixture remains a
+  retirement gate until its recovery scenario passes against Go.
+- MCP race tests and 31 Swift tests passed, including real collector IPC.
+  Generated-client checks and authenticated Go client calls passed. Focused
+  schema, numeric identity and historical PostgreSQL rollback race tests passed.
+- React/docs builds, frontend/docs typechecks, lint and entrypoint lifecycle
+  tests passed with Node 24.21.0 before final source retirement.
+- A local combined backend run reached its 20-minute timeout. It does not count
+  as full acceptance; the canonical PostgreSQL 18 CI shards remain required at
+  the final reviewed head.
+- Final retirement, combined-head reviews, CI and merged-main gates remain pending.
 
 ## Production gate
 

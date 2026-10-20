@@ -28,12 +28,12 @@ application behavior. Go strips credentials and forwarding identity before
 proxying dashboard GET/HEAD requests and prevents renderer cookies from replacing
 Go sessions. Renderer failure leaves the API available.
 
-The TypeScript implementation remains a temporary compatibility/rollback test
-reference while retirement acceptance is completed. It is not the default
-runtime. Its schema-1 restriction makes it unsuitable for running against a
-Go-upgraded database. Removing it requires preserved behavior-focused tests,
-including restored authentication, numeric import identity and old-schema refusal.
-Track that gate in the [P0 acceptance ledger](runbooks/p0-consolidation.md).
+The TypeScript implementation has been removed from the current source tree.
+Rollback tests extract its pinned historical revision into disposable fixtures.
+Its schema-1 restriction makes it unsuitable for running against a Go-upgraded
+database. Behavior-focused tests retain restored authentication, numeric import
+identity and old-schema refusal. Track acceptance in the
+[P0 acceptance ledger](runbooks/p0-consolidation.md).
 
 The native macOS SwiftUI app manages collector configuration, credentials and
 lifecycle. Homebrew cask updates replace the earlier in-app updater direction;

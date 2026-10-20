@@ -135,7 +135,9 @@ async function main() {
     return;
   }
   if (!/^http:\/\/127\.0\.0\.1:[0-9]+$/.test(endpoint))
-    throw new Error("Private history requires the isolated Go loopback fixture.");
+    throw new Error(
+      "Private history requires the isolated Go loopback fixture.",
+    );
   const call = async (
     path: string,
     method = "GET",
