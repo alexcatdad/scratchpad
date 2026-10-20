@@ -209,10 +209,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Build opt-in Go runtime image
+      - name: Build default Go image and retained TypeScript rollback image
         run: |
-          docker --context default build --target go-runtime -t scratchpad-go:ci .
-          docker --context default build -t scratchpad-retained:ci .
+          docker --context default build -t scratchpad-go:ci .
+          docker --context default build --target typescript-runtime -t scratchpad-retained:ci .
       - name: Verify Go image browser access and operational restore
         run: npx playwright test --project=go-container
         env:

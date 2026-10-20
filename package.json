@@ -11,7 +11,7 @@
     "node": ">=24.21.0"
   },
   "scripts": {
-    "dev": "npm run dev -w @scratchpad/web",
+    "dev": "node scripts/dev-go.mjs",
     "docs:dev": "npm run dev -w @scratchpad/docs",
     "build": "npm run build --workspaces",
     "typecheck": "npm run typecheck -w @scratchpad/web && npm run check -w @scratchpad/docs && npm run typecheck:history",

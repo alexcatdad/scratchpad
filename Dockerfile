@@ -30,6 +30,10 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s CMD ["node", "-e", "fetch('http://localhost:3000/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
 CMD ["npm", "run", "start", "-w", "@scratchpad/web"]
 
+FROM runtime-base AS typescript-runtime
+
+# Default image: Go owns the public API and the retained React renderer serves
+# the dashboard on a private loopback port.
 FROM runtime-base AS go-runtime
 USER 0:0
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u1 && rm -rf /var/lib/apt/lists/*
@@ -40,4 +44,6 @@ COPY --chown=node:node scripts/go-dashboard-runtime.mjs ./scripts/go-dashboard-r
 ENTRYPOINT ["node", "/app/scripts/go-dashboard-runtime.mjs", "/usr/local/bin/scratchpad-server"]
 CMD ["serve"]
 
-FROM runtime-base AS runtime
+# The final stage is intentionally Go-backed so an ordinary image build uses
+# the supported central API runtime.
+FROM go-runtime AS runtime
