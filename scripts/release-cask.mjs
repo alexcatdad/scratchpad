@@ -31,7 +31,9 @@ if (existsSync(cask)) {
 
 const sha = createHash("sha256").update(readFileSync(archive)).digest("hex");
 const filename = `scratchpad-${tag}-darwin-arm64.zip`;
-const body = `cask "scratchpad" do
+const body = `# Third-party Ruby hooks retain the transaction lock until Homebrew exits.
+# Declarative steps cannot express this lock lifetime.
+cask "scratchpad" do
   version "${version}"
   sha256 "${sha}"
 
@@ -48,35 +50,42 @@ const body = `cask "scratchpad" do
       lock_dir = File.expand_path("~/Library/Application Support/Scratchpad")
       FileUtils.mkdir_p(lock_dir, mode: 0700)
       dir_stat = File.lstat(lock_dir)
-      raise "Scratchpad upgrade state directory is not private" unless dir_stat.directory? && dir_stat.uid == Process.uid && (dir_stat.mode & 0077).zero?
+      if !dir_stat.directory? || dir_stat.uid != Process.uid || !dir_stat.mode.nobits?(0077)
+        raise "Scratchpad upgrade state directory is not private"
+      end
+
       lock_path = File.join(lock_dir, "homebrew-upgrade.lock")
+      # This descriptor intentionally remains open for the Homebrew transaction.
       lock = File.open(lock_path, File::RDWR | File::CREAT | File::NOFOLLOW, 0600)
       lock_stat = lock.stat
-      raise "Scratchpad upgrade lock is not private" unless lock_stat.file? && lock_stat.uid == Process.uid && (lock_stat.mode & 0077).zero?
+      if !lock_stat.file? || lock_stat.uid != Process.uid || !lock_stat.mode.nobits?(0077)
+        raise "Scratchpad upgrade lock is not private"
+      end
+
       lock.close_on_exec = true
       lock.flock(File::LOCK_EX)
       Object.const_set(:ScratchpadHomebrewUpgradeLock, lock)
     end
   end
 
+  app "Scratchpad.app"
+
   preflight do
     upgrade_lock.call
     service = staged_path/"Scratchpad.app/Contents/Helpers/scratchpad-service"
     installed_service = appdir/"Scratchpad.app/Contents/Helpers/scratchpad-service"
     system_command service.to_s,
-      args: ["--prepare-upgrade", "--upgrade-service-path", installed_service.to_s],
-      must_succeed: true
+                   args:         ["--prepare-upgrade", "--upgrade-service-path", installed_service.to_s],
+                   must_succeed: true
   end
 
   uninstall_preflight do
     upgrade_lock.call
     service = appdir/"Scratchpad.app/Contents/Helpers/scratchpad-service"
     system_command service.to_s,
-      args: ["--prepare-upgrade"],
-      must_succeed: true
+                   args:         ["--prepare-upgrade"],
+                   must_succeed: true
   end
-
-  app "Scratchpad.app"
 
   uninstall quit: "com.alexcatdad.scratchpad"
 end

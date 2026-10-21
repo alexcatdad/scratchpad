@@ -157,7 +157,7 @@ test("release-cask renders the pinned arm64 app archive, runs safe hooks, and re
     assert.match(cask, /preflight do/);
     assert.match(cask, /uninstall_preflight do/);
     assert.match(cask, /homebrew-upgrade\.lock/);
-    assert.match(cask, /args: \["--prepare-upgrade"/);
+    assert.match(cask, /args:\s+\["--prepare-upgrade"/);
     assert.match(cask, /must_succeed: true/);
     assert.doesNotMatch(cask, /postflight|finish-upgrade/);
     assert.doesNotMatch(cask, /verified:|no_quarantine|quarantine/);
