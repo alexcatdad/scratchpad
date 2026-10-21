@@ -18,7 +18,34 @@ Current source adds optional GitHub browser sign-in and synchronized published S
 
 See the [OAuth operator runbook](docs/runbooks/github-oauth.md), [security guide](https://alexcatdad.github.io/scratchpad/reference/security/) and portable [connection skill](skills/scratchpad-connect/SKILL.md).
 
-## Install the MCP
+## Install the macOS app
+
+Scratchpad's macOS application is the primary desktop installation. It bundles
+the stdio MCP adapter, background capture service and encrypted offline queue.
+The app targets Apple Silicon Macs running macOS 13 or later.
+
+The app release and Homebrew cask are pending publication. Once both are
+published, install and open it with:
+
+```sh
+brew install --cask alexcatdad/tap/scratchpad
+open -a Scratchpad
+```
+
+The fully qualified install grants Homebrew trust only to the Scratchpad cask.
+Tapping the repository alone does not grant trust; whole-tap trust is not needed.
+
+Configure your existing server and SSH signer in **Authentication**, verify
+authenticated access, then use **MCP setup** to preview and apply your coding
+client's configuration. The client uses the bundled
+`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`; no separate MCP
+formula is required. Restart the client's MCP connection after applying it.
+The server remains a separate deployment.
+
+See the [app distribution runbook](docs/runbooks/macos-app-distribution.md)
+for publication and installation verification.
+
+## Historical standalone MCP
 
 ```sh
 brew install alexcatdad/tap/scratchpad-mcp
@@ -27,7 +54,10 @@ scratchpad-mcp --version
 
 The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
 
-The bundled MCP startup behavior applies to this development branch's macOS tray app. Published v0.3.0 binaries retain their released behavior; this work does not change their packaging.
+This formula currently distributes v0.3.0, which predates the app, collector
+and current authentication contract. It does not provide the app's offline
+capture workflow and is not a substitute for the app on a new Mac. Keep an
+existing installation until clients have been switched to the bundled adapter.
 
 ## Run with Docker
 
@@ -62,7 +92,7 @@ For a source checkout, the repository's `docker compose up --build -d` builds th
 
 ## Develop
 
-Use the Node 24 version in `.node-version`, npm, Go 1.27.2, Git and OpenSSH.
+Use the Node 24 version in `.node-version`, npm, Go 1.27.3, Git and OpenSSH.
 
 ```sh
 npm ci

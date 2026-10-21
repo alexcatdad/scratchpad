@@ -1,9 +1,47 @@
 ---
 title: Installation & development
-description: Install the released MCP and container, enroll the owner, or develop from source.
+description: Install the macOS app, understand historical MCP releases, or develop from source.
 ---
 
-## Install the released MCP
+## Install the macOS application
+
+The macOS app bundles the stdio MCP adapter, background capture service and
+encrypted offline queue. It targets Apple Silicon Macs running macOS 13 or
+later. Intel and Linux app builds are not available.
+
+**Publication pending:** the public tap currently contains the historical
+`scratchpad-mcp` formula, but no `scratchpad` app cask. After the signed app
+release and cask are published, the installation command will be:
+
+```sh
+brew install --cask alexcatdad/tap/scratchpad
+open -a Scratchpad
+```
+
+Homebrew requires explicit trust for third-party packages. This fully qualified
+install trusts only the Scratchpad cask. If you have already tapped the
+repository and need to inspect the cask before installation, use
+`brew trust --cask alexcatdad/tap/scratchpad`, then
+`brew info --cask alexcatdad/tap/scratchpad`. No whole-tap trust or trust-bypass
+environment variable is needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
+
+In the app, open **Authentication**, enter your existing server connection and
+local SSH signer details, save, and choose **Verify authenticated access**.
+The matching public key must already be authorized by the server. Keep private
+keys on the computer; the app reuses your SSH signer.
+
+Open **MCP setup**, select your client, review the configuration preview, and
+apply it. Restart the client's MCP connection. Its command is the bundled
+`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`, which obtains
+configuration and authenticated operations through the collector. Installing
+the standalone formula is not required. Verify a real authenticated read in
+your intended project after connecting.
+
+Homebrew manages app updates. Installing the app does not deploy a server or
+transfer another computer's local configuration, signer or queued captures.
+See the [distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md).
+
+## Historical standalone MCP release
 
 ```sh
 brew install alexcatdad/tap/scratchpad-mcp
@@ -13,6 +51,11 @@ scratchpad-mcp --version
 Homebrew supports macOS and Linux, including WSL through Linux Homebrew. Exact-version archives and checksums are available from [the v0.3.0 release](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS release binaries are signed and notarized using the owner's local Keychain; they are independently verified before publication.
 
 After setting up the server below, follow [MCP setup](/scratchpad/guides/mcp/) to enroll your public key and point your coding client at the installed `scratchpad-mcp` binary. Homebrew installation alone does not connect it to an instance.
+
+The v0.3.0 formula predates the app, offline collector and current SSH proof
+contract. Its environment-based setup describes that historical release;
+use the app's **MCP setup** for the bundled adapter. Preserve existing client
+configuration until its replacement has been verified.
 
 ## Run the released server with Compose
 
@@ -54,7 +97,7 @@ After linking, your laptop and VMs can use synchronized published SSH authentica
 
 ## Develop from source
 
-Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.2**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
+Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.3**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
 
 Clone [the repository](https://github.com/alexcatdad/scratchpad) and run these commands from its root:
 

@@ -2,6 +2,11 @@
 
 ## Status and authority
 
+For the native macOS application and bundled collector/MCP, use the separate
+[app distribution procedure](macos-app-distribution.md) and manually triggered
+`release-macos-app.yml` workflow. The workflow below publishes the historical
+standalone MCP/container distribution, not the app cask.
+
 The release pipeline is implemented in `.github/workflows/release.yml`. The first distribution release, [v0.1.2](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.2), is published; its signed-artifact verification and fresh-runner installation acceptance passed. See the [readiness ledger](mvp-readiness.md) for exact source revisions and run links. The owner signs and notarizes macOS MCP archives locally; GitHub Actions verifies those finished archives, builds Linux binaries and the multiarchitecture image, publishes the release, and updates the existing Homebrew tap.
 
 The prior MVP patch release is [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3), correcting exact timestamp ordering and SQLite readiness/startup validation. Its tagged source is `ef5cb1a30594b43657c5bc327101cdd0463cc4a4`; [publication run 36859022794](https://github.com/alexcatdad/scratchpad/actions/runs/36859022794) passed native verification, image publication, release publication and tap delivery. Keep prior published versions immutable.

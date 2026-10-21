@@ -4,7 +4,7 @@ Local stdio MCP for Scratchpad. Captures use the private `scratchpad-service`
 over its local socket and are acknowledged only after durable local intake;
 reads and supported non-capture operations also use the collector. The collector
 owns server configuration and SSH authentication. Requires Go
-1.27.2 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime.
+1.27.3 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime.
 Dependencies are pinned in `go.mod` / `go.sum`.
 
 ## Development runbook
