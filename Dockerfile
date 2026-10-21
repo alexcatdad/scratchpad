@@ -1,4 +1,4 @@
-FROM golang:1.27.2-bookworm AS go-build
+FROM golang:1.27.3-bookworm AS go-build
 WORKDIR /src
 COPY backend/go.mod backend/go.sum ./
 RUN go mod download
@@ -34,7 +34,7 @@ CMD ["npm", "run", "start", "-w", "@scratchpad/web"]
 # the dashboard on a private loopback port.
 FROM runtime-base AS go-runtime
 USER 0:0
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u1 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates=20250419~deb12u2 && rm -rf /var/lib/apt/lists/*
 USER 1000:1000
 ENV SCRATCHPAD_LISTEN_ADDR=0.0.0.0:3000 SCRATCHPAD_UI_PORT=4000 SCRATCHPAD_SERVER_BINARY=/usr/local/bin/scratchpad-server
 COPY --from=go-build --chown=node:node /scratchpad-server /usr/local/bin/scratchpad-server

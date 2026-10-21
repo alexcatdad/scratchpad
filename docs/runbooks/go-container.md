@@ -22,11 +22,11 @@ TEST_RETAINED_IMAGE=scratchpad-retained:local \
 ```
 
 Use the project's Node version and installed dependencies for the browser test.
-The image uses the backend's pinned Go 1.27.2 toolchain, verified against the
+The image uses the backend's pinned Go 1.27.3 toolchain, verified against the
 [official stable download listing](https://go.dev/dl/), and the existing pinned
 Node 24.21.0 renderer image. It runs as UID/GID 1000, owns a private `/data`
 directory, exposes port 3000 and keeps rendering on loopback port 4000.
-The Go target adds pinned `ca-certificates=20250419~deb12u1` from the
+The Go target adds pinned `ca-certificates=20250419~deb12u2` from the
 [Debian Bookworm security package](https://packages.debian.org/bookworm/ca-certificates)
 so HTTPS clients can use normal system trust. Package selection was also checked
 against the image's official Debian repository candidate.

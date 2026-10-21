@@ -97,7 +97,7 @@ After linking, your laptop and VMs can use synchronized published SSH authentica
 
 ## Develop from source
 
-Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.2**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
+Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.3**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
 
 Clone [the repository](https://github.com/alexcatdad/scratchpad) and run these commands from its root:
 
