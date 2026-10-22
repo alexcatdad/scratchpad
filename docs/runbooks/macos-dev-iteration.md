@@ -109,6 +109,20 @@ Verify the installed UI:
 
 The SwiftPM policy suite does not exercise native scene creation, foreground
 activation or editable controls. Record rendered UI checks separately from tests.
+The native window tests verify that presentation raises only the identified
+workspace, even when a tray window appears first in the app's window list.
+
+If foreground or tray visibility regresses, inspect the safe lifecycle events:
+
+```sh
+log show --last 5m --info --style compact \
+  --predicate 'subsystem == "com.alexcatdad.scratchpad" AND category == "Windowing"'
+```
+
+These report workspace presence, visibility, key status and app activation, plus
+tray-label attachment. They omit server URLs, credentials and capture contents.
+Distinguish a focus change from process termination using current process state
+and a fresh crash report; an older crash report does not explain a new incident.
 
 ## Signing-key fallback regression
 

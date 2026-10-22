@@ -1,5 +1,8 @@
 import SwiftUI
 import ScratchpadNative
+import OSLog
+
+private let windowLog = Logger(subsystem: "com.alexcatdad.scratchpad", category: "Windowing")
 
 enum AppIdentity {
     static let isDevelopment = Bundle.main.bundleIdentifier == "com.alexcatdad.scratchpad.dev"
@@ -17,6 +20,19 @@ struct ScratchpadApp: App {
             WorkspaceView()
                 .environmentObject(model)
                 .frame(minWidth: 740, minHeight: 480)
+                .onAppear {
+                    DispatchQueue.main.async {
+                        WorkspaceWindowPresentation.present()
+                        logWorkspaceState("workspace appeared")
+                    }
+                }
+                .onDisappear { logWorkspaceState("workspace disappeared") }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                    logWorkspaceState("app resigned active")
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    logWorkspaceState("app became active")
+                }
         }
         .defaultSize(width: 860, height: 590)
         .commands {
@@ -47,6 +63,8 @@ struct ScratchpadApp: App {
                     Text("DEV").font(.caption2.weight(.semibold))
                 }
             }
+            .onAppear { windowLog.info("Tray label appeared") }
+            .onDisappear { windowLog.info("Tray label disappeared") }
         }
         .menuBarExtraStyle(.window)
 
@@ -57,11 +75,17 @@ struct ScratchpadApp: App {
 private func showWorkspace(_ page: WorkspacePage, model: AppModel, openWindow: OpenWindowAction) {
     model.workspacePage = page
     openWindow(id: "workspace")
-    if #available(macOS 14, *) {
-        NSApp.activate()
-    } else {
-        NSApp.activate(ignoringOtherApps: true)
+    // Let the tray button finish before assigning key-window status to the workspace.
+    DispatchQueue.main.async {
+        WorkspaceWindowPresentation.present()
+        logWorkspaceState("workspace requested")
     }
+}
+
+@MainActor
+private func logWorkspaceState(_ event: String) {
+    let window = NSApp.windows.first { $0.identifier == WorkspaceWindowPresentation.identifier }
+    windowLog.info("\(event, privacy: .public): found=\(window != nil) visible=\(window?.isVisible ?? false) key=\(window?.isKeyWindow ?? false) active=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)")
 }
 
 struct MenuContent: View {
