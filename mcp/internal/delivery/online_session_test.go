@@ -156,6 +156,15 @@ func TestOnlineReadsReuseSessionWithinAuthenticationAdmissionBudget(t *testing.T
 	if challenges.Load() != 8 {
 		t.Fatalf("expected one expired-session refresh, challenges=%d", challenges.Load())
 	}
+	// Changing only the signer socket invalidates the previous online session.
+	// The fixture uses a direct key file, so no agent needs to exist at this path.
+	binding.SSHAgentSocket = "/tmp/scratchpad-synthetic-agent.sock"
+	if out, err := adapter.OnlineRequest(context.Background(), binding, localcapture.OnlineRequest{Method: "GET", Path: "/records/rec_synthetic"}); err != nil || out.ErrorCode != "" {
+		t.Fatalf("agent socket change: %v code=%q", err, out.ErrorCode)
+	}
+	if challenges.Load() != 9 {
+		t.Fatalf("changed agent socket reused old session: challenges=%d", challenges.Load())
+	}
 	// A changed public-key file must fail closed even with a cached session.
 	beforeReads := reads.Load()
 	if err := os.WriteFile(binding.PublicKeyPath, []byte("invalid synthetic public key"), 0600); err != nil {
@@ -165,7 +174,7 @@ func TestOnlineReadsReuseSessionWithinAuthenticationAdmissionBudget(t *testing.T
 	if failure, ok := err.(*localcapture.DeliveryFailure); !ok || failure.Code != localcapture.DeliveryCredentialChanged || len(out.Body) != 0 {
 		t.Fatalf("changed public key reused cached credentials: %+v %v", out, err)
 	}
-	if reads.Load() != beforeReads || challenges.Load() != 8 {
+	if reads.Load() != beforeReads || challenges.Load() != 9 {
 		t.Fatal("changed public key made an upstream request")
 	}
 }

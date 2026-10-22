@@ -271,7 +271,7 @@ func (r *Runtime) probeConnection(ctx context.Context) {
 	if validateConfiguration(c) != nil {
 		return
 	}
-	b := Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath}
+	b := Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath, SSHAgentSocket: c.SSHAgentSocket}
 	identity, err := r.adapter.Authenticate(ctx, b)
 	if err != nil {
 		code, _ := classifyFailure(err, DeliveryConnectivity, true)
@@ -325,6 +325,7 @@ func (r *Runtime) processOne(ctx context.Context) (bool, error) {
 	adapterBinding := req.Binding
 	adapterBinding.PublicKeyPath = config.PublicKeyPath
 	adapterBinding.SigningKeyPath = config.SigningKeyPath
+	adapterBinding.SSHAgentSocket = config.SSHAgentSocket
 	identity, authErr := r.adapter.Authenticate(ctx, adapterBinding)
 	if authErr != nil {
 		code, retryable := classifyFailure(authErr, DeliveryConnectivity, true)
@@ -982,17 +983,28 @@ func (r *Runtime) GetConfiguration(ctx context.Context) (ServiceConfiguration, e
 	return r.store.configuration()
 }
 func (r *Runtime) SetConfiguration(ctx context.Context, c ServiceConfiguration) error {
-	if err := validateConfiguration(c); err != nil {
-		return ErrConflictSentinel
-	}
-	u, err := url.Parse(c.ServerURL)
-	if err != nil || u.Scheme == "" || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
+	if !validServiceConfiguration(c) {
 		return ErrConflictSentinel
 	}
 	r.workMu.Lock()
 	defer r.workMu.Unlock()
 	r.configMu.Lock()
 	defer r.configMu.Unlock()
+	return r.setConfigurationLocked(c, false)
+}
+
+func validServiceConfiguration(c ServiceConfiguration) bool {
+	if validateConfiguration(c) != nil {
+		return false
+	}
+	u, err := url.Parse(c.ServerURL)
+	return err == nil && u.Host != "" && (u.Scheme == "https" || u.Scheme == "http")
+}
+
+// The caller holds workMu and configMu, preserving queue routing while changing
+// the signer reference. Verification never changes an existing configuration
+// until the proposed connection has authenticated successfully.
+func (r *Runtime) setConfigurationLocked(c ServiceConfiguration, verified bool) error {
 	previous, err := r.store.configuration()
 	if err != nil {
 		r.markStorageFailure(err)
@@ -1004,8 +1016,13 @@ func (r *Runtime) SetConfiguration(ctx context.Context, c ServiceConfiguration) 
 	}
 	if previous != c {
 		r.configGeneration++
+	}
+	if previous != c || verified {
 		r.mu.Lock()
 		r.connection = ConnectionStatus{State: ConnectionUnknown}
+		if verified {
+			r.connection = ConnectionStatus{State: ConnectionConnected, CheckedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+		}
 		if err = r.persistSettingsLocked(); err != nil {
 			r.storageAvailable = false
 			r.mu.Unlock()
@@ -1021,11 +1038,52 @@ func (r *Runtime) SetConfiguration(ctx context.Context, c ServiceConfiguration) 
 	case r.wake <- struct{}{}:
 	default:
 	}
-	select {
-	case r.probeWake <- struct{}{}:
-	default:
+	if !verified {
+		select {
+		case r.probeWake <- struct{}{}:
+		default:
+		}
 	}
 	return nil
+}
+
+// VerifyConfiguration verifies a proposed desktop connection before saving it.
+// A concurrent configuration edit wins over an older in-flight verification.
+func (r *Runtime) VerifyConfiguration(ctx context.Context, c ServiceConfiguration) (VerifyConnectionResponse, error) {
+	if !validServiceConfiguration(c) {
+		return VerifyConnectionResponse{}, ErrConflictSentinel
+	}
+	r.configMu.RLock()
+	generation := r.configGeneration
+	r.configMu.RUnlock()
+	if r.adapter == nil {
+		return VerifyConnectionResponse{}, ErrStorageFailedSentinel
+	}
+	b := Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath, SSHAgentSocket: c.SSHAgentSocket}
+	identity, err := r.adapter.VerifyConnection(ctx, b)
+	if err != nil {
+		return VerifyConnectionResponse{}, err
+	}
+	if canonicalURL(identity.ServerURL) != canonicalURL(c.ServerURL) || identity.CredentialID == "" || !hasCapability(identity.CaptureCapabilities, CapabilityClientSavedAtV1) {
+		return VerifyConnectionResponse{}, &DeliveryFailure{Code: DeliveryServerIncompatible}
+	}
+	if err := ctx.Err(); err != nil {
+		return VerifyConnectionResponse{}, err
+	}
+	r.workMu.Lock()
+	defer r.workMu.Unlock()
+	r.configMu.Lock()
+	defer r.configMu.Unlock()
+	if r.configGeneration != generation {
+		return VerifyConnectionResponse{}, ErrConflictSentinel
+	}
+	if err := ctx.Err(); err != nil {
+		return VerifyConnectionResponse{}, err
+	}
+	if err := r.setConfigurationLocked(c, true); err != nil {
+		return VerifyConnectionResponse{}, err
+	}
+	return VerifyConnectionResponse{ServerURL: c.ServerURL, CredentialID: identity.CredentialID, CaptureCapabilities: identity.CaptureCapabilities, VerifiedAt: time.Now().UTC().Format(time.RFC3339Nano)}, nil
 }
 func (r *Runtime) VerifyConnection(ctx context.Context) (VerifyConnectionResponse, error) {
 	r.configMu.RLock()
@@ -1038,7 +1096,7 @@ func (r *Runtime) VerifyConnection(ctx context.Context) (VerifyConnectionRespons
 	if r.adapter == nil {
 		return VerifyConnectionResponse{}, ErrStorageFailedSentinel
 	}
-	b := Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath}
+	b := Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath, SSHAgentSocket: c.SSHAgentSocket}
 	identity, err := r.adapter.VerifyConnection(ctx, b)
 	if err != nil {
 		code, _ := classifyFailure(err, DeliveryConnectivity, true)
@@ -1077,7 +1135,7 @@ func (r *Runtime) ListProjects(ctx context.Context) (ListProjectsResponse, error
 	if r.adapter == nil {
 		return ListProjectsResponse{}, ErrStorageFailedSentinel
 	}
-	projects, err := r.adapter.ListProjects(ctx, Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath})
+	projects, err := r.adapter.ListProjects(ctx, Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath, SSHAgentSocket: c.SSHAgentSocket})
 	if err != nil {
 		code, _ := classifyFailure(err, DeliveryConnectivity, true)
 		if !r.noteConnectionFor(generation, code) {

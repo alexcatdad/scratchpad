@@ -882,6 +882,9 @@ func (s *Store) listReceipts(req ListReceiptsRequest) (ListReceiptsResponse, err
 }
 
 func validateConfiguration(c ServiceConfiguration) error {
+	if c.SSHAgentSocket != "" && (!filepath.IsAbs(c.SSHAgentSocket) || len(c.SSHAgentSocket) > 4096 || strings.ContainsAny(c.SSHAgentSocket, "\x00\r\n")) {
+		return ErrStorageFailedSentinel
+	}
 	if strings.TrimSpace(c.ServerURL) == "" || strings.TrimSpace(c.CredentialFingerprint) == "" || strings.TrimSpace(c.PublicKeyPath) == "" || strings.TrimSpace(c.SigningKeyPath) == "" || len(c.ServerURL) > 2048 || len(c.CredentialFingerprint) > 256 || len(c.PublicKeyPath) > 4096 || len(c.SigningKeyPath) > 4096 {
 		return ErrStorageFailedSentinel
 	}

@@ -107,6 +107,7 @@ type Binding struct {
 	CredentialFingerprint string `json:"credentialFingerprint"`
 	PublicKeyPath         string `json:"publicKeyPath,omitempty"`
 	SigningKeyPath        string `json:"signingKeyPath,omitempty"`
+	SSHAgentSocket        string `json:"sshAgentSocket,omitempty"`
 	CredentialID          string `json:"credentialId,omitempty"`
 }
 
@@ -118,6 +119,7 @@ type ServiceConfiguration struct {
 	CredentialFingerprint string `json:"credentialFingerprint"`
 	PublicKeyPath         string `json:"publicKeyPath"`
 	SigningKeyPath        string `json:"signingKeyPath"`
+	SSHAgentSocket        string `json:"sshAgentSocket,omitempty"`
 }
 
 type SetConfigurationRequest struct {
@@ -354,7 +356,7 @@ type DeliveryItem struct {
 }
 
 type VerifyConnectionRequest struct {
-	Binding Binding `json:"binding"`
+	Configuration *ServiceConfiguration `json:"configuration,omitempty"`
 }
 
 type ListProjectsRequest struct {
