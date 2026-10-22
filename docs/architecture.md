@@ -58,6 +58,12 @@ expire 24 hours after the last complete successful refresh. Failed refreshes and
 restarts never extend freshness. Independent credentials and recovery remain
 available when GitHub is unavailable.
 
+The desktop discovers local public keys and checks eligibility through the
+existing SSH challenge route. Connecting proves possession and performs an
+authenticated read before saving the proposed connection. The collector retains
+an optional SSH-agent socket alongside public-key references; private keys remain
+with the local signer. See [desktop onboarding](runbooks/desktop-ssh-onboarding.md).
+
 The public origin must remain stable for passkeys and proof recipients. Neither
 Git transport credentials nor personal access tokens substitute for Scratchpad
 proof. The central server never receives client private keys. See
