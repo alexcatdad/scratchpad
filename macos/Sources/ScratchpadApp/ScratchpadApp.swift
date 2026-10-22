@@ -13,6 +13,19 @@ struct ScratchpadApp: App {
     private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL)
 
     var body: some Scene {
+        Window(AppIdentity.displayName, id: "workspace") {
+            WorkspaceView()
+                .environmentObject(model)
+                .frame(minWidth: 740, minHeight: 480)
+        }
+        .defaultSize(width: 860, height: 590)
+        .commands {
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings…") { showWorkspace(.settings, model: model, openWindow: openWindow) }
+                    .keyboardShortcut(",")
+            }
+        }
+
         MenuBarExtra {
             MenuContent()
                 .environmentObject(model)
@@ -37,12 +50,17 @@ struct ScratchpadApp: App {
         }
         .menuBarExtraStyle(.window)
 
-        WindowGroup(AppIdentity.displayName, id: "workspace") {
-            WorkspaceView()
-                .environmentObject(model)
-                .frame(minWidth: 740, minHeight: 480)
-        }
-        .defaultSize(width: 860, height: 590)
+    }
+}
+
+@MainActor
+private func showWorkspace(_ page: WorkspacePage, model: AppModel, openWindow: OpenWindowAction) {
+    model.workspacePage = page
+    openWindow(id: "workspace")
+    if #available(macOS 14, *) {
+        NSApp.activate()
+    } else {
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
@@ -65,7 +83,7 @@ struct MenuContent: View {
             }
             statusGlance
             Divider()
-            Button { openWindow(id: "workspace") } label: {
+            Button { showWorkspace(.queue, model: model, openWindow: openWindow) } label: {
                 Label("Pending captures \(totalWaiting)", systemImage: "list.bullet")
             }
             .disabled(model.status == nil)
@@ -74,7 +92,7 @@ struct MenuContent: View {
             } else if model.status?.lifecycle == "running" {
                 Button { model.setLifecycle("pause_delivery") } label: { Label("Pause delivery", systemImage: "pause") }
             }
-            Button { openWindow(id: "workspace") } label: { Label("Settings & connections…", systemImage: "slider.horizontal.3") }
+            Button { showWorkspace(.settings, model: model, openWindow: openWindow) } label: { Label("Settings & connections…", systemImage: "slider.horizontal.3") }
             if model.status?.lifecycle == "stopped" || model.status == nil {
                 Button { model.startService() } label: { Label("Start service", systemImage: "play.fill") }
             } else {

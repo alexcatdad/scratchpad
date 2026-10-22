@@ -4,6 +4,7 @@ import ScratchpadNative
 
 @MainActor
 final class AppModel: ObservableObject {
+    @Published var workspacePage: WorkspacePage? = .queue
     @Published private(set) var status: ServiceStatus?
     @Published private(set) var statusObservedAt: Date?
     @Published private(set) var receipts: [Receipt] = []
@@ -192,7 +193,7 @@ final class AppModel: ObservableObject {
     func saveConfiguration() {
         let client = self.client
         let configuration = self.configuration
-        perform({ try client.call("set_configuration", body: ConfigurationBody(configuration: configuration), as: ConfigurationResult.self) }) { _ in
+        perform({ try client.saveConfiguration(configuration); return EmptyResponse() }) { _ in
             self.verified = nil
             self.errorMessage = "Connection settings saved. Verify the connection before relying on delivery."
         }

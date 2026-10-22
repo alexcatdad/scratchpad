@@ -73,7 +73,9 @@ struct SettingsPage: View {
     var body: some View {
         Form {
             Section("Server connection") {
-                LabeledContent("Server", value: model.configuration.serverURL.isEmpty ? "Not configured" : model.configuration.serverURL)
+                TextField("Server URL", text: $model.configuration.serverURL)
+                Button("Save connection") { model.saveConfiguration() }
+                    .disabled(model.busy)
                 LabeledContent("Local capture", value: LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
                 LabeledContent("Connection", value: connectionName)
                 Text("Pending captures stay bound to their original server and credential.").font(.caption).foregroundStyle(.secondary)

@@ -81,6 +81,35 @@ In the development workspace, verify that Pending captures starts selected,
 then click Settings and Projects and confirm both the selection highlight and
 detail content change. Return to Settings without changing configuration.
 
+## Settings window regression
+
+Build and sign the app with the existing `package-app.sh` workflow, then run the
+native tests with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path macos`.
+Set `SCRATCHPAD_TEST_SERVICE` to the built collector executable to include the
+isolated process test. It uses synthetic storage, keys and connection settings,
+and checks that saving a changed URL preserves the other connection fields.
+Use the normal upgrade handoff when replacing an installed bundle and retain the
+previous bundle for rollback.
+
+Verify the installed UI:
+
+1. Open **Settings & connections…** from the tray while another app is active.
+   Settings must become the foreground window.
+2. Repeat the action. The same workspace window must remain open, with Settings
+   selected. Repeat after selecting Projects and after minimizing the workspace.
+3. Open **Scratchpad → Settings…** or press Command-comma. These must select
+   Settings in the same window. The File menu must not offer a new workspace.
+4. Edit **Server URL** with a synthetic value, then restore the original text
+   without saving the synthetic destination. **Save connection** must use the
+   existing collector configuration operation and retain the other connection
+   fields. Check saved configuration only against an approved destination or a
+   disposable collector.
+5. Close the workspace and reopen it from the tray. Closing it must leave the
+   tray and collector running.
+
+The SwiftPM policy suite does not exercise native scene creation, foreground
+activation or editable controls. Record rendered UI checks separately from tests.
+
 ## Signing-key fallback regression
 
 An omitted `SCRATCHPAD_SIGNING_KEY` uses `SCRATCHPAD_PUBLIC_KEY` as the

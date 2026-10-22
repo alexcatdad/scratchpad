@@ -94,9 +94,16 @@ private struct SmokeEmptyResponse: Decodable, Sendable {}
         publicKeyPath: "/private/tmp/scratchpad-synthetic.pub",
         signingKeyPath: "/private/tmp/scratchpad-synthetic-key"
     )
-    _ = try client.call("set_configuration", body: ConfigurationBody(configuration: configuration), as: SmokeEmptyResponse.self)
+    try client.saveConfiguration(configuration)
     let savedConfiguration = try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self)
     #expect(savedConfiguration.configuration == configuration)
+
+    var changedConfiguration = configuration
+    changedConfiguration.serverURL = "http://127.0.0.1:2"
+    try client.saveConfiguration(changedConfiguration)
+    let changedResult = try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self)
+    #expect(changedResult.configuration == changedConfiguration)
+    try client.saveConfiguration(configuration)
 
     _ = try client.call("pause_delivery", body: EmptyBody(), as: SmokeEmptyResponse.self)
     status = try client.call("status", body: EmptyBody(), as: ServiceStatus.self)
