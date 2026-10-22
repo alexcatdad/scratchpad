@@ -12,8 +12,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var hasMoreReceipts = false
     @Published private(set) var loadingMoreReceipts = false
     @Published private(set) var projects: [Project] = []
-    @Published var configuration = ServiceConfiguration() { didSet { configurationRevision += 1 } }
+    @Published var configuration = ServiceConfiguration() { didSet { configurationRevision += 1; verified = nil } }
     @Published private(set) var verified: VerifyResult?
+    @Published private(set) var sshKeys: [SSHKeyCandidate] = []
+    @Published var selectedSSHKey: String?
+    @Published private(set) var keyDiscoveryMessage: String?
     @Published var errorMessage: String?
     @Published private(set) var busy = false
     let client = ServiceClient()
@@ -45,6 +48,11 @@ final class AppModel: ObservableObject {
     private struct QueuedOperation {
         let key: String?
         let launch: @MainActor () -> Void
+    }
+
+    private struct ConnectedKey: Decodable, Sendable {
+        let configuration: ServiceConfiguration
+        let verification: VerifyResult
     }
 
     init() {
@@ -186,24 +194,84 @@ final class AppModel: ObservableObject {
         let revision = configurationRevision
         perform({ try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self) }, queueKey: "configuration-read") { result in
             guard self.configurationRevision == revision else { return }
-            self.configuration = result.configuration
+            if self.configuration != result.configuration { self.configuration = result.configuration }
         }
     }
     func saveConfiguration() {
         let client = self.client
         let configuration = self.configuration
-        perform({ try client.call("set_configuration", body: ConfigurationBody(configuration: configuration), as: ConfigurationResult.self) }) { _ in
+        perform({ try client.call("set_configuration", body: ConfigurationBody(configuration: configuration), as: EmptyResponse.self) }) { _ in
             self.verified = nil
             self.errorMessage = "Connection settings saved. Verify the connection before relying on delivery."
         }
     }
     func verifyConnection() {
-        let client = self.client
+        let client = ServiceClient(timeout: ServiceClient.timeout(for: "verify_connection"))
+        let revision = configurationRevision
         verified = nil
         perform({ try client.call("verify_connection", body: EmptyBody(), as: VerifyResult.self) }, completion: { result in
+            guard self.configurationRevision == revision else { return }
             self.verified = result
             self.refresh()
         }, onFailure: { _ in
+            self.refresh()
+        })
+    }
+
+    func clearDiscoveredKeys() {
+        sshKeys = []
+        selectedSSHKey = nil
+        keyDiscoveryMessage = nil
+        verified = nil
+    }
+
+    func discoverSSHKeys() {
+        guard !busy else { return }
+        let configuration = configuration
+        let revision = configurationRevision
+        clearDiscoveredKeys()
+        busy = true
+        errorMessage = nil
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.busy = false; self.runNextOperation() }
+            do {
+                _ = try SSHKeyDiscovery.serverOrigin(configuration.serverURL)
+                let candidates = try await Task.detached {
+                    try SSHKeyDiscovery.localCandidates(preferredAgentSocket: configuration.sshAgentSocket)
+                }.value
+                let eligible = try await SSHKeyDiscovery.eligibleCandidates(candidates, serverURL: configuration.serverURL)
+                guard self.configurationRevision == revision else { return }
+                self.sshKeys = eligible
+                self.selectedSSHKey = eligible.first(where: { $0.fingerprint == configuration.credentialFingerprint })?.id
+                    ?? (eligible.count == 1 ? eligible.first?.id : nil)
+                self.keyDiscoveryMessage = eligible.isEmpty
+                    ? "No accepted local key was found. Unlock your SSH agent and confirm the server has linked your GitHub account and synchronized this machine's public key. Independent enrolled keys also work."
+                    : "Found \(eligible.count) accepted key\(eligible.count == 1 ? "" : "s"). Connect to prove possession; your signer may ask you to unlock or approve."
+            } catch {
+                if self.configurationRevision == revision { self.errorMessage = error.localizedDescription }
+            }
+        }
+    }
+
+    func connectSSHKey() {
+        guard let candidate = sshKeys.first(where: { $0.id == selectedSSHKey }) else { return }
+        let serverURL = configuration.serverURL
+        let agentSocket = configuration.sshAgentSocket
+        let revision = configurationRevision
+        let client = ServiceClient(timeout: ServiceClient.timeout(for: "verify_connection"))
+        perform({
+            let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+            let configuration = try candidate.configuration(serverURL: serverURL, directory: support.appendingPathComponent("Scratchpad/public-keys", isDirectory: true))
+            let verification = try client.call("verify_connection", body: ConfigurationBody(configuration: configuration), as: VerifyResult.self)
+            return ConnectedKey(configuration: configuration, verification: verification)
+        }, completion: { result in
+            guard self.configurationRevision == revision, self.configuration.serverURL == serverURL, self.configuration.sshAgentSocket == agentSocket else { return }
+            self.configuration = result.configuration
+            self.verified = result.verification
+            self.refresh()
+        }, onFailure: { message in
+            self.errorMessage = message + " Unlock your SSH agent and confirm the selected key is loaded, then retry."
             self.refresh()
         })
     }

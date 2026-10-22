@@ -91,7 +91,7 @@ func (r *Runtime) OnlineRequest(ctx context.Context, req OnlineRequest) (OnlineR
 	}
 	ctx, cancel := context.WithTimeout(ctx, OnlineTimeout)
 	defer cancel()
-	out, err := adapter.OnlineRequest(ctx, Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath}, req)
+	out, err := adapter.OnlineRequest(ctx, Binding{ServerURL: c.ServerURL, CredentialFingerprint: c.CredentialFingerprint, PublicKeyPath: c.PublicKeyPath, SigningKeyPath: c.SigningKeyPath, SSHAgentSocket: c.SSHAgentSocket}, req)
 	if err != nil {
 		code, _ := classifyFailure(err, DeliveryConnectivity, true)
 		r.noteConnectionFor(generation, code)
