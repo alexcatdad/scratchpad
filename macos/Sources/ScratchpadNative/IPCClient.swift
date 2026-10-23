@@ -168,6 +168,7 @@ public struct ServiceConfiguration: Codable, Equatable, Sendable {
     }
 }
 public struct ConfigurationResult: Decodable, Sendable { public let configuration: ServiceConfiguration }
+private struct ConfigurationAcknowledgement: Decodable, Sendable {}
 public struct VerifyResult: Decodable, Sendable {
     public let serverURL: String
     public let credentialId: String
@@ -218,6 +219,10 @@ public struct ServiceClient: Sendable {
     public init(socketPath: String = "/tmp/scratchpad-\(getuid())/service.sock", timeout: TimeInterval = 5) {
         self.socketPath = socketPath
         self.timeout = timeout
+    }
+
+    public func saveConfiguration(_ configuration: ServiceConfiguration) throws {
+        _ = try call("set_configuration", body: ConfigurationBody(configuration: configuration), as: ConfigurationAcknowledgement.self)
     }
 
     public func call<Body: Encodable & Sendable, Result: Decodable & Sendable>(_ operation: String, body: Body, as resultType: Result.Type = Result.self) throws -> Result {
