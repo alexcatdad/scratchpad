@@ -76,6 +76,7 @@ func (a *Adapter) client(binding localcapture.Binding) (*scratchpad.Client, erro
 	client, err := scratchpad.NewClient(scratchpad.Config{
 		URL: binding.ServerURL, PublicKeyPath: binding.PublicKeyPath,
 		SigningKeyPath: binding.SigningKeyPath,
+		SSHAgentSocket: binding.SSHAgentSocket,
 	})
 	if err != nil {
 		return nil, localcaptureFailure(localcapture.DeliveryServerIncompatible, false)

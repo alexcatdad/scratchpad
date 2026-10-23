@@ -21,6 +21,9 @@ import (
 
 const ipcDeadline = 5 * time.Second
 
+// Explicit verification may wait for the owner to unlock their SSH signer.
+const verifyConnectionTimeout = 90 * time.Second
+
 type IPCClient struct {
 	SocketPath string
 	Timeout    time.Duration
@@ -140,7 +143,9 @@ func (c *IPCClient) SetConfiguration(ctx context.Context, cfg ServiceConfigurati
 }
 func (c *IPCClient) VerifyConnection(ctx context.Context) (VerifyConnectionResponse, error) {
 	var out VerifyConnectionResponse
-	err := c.call(ctx, OpVerifyConnection, struct{}{}, &out)
+	verificationClient := *c
+	verificationClient.Timeout = verifyConnectionTimeout + time.Second
+	err := verificationClient.call(ctx, OpVerifyConnection, struct{}{}, &out)
 	return out, err
 }
 func (c *IPCClient) ListProjects(ctx context.Context) (ListProjectsResponse, error) {
@@ -315,6 +320,9 @@ func (s *IPCServer) serveOne(conn *net.UnixConn) {
 	if req.Op == OpOnlineRequest {
 		_ = conn.SetDeadline(time.Now().Add(OnlineTimeout + time.Second))
 	}
+	if req.Op == OpVerifyConnection {
+		_ = conn.SetDeadline(time.Now().Add(verifyConnectionTimeout + time.Second))
+	}
 	result, err := s.dispatch(req)
 	if err != nil {
 		code := wireCode(err)
@@ -465,10 +473,22 @@ func (s *IPCServer) dispatch(req Request) (any, error) {
 		}
 		return nil, s.Service.SetConfiguration(ctx, b.Configuration)
 	case OpVerifyConnection:
-		if emptyBody(req.Body) != nil {
+		var b VerifyConnectionRequest
+		if bodyAs(req.Body, &b) != nil {
 			return nil, ErrConflictSentinel
 		}
-		return s.Service.VerifyConnection(ctx)
+		verificationContext, cancel := context.WithTimeout(ctx, verifyConnectionTimeout)
+		defer cancel()
+		if b.Configuration != nil {
+			service, ok := s.Service.(interface {
+				VerifyConfiguration(context.Context, ServiceConfiguration) (VerifyConnectionResponse, error)
+			})
+			if !ok {
+				return nil, ErrUnknownOperationSentinel
+			}
+			return service.VerifyConfiguration(verificationContext, *b.Configuration)
+		}
+		return s.Service.VerifyConnection(verificationContext)
 	case OpListProjects:
 		if emptyBody(req.Body) != nil {
 			return nil, ErrConflictSentinel

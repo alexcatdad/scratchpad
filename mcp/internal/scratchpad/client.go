@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -25,6 +26,7 @@ import (
 
 type Config struct {
 	URL, PublicKeyPath, SigningKeyPath, WorkingDirectory, MirrorPath, ServiceSocketPath string
+	SSHAgentSocket                                                                      string
 	Mirror                                                                              bool
 }
 type Client struct {
@@ -46,6 +48,9 @@ type APIError struct {
 
 func (e *APIError) Error() string { return e.Code + ": " + e.Message }
 func NewClient(c Config) (*Client, error) {
+	if c.SSHAgentSocket != "" && (!filepath.IsAbs(c.SSHAgentSocket) || len(c.SSHAgentSocket) > 4096 || strings.ContainsAny(c.SSHAgentSocket, "\x00\r\n")) {
+		return nil, errors.New("SSH agent socket must be an absolute path")
+	}
 	u, err := url.Parse(c.URL)
 	if err != nil || u.Host == "" || (u.Scheme != "https" && u.Scheme != "http") {
 		return nil, errors.New("SCRATCHPAD_URL must be an absolute HTTP(S) URL")
@@ -203,6 +208,9 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 		return "", errors.New("invalid signing proof")
 	}
 	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", c.Config.SigningKeyPath, "-n", "scratchpad-auth-v2")
+	if c.Config.SSHAgentSocket != "" {
+		cmd.Env = append(cmd.Environ(), "SSH_AUTH_SOCK="+c.Config.SSHAgentSocket)
+	}
 	cmd.Stdin = bytes.NewReader(proof)
 	signature, err := cmd.Output()
 	if err != nil {

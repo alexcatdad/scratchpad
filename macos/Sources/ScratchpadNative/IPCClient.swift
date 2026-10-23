@@ -148,11 +148,23 @@ public struct ServiceConfiguration: Codable, Equatable, Sendable {
     public var credentialFingerprint: String
     public var publicKeyPath: String
     public var signingKeyPath: String
-    public init(serverURL: String = "", credentialFingerprint: String = "", publicKeyPath: String = "", signingKeyPath: String = "") {
+    public var sshAgentSocket: String
+    public init(serverURL: String = "", credentialFingerprint: String = "", publicKeyPath: String = "", signingKeyPath: String = "", sshAgentSocket: String = "") {
         self.serverURL = serverURL
         self.credentialFingerprint = credentialFingerprint
         self.publicKeyPath = publicKeyPath
         self.signingKeyPath = signingKeyPath
+        self.sshAgentSocket = sshAgentSocket
+    }
+
+    private enum CodingKeys: String, CodingKey { case serverURL, credentialFingerprint, publicKeyPath, signingKeyPath, sshAgentSocket }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        serverURL = try values.decode(String.self, forKey: .serverURL)
+        credentialFingerprint = try values.decode(String.self, forKey: .credentialFingerprint)
+        publicKeyPath = try values.decode(String.self, forKey: .publicKeyPath)
+        signingKeyPath = try values.decode(String.self, forKey: .signingKeyPath)
+        sshAgentSocket = try values.decodeIfPresent(String.self, forKey: .sshAgentSocket) ?? ""
     }
 }
 public struct ConfigurationResult: Decodable, Sendable { public let configuration: ServiceConfiguration }
@@ -197,7 +209,11 @@ public struct ServiceClient: Sendable {
     public static let stopTimeout: TimeInterval = 120
 
     public static func timeout(for operation: String) -> TimeInterval {
-        operation == "stop" ? stopTimeout : defaultTimeout
+        switch operation {
+        case "stop": stopTimeout
+        case "verify_connection": 95
+        default: defaultTimeout
+        }
     }
 
     public init(socketPath: String = "/tmp/scratchpad-\(getuid())/service.sock", timeout: TimeInterval = 5) {

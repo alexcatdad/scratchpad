@@ -105,6 +105,16 @@ private struct SmokeEmptyResponse: Decodable, Sendable {}
     #expect(changedResult.configuration == changedConfiguration)
     try client.saveConfiguration(configuration)
 
+    // The desktop's connect action sends proposed settings through the real
+    // private socket. Failed possession must not replace a working binding.
+    var proposed = configuration
+    proposed.sshAgentSocket = root.appendingPathComponent("unavailable-agent.sock").path
+    #expect(throws: (any Error).self) {
+        try client.call("verify_connection", body: ConfigurationBody(configuration: proposed), as: VerifyResult.self)
+    }
+    let retained = try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self)
+    #expect(retained.configuration == configuration)
+
     _ = try client.call("pause_delivery", body: EmptyBody(), as: SmokeEmptyResponse.self)
     status = try client.call("status", body: EmptyBody(), as: ServiceStatus.self)
     #expect(status?.lifecycle == "paused")

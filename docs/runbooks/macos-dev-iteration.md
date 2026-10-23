@@ -83,6 +83,16 @@ detail content change. Return to Settings without changing configuration.
 
 ## Settings window regression
 
+When integrating these fixes with desktop SSH onboarding, fetch current main and
+merge it into the feature branch before requesting CI. Preserve all decision-log
+entries, use `ServiceClient.saveConfiguration` for the empty acknowledgement,
+and retain both IPC smoke cases: changed URL persistence and failed proposed
+connection preserving the saved configuration. Run the native package with an
+isolated service fixture, then require the PR's GitHub Actions checks to pass.
+After merging, fetch main and fast-forward the local main checkout. If another
+clean worktree holds main, preserve its current commit with a detached checkout
+before moving this workspace to main; retain unrelated untracked files.
+
 Build and sign the app with the existing `package-app.sh` workflow, then run the
 native tests with `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer swift test --package-path macos`.
 Set `SCRATCHPAD_TEST_SERVICE` to the built collector executable to include the

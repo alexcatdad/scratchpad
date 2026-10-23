@@ -33,17 +33,41 @@ struct AuthenticationPage: View {
     var body: some View {
         Form {
             Section("Scratchpad connection") {
-                TextField("Server URL", text: $model.configuration.serverURL)
-                TextField("Public key fingerprint", text: $model.configuration.credentialFingerprint)
-                TextField("Public key file", text: $model.configuration.publicKeyPath)
-                TextField("SSH signing key reference", text: $model.configuration.signingKeyPath)
-                Text("Scratchpad reuses the existing SSH signer. Key contents and passphrases are never copied into this app or its MCP configuration.")
+                TextField("Server URL", text: Binding(get: { model.configuration.serverURL }, set: {
+                    model.configuration.serverURL = $0
+                    model.clearDiscoveredKeys()
+                }))
+                Button("Find SSH keys") { model.discoverSSHKeys() }
+                    .disabled(model.configuration.serverURL.isEmpty)
+                Text("Link GitHub in the server dashboard first. Scratchpad checks your local public keys with that server, then asks your SSH signer to prove possession.")
                     .font(.caption).foregroundStyle(.secondary)
+                if let message = model.keyDiscoveryMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
+                if !model.sshKeys.isEmpty {
+                    Picker("SSH key", selection: $model.selectedSSHKey) {
+                        Text("Choose a key").tag(String?.none)
+                        ForEach(model.sshKeys) { key in
+                            Text("\(key.label) — \(key.fingerprint)").tag(Optional(key.id))
+                        }
+                    }
+                    Button("Connect with selected key") { model.connectSSHKey() }
+                        .disabled(model.selectedSSHKey == nil)
+                }
+                DisclosureGroup("Advanced connection settings") {
+                    TextField("Public key fingerprint", text: $model.configuration.credentialFingerprint)
+                    TextField("Public key file", text: $model.configuration.publicKeyPath)
+                    TextField("SSH signing key reference", text: $model.configuration.signingKeyPath)
+                    TextField("SSH agent socket (optional)", text: Binding(get: { model.configuration.sshAgentSocket }, set: {
+                        model.configuration.sshAgentSocket = $0
+                        model.clearDiscoveredKeys()
+                    }))
+                    Text("Keys found as public files must be loaded into your SSH agent before connecting. Your agent handles unlock and approval prompts. Private key files and passphrases are never copied into Scratchpad.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
             }
             Section {
                 HStack {
                     Button("Save connection") { model.saveConfiguration() }
-                    Button("Verify authenticated access") { model.verifyConnection() }
+                    Button("Verify saved connection") { model.verifyConnection() }
                         .disabled(model.configuration.serverURL.isEmpty || model.configuration.credentialFingerprint.isEmpty)
                     if model.busy { ProgressView().controlSize(.small) }
                 }
@@ -59,6 +83,7 @@ struct AuthenticationPage: View {
             }
         }
         .formStyle(.grouped)
+        .disabled(model.busy)
         .navigationTitle("Authentication")
         .onAppear { model.loadConfiguration() }
     }
