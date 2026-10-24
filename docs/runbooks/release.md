@@ -11,9 +11,9 @@ or updates the tap, and releases neither wait for nor read CI status.
 
 The tool is [release-tools](https://github.com/alexcatdad/release-tools)
 (`reltool`), pinned in `Taskfile.yml` to a tag and the commit it must resolve to.
-The app-owned configuration is `release.json`; the build, validation and deploy
-recipes are `Taskfile.yml` tasks that call `scripts/release-build.sh`,
-`scripts/release-validate.sh` and `scripts/deploy-image.sh`.
+The app-owned configuration is `release.json`; the build and validation recipes
+are `Taskfile.yml` tasks that call `scripts/release-build.sh` and
+`scripts/release-validate.sh`.
 
 Published versions are `YYYY.M.N` (UTC year and month without leading zeros, a
 monthly counter starting at 1) with tag `vYYYY.M.N`. Earlier `v0.x.y` tags and
@@ -97,21 +97,12 @@ A failed tap step is retried by `task release:resume` without rebuilding or
 reserving a new version. Published assets are never replaced. State lives under
 `$XDG_STATE_HOME/release-tools/scratchpad/`; back it up with the local config.
 
-## Image publication
+## Container image
 
-`task deploy` replaces the former manually dispatched image workflow. It runs
-`scripts/deploy-image.sh` from a clean checkout of a published release commit
-(the newest by default; `task deploy -- VERSION` selects another) and pushes the
-`go-runtime` image to `ghcr.io/alexcatdad/scratchpad:sha-<commit>` for
-`linux/amd64` and `linux/arm64`, with provenance and SBOM attestations, then
-prints the immutable digest. It does not touch a cluster; see
-[Kubernetes deployment](homelab-deploy.md). Run it only when the owner intends to
-publish an image.
-
-Local prerequisites, never committed: `docker login ghcr.io` with a token that can
-write packages to the repository's package, and a `docker buildx` builder that can
-build both platforms with attestations (for example a `docker-container` builder
-with QEMU). Set `SCRATCHPAD_IMAGE` to publish to another repository.
+No container image is published. The owner's homelab deployment builds the
+`go-runtime` target of the `Dockerfile` itself from the release tag when it is
+deployed; see [Kubernetes deployment](homelab-deploy.md). Images published
+before calendar versioning (up to `v0.3.0`) remain in the registry as history.
 
 ## Verify a published release
 
@@ -129,12 +120,9 @@ separate outcomes; record each one.
 
 ## Open decisions
 
-1. **Container images.** The former `release.yml` also pushed
-   `ghcr.io/alexcatdad/scratchpad:vX.Y.Z` (multi-arch, provenance, SBOM) for every
-   release. Registry publishing is outside the GitHub-release contract and is not
-   done by `task release`. `task deploy` publishes only the `sha-<commit>` image.
-   Decide whether to also publish a version-tagged image from `task deploy`.
-   `release-acceptance.yml` no longer verifies image pulls because of this.
+1. **Container images.** Not published (decided): the homelab builds the image
+   from the release tag at deployment. `release-acceptance.yml` no longer
+   verifies image pulls.
 2. **TypeScript client package.** `scratchpad-api-client-X.Y.Z.tgz` was attached
    to v0.3.0 and is no longer published. The tap updater now ignores assets that
    no formula slot uses, so it could be added to the matrix. It is not a

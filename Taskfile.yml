@@ -42,11 +42,6 @@ tasks:
     cmds:
       - bash scripts/release-validate.sh
 
-  deploy:image:
-    desc: Build and push the application image (run through `task deploy`)
-    cmds:
-      - bash scripts/deploy-image.sh
-
   # --- release-tools consumer snippet ---
   reltool:install:
     internal: true
@@ -79,8 +74,3 @@ tasks:
     deps: [reltool:install]
     cmds:
       - '"{{.RELTOOL}}" release abandon {{.CLI_ARGS}}'
-
-  deploy:
-    deps: [reltool:install]
-    cmds:
-      - '"{{.RELTOOL}}" deploy {{.CLI_ARGS}} --task-exe "{{.TASK_EXE}}"'
