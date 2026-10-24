@@ -1,11 +1,12 @@
 # Kubernetes deployment lifecycle
 
-Scratchpad owns its image publication workflow, application manifests, migration
+Scratchpad owns its image publication task, application manifests, migration
 instructions and recovery procedure. Publishing an image does not deploy it.
-`.github/workflows/deploy.yml` is manually dispatched from `main`, verifies the
-selected commit is on `main` and has successful canonical CI, and publishes the
-`go-runtime` image to GHCR with provenance and an immutable digest. It has no
-cluster credentials and makes no Kubernetes changes.
+`task deploy` (see [release](release.md#image-publication)) is run locally from
+the owner's Mac. It builds the `go-runtime` image at the commit of a published
+release and pushes it to GHCR with provenance, an SBOM and an immutable digest.
+No GitHub workflow publishes images. The task has no cluster credentials and
+makes no Kubernetes changes.
 
 The manifests under `deploy/kubernetes/` describe a single-replica application,
 ClusterIP Service and SQLite PVC. They reference operator-managed ConfigMap and
@@ -31,7 +32,7 @@ missing Secret from that existing key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`
 run `--apply`. It refuses to replace an existing Secret. This is key adoption,
 not key generation or rotation.
 
-Select an immutable image reference from a successful Publish application image
+Select an immutable image reference from a successful `task deploy`
 run (`ghcr.io/alexcatdad/scratchpad@sha256:...`) and replace the image placeholder
 in a reviewed local copy of the Kustomize overlay. Apply only after the owner has
 reviewed the target cluster and namespace:

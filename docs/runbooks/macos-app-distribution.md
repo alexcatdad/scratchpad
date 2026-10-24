@@ -20,51 +20,17 @@ The release must include these outputs from `scripts/release-macos-app.sh`:
 - `notarization-app-v1.0.2.json`
 - `macos-app-release.json`
 
-## Upload the draft and dispatch publication
+## Publication status
 
-After local signing and notarization, upload the exact finished outputs. The
-following example uses a new `v1.0.2` tag; choose an unused version and set
-`RELEASE_TAG` consistently with the local build.
-
-```sh
-export RELEASE_TAG=v1.0.2
-gh release create "$RELEASE_TAG" --repo alexcatdad/scratchpad \
-  --verify-tag --draft --title "Scratchpad app $RELEASE_TAG" \
-  --notes 'Apple Silicon macOS application with bundled MCP and offline capture service.'
-gh release upload "$RELEASE_TAG" --repo alexcatdad/scratchpad \
-  "dist/release/scratchpad-$RELEASE_TAG-darwin-arm64.zip" \
-  "dist/release/notarization-app-$RELEASE_TAG.json" \
-  dist/release/macos-app-release.json
-gh workflow run release-macos-app.yml --repo alexcatdad/scratchpad --ref main \
-  -f tag="$RELEASE_TAG"
-```
-
-The workflow requires successful CI at the tagged main-branch source, verifies
-archive/receipt hashes and declared source, validates all nested signing teams,
-checks Apple notarization and Gatekeeper, then publishes the existing draft.
-Its source identity is a signer-supplied manifest; it does not claim reproducible
-Swift binary comparison. It neither signs in CI nor builds a new server image.
-Do not invoke the historical combined MCP/container workflow for an app release.
-
-The workflow then opens a cask PR in `alexcatdad/homebrew-tap`; publication of
-the app and merging the tap PR are separate steps. It runs only when manually
-dispatched on `main`. Merging this preparation PR does not publish the app.
-
-### Required permissions
-
-The existing `action-runners` environment supplies `APP_ID`, `APP_SECRET` and
-the public `APPLE_TEAM_ID`. Install the GitHub App only on the target tap with
-**Contents: read/write** and **Pull requests: read/write**, accepting any pending
-installation permission update. `release-access.yml` requests both permissions
-for that one repository without writing it. The app release job uses its own
-repository token's contents-write access to read draft assets and publish the
-release; the tap App token cannot publish Scratchpad releases. Apple signing
-credentials stay local. No administration or workflow-write permission is needed.
-
-Token minting precedes publication so missing app permissions stop the workflow
-before the draft becomes public. If publication succeeds but tap PR creation
-fails, preserve the public release and prepare only the cask update below;
-do not overwrite assets or rerun draft publication against a public release.
+The native app is not part of the local release contract in `release.json`, and
+no workflow publishes it: `release-macos-app.yml`, its draft-upload step and the
+tap-writer permissions it used were removed with the move to local releases (see
+[release](release.md)). `scripts/release-macos-app.sh` still produces the signed
+and notarized archive from an exact tag, but it has never been run with owner
+credentials, no app release exists and the tap owns no `scratchpad` cask. Whether
+to add an app target to `release.json`, add a cask to the tap, or keep the app
+unpublished is an open decision. Until that is decided, the cask steps below are
+a record of the prepared design, not a procedure to run.
 
 ## Prepare and publish the cask
 
@@ -83,7 +49,7 @@ must be publicly downloadable before publishing the cask. Add the app command
 to the tap README and leave unrelated packages unchanged.
 
 Validate the cask with the installed Homebrew's developer-mode loader and style
-checks. The workflow explicitly grants only cask trust before loading it:
+checks. The prepared design explicitly granted only cask trust before loading it:
 
 ```sh
 brew trust --cask alexcatdad/tap/scratchpad
@@ -99,7 +65,7 @@ The cask retains third-party Ruby flight hooks because its transaction lock
 must survive until the Homebrew process exits. Structured flight steps cannot
 express that descriptor lifetime. Homebrew's [Cask Cookbook](https://docs.brew.sh/Cask-Cookbook#stanza-flight_steps)
 still permits legacy hooks for third-party taps. The generator documents this
-intentional open descriptor. The workflow scopes its style exceptions to
+intentional open descriptor. The prepared design scoped its style exceptions to
 `Cask/InstallSteps`, `Style/AutoResourceCleanup` and `Style/FileOpen` for this
 cask; all remaining style checks and the hook/locking tests
 remain required. This is separate from cask trust and does not disable trust.

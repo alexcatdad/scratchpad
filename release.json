@@ -12,7 +12,12 @@
       "runs": "local",
       "build_task": "build:darwin-arm64",
       "validate_task": "validate:darwin-arm64",
-      "artifacts": [{ "name": "scratchpad-mcp-v{version}-darwin-arm64.zip", "kind": "zip" }]
+      "artifacts": [
+        {
+          "name": "scratchpad-mcp-v{version}-darwin-arm64.zip",
+          "kind": "zip"
+        }
+      ]
     },
     {
       "id": "darwin-amd64",
@@ -21,7 +26,12 @@
       "min_os": "13.0",
       "runs": "local",
       "build_task": "build:darwin-amd64",
-      "artifacts": [{ "name": "scratchpad-mcp-v{version}-darwin-amd64.zip", "kind": "zip" }]
+      "artifacts": [
+        {
+          "name": "scratchpad-mcp-v{version}-darwin-amd64.zip",
+          "kind": "zip"
+        }
+      ]
     },
     {
       "id": "linux-arm64",
@@ -30,7 +40,12 @@
       "min_os": "fedora-42",
       "runs": "any",
       "build_task": "build:linux-arm64",
-      "artifacts": [{ "name": "scratchpad-mcp-v{version}-linux-arm64.tar.gz", "kind": "tar.gz" }]
+      "artifacts": [
+        {
+          "name": "scratchpad-mcp-v{version}-linux-arm64.tar.gz",
+          "kind": "tar.gz"
+        }
+      ]
     },
     {
       "id": "linux-amd64",
@@ -39,7 +54,12 @@
       "min_os": "fedora-42",
       "runs": "any",
       "build_task": "build:linux-amd64",
-      "artifacts": [{ "name": "scratchpad-mcp-v{version}-linux-amd64.tar.gz", "kind": "tar.gz" }]
+      "artifacts": [
+        {
+          "name": "scratchpad-mcp-v{version}-linux-amd64.tar.gz",
+          "kind": "tar.gz"
+        }
+      ]
     }
   ],
   "migration": { "floor": "0.3.0" },
