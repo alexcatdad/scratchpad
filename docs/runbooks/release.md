@@ -135,13 +135,16 @@ separate outcomes; record each one.
    done by `task release`. `task deploy` publishes only the `sha-<commit>` image.
    Decide whether to also publish a version-tagged image from `task deploy`.
    `release-acceptance.yml` no longer verifies image pulls because of this.
-2. **TypeScript client package.** `scratchpad-api-client-X.Y.Z.tgz` was attached to
-   v0.3.0. release-tools sends every non-RPM artifact of a target to the tap
-   updater, which rejects assets that the `scratchpad-mcp` formula does not use,
-   so the tarball cannot join the matrix as it stands. It is not published
-   anymore. Options: a separate release app, a tap-ignored asset kind in
-   release-tools, or npm publication. The Go client module is consumed by Go tag
-   (`packages/clients/go/vX.Y.Z`), which is not created by this tooling; the
+2. **TypeScript client package.** `scratchpad-api-client-X.Y.Z.tgz` was attached
+   to v0.3.0 and is no longer published. The tap updater now ignores assets that
+   no formula slot uses, so it could be added to the matrix. It is not a
+   straightforward step yet: the build needs Node 24, `npm ci`, a package version
+   set per release (`packages/clients/typescript/package.json` is a fixed `0.3.0`
+   and the old workflow required it to equal the tag), and `npm pack`, and a
+   target must own an architecture-neutral file. Decide the owning target (for
+   example `linux-amd64`) and whether the coordinator may require Node, or use a
+   separate release app or npm publication. The Go client module is consumed by Go
+   tag (`packages/clients/go/vX.Y.Z`), which is not created by this tooling; the
    former `verify-released-clients.sh` check is not run by any workflow.
 3. **Native macOS app and cask.** The app has never been released (v0.3.0 has no
    app asset) and the tap owns no `scratchpad` cask, so the app is not in

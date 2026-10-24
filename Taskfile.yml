@@ -6,8 +6,8 @@ version: "3"
 # the tap.
 
 vars:
-  RELTOOL_TAG: v0.1.0
-  RELTOOL_COMMIT: 47b12842142fbd2b8443479e85d2b457c37b47aa # commit of RELTOOL_TAG
+  RELTOOL_TAG: v0.2.0
+  RELTOOL_COMMIT: 6036a85828711fbfb908f67e159482597c4434c0 # commit of RELTOOL_TAG
   RELTOOL_SRC: ../release-tools
   RELTOOL:
     sh: echo "${XDG_CACHE_HOME:-$HOME/.cache}/release-tools/{{.RELTOOL_COMMIT}}/reltool"
