@@ -128,7 +128,7 @@ Open a record to inspect its original payload, capture provenance, evidence, rel
 
 ## Release verification
 
-The [release pipeline](docs/runbooks/release.md) publishes native MCP archives, checksums, a versioned multiarchitecture GHCR image, and an update to the existing Homebrew tap. The owner signs and notarizes macOS artifacts locally using the macOS Keychain; Apple signing and notarization secrets are not stored in GitHub. CI independently verifies their signing team, source identity, checksums, and Apple trust before publication.
+Releases are built, signed, notarized and published by an explicit local task on the owner's Mac using [release-tools](docs/runbooks/release.md); GitHub Actions only validates and never releases. A release publishes native MCP archives for macOS and Linux with checksums and a manifest, and updates the Homebrew tap formula. Apple signing and notarization credentials stay in the local macOS Keychain and are never stored in GitHub. Release assets are verified by SHA-256 against the local artifacts before the draft is published.
 
 See the [remaining-product acceptance ledger](docs/post-mvp-readiness.md) for the current source and the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for prior installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
 
