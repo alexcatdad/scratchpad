@@ -36,3 +36,25 @@ GitHub OAuth callback setup is in [github-oauth.md](github-oauth.md).
 
 SQLite lives in `/var/lib/scratchpad` (mode 0700, dynamic user). Back it up with
 `scratchpad-server backup <destination>` before upgrades.
+
+## Homelab handoff
+
+The installer needs these inputs; none belong in this repository.
+
+- **Origin:** keep the existing tailnet HTTPS hostname as `publicUrl`. The
+  WebAuthn relying-party ID derives from its hostname, so a changed hostname
+  needs the administrator `recover` flow
+  ([homelab-migration.md](homelab-migration.md#authentication-and-provider-consequences)).
+  Bind `listenAddress` to loopback, set `trustedProxies` to the Tailscale Serve
+  proxy address and expose it with Tailscale Serve (not Funnel).
+- **Database:** the owner instance runs on PostgreSQL. Supply
+  `SCRATCHPAD_DATABASE_URL` in `environmentFile`; it takes precedence over the
+  SQLite path. Do not start against an empty database. Follow
+  [sqlite-to-postgres.md](sqlite-to-postgres.md) for backups.
+- **Key:** deliver the existing installation key to `encryptionKeyFile` (mode
+  0600/0400, no group write, no other access). Never generate a new one.
+- **GitHub:** `github.clientId` plus `SCRATCHPAD_GITHUB_CLIENT_SECRET` in
+  `environmentFile`. The OAuth callback is `<publicUrl>/api/v1/auth/github/callback`.
+- **Dashboard:** not part of this module. Retire the old k3s pod only after the
+  web UI has a replacement, or keep it running with `dashboardUrl` pointing at
+  its loopback address.
