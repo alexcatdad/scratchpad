@@ -1,12 +1,10 @@
 # Kubernetes deployment lifecycle
 
-Scratchpad owns its image publication task, application manifests, migration
-instructions and recovery procedure. Publishing an image does not deploy it.
-`task deploy` (see [release](release.md#image-publication)) is run locally from
-the owner's Mac. It builds the `go-runtime` image at the commit of a published
-release and pushes it to GHCR with provenance, an SBOM and an immutable digest.
-No GitHub workflow publishes images. The task has no cluster credentials and
-makes no Kubernetes changes.
+Scratchpad owns its application manifests, migration instructions and recovery
+procedure. No container image is published (see
+[release](release.md#container-image)): the deployment builds the `go-runtime`
+target of the `Dockerfile` from the release tag it deploys. No GitHub workflow
+builds or publishes images.
 
 The manifests under `deploy/kubernetes/` describe a single-replica application,
 ClusterIP Service and SQLite PVC. They reference operator-managed ConfigMap and
@@ -32,8 +30,8 @@ missing Secret from that existing key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`
 run `--apply`. It refuses to replace an existing Secret. This is key adoption,
 not key generation or rotation.
 
-Select an immutable image reference from a successful `task deploy`
-run (`ghcr.io/alexcatdad/scratchpad@sha256:...`) and replace the image placeholder
+Build the `go-runtime` image from the release tag being deployed, reference it by
+an immutable digest, and replace the image placeholder
 in a reviewed local copy of the Kustomize overlay. Apply only after the owner has
 reviewed the target cluster and namespace:
 

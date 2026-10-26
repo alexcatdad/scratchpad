@@ -73,6 +73,5 @@
     "repo": "alexcatdad/homebrew-tap",
     "kind": "formula",
     "package": "scratchpad-mcp"
-  },
-  "deploy": { "task": "deploy:image" }
+  }
 }
