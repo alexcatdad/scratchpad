@@ -1,7 +1,7 @@
 import SwiftUI
 import ScratchpadNative
 
-private enum WorkspacePage: String, CaseIterable, Identifiable {
+enum WorkspacePage: String, CaseIterable, Identifiable {
     case queue = "Pending captures"
     case projects = "Projects"
     case setup = "MCP setup"
@@ -21,10 +21,9 @@ private enum WorkspacePage: String, CaseIterable, Identifiable {
 
 struct WorkspaceView: View {
     @EnvironmentObject private var model: AppModel
-    @State private var page: WorkspacePage? = .queue
     var body: some View {
         NavigationSplitView {
-            List(WorkspacePage.allCases, selection: $page) { item in
+            List(WorkspacePage.allCases, selection: $model.workspacePage) { item in
                 Label(item.rawValue, systemImage: item.icon).tag(item as WorkspacePage?)
             }
             .navigationTitle(AppIdentity.displayName)
@@ -38,7 +37,7 @@ struct WorkspaceView: View {
                 .frame(maxWidth: .infinity, alignment: .leading).padding()
             }
         } detail: {
-            switch page ?? .queue {
+            switch model.workspacePage ?? .queue {
             case .queue: QueuePage()
             case .projects: ProjectsPage()
             case .setup: MCPSetupPage()
@@ -50,7 +49,7 @@ struct WorkspaceView: View {
             ToolbarItem(placement: .primaryAction) { Button { model.refresh() } label: { Label("Refresh", systemImage: "arrow.clockwise") } }
         }
         .onAppear { model.refresh(); model.loadConfiguration(); model.loadReceipts() }
-        .onReceive(NotificationCenter.default.publisher(for: .showAuthenticationPage)) { _ in page = .authentication }
+        .onReceive(NotificationCenter.default.publisher(for: .showAuthenticationPage)) { _ in model.workspacePage = .authentication }
         .alert("Scratchpad", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
         } message: { Text(model.errorMessage ?? "") }
