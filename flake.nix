@@ -10,6 +10,7 @@
     in {
       packages = forAll (pkgs: rec {
         scratchpad-server = pkgs.callPackage ./nix/package.nix { };
+        scratchpad-dashboard = pkgs.callPackage ./nix/dashboard.nix { };
         default = scratchpad-server;
       });
 

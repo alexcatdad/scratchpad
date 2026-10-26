@@ -1,8 +1,8 @@
 # Run the server as a NixOS service
 
 The flake exports `packages.<system>.scratchpad-server` (the Go server only) and
-`nixosModules.default`. The dashboard renderer is not packaged; without
-`dashboardUrl` the service serves the API only.
+`nixosModules.default`. The dashboard renderer runs as a second loopback unit
+(`dashboard.enable`, default true) that the API server proxies.
 
 ## Enable
 
@@ -29,8 +29,8 @@ GitHub OAuth callback setup is in [github-oauth.md](github-oauth.md).
 
 ## First build
 
-`vendorHash` in `nix/package.nix` is `lib.fakeHash`. Run
-`nix build .#scratchpad-server`, copy the reported hash into the file and rebuild.
+`vendorHash` in `nix/package.nix` and `npmDepsHash` in `nix/dashboard.nix` are `lib.fakeHash`. Run
+`nix build .#scratchpad-server .#scratchpad-dashboard`, copy each reported hash into its file and rebuild.
 
 ## State
 
@@ -55,6 +55,4 @@ The installer needs these inputs; none belong in this repository.
   0600/0400, no group write, no other access). Never generate a new one.
 - **GitHub:** `github.clientId` plus `SCRATCHPAD_GITHUB_CLIENT_SECRET` in
   `environmentFile`. The OAuth callback is `<publicUrl>/api/v1/auth/github/callback`.
-- **Dashboard:** not part of this module. Retire the old k3s pod only after the
-  web UI has a replacement, or keep it running with `dashboardUrl` pointing at
-  its loopback address.
+- **Dashboard:** `scratchpad-dashboard` runs on `127.0.0.1:4000` with no credentials; the API server proxies it. No separate exposure is needed. Set `dashboard.enable = false` for API-only.
