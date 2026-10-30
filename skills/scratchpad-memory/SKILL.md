@@ -6,8 +6,10 @@ description: Use Scratchpad MCP to resume project work, recover earlier reasonin
 # Scratchpad memory
 
 Use Scratchpad to retain why work happened and recover evidence for future work.
-The central API owns memory; the local stdio MCP supplies project discovery,
-authentication, tools and optional repository mirroring.
+The central API owns memory; the local capture service holds the server connection
+and authenticates, and the local stdio MCP supplies project discovery, tools and
+optional repository mirroring. Set up or repair the connection with the
+`scratchpad-connect` skill.
 
 ## Select the workflow and project
 
