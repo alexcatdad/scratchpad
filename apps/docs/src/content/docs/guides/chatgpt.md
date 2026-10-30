@@ -9,11 +9,11 @@ The ChatGPT desktop app supports local STDIO MCP connections on its Codex host. 
 
 First [install the Scratchpad macOS app](/scratchpad/guides/installation/), start its capture service and [connect it to your server](/scratchpad/guides/mcp/#connect-the-capture-service). Then have these values ready:
 
-| Field     | Value                                                             |
-| --------- | ----------------------------------------------------------------- |
-| Name      | `scratchpad`                                                      |
-| Transport | **STDIO**                                                         |
-| Command   | `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`    |
+| Field     | Value                                                          |
+| --------- | -------------------------------------------------------------- |
+| Name      | `scratchpad`                                                   |
+| Transport | **STDIO**                                                      |
+| Command   | `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp` |
 
 In the desktop app:
 
