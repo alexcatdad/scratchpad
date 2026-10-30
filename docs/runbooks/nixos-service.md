@@ -53,6 +53,7 @@ Use the same form for `migrate`, `setup` and `recover`.
 
 ## Homelab handoff
 
+The owner-instance cutover procedure is [nixos-homelab-cutover.md](nixos-homelab-cutover.md).
 The installer needs these inputs; none belong in this repository.
 
 - **Origin:** keep the existing tailnet HTTPS hostname as `publicUrl`. The
