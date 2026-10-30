@@ -11,7 +11,10 @@ set -euo pipefail
 archive="$RELEASE_OUT/scratchpad-${RELEASE_VERSION}-darwin-arm64.zip"
 work=$(mktemp -d "${TMPDIR:-/tmp}/scratchpad-validate.XXXXXX")
 trap 'rm -rf "$work"' EXIT
-[[ -z $(unzip -Z1 "$archive" | grep -v '^Scratchpad\.app/') ]]
+if unzip -Z1 "$archive" | grep -qv '^Scratchpad\.app/'; then
+  echo "Archive holds more than Scratchpad.app" >&2
+  exit 1
+fi
 ditto -x -k "$archive" "$work"
 app="$work/Scratchpad.app"
 codesign --verify --strict --deep "$app"
