@@ -15,28 +15,17 @@ vars:
 tasks:
   # --- app-owned recipes ---
   check:
-    desc: Go checks for the released scratchpad-mcp binary
-    dir: mcp
+    desc: Go and native checks for the released app
     cmds:
-      - test -z "$(gofmt -l .)"
-      - go vet ./...
-      - go test -race -count=1 ./...
+      - test -z "$(gofmt -l mcp)"
+      - go -C mcp vet ./...
+      - go -C mcp test -race -count=1 ./...
+      - DEVELOPER_DIR="$(xcode-select -p)" swift test --package-path macos
 
   build:darwin-arm64:
+    desc: Signed Scratchpad.app archive for the Homebrew cask
     cmds:
-      - RELEASE_OS=darwin RELEASE_ARCH=arm64 bash scripts/release-build.sh
-
-  build:darwin-amd64:
-    cmds:
-      - RELEASE_OS=darwin RELEASE_ARCH=amd64 bash scripts/release-build.sh
-
-  build:linux-arm64:
-    cmds:
-      - RELEASE_OS=linux RELEASE_ARCH=arm64 bash scripts/release-build.sh
-
-  build:linux-amd64:
-    cmds:
-      - RELEASE_OS=linux RELEASE_ARCH=amd64 bash scripts/release-build.sh
+      - sh scripts/release-app-build.sh
 
   validate:darwin-arm64:
     cmds:

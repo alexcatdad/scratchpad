@@ -12,35 +12,36 @@ or updates the tap, and releases neither wait for nor read CI status.
 The tool is [release-tools](https://github.com/alexcatdad/release-tools)
 (`reltool`), pinned in `Taskfile.yml` to a tag and the commit it must resolve to.
 The app-owned configuration is `release.json`; the build and validation recipes
-are `Taskfile.yml` tasks that call `scripts/release-build.sh` and
+are `Taskfile.yml` tasks that call `scripts/release-app-build.sh` and
 `scripts/release-validate.sh`.
 
 Published versions are `YYYY.M.N` (UTC year and month without leading zeros, a
 monthly counter starting at 1) with tag `vYYYY.M.N`. Earlier `v0.x.y` tags and
 releases stay as history; the first calendar version sorts above them. The
-native macOS application and the TypeScript/Go SDK packages are not part of this
-release contract (see [Open decisions](#open-decisions)).
+TypeScript/Go SDK packages are not part of this release contract (see
+[Open decisions](#open-decisions)).
 
 ## What a release publishes
 
-- `scratchpad-mcp-vYYYY.M.N-darwin-arm64.zip` (macOS 13 or later; Developer ID signed, notarized)
-- `scratchpad-mcp-vYYYY.M.N-darwin-amd64.zip` (macOS 13 or later; Developer ID signed, notarized)
-- `scratchpad-mcp-vYYYY.M.N-linux-arm64.tar.gz` (Fedora 42 baseline; unsigned)
-- `scratchpad-mcp-vYYYY.M.N-linux-amd64.tar.gz` (Fedora 42 baseline; unsigned)
+- `scratchpad-YYYY.M.N-darwin-arm64.zip`: `Scratchpad.app` for Apple Silicon,
+  macOS 13 or later; Developer ID signed, notarized and stapled. It bundles the
+  capture service, keychain helper and `scratchpad-mcp`.
 
-The Linux binaries are static (`CGO_ENABLED=0`) and also serve Homebrew on Linux.
 release-tools additionally uploads `SHA256SUMS` and
-`scratchpad-<version>.manifest.json`. These replace the former
-`checksums.txt`, `notarization-darwin-*.json` and `macos-release.json` assets;
-notarization status is recorded in the manifest. File names keep the previous
-`scratchpad-mcp-v<version>-<os>-<arch>` form so the tap updater can match them
-to `Formula/scratchpad-mcp.rb`. That formula (`scratchpad-mcp`) is the only tap
-entry this app owns; there is no `scratchpad` cask.
+`scratchpad-<version>.manifest.json`, then updates `Casks/scratchpad.rb` in
+`alexcatdad/homebrew-tap`. That cask is the only tap entry this app owns. The
+`scratchpad-mcp` formula is deprecated in favor of the cask and receives no
+further releases; its v2026.10.1 assets remain as history.
 
-Bare Mach-O binaries and ZIPs cannot receive stapled tickets, so `staple` is not
-enabled; Apple trust is checked online. Version strings come only from
-`RELEASE_VERSION` (injected as `main.version`); nothing is derived from CI
+The app's marketing and bundle versions come only from `RELEASE_VERSION`
+(`MACOS_SHORT_VERSION`, `MACOS_BUNDLE_VERSION`); nothing is derived from CI
 variables, Git refs or commit messages.
+
+The build signs with the keychain helper's Developer ID provisioning profile at
+`~/.config/scratchpad/keychain-helper.provisionprofile` (override with
+`SCRATCHPAD_KEYCHAIN_PROFILE`). The profile must include the certificate of the
+configured signing identity; regenerate it in the Apple Developer portal when
+the certificate changes.
 
 ## One-time local configuration
 
@@ -134,12 +135,8 @@ separate outcomes; record each one.
    separate release app or npm publication. The Go client module is consumed by Go
    tag (`packages/clients/go/vX.Y.Z`), which is not created by this tooling; the
    former `verify-released-clients.sh` check is not run by any workflow.
-3. **Native macOS app and cask.** The app has never been released (v0.3.0 has no
-   app asset) and the tap owns no `scratchpad` cask, so the app is not in
-   `release.json`. See [macOS app distribution](macos-app-distribution.md). Decide
-   whether to keep, add or remove an app target and cask; `scripts/release-macos-app.sh`
-   and `scripts/release-cask.mjs` are retained unchanged, still expect a
-   `vX.Y.Z` tag, and are not wired to any task.
+3. **Native macOS app and cask.** Decided 2026-10-30: releases publish the app
+   archive and update the `scratchpad` cask; the MCP-only formula is deprecated.
 4. **Fedora package.** Linux ships as tar.gz for Homebrew only; no RPM is built.
 
 ## Historical releases
