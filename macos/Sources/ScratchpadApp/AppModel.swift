@@ -13,7 +13,14 @@ final class AppModel: ObservableObject {
     @Published private(set) var hasMoreReceipts = false
     @Published private(set) var loadingMoreReceipts = false
     @Published private(set) var projects: [Project] = []
-    @Published var configuration = ServiceConfiguration() { didSet { configurationRevision += 1; verified = nil } }
+    // Text fields re-commit unchanged values when the form is disabled; only real changes invalidate work.
+    @Published var configuration = ServiceConfiguration() {
+        didSet {
+            guard configuration != oldValue else { return }
+            configurationRevision += 1
+            verified = nil
+        }
+    }
     @Published private(set) var verified: VerifyResult?
     @Published private(set) var sshKeys: [SSHKeyCandidate] = []
     @Published var selectedSSHKey: String?

@@ -34,6 +34,7 @@ struct AuthenticationPage: View {
         Form {
             Section("Scratchpad connection") {
                 TextField("Server URL", text: Binding(get: { model.configuration.serverURL }, set: {
+                    guard $0 != model.configuration.serverURL else { return }
                     model.configuration.serverURL = $0
                     model.clearDiscoveredKeys()
                 }))
@@ -41,6 +42,7 @@ struct AuthenticationPage: View {
                     .disabled(model.configuration.serverURL.isEmpty)
                 Text("Link GitHub in the server dashboard first. Scratchpad checks your local public keys with that server, then asks your SSH signer to prove possession.")
                     .font(.caption).foregroundStyle(.secondary)
+                if model.busy { ProgressView("Checking keys with the server…").controlSize(.small) }
                 if let message = model.keyDiscoveryMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
                 if !model.sshKeys.isEmpty {
                     Picker("SSH key", selection: $model.selectedSSHKey) {
@@ -57,6 +59,7 @@ struct AuthenticationPage: View {
                     TextField("Public key file", text: $model.configuration.publicKeyPath)
                     TextField("SSH signing key reference", text: $model.configuration.signingKeyPath)
                     TextField("SSH agent socket (optional)", text: Binding(get: { model.configuration.sshAgentSocket }, set: {
+                        guard $0 != model.configuration.sshAgentSocket else { return }
                         model.configuration.sshAgentSocket = $0
                         model.clearDiscoveredKeys()
                     }))

@@ -148,6 +148,15 @@ func (c *IPCClient) VerifyConnection(ctx context.Context) (VerifyConnectionRespo
 	err := verificationClient.call(ctx, OpVerifyConnection, struct{}{}, &out)
 	return out, err
 }
+
+// VerifyConfiguration proves possession for cfg and saves it only on success.
+func (c *IPCClient) VerifyConfiguration(ctx context.Context, cfg ServiceConfiguration) (VerifyConnectionResponse, error) {
+	var out VerifyConnectionResponse
+	verificationClient := *c
+	verificationClient.Timeout = verifyConnectionTimeout + time.Second
+	err := verificationClient.call(ctx, OpVerifyConnection, VerifyConnectionRequest{Configuration: &cfg}, &out)
+	return out, err
+}
 func (c *IPCClient) ListProjects(ctx context.Context) (ListProjectsResponse, error) {
 	var out ListProjectsResponse
 	err := c.call(ctx, OpListProjects, struct{}{}, &out)

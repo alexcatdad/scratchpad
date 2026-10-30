@@ -24,6 +24,12 @@ func main() {
 		fmt.Printf("scratchpad-mcp %s (build %s)\n", version, buildNumber)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "connect" {
+		os.Exit(runConnect(os.Args[2:]))
+	}
+	if len(os.Args) > 1 && os.Args[1] == "status" {
+		os.Exit(runStatus())
+	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	// Capture always goes through the durable per-user service. An explicitly

@@ -108,6 +108,8 @@ in
       after = [ "network-online.target" ] ++ lib.optional cfg.dashboard.enable "scratchpad-dashboard.service";
       wants = [ "network-online.target" ];
       requires = lib.optional cfg.dashboard.enable "scratchpad-dashboard.service";
+      # SSH sign-in proofs are verified with `ssh-keygen -Y verify`.
+      path = [ pkgs.openssh ];
 
       environment = {
         SCRATCHPAD_LISTEN_ADDR = cfg.listenAddress;

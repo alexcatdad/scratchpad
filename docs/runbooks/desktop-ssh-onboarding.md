@@ -55,3 +55,19 @@ agent approval/unlock, connection persistence after restart, failed-proof retent
 and an authenticated scoped MCP read. Never test with another user's keys or
 point fixture writers at the live collector. Source tests and a development-bundle
 build do not establish Developer ID distribution or live GitHub acceptance.
+
+## Connect from a terminal
+
+The bundled `scratchpad-mcp` binary configures the same capture service without
+the tray app, for terminals and agents:
+
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp connect --server https://memory.example.com
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp status
+```
+
+`connect` uses the same key sources, server eligibility check and possession
+proof as the app, and saves the configuration only after the proof succeeds.
+Pass `--public-key <file.pub>` to choose among several accepted keys and
+`--agent-socket <path>` for a non-default agent. `status` prints the service
+status and saved configuration as JSON.
