@@ -9,9 +9,8 @@ The macOS app bundles the stdio MCP adapter, background capture service and
 encrypted offline queue. It targets Apple Silicon Macs running macOS 13 or
 later. Intel and Linux app builds are not available.
 
-**Publication pending:** the public tap currently contains the historical
-`scratchpad-mcp` formula, but no `scratchpad` app cask. After the signed app
-release and cask are published, the installation command will be:
+Install the signed app from the Homebrew tap. The cask is available from the
+first app release onwards:
 
 ```sh
 brew install --cask alexcatdad/tap/scratchpad
@@ -37,25 +36,27 @@ configuration and authenticated operations through the collector. Installing
 the standalone formula is not required. Verify a real authenticated read in
 your intended project after connecting.
 
-Homebrew manages app updates. Installing the app does not deploy a server or
+Homebrew manages app updates with `brew upgrade --cask scratchpad`. After an
+upgrade, choose **Stop service** and then **Start service** from the menu-bar
+icon so the capture service runs the new version; it also switches at your next
+login. Installing the app does not deploy a server or
 transfer another computer's local configuration, signer or queued captures.
 See the [distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md).
 
-## Historical standalone MCP release
+## Retired standalone MCP formula
+
+The `alexcatdad/tap/scratchpad-mcp` formula is deprecated and receives no further
+releases. It installed only the MCP binary, without the capture service the
+current binary needs, and its environment-based setup describes the historical
+v0.3.0 release. Move to the app:
 
 ```sh
-brew install alexcatdad/tap/scratchpad-mcp
-scratchpad-mcp --version
+brew uninstall alexcatdad/tap/scratchpad-mcp
+brew install --cask alexcatdad/tap/scratchpad
 ```
 
-Homebrew supports macOS and Linux, including WSL through Linux Homebrew. Exact-version archives and checksums are available from [the v0.3.0 release](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS release binaries are signed and notarized using the owner's local Keychain; they are independently verified before publication.
-
-After setting up the server below, follow [MCP setup](/scratchpad/guides/mcp/) to enroll your public key and point your coding client at the installed `scratchpad-mcp` binary. Homebrew installation alone does not connect it to an instance.
-
-The v0.3.0 formula predates the app, offline collector and current SSH proof
-contract. Its environment-based setup describes that historical release;
-use the app's **MCP setup** for the bundled adapter. Preserve existing client
-configuration until its replacement has been verified.
+Then update your MCP client to the bundled
+`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`.
 
 ## Run the released server with Compose
 
