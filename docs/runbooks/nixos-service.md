@@ -27,15 +27,29 @@ The flake exports `packages.<system>.scratchpad-server` (the Go server only) and
 the Nix store. Adopt the existing installation key; do not generate a new one.
 GitHub OAuth callback setup is in [github-oauth.md](github-oauth.md).
 
-## First build
+## Build
 
-`vendorHash` in `nix/package.nix` and `npmDepsHash` in `nix/dashboard.nix` are `lib.fakeHash`. Run
-`nix build .#scratchpad-server .#scratchpad-dashboard`, copy each reported hash into its file and rebuild.
+`flake.lock` pins nixpkgs. After changing Go or npm dependencies, set the
+matching `vendorHash` (`nix/package.nix`) or `npmDepsHash` (`nix/dashboard.nix`) to
+`lib.fakeHash`, run `nix build .#scratchpad-server .#scratchpad-dashboard`, and
+copy the reported hash back. The server builds with Go 1.27 (`buildGo127Module`).
 
-## State
+## State and administration
 
-SQLite lives in `/var/lib/scratchpad` (mode 0700, dynamic user). Back it up with
-`scratchpad-server backup <destination>` before upgrades.
+The API server runs as the static `scratchpad` system user. SQLite lives in
+`/var/lib/scratchpad` (mode 0700). The server refuses storage owned by another
+user or reached through a symlink, so run administrative commands as that user
+with the service environment, for example a backup before upgrades:
+
+```sh
+sudo systemd-run --pty --wait --collect --uid=scratchpad --gid=scratchpad \
+  -p EnvironmentFile=/run/agenix/scratchpad-env \
+  -E SCRATCHPAD_DATABASE_PATH=/var/lib/scratchpad/scratchpad.sqlite \
+  $(systemctl show -P ExecStart scratchpad | grep -o "/nix/store/[^ ]*/bin/scratchpad-server") \
+  backup /var/lib/scratchpad/backup.sqlite
+```
+
+Use the same form for `migrate`, `setup` and `recover`.
 
 ## Homelab handoff
 

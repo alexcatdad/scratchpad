@@ -93,6 +93,15 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # A static user keeps /var/lib/scratchpad a real directory; DynamicUser makes
+    # it a symlink, which the server rejects as unsafe storage.
+    users.users.scratchpad = {
+      isSystemUser = true;
+      group = "scratchpad";
+      home = "/var/lib/scratchpad";
+    };
+    users.groups.scratchpad = { };
+
     systemd.services.scratchpad = {
       description = "Scratchpad central API server";
       wantedBy = [ "multi-user.target" ];
@@ -121,7 +130,8 @@ in
         EnvironmentFile = lib.mkIf (cfg.environmentFile != null) cfg.environmentFile;
         Restart = "on-failure";
 
-        DynamicUser = true;
+        User = "scratchpad";
+        Group = "scratchpad";
         StateDirectory = "scratchpad";
         StateDirectoryMode = "0700";
         UMask = "0077";

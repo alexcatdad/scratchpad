@@ -14,8 +14,7 @@ buildNpmPackage {
   nodejs = nodejs_24;
   npmWorkspace = "apps/web";
 
-  # Replace after the first build prints the real hash.
-  npmDepsHash = lib.fakeHash;
+  npmDepsHash = "sha256-U93O4+vPXfMkaRv1hF0t34NsOPsCjH2jwERZOKfvBRA=";
 
   # Only the web workspace is built; the dev-only dependencies are pruned.
   installPhase = ''
@@ -23,6 +22,8 @@ buildNpmPackage {
     npm prune --omit=dev --offline --workspace @scratchpad/web
     mkdir -p $out/apps/web
     cp -r node_modules package.json $out/
+    # Drop links to workspaces the renderer does not ship or import.
+    find $out/node_modules/@scratchpad -maxdepth 1 -type l ! -name web -delete
     cp -r apps/web/dist apps/web/server.mjs apps/web/package.json $out/apps/web/
     runHook postInstall
   '';
