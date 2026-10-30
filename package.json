@@ -31,7 +31,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
     "@playwright/test": "1.63.0",
-    "markdownlint-cli2": "0.23.3",
+    "markdownlint-cli2": "0.24.0",
     "prettier": "3.9.9",
     "prettier-plugin-astro": "1.1.0",
     "typescript": "5.9.3",
@@ -41,6 +41,6 @@
     "drizzle-orm": "0.45.3",
     "postgres": "3.4.9",
     "tsx": "4.23.15",
-    "undici": "8.11.2"
+    "undici": "8.12.3"
   }
 }
