@@ -105,9 +105,11 @@ secret if the OAuth app is not ready yet; set both together later. Do not
    ```
 
    It prints the engine and schema version. Stop on any error.
-4. `nixos-rebuild switch`. Check `systemctl status scratchpad
-   scratchpad-dashboard` and `journalctl -u scratchpad -b`. The first log line
-   reports the address, database engine and schema version.
+
+4. `nixos-rebuild switch`. Check
+   `systemctl status scratchpad scratchpad-dashboard` and
+   `journalctl -u scratchpad -b`. The first log line reports the address,
+   database engine and schema version.
 5. Point Tailscale Serve at `http://127.0.0.1:3000` on the existing hostname
    (Serve, not Funnel). Remove the old Serve target.
 
