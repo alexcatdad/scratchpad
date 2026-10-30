@@ -30,18 +30,18 @@ The skill follows existing task authorization and project instructions. Core cap
 
 ## Connect with an agent
 
-The optional [`scratchpad-connect` skill](https://github.com/alexcatdad/scratchpad/tree/main/skills/scratchpad-connect) handles first-time connection and authentication troubleshooting using existing Git/SSH tooling. Install its complete folder in your client’s supported skill location as above, preserving any existing installation, then invoke `$scratchpad-connect` with your server origin and checkout. It discovers a usable public key, configures the local stdio MCP and verifies a real authenticated read in the intended project. It does not publish keys, copy private material or change server identity. Installation and tool discovery alone do not prove access.
+The optional [`scratchpad-connect` skill](https://github.com/alexcatdad/scratchpad/tree/main/skills/scratchpad-connect) handles first-time connection and authentication troubleshooting using existing Git/SSH tooling. Install its complete folder in your client’s supported skill location as above, preserving any existing installation, then invoke `$scratchpad-connect` with your server origin and checkout. It checks the capture service with `scratchpad-mcp status`, connects it with `scratchpad-mcp connect`, registers the local stdio MCP and verifies a real authenticated read in the intended project. It does not publish keys, copy private material or change server identity. Installation and tool discovery alone do not prove access.
 
 A key synchronized from your verified GitHub account needs no separate dashboard approval; each machine proves possession automatically. GitHub integration is in current server source and requires operator OAuth configuration. Released v0.3.0 servers predate it. See [Security & recovery](/scratchpad/reference/security/) for outage, revocation and independent-key behavior.
 
 ## Connect once
 
-1. Install `scratchpad-mcp` using the [installation guide](/scratchpad/guides/installation/). Homebrew installs the local binary; it does not start the server.
-2. Choose an eligible SSH key synchronized from the owner’s verified GitHub account, or enroll an independent OpenSSH public key in the authenticated dashboard under **Settings → Connect an MCP key**. Sign the enrollment challenge locally with the matching key. Never upload a private key.
-3. Configure your client's stdio command with the absolute binary path. Set `SCRATCHPAD_URL` to the server origin and `SCRATCHPAD_PUBLIC_KEY` to the absolute enrolled public-key path. Make the matching private key available through `ssh-agent`, or set `SCRATCHPAD_SIGNING_KEY` to its local path.
-4. Follow [Codex setup](/scratchpad/guides/codex/) or [ChatGPT macOS setup](/scratchpad/guides/chatgpt/), restart the connection, and discover tools with MCP `tools/list`.
+1. Install the Scratchpad macOS app using the [installation guide](/scratchpad/guides/installation/) and choose **Start service** from its menu-bar icon. The app does not start a server.
+2. Use an eligible SSH key synchronized from the owner’s verified GitHub account, or [enroll an independent OpenSSH public key](/scratchpad/guides/mcp/#enroll-an-independent-key). Never upload a private key.
+3. Connect the capture service: `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp connect --server <origin>`, or **Settings → Authentication** in the app. Confirm with `scratchpad-mcp status`.
+4. Register `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp` as a stdio server with no arguments or connection variables (the app's **MCP setup** page can do this), following [Codex setup](/scratchpad/guides/codex/) or [ChatGPT macOS setup](/scratchpad/guides/chatgpt/). Restart the connection and discover tools with MCP `tools/list`.
 
-The MCP performs SSH challenge authentication automatically. Session tokens remain in process memory; restarting the process authenticates again. A dashboard URL or REST API URL cannot be used as a hosted MCP endpoint. Local setup also depends on the binary, Git, OpenSSH, and key being available on the machine running the client.
+The capture service performs SSH challenge authentication and holds the session; MCP clients never hold tokens. A dashboard URL or REST API URL cannot be used as a hosted MCP endpoint. Local setup also depends on the binary, Git, OpenSSH, and key being available on the machine running the client.
 
 ## Start each project session
 

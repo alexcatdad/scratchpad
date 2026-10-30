@@ -25,10 +25,17 @@ repository and need to inspect the cask before installation, use
 `brew info --cask alexcatdad/tap/scratchpad`. No whole-tap trust or trust-bypass
 environment variable is needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 
-In the app, open **Authentication**, enter your existing server connection and
-local SSH signer details, save, and choose **Verify authenticated access**.
-The matching public key must already be authorized by the server. Keep private
-keys on the computer; the app reuses your SSH signer.
+Choose **Start service** from the Scratchpad menu-bar icon. Then open
+**Settings → Authentication**, enter your server origin, choose **Find SSH keys**
+and **Connect with selected key**, or run the bundled command:
+
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp connect --server https://memory.example.com
+```
+
+The matching public key must already be authorized by the server, through your
+linked GitHub account or [independent enrollment](/scratchpad/guides/mcp/#enroll-an-independent-key).
+Keep private keys on the computer; the app uses your SSH agent.
 
 Open **MCP setup**, select your client, review the configuration preview, and
 apply it. Restart the client's MCP connection. Its command is the bundled

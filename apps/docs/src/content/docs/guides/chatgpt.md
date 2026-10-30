@@ -3,25 +3,23 @@ title: Connect ChatGPT on macOS
 description: Use Scratchpad through the desktop app's local MCP connection, and understand web compatibility.
 ---
 
-The ChatGPT desktop app supports local STDIO MCP connections on its Codex host. Scratchpad uses this path: the app starts `scratchpad-mcp` locally, and the binary talks to your server using your eligible synchronized GitHub SSH key or independent enrolled SSH key.
+The ChatGPT desktop app supports local STDIO MCP connections on its Codex host. Scratchpad uses this path: the app starts `scratchpad-mcp` locally, and the binary reaches your server through the Scratchpad capture service, which holds your connection and SSH key.
 
 ## Add the local server
 
-First [install the binary](/scratchpad/guides/installation/) and [select a synchronized GitHub SSH key or enroll an independent public key](/scratchpad/guides/mcp/#build-and-enroll). Have these values ready:
+First [install the Scratchpad macOS app](/scratchpad/guides/installation/), start its capture service and [connect it to your server](/scratchpad/guides/mcp/#connect-the-capture-service). Then have these values ready:
 
-| Field                   | Value                                                               |
-| ----------------------- | ------------------------------------------------------------------- |
-| Name                    | `scratchpad`                                                        |
-| Transport               | **STDIO**                                                           |
-| Command                 | Absolute path to `scratchpad-mcp`, or your configured launcher      |
-| `SCRATCHPAD_URL`        | Your Scratchpad server origin, such as `https://memory.example.com` |
-| `SCRATCHPAD_PUBLIC_KEY` | Absolute path to your enrolled OpenSSH public key                   |
+| Field     | Value                                                          |
+| --------- | -------------------------------------------------------------- |
+| Name      | `scratchpad`                                                   |
+| Transport | **STDIO**                                                      |
+| Command   | `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp` |
 
 In the desktop app:
 
 1. Open **Settings → MCP servers**.
 2. Choose **Add server** and select **STDIO**.
-3. Enter the command and environment variables above. A configured launcher can supply the variables itself.
+3. Enter the command above. No environment variables are needed.
 4. Save the server and select **Restart**.
 5. Open a local Work/Codex chat and use `/mcp` to inspect the connection.
 

@@ -3,7 +3,7 @@ title: MCP & project context
 description: The local stdio interface, project discovery, and authentication design.
 ---
 
-The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context, authenticates to the central API, and optionally mirrors eligible captures into the selected checkout. Record business rules remain server-side.
+The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context and sends reads and captures through the local capture service, which holds the server connection, authenticates and queues captures while offline. It can optionally mirror eligible captures into the selected checkout. Record business rules remain server-side.
 
 ## Connect your client
 
@@ -14,7 +14,18 @@ Start with the guide for your client:
 - [Codex setup](/scratchpad/guides/codex/) — CLI registration, configuration, and a first read.
 - [ChatGPT macOS setup](/scratchpad/guides/chatgpt/) — the desktop STDIO connection and the distinction from ChatGPT web.
 
-Install the binary and select an eligible synchronized GitHub SSH key or enroll an independent public key before adding it to either client. Homebrew installs the MCP; your Scratchpad server runs separately.
+Before adding it to a client, [install the macOS app](/scratchpad/guides/installation/), start its capture service and [connect it to your server](#connect-the-capture-service). Your Scratchpad server runs separately.
+
+## Connect the capture service
+
+Choose **Start service** from the Scratchpad menu-bar icon, then connect with an eligible synchronized GitHub SSH key or an [independently enrolled key](#enroll-an-independent-key). Either use **Settings → Authentication** in the app (**Find SSH keys**, then **Connect with selected key**), or the bundled command:
+
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp connect --server https://memory.example.com
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp status
+```
+
+`connect` reads public keys from your SSH agent, the 1Password agent and `~/.ssh/*.pub`, asks the server which it accepts, proves possession through the agent and saves the connection only after the proof succeeds. Use `--public-key <file.pub>` to choose among several accepted keys and `--agent-socket <path>` for a non-default agent. `status` prints the service state and saved connection as JSON. The matching private key must be loaded in your SSH agent.
 
 ## Selecting the project
 
@@ -34,35 +45,38 @@ Initial payloads stay small and flexible. Adding optional fields later must not 
 
 ## Authentication
 
-The MCP proves possession of an independent enrolled key or an eligible SSH authentication/signing key synchronized from the owner’s verified GitHub binding. GitHub-managed keys need no individual dashboard approval. Current server source supports GitHub access; released v0.3.0 servers predate it. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
+The capture service proves possession of an independent enrolled key or an eligible SSH authentication/signing key synchronized from the owner’s verified GitHub binding. GitHub-managed keys need no individual dashboard approval. Current server source supports GitHub access; released v0.3.0 servers predate it. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
 
-Tokens stay in the MCP process memory. Restarting MCP requires authentication again. Revoking its credential immediately invalidates its sessions. Private signing keys remain local.
+Sessions stay in the capture service; MCP clients never hold tokens. Revoking its credential immediately invalidates its sessions. Private signing keys remain local in your SSH agent.
 
 GitHub-managed requests and renewals also require an unblocked key and cache freshness within 24 hours of the last complete successful synchronization. Detected removal, unlinking or account replacement invalidates derived access immediately. Independent manual credentials remain locally managed. See [Security & recovery](/scratchpad/reference/security/).
 
 Use the [connection skill](/scratchpad/guides/agents/#connect-with-an-agent) for agent-assisted discovery, client configuration and a scoped authenticated read.
 
-## Build and enroll
+## Enroll an independent key
 
 This manual workflow creates an independent local credential. Use it when a key is not published on GitHub or independent access is desired.
 
-Build the local binary using the [installation guide](/scratchpad/guides/installation/). Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
+Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
 
-Sign the exact displayed JSON proof **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The MCP handles subsequent authentication challenges automatically. Version 2 binds each proof to the locally configured instance, key, purpose and expiry. Upgrade the server and MCP together; old nonce-only signatures are rejected. Existing sessions retain their expiry and revocation rules until renewal.
+Sign the exact displayed JSON proof **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential, then [connect the capture service](#connect-the-capture-service) with `--public-key` pointing at that key. Private keys are never uploaded. The capture service handles subsequent authentication challenges automatically. Version 2 binds each proof to the locally configured instance, key, purpose and expiry. Upgrade the server and MCP together; old nonce-only signatures are rejected. Existing sessions retain their expiry and revocation rules until renewal.
 
 ## Client configuration
 
-Point your MCP client's stdio command at the absolute path to the installed `scratchpad-mcp` binary, or your locally built `dist/scratchpad-mcp`. Find an installed binary with `command -v scratchpad-mcp`. Set these environment variables in that client's configuration:
+Register the bundled binary as a stdio server with no arguments. The app's **MCP setup** page previews and applies this for Codex and Claude Code, or prints a generic entry. For Claude Code:
 
-| Variable                 | Meaning                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `SCRATCHPAD_URL`         | Required server origin; HTTP is allowed only on loopback                      |
-| `SCRATCHPAD_PUBLIC_KEY`  | Required absolute path to the enrolled OpenSSH public key                     |
-| `SCRATCHPAD_SIGNING_KEY` | Optional private-key path; otherwise use the public-key path with `ssh-agent` |
-| `SCRATCHPAD_MIRROR`      | Set to `true` to opt into local mirroring; off by default                     |
-| `SCRATCHPAD_MIRROR_PATH` | Repository-relative path; defaults to `scratchpad/decisions.jsonl`            |
+```sh
+claude mcp add --scope user scratchpad -- /Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp
+```
 
-Keep the private key local and available through `ssh-agent` or the explicit signing-key path. A locked or missing key prevents authentication.
+The server connection and key come from the capture service; the binary needs no connection variables. Two optional variables control mirroring:
+
+| Variable                 | Meaning                                                            |
+| ------------------------ | ------------------------------------------------------------------ |
+| `SCRATCHPAD_MIRROR`      | Set to `true` to opt into local mirroring; off by default          |
+| `SCRATCHPAD_MIRROR_PATH` | Repository-relative path; defaults to `scratchpad/decisions.jsonl` |
+
+The historical v0.3.0 standalone formula used `SCRATCHPAD_URL` and `SCRATCHPAD_PUBLIC_KEY`; the current binary ignores them.
 
 ## Available tools
 

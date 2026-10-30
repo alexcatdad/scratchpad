@@ -142,3 +142,13 @@ discard new captures silently.
 Report separately: preflight findings, backup references (location only),
 rehearsal result, migration output, deployed commit, each acceptance item, and
 anything left undone. Record evidence in the infrastructure repository.
+
+## Completed: 30 October 2026
+
+Preflight found no running Scratchpad workload and the database on PostgreSQL 18
+(not 16). The live database migrated to schema version 3 and the service runs
+from the pinned flake commit behind `svc:scratchpad`. A first deployment lacked
+`ssh-keygen` on the service PATH, so SSH sign-in failed until the module added
+`openssh`. Owner sign-in, GitHub linking, desktop SSH connection, MCP read,
+capture and identical retry, and a service restart passed. Host reboot
+persistence remains pending.
