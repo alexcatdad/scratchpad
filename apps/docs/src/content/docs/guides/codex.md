@@ -47,13 +47,13 @@ Clients may launch a globally configured MCP outside the checkout. Pass `working
 
 ## Troubleshooting
 
-| Symptom                             | Check                                                                                                                                                                                                                                          |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Executable cannot start             | Use an existing absolute executable path; confirm the installed version.                                                                                                                                                                       |
-| Capture service unavailable         | Choose **Start service** from the Scratchpad menu-bar icon, then check `scratchpad-mcp status`.                                                                                                                                                |
-| Signing fails                       | Confirm the public key is locally enrolled or eligible in the synchronized GitHub key set and the matching private key is loaded in your SSH agent, then rerun `scratchpad-mcp connect`.                                                       |
-| Cannot reach the server             | Check the origin, HTTPS certificate, server availability, and VPN access from this computer.                                                                                                                                                   |
-| Project discovery fails             | Supply the checkout's absolute `workingDirectory`, or an explicit project identity for non-Git work.                                                                                                                                           |
-| Tools are absent after registration | Restart the connection or client, then inspect `/mcp`. Existing chats may still have their earlier tool catalog.                                                                                                                               |
+| Symptom                             | Check                                                                                                                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Executable cannot start             | Use an existing absolute executable path; confirm the installed version.                                                                                                                 |
+| Capture service unavailable         | Choose **Start service** from the Scratchpad menu-bar icon, then check `scratchpad-mcp status`.                                                                                          |
+| Signing fails                       | Confirm the public key is locally enrolled or eligible in the synchronized GitHub key set and the matching private key is loaded in your SSH agent, then rerun `scratchpad-mcp connect`. |
+| Cannot reach the server             | Check the origin, HTTPS certificate, server availability, and VPN access from this computer.                                                                                             |
+| Project discovery fails             | Supply the checkout's absolute `workingDirectory`, or an explicit project identity for non-Git work.                                                                                     |
+| Tools are absent after registration | Restart the connection or client, then inspect `/mcp`. Existing chats may still have their earlier tool catalog.                                                                         |
 
 Configuration on your Mac does not install the executable or provide signing credentials inside a Codex cloud container. Verify those separately before using a remote execution environment.
