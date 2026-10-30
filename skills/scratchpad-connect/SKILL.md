@@ -5,19 +5,32 @@ description: Connect a laptop or VM to Scratchpad MCP using an existing SSH key 
 
 # Connect to Scratchpad
 
-Configure the local stdio MCP for the owner's instance using the agent's preferred
-Git/SSH tooling. Keep private keys on the machine or signing device. Completion
-requires a successful authenticated read with confirmed project scope; installing
-a binary, listing public GitHub keys or discovering MCP tools alone is insufficient.
+Connect this machine's local capture service to the owner's instance, then register
+the local stdio MCP with the client. The service owns the server URL and SSH key;
+the MCP has no connection settings of its own. Keep private keys on the machine or
+signing device. Completion requires a successful authenticated read with confirmed
+project scope; installing a binary, listing public GitHub keys or discovering MCP
+tools alone is insufficient.
 
 ## Confirm the instance
 
 Reuse the owner's confirmed server origin and project identity from the session.
 Otherwise obtain the intended Scratchpad server URL and checkout or project ID.
 The public documentation URL is not an instance, and the HTTP API is not a hosted
-MCP endpoint. Use HTTPS outside loopback. Check the installed binary version and
-client's supported local stdio configuration before changing it. Preserve unrelated
-MCP entries and existing credentials.
+MCP endpoint. Use HTTPS outside loopback. Preserve unrelated MCP entries and
+existing credentials.
+
+On macOS the Scratchpad app provides the binaries in
+`/Applications/Scratchpad.app/Contents/Helpers/`. Check the current state first:
+
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp status
+```
+
+It prints the service lifecycle, connection state and saved server and key as
+JSON. If it reports the service unavailable, have the owner open the app and choose
+**Start service** from its menu-bar icon. If it already shows the intended server
+and `connected`, skip to registering the MCP.
 
 For server initialization, OAuth configuration or recovery, consult the
 [security guide](https://alexcatdad.github.io/scratchpad/reference/security.md).
@@ -42,22 +55,42 @@ Publishing a new GitHub key or generating an identity requires separate owner
 instruction. Never read, copy, upload or print private key contents; inspect public
 material only. Hardware/agent unlocking remains a local owner interaction.
 
-## Configure and prove access
+## Connect the capture service
 
-Use the client's supported configuration mechanism and the absolute path to
-`scratchpad-mcp`. Set `SCRATCHPAD_URL` to the confirmed server origin and
-`SCRATCHPAD_PUBLIC_KEY` to an absolute OpenSSH public-key file path. A selected
-agent-only public key can be saved to a dedicated local public-key file, preserving
-existing files. The matching key must be available to `ssh-agent`; if the owner
-already uses a local signing-key file, `SCRATCHPAD_SIGNING_KEY` may reference its
-absolute path. The MCP signs locally using OpenSSH. Git tooling helps discover the
-identity but cannot replace the MCP's supported signer. Keep mirroring off unless
-explicitly authorized.
+```sh
+/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp connect --server <origin>
+```
 
-Restart/reconnect the client as required and discover the running binary's tools.
+`connect` reads public keys from the SSH agent, the 1Password agent and
+`~/.ssh/*.pub`, asks the server which it accepts, proves possession through the
+agent and saves the connection only after the proof succeeds. Pass
+`--public-key <file.pub>` to pick one of several accepted keys and
+`--agent-socket <path>` for a non-default agent. The matching private key must be
+loaded in the agent; the owner approves or unlocks it. The app's
+**Settings → Authentication** page performs the same steps. Do not set
+`SCRATCHPAD_URL`, `SCRATCHPAD_PUBLIC_KEY` or `SCRATCHPAD_SIGNING_KEY`; the current
+binary ignores them.
+
+Failure messages map to the diagnosis below: no accepted key means the GitHub link
+or key sync is missing; `authentication` after an accepted key means the server
+rejected the proof, which is a server-side problem to report.
+
+## Register the MCP and prove access
+
+Register the same binary as a stdio server with no arguments or environment, for
+example in Claude Code:
+
+```sh
+claude mcp add --scope user scratchpad -- /Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp
+```
+
+Use the client's own mechanism elsewhere. Keep mirroring off unless explicitly
+authorized. Restart/reconnect the client as required and discover the running
+binary's tools.
 Call `get_project_context` with the absolute `workingDirectory` or confirmed
-`projectId`, using the discovered schema. The MCP performs a single-use signed
-challenge and obtains its own session; GitHub tokens/PATs are not MCP credentials.
+`projectId`, using the discovered schema; compact limits require `version: 2`.
+The capture service performs the signed challenge and holds the session; GitHub
+tokens/PATs are not MCP credentials.
 Inspect the returned project identity before declaring success. Missing or
 ambiguous project identity needs an owner-confirmed selection, not another guessed
 project. An empty context in the expected project is a valid authenticated read.
