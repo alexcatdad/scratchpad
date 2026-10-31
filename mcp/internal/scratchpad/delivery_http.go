@@ -8,6 +8,22 @@ import (
 	"net/url"
 )
 
+// ServerBuild is the build a server reports from GET /about.
+type ServerBuild struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+}
+
+// About reads the authenticated server build. Servers older than the endpoint
+// return an API error, which callers treat as an unknown version.
+func (c *Client) About(ctx context.Context) (ServerBuild, error) {
+	var result ServerBuild
+	if err := c.request(ctx, "GET", "/about", nil, "", &result); err != nil {
+		return ServerBuild{}, err
+	}
+	return result, nil
+}
+
 // ResolveGitProject applies the MCP's existing server-backed repository
 // resolution to a Git snapshot taken for one capture call.
 func (c *Client) ResolveGitProject(ctx context.Context, git json.RawMessage) (map[string]any, error) {

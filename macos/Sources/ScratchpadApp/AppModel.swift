@@ -27,6 +27,9 @@ final class AppModel: ObservableObject {
     @Published private(set) var keyDiscoveryMessage: String?
     @Published var errorMessage: String?
     @Published private(set) var busy = false
+    var serviceUpdate: ServiceUpdateState {
+        ServiceUpdateState(status: status, appVersion: AppIdentity.version, appBuild: AppIdentity.build)
+    }
     let client = ServiceClient()
     let supervisor = ServiceSupervisor()
     private var incidentTracker = IncidentTracker(

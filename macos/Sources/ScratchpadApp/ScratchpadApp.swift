@@ -7,6 +7,9 @@ private let windowLog = Logger(subsystem: "com.alexcatdad.scratchpad", category:
 enum AppIdentity {
     static let isDevelopment = Bundle.main.bundleIdentifier == "com.alexcatdad.scratchpad.dev"
     static let displayName = isDevelopment ? "Scratchpad DEV" : "Scratchpad"
+    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    static var versionLabel: String { ServiceUpdateState.label(version: version ?? "unknown", build: build) }
 }
 
 @main
@@ -122,6 +125,11 @@ struct MenuContent: View {
             } else {
                 Button(role: .destructive) { confirmStop = true } label: { Label("Stop service…", systemImage: "stop.fill") }
             }
+            if case .restartNeeded(let running) = model.serviceUpdate {
+                Label("The capture service is still running \(running). Stop and start it to finish updating.", systemImage: "arrow.up.circle")
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Divider()
             Button { NSApp.terminate(nil) } label: {
                 HStack {
@@ -131,6 +139,7 @@ struct MenuContent: View {
                 }
             }
             .font(.callout)
+            Text("Version \(AppIdentity.versionLabel)").font(.caption).foregroundStyle(.secondary)
         }
         .padding(16)
         .frame(width: 310)
