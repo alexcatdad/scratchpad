@@ -51,6 +51,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/about": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Server build and storage for the authenticated client */
+        get: operations["get_about"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/mcp/challenge": {
         parameters: {
             query?: never;
@@ -1313,6 +1330,34 @@ export interface operations {
                         initialized?: boolean;
                         authenticated?: boolean;
                         githubConfigured?: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_about: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        version: string;
+                        commit: string;
+                        /** @enum {string} */
+                        database: "sqlite" | "postgres";
+                        schemaVersion: number;
+                        githubConfigured: boolean;
                     };
                 };
             };

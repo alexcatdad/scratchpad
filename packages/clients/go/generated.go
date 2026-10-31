@@ -662,6 +662,24 @@ func (e RecordType) Valid() bool {
 	}
 }
 
+// Defines values for GetAbout200JSONResponseBodyDatabase.
+const (
+	GetAbout200JSONResponseBodyDatabasePostgres GetAbout200JSONResponseBodyDatabase = "postgres"
+	GetAbout200JSONResponseBodyDatabaseSqlite   GetAbout200JSONResponseBodyDatabase = "sqlite"
+)
+
+// Valid indicates whether the value is a known member of the GetAbout200JSONResponseBodyDatabase enum.
+func (e GetAbout200JSONResponseBodyDatabase) Valid() bool {
+	switch e {
+	case GetAbout200JSONResponseBodyDatabasePostgres:
+		return true
+	case GetAbout200JSONResponseBodyDatabaseSqlite:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GetAuthCredentials200JSONResponseBodyCredentialsKind.
 const (
 	GetAuthCredentials200JSONResponseBodyCredentialsKindGithub   GetAuthCredentials200JSONResponseBodyCredentialsKind = "github"
@@ -1583,6 +1601,9 @@ type SemanticQuery struct {
 	ProjectIds   *[]string `json:"projectIds,omitempty"`
 	Query        string    `json:"query"`
 }
+
+// GetAbout200JSONResponseBodyDatabase defines parameters for GetAbout.
+type GetAbout200JSONResponseBodyDatabase string
 
 // GetAiJobsParams defines parameters for GetAiJobs.
 type GetAiJobsParams struct {
@@ -2605,6 +2626,11 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 // The interface specification for the client above.
 type ClientInterface interface {
 
+	// GetAbout Server build and storage for the authenticated client
+	//
+	// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
+	GetAbout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetAiJobs Inspect a bounded page of persisted jobs
 	//
 	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
@@ -3331,6 +3357,21 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /ready (the `GetReady` operationId).
 	GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetAbout Server build and storage for the authenticated client
+//
+// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
+func (c *Client) GetAbout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAboutRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // GetAiJobs Inspect a bounded page of persisted jobs
@@ -5088,6 +5129,33 @@ func (c *Client) GetReady(ctx context.Context, reqEditors ...RequestEditorFn) (*
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetAboutRequest constructs an http.Request for the GetAbout method
+func NewGetAboutRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/about")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewGetAiJobsRequest constructs an http.Request for the GetAiJobs method
@@ -8156,6 +8224,13 @@ func WithBaseURL(baseURL string) ClientOption {
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
 
+	// GetAboutWithResponse Server build and storage for the authenticated client
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
+	GetAboutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAboutResponse, error)
+
 	// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 	//
 	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
@@ -8928,6 +9003,66 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /ready (the `GetReady` operationId).
 	GetReadyWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetReadyResponse, error)
+}
+
+type GetAboutResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Commit           string                              `json:"commit"`
+		Database         GetAbout200JSONResponseBodyDatabase `json:"database"`
+		GithubConfigured bool                                `json:"githubConfigured"`
+		SchemaVersion    int                                 `json:"schemaVersion"`
+		Version          string                              `json:"version"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAboutResponse) GetJSON200() *struct {
+	Commit           string                              `json:"commit"`
+	Database         GetAbout200JSONResponseBodyDatabase `json:"database"`
+	GithubConfigured bool                                `json:"githubConfigured"`
+	SchemaVersion    int                                 `json:"schemaVersion"`
+	Version          string                              `json:"version"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetAboutResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAboutResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAboutResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAboutResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAboutResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type GetAiJobsResponse struct {
@@ -12480,6 +12615,19 @@ func (r GetReadyResponse) ContentType() string {
 	return ""
 }
 
+// GetAboutWithResponse Server build and storage for the authenticated client
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
+func (c *ClientWithResponses) GetAboutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAboutResponse, error) {
+	rsp, err := c.GetAbout(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAboutResponse(rsp)
+}
+
 // GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 //
 // Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
@@ -13869,6 +14017,45 @@ func (c *ClientWithResponses) GetReadyWithResponse(ctx context.Context, reqEdito
 		return nil, err
 	}
 	return ParseGetReadyResponse(rsp)
+}
+
+// ParseGetAboutResponse parses an HTTP response from a GetAboutWithResponse call
+func ParseGetAboutResponse(rsp *http.Response) (*GetAboutResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAboutResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Commit           string                              `json:"commit"`
+			Database         GetAbout200JSONResponseBodyDatabase `json:"database"`
+			GithubConfigured bool                                `json:"githubConfigured"`
+			SchemaVersion    int                                 `json:"schemaVersion"`
+			Version          string                              `json:"version"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseGetAiJobsResponse parses an HTTP response from a GetAiJobsWithResponse call
