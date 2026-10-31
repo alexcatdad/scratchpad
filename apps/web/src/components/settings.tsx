@@ -1,7 +1,7 @@
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useCallback, useEffect, useState } from "react";
-import { api, type Project, post } from "../lib/api";
+import { type About, api, type Project, post } from "../lib/api";
 import { encodedId } from "../lib/opaque-id";
 import { sshProof } from "../lib/ssh-proof";
 import { AiSettings, OwnerSettings } from "./ai-settings";
@@ -33,6 +33,7 @@ export function Settings({
     ["defaults", "Project defaults"],
     ["access", "Access & MCP"],
     ["data", "Import & export"],
+    ["about", "About"],
   ] as const;
   const selected = sections.some(([key]) => key === section)
     ? section
@@ -52,6 +53,7 @@ export function Settings({
     onImported();
   }
   const [credentials, setCredentials] = useState<Credential[]>([]);
+  const [about, setAbout] = useState<About | null>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [publicKey, setPublicKey] = useState("");
@@ -68,6 +70,12 @@ export function Settings({
   useEffect(() => {
     void refresh().catch((e: Error) => setError(e.message));
   }, [refresh]);
+  useEffect(() => {
+    // Servers that predate /about leave this section showing "Not reported".
+    void api<About>("/about")
+      .then(setAbout)
+      .catch(() => setAbout(null));
+  }, []);
   async function perform(work: () => Promise<void>) {
     setError("");
     setNotice("");
@@ -337,6 +345,35 @@ export function Settings({
             </ul>
           </details>
         )}
+      </section>
+      <section className="settings-section" hidden={selected !== "about"}>
+        <h2>About this server</h2>
+        <dl className="about-list">
+          <dt>Version</dt>
+          <dd>
+            {about
+              ? `${about.version}${about.commit ? ` · ${about.commit}` : ""}`
+              : "Not reported"}
+          </dd>
+          <dt>Database</dt>
+          <dd>
+            {about
+              ? `${about.database === "postgres" ? "PostgreSQL" : "SQLite"} · schema ${about.schemaVersion}`
+              : "Not reported"}
+          </dd>
+          <dt>GitHub sign-in</dt>
+          <dd>
+            {about
+              ? about.githubConfigured
+                ? "Configured"
+                : "Not configured"
+              : "Not reported"}
+          </dd>
+          <dt>Mac app</dt>
+          <dd>
+            <code>brew install --cask alexcatdad/tap/scratchpad</code>
+          </dd>
+        </dl>
       </section>
     </section>
   );
