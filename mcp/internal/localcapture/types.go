@@ -283,6 +283,14 @@ type ServiceStatus struct {
 	LastDelivery       *DeliverySummary `json:"lastDelivery,omitempty"`
 	Connection         ConnectionStatus `json:"connection"`
 	QueueSchemaVersion int              `json:"queueSchemaVersion"`
+	// ServiceVersion and ServiceBuild identify the running service binary so
+	// the app can detect that an upgrade has not restarted it yet.
+	ServiceVersion string `json:"serviceVersion,omitempty"`
+	ServiceBuild   string `json:"serviceBuild,omitempty"`
+	// ServerVersion and ServerCommit come from the latest successful health
+	// probe; they are empty for servers that predate GET /about.
+	ServerVersion string `json:"serverVersion,omitempty"`
+	ServerCommit  string `json:"serverCommit,omitempty"`
 }
 
 type ConnectionState string
@@ -340,6 +348,8 @@ type AuthenticatedIdentity struct {
 	ServerURL           string
 	CredentialID        string
 	CaptureCapabilities []string
+	ServerVersion       string
+	ServerCommit        string
 }
 
 type DeliveryItem struct {

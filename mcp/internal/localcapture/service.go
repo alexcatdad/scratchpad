@@ -21,6 +21,9 @@ type ServiceOptions struct {
 	RetryMax         time.Duration
 	HealthInterval   time.Duration
 	PruneInterval    time.Duration
+	// Version and Build identify this service binary in Status.
+	Version string
+	Build   string
 }
 
 const (
@@ -64,6 +67,9 @@ type Runtime struct {
 	quiescing               bool
 	connection              ConnectionStatus
 	lastDelivery            *DeliverySummary
+	version, build          string
+	serverVersion           string
+	serverCommit            string
 	wake                    chan struct{}
 	probeWake               chan struct{}
 	stop                    chan struct{}
@@ -103,7 +109,7 @@ func NewRuntime(ctx context.Context, options ServiceOptions) (*Runtime, error) {
 	if options.PruneInterval <= 0 {
 		options.PruneInterval = time.Hour
 	}
-	r := &Runtime{store: options.Store, adapter: options.Adapter, wake: make(chan struct{}, 1), probeWake: make(chan struct{}, 1), stop: make(chan struct{}), workerDone: make(chan struct{}), retryMin: options.RetryMin, timeRetryMax: options.RetryMax, healthInterval: options.HealthInterval, pruneInterval: options.PruneInterval, results: map[string]cachedDeliveryResult{}, waiters: map[string]*deliveryWaiter{}, exitAfterQuiesce: options.ExitAfterQuiesce, storageAvailable: true}
+	r := &Runtime{store: options.Store, adapter: options.Adapter, wake: make(chan struct{}, 1), probeWake: make(chan struct{}, 1), stop: make(chan struct{}), workerDone: make(chan struct{}), retryMin: options.RetryMin, timeRetryMax: options.RetryMax, healthInterval: options.HealthInterval, pruneInterval: options.PruneInterval, results: map[string]cachedDeliveryResult{}, waiters: map[string]*deliveryWaiter{}, exitAfterQuiesce: options.ExitAfterQuiesce, storageAvailable: true, version: options.Version, build: options.Build}
 	settings, err := r.store.settings()
 	if err != nil {
 		return nil, err
@@ -282,7 +288,11 @@ func (r *Runtime) probeConnection(ctx context.Context) {
 		r.noteConnectionFor(generation, DeliveryServerIncompatible)
 		return
 	}
-	r.noteConnectionFor(generation, "")
+	if r.noteConnectionFor(generation, "") {
+		r.mu.Lock()
+		r.serverVersion, r.serverCommit = identity.ServerVersion, identity.ServerCommit
+		r.mu.Unlock()
+	}
 }
 
 func (r *Runtime) processOne(ctx context.Context) (bool, error) {
@@ -875,7 +885,7 @@ func (r *Runtime) Status(ctx context.Context) (ServiceStatus, error) {
 			connection.State = ConnectionUnknown
 		}
 	}
-	return ServiceStatus{Lifecycle: lifecycle, Pending: states[ReceiptPending], Blocked: states[ReceiptBlocked], Rejected: states[ReceiptRejected], NeedsSelection: states[ReceiptNeedsSelection], KeyAvailable: true, StorageAvailable: r.storageAvailable, LastDelivery: r.lastDelivery, Connection: connection, QueueSchemaVersion: QueueSchemaVersion}, nil
+	return ServiceStatus{Lifecycle: lifecycle, Pending: states[ReceiptPending], Blocked: states[ReceiptBlocked], Rejected: states[ReceiptRejected], NeedsSelection: states[ReceiptNeedsSelection], KeyAvailable: true, StorageAvailable: r.storageAvailable, LastDelivery: r.lastDelivery, Connection: connection, QueueSchemaVersion: QueueSchemaVersion, ServiceVersion: r.version, ServiceBuild: r.build, ServerVersion: r.serverVersion, ServerCommit: r.serverCommit}, nil
 }
 func (r *Runtime) PauseDelivery(ctx context.Context) error {
 	r.mu.Lock()

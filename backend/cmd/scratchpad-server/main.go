@@ -220,6 +220,7 @@ func run() error {
 		mux.HandleFunc("POST /api/v1/auth/"+operation, passkeys.Handler(operation))
 	}
 	mux.HandleFunc("GET /api/v1/auth/status", httpapi.AuthStatus(store, github.Configured()))
+	mux.HandleFunc("GET /api/v1/about", auth.About(httpapi.Build{Version: version, Commit: commit}, github.Configured()))
 	mux.HandleFunc("POST /api/v1/auth/mcp/challenge", auth.Handler(false))
 	mux.HandleFunc("POST /api/v1/auth/mcp/verify", auth.Handler(true))
 	mux.HandleFunc("GET /api/v1/records/{id}", httpapi.EntityRoute(httpapi.Records(store)))
@@ -245,7 +246,7 @@ func run() error {
 	defer func() { cancelWorker(); <-aiWorkerDone }()
 	done := make(chan error, 1)
 	go func() { done <- server.Serve(listener) }()
-	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "database": store.Engine, "schemaVersion": store.Version, "secretConversionFailed": conversionPending}); err != nil {
+	if err := json.NewEncoder(os.Stdout).Encode(map[string]any{"address": listener.Addr().String(), "version": version, "database": store.Engine, "schemaVersion": store.Version, "secretConversionFailed": conversionPending}); err != nil {
 		server.Close()
 		<-done
 		return errors.New("STARTUP_FAILED")
@@ -273,6 +274,14 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
+
+// version and commit are injected by release builds with
+// -ldflags "-X main.version=<version> -X main.commit=<revision>".
+var (
+	version = "dev"
+	commit  = ""
+)
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)

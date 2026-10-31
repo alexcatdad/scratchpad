@@ -132,6 +132,7 @@ func run() error {
 	defer cancel()
 	runtime, err := localcapture.NewRuntime(ctx, localcapture.ServiceOptions{
 		Store: store, Adapter: delivery.NewAdapter(), ExplicitStart: *explicitStart, ExitAfterQuiesce: true, DeferWorker: true,
+		Version: version, Build: buildNumber,
 	})
 	if err != nil {
 		_ = store.Close()

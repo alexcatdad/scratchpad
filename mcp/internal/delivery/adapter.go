@@ -85,11 +85,17 @@ func (a *Adapter) client(binding localcapture.Binding) (*scratchpad.Client, erro
 }
 
 func (a *Adapter) Authenticate(ctx context.Context, binding localcapture.Binding) (localcapture.AuthenticatedIdentity, error) {
-	_, credentialID, capabilities, err := a.authenticatedClient(ctx, binding)
+	client, credentialID, capabilities, err := a.authenticatedClient(ctx, binding)
 	if err != nil {
 		return localcapture.AuthenticatedIdentity{}, err
 	}
-	return localcapture.AuthenticatedIdentity{ServerURL: binding.ServerURL, CredentialID: credentialID, CaptureCapabilities: capabilities}, nil
+	identity := localcapture.AuthenticatedIdentity{ServerURL: binding.ServerURL, CredentialID: credentialID, CaptureCapabilities: capabilities}
+	// The server build is informational: an older server without /about, or a
+	// failed read, leaves it empty without affecting authentication.
+	if build, aboutErr := client.About(ctx); aboutErr == nil {
+		identity.ServerVersion, identity.ServerCommit = build.Version, build.Commit
+	}
+	return identity, nil
 }
 
 func (a *Adapter) VerifyConnection(ctx context.Context, binding localcapture.Binding) (localcapture.AuthenticatedIdentity, error) {

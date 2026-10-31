@@ -33,6 +33,11 @@ public struct ServiceStatus: Decodable, Sendable {
     public let lastDelivery: DeliverySummary?
     public let connection: ConnectionObservation?
     public let queueSchemaVersion: Int?
+    // Reported by services and servers new enough to know them; absent otherwise.
+    public var serviceVersion: String? = nil
+    public var serviceBuild: String? = nil
+    public var serverVersion: String? = nil
+    public var serverCommit: String? = nil
 }
 public struct ConnectionObservation: Decodable, Sendable {
     public let state: String

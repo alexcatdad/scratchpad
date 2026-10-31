@@ -143,8 +143,15 @@ struct SettingsPage: View {
                 }
                 Text("Alerts cover sustained outages, blocked delivery and local-save failures. They include counts and safe descriptions only.").font(.caption).foregroundStyle(.secondary)
             }
-            Section("App maintenance") {
-                Text("Install and update Scratchpad through Homebrew using the project’s tap.")
+            Section("About") {
+                LabeledContent("App", value: AppIdentity.versionLabel)
+                LabeledContent("Capture service", value: serviceVersionLabel)
+                LabeledContent("Server", value: serverVersionLabel)
+                if case .restartNeeded = model.serviceUpdate {
+                    Label("The capture service is running an older build. Choose Stop service and then Start service from the menu bar to finish updating.", systemImage: "arrow.up.circle")
+                        .font(.caption).foregroundStyle(.orange)
+                }
+                Text("Install and update Scratchpad with Homebrew: brew upgrade --cask scratchpad")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -152,6 +159,15 @@ struct SettingsPage: View {
         .navigationTitle("Settings")
         .onAppear { loginEnabled = model.supervisor.loginItemStatus == .enabled; model.loadConfiguration() }
         .task { notificationPermission = await IncidentNotifier.permissionState() }
+    }
+    private var serviceVersionLabel: String {
+        guard let version = model.status?.serviceVersion else { return "Not reported" }
+        return ServiceUpdateState.label(version: version, build: model.status?.serviceBuild)
+    }
+    private var serverVersionLabel: String {
+        guard let version = model.status?.serverVersion, !version.isEmpty else { return "Not reported" }
+        guard let commit = model.status?.serverCommit, !commit.isEmpty else { return version }
+        return "\(version) · \(commit)"
     }
     private var connectionName: String {
         switch model.status?.connection?.effectiveState() {

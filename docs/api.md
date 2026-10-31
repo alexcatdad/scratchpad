@@ -1926,3 +1926,21 @@ requests have a 120-second bound and the existing 4 MiB IPC frame limit; oversiz
 responses report `RESPONSE_TOO_LARGE`. The MCP receives operation results, never
 SSH keys or session tokens. Unavailable collector or server reads fail explicitly
 without bypassing the collector. Capture and receipt semantics are unchanged.
+
+## Accepted clarification: build and version reporting (2026-10-31)
+
+`GET /about` requires an authenticated browser or machine session and returns
+`{version, commit, database, schemaVersion, githubConfigured}`. Release builds
+stamp `version` and `commit` at link time; the Nix package uses the flake's
+commit date (`YYYY.MM.DD`) and short revision, and a dirty tree reports commit
+`dirty`. Source builds report `version` `dev` and an empty commit. Anonymous
+requests return HTTP 401, so the endpoint does not disclose the build to
+unauthenticated callers. The server's startup report also includes `version`.
+
+The private capture service `status` operation adds `serviceVersion` and
+`serviceBuild` for its own binary, plus `serverVersion` and `serverCommit` from
+its latest successful health probe. All four are optional: older services omit
+them, and servers that predate `GET /about` leave the server fields empty
+without affecting authentication or delivery. The app compares the service
+build with its own bundle version to detect a service that has not been
+restarted after an upgrade.
