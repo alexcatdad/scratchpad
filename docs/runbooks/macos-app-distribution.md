@@ -32,8 +32,8 @@ to replace it. Queue data, credentials and lifecycle settings stay in
 `~/Library/Application Support/Scratchpad`.
 
 `brew upgrade --cask scratchpad` replaces the app bundle. The running capture
-service keeps its previous binary until **Stop service** / **Start service** from
-the menu-bar icon or the next login; the cask caveats say so. The service's
+service keeps its previous binary until **Restart Capture Service** in the
+menu-bar popover or the next login; the cask caveats say so. The service's
 `--prepare-upgrade` / `--finish-upgrade` handoff is not wired into the cask
 because Homebrew 7 rejects Ruby install hooks.
 

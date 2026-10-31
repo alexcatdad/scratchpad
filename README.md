@@ -35,9 +35,8 @@ open -a Scratchpad
 The fully qualified install grants Homebrew trust only to the Scratchpad cask.
 Tapping the repository alone does not grant trust; whole-tap trust is not needed.
 
-Configure your existing server and SSH signer in **Authentication**, verify
-authenticated access, then use **MCP setup** to preview and apply your coding
-client's configuration. The client uses the bundled
+Connect your existing server and SSH signer in **Connection**, then use **AI
+Tools** to preview and apply your coding client's configuration. The client uses the bundled
 `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`; no separate MCP
 formula is required. Restart the client's MCP connection after applying it.
 The server remains a separate deployment.
