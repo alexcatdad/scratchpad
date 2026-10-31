@@ -4,7 +4,7 @@ import ScratchpadNative
 
 @MainActor
 final class AppModel: ObservableObject {
-    @Published var workspacePage: WorkspacePage? = .queue
+    @Published var workspacePage: WorkspacePage? = .overview
     @Published private(set) var status: ServiceStatus?
     @Published private(set) var statusObservedAt: Date?
     @Published private(set) var receipts: [Receipt] = []
@@ -27,9 +27,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var keyDiscoveryMessage: String?
     @Published var errorMessage: String?
     @Published private(set) var busy = false
+    @Published private(set) var activity: String?
     var serviceUpdate: ServiceUpdateState {
         ServiceUpdateState(status: status, appVersion: AppIdentity.version, appBuild: AppIdentity.build)
     }
+    var presentation: StatusPresentation { StatusPresentation(status: status, update: serviceUpdate) }
     let client = ServiceClient()
     let supervisor = ServiceSupervisor()
     private var incidentTracker = IncidentTracker(
@@ -310,18 +312,18 @@ final class AppModel: ObservableObject {
                     guard let self, self.isCurrentStartIntent(revision) else { return }
                     _ = self.observationRevision.finishStartFailure(revision)
                     self.persistLifecyclePolicy()
-                    self.startupProcess = nil
+                    self.startupProcess = nil; self.activity = nil
                     self.errorMessage = exitCode == 1
                         ? "The capture service exited during startup (code 1). Unlock the queue Keychain and check local queue access before retrying."
                         : "The capture service exited during startup (code \(exitCode)). Check its local configuration before retrying."
                     self.recordLocalSaveUnavailable()
                 }
             }
-            errorMessage = "Starting the capture service…"
+            activity = "Starting the capture service…"
         } catch {
             _ = observationRevision.finishStartFailure(revision)
             persistLifecyclePolicy()
-            startupProcess = nil
+            startupProcess = nil; activity = nil
             errorMessage = error.localizedDescription
             recordLocalSaveUnavailable()
             return
@@ -339,7 +341,7 @@ final class AppModel: ObservableObject {
                         self.acceptServiceStatus(status)
                         _ = self.observationRevision.finishStart(revision)
                         self.persistLifecyclePolicy()
-                        self.startupProcess = nil
+                        self.startupProcess = nil; self.activity = nil
                         self.errorMessage = nil
                     }
                     return
@@ -351,10 +353,37 @@ final class AppModel: ObservableObject {
             guard let self, self.isCurrentStartIntent(revision) else { return }
             _ = self.observationRevision.finishStartFailure(revision)
             self.persistLifecyclePolicy()
-            self.startupProcess = nil
+            self.startupProcess = nil; self.activity = nil
             self.errorMessage = "The capture service has not become available yet. Check queue Keychain unlock and local storage status."
             self.recordLocalSaveUnavailable()
         }
+    }
+
+    /// Stops the running service and starts the installed binary, so an upgrade
+    /// takes effect without logging out. Queued captures stay in the local queue.
+    func restartService() {
+        let revision = beginLifecycleIntent(operation: "stop")
+        let client = ServiceClient(timeout: ServiceClient.timeout(for: "stop"))
+        activity = "Restarting the capture service…"
+        perform({ try client.call("stop", body: EmptyBody(), as: EmptyResponse.self) }, completion: { _ in
+            guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: true) else { return }
+            Task { @MainActor [weak model = self] in
+                // Wait for the old process to release its socket before starting the new one.
+                for _ in 0..<40 {
+                    let gone = await Task.detached {
+                        (try? ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) == nil
+                    }.value
+                    if gone { break }
+                    try? await Task.sleep(for: .milliseconds(250))
+                }
+                model?.startService()
+            }
+        }, onFailure: { error in
+            self.activity = nil
+            guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: false) else { return }
+            self.errorMessage = error
+            self.refresh()
+        })
     }
 
     private func recordLocalSaveUnavailable() {

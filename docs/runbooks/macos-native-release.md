@@ -122,7 +122,8 @@ which builds with `scripts/release-app-build.sh`, notarizes, staples, publishes
 and updates the `scratchpad` cask. The cask installs the app without upgrade
 hooks: Homebrew 7 rejects Ruby `preflight` hooks, and its declarative steps cannot
 hold the collector handoff lock. After an upgrade the running collector keeps its
-previous binary until **Stop service** / **Start service** or the next login. The
+previous binary until **Restart Capture Service** (offered by the app once it
+detects the version mismatch) or the next login. The
 `--prepare-upgrade` / `--finish-upgrade` handoff remains in the service for a
 future cask that can express it.
 

@@ -371,7 +371,9 @@ export function Settings({
           </dd>
           <dt>Mac app</dt>
           <dd>
-            <code>brew install --cask alexcatdad/tap/scratchpad</code>
+            <span className="mono">
+              brew install --cask alexcatdad/tap/scratchpad
+            </span>
           </dd>
         </dl>
       </section>

@@ -957,3 +957,8 @@ body:has(dialog[open]) {
     margin-top: 0;
   }
 }
+.mono {
+  font-family: "SF Mono", ui-monospace, Menlo, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}

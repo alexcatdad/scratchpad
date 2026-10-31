@@ -77,9 +77,9 @@ macos/Scripts/test-dev-app.sh
 
 Keep the sidebar row identity type equal to its selection value type
 (`WorkspacePage`). SwiftPM policy tests do not exercise rendered selection.
-In the development workspace, verify that Pending captures starts selected,
-then click Settings and Projects and confirm both the selection highlight and
-detail content change. Return to Settings without changing configuration.
+In the development workspace, verify that Overview starts selected,
+then click Captures and General and confirm both the selection highlight and
+detail content change. Return to General without changing configuration.
 
 ## Settings window regression
 
