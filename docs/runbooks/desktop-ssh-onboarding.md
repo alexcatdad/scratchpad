@@ -7,15 +7,15 @@ supported. Each desktop needs a matching private key through an SSH agent.
 
 ## Connect
 
-1. Open **Authentication** and enter the server's HTTPS origin. Private Tailscale
+1. Open **Connection** and enter the server's HTTPS origin. Private Tailscale
    origins work when the desktop can reach them. Loopback development may use HTTP.
-2. Choose **Find SSH keys**. Discovery reads public keys from the inherited SSH
+2. Choose **Find Keys**. Discovery reads public keys from the inherited SSH
    agent, the standard macOS 1Password agent socket and `.ssh/*.pub`. Advanced
    settings allow an explicit agent socket. No private key files are inspected.
 3. Choose an accepted key if several match. The saved identity is preferred when
    available; a single match is selected automatically. A public file marked
    **load in SSH agent** needs its matching private key loaded into that agent.
-4. Choose **Connect with selected key**. Approve or unlock the agent when prompted.
+4. Choose **Connect**. Approve or unlock the agent when prompted.
    Explicit verification permits up to 90 seconds for the signer. Scratchpad saves
    a public-key reference and agent socket only after possession proof and an
    authenticated project-list read succeed. Failed proof preserves existing

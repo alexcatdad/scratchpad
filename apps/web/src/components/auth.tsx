@@ -10,6 +10,7 @@ import {
 } from "@simplewebauthn/browser";
 import { useState } from "react";
 import { api, post, signInWithGithub } from "../lib/api";
+import { Mark } from "./mark";
 export async function authenticatePasskey(): Promise<void> {
   const result = await api<{
     challengeId: string;
@@ -91,6 +92,7 @@ export function AuthScreen({
     <main className="auth-page">
       <div className="auth-box">
         <a className="wordmark" href="/">
+          <Mark />
           Scratchpad
         </a>
         <h1>{enroll ? "Make room for your memory." : "Welcome back."}</h1>

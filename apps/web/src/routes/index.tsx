@@ -3,12 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
 import { Insights } from "../components/insights";
+import { Mark } from "../components/mark";
 import { MemoryFilters } from "../components/memory-filters";
 import { NavIcon } from "../components/nav-icon";
 import { Projects } from "../components/projects";
 import { type Detail, RecordDetail } from "../components/record-detail";
 import { Settings } from "../components/settings";
 import {
+  type About,
   api,
   githubSignInError,
   label,
@@ -42,6 +44,7 @@ function Dashboard() {
     githubConfigured: boolean;
   } | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [about, setAbout] = useState<About | null>(null);
   const [records, setRecords] = useState<MemoryRecord[]>([]);
   const [detail, setDetail] = useState<Detail | null>(null);
   const [detailError, setDetailError] = useState("");
@@ -139,6 +142,13 @@ function Dashboard() {
       void loadProjects().catch((e: Error) => setError(e.message));
   }, [status?.authenticated, loadProjects]);
   useEffect(() => {
+    // Older servers have no /about; the version is informational only.
+    if (status?.authenticated)
+      void api<About>("/about")
+        .then(setAbout)
+        .catch(() => setAbout(null));
+  }, [status?.authenticated]);
+  useEffect(() => {
     if (status?.authenticated) {
       setRecords([]);
       void loadRecords();
@@ -201,9 +211,7 @@ function Dashboard() {
       </a>
       <aside className="sidebar">
         <a href="/" className="wordmark">
-          <span className="scratch" aria-hidden="true">
-            ≋
-          </span>
+          <Mark />
           Scratchpad
         </a>
         <nav aria-label="Main navigation">
@@ -220,7 +228,38 @@ function Dashboard() {
             </button>
           ))}
         </nav>
+        {projects.length > 0 && (
+          <nav className="sidebar-projects" aria-label="Projects">
+            <h2>Projects</h2>
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                className={
+                  tab === "Memory" && search.projectId === project.id
+                    ? "active"
+                    : ""
+                }
+                aria-current={
+                  tab === "Memory" && search.projectId === project.id
+                    ? "page"
+                    : undefined
+                }
+                onClick={() => applyFilters({ projectId: project.id })}
+              >
+                <span aria-hidden="true">#</span>
+                {project.name}
+              </button>
+            ))}
+          </nav>
+        )}
         <div className="sidebar-bottom">
+          {about && (
+            <span className="server-version">
+              Server {about.version}
+              {about.commit ? ` · ${about.commit}` : ""}
+            </span>
+          )}
           <a href="https://alexcatdad.github.io/scratchpad/">
             <NavIcon name="Documentation" />
             Documentation
@@ -379,11 +418,6 @@ function Dashboard() {
                 </div>
               )}
               <section aria-label="Records" aria-busy={loading}>
-                <div className="list-heading">
-                  <span>Type</span>
-                  <span>Title</span>
-                  <span>Project</span>
-                </div>
                 {records.map((record) => (
                   <button
                     key={record.id}
@@ -394,30 +428,32 @@ function Dashboard() {
                       inspect(record.id);
                     }}
                   >
-                    <span className="record-type">{label(record.type)}</span>
-                    <span>
-                      <strong>
-                        {record.metadata?.displayTitle || record.title}
-                      </strong>
-                      <small>{recordPreview(record)}</small>
-                      <span className="record-tags">
-                        {record.metadata?.tags?.map((tag) => (
-                          <span key={tag}>#{tag}</span>
-                        ))}
+                    <span className="record-meta">
+                      <span className="record-type">{label(record.type)}</span>
+                      <span className="project-name">
+                        {projects.find((p) => p.id === record.projectId)
+                          ?.name ?? "Project"}
                       </span>
-                    </span>
-                    <span className="project-name">
-                      {projects.find((p) => p.id === record.projectId)?.name ??
-                        "Project"}
-                      <small>
+                      <span>{label(record.authority)}</span>
+                      <span className="record-date">
                         {new Date(record.recordedAt).toLocaleDateString("en", {
                           month: "short",
                           day: "numeric",
                           year: "numeric",
                         })}
-                      </small>
-                      <small>{label(record.authority)}</small>
+                      </span>
                     </span>
+                    <strong>
+                      {record.metadata?.displayTitle || record.title}
+                    </strong>
+                    <small>{recordPreview(record)}</small>
+                    {record.metadata?.tags?.length ? (
+                      <span className="record-tags">
+                        {record.metadata.tags.map((tag) => (
+                          <span key={tag}>#{tag}</span>
+                        ))}
+                      </span>
+                    ) : null}
                   </button>
                 ))}
                 {!records.length && !loading && !error && (

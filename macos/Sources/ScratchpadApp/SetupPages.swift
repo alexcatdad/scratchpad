@@ -1,321 +1,399 @@
 import SwiftUI
+import AppKit
 import ScratchpadNative
 
-struct ProjectsPage: View {
+struct ConnectionPage: View {
     @EnvironmentObject private var model: AppModel
-    @State private var filter = ""
-    private var filtered: [Project] { model.projects.filter { filter.isEmpty || $0.name.localizedCaseInsensitiveContains(filter) || $0.id.localizedCaseInsensitiveContains(filter) } }
-    var body: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("Projects").font(.largeTitle.bold())
-            Text("Projects are loaded from the configured Scratchpad server. Each capture keeps its own project.").foregroundStyle(.secondary)
-            TextField("Search projects", text: $filter).textFieldStyle(.roundedBorder)
-            if model.projects.isEmpty {
-                EmptyStateView(title: "No projects loaded", symbol: "folder", detail: "Connect and verify the Scratchpad server, then refresh projects.")
-                    .frame(maxHeight: .infinity)
-            } else {
-                List(filtered) { project in
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(project.name).font(.headline)
-                        Text(project.id).font(.caption.monospaced()).foregroundStyle(.secondary)
-                    }.padding(.vertical, 3)
-                }
-            }
-        }
-        .padding(22)
-        .toolbar { ToolbarItem { Button("Refresh projects") { model.loadProjects() } } }
-        .onAppear { model.loadProjects() }
-    }
-}
+    @State private var showAdvanced = false
 
-struct AuthenticationPage: View {
-    @EnvironmentObject private var model: AppModel
     var body: some View {
         Form {
-            Section("Scratchpad connection") {
-                TextField("Server URL", text: Binding(get: { model.configuration.serverURL }, set: {
+            Section {
+                TextField("Address", text: Binding(get: { model.configuration.serverURL }, set: {
                     guard $0 != model.configuration.serverURL else { return }
                     model.configuration.serverURL = $0
                     model.clearDiscoveredKeys()
-                }))
-                Button("Find SSH keys") { model.discoverSSHKeys() }
-                    .disabled(model.configuration.serverURL.isEmpty)
-                Text("Link GitHub in the server dashboard first. Scratchpad checks your local public keys with that server, then asks your SSH signer to prove possession.")
-                    .font(.caption).foregroundStyle(.secondary)
-                if model.busy { ProgressView("Checking keys with the server…").controlSize(.small) }
-                if let message = model.keyDiscoveryMessage { Text(message).font(.caption).foregroundStyle(.secondary) }
-                if !model.sshKeys.isEmpty {
-                    Picker("SSH key", selection: $model.selectedSSHKey) {
-                        Text("Choose a key").tag(String?.none)
+                }), prompt: Text("https://scratchpad.example.com"))
+                LabeledContent("Status") {
+                    let server = model.presentation.rows.first { $0.title == "Server" }
+                    HStack(spacing: 6) {
+                        StatusIcon(tone: server?.tone ?? .off)
+                        Text([server?.value, model.status?.serverVersion.map { "server \($0)" }].compactMap { $0 }.joined(separator: " · "))
+                    }
+                }
+            } header: {
+                Text("Server")
+            } footer: {
+                Text("Link GitHub in the server dashboard first. Scratchpad then finds keys on this Mac that the server accepts.")
+            }
+
+            Section {
+                if model.sshKeys.isEmpty {
+                    HStack {
+                        Text(model.keyDiscoveryMessage ?? "Look for SSH keys on this Mac that this server accepts.")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Find Keys") { model.discoverSSHKeys() }
+                            .disabled(model.configuration.serverURL.isEmpty || model.busy)
+                    }
+                } else {
+                    Picker("Key", selection: $model.selectedSSHKey) {
                         ForEach(model.sshKeys) { key in
-                            Text("\(key.label) — \(key.fingerprint)").tag(Optional(key.id))
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(key.label)
+                                Text(key.fingerprint).font(.caption.monospaced()).foregroundStyle(.secondary)
+                            }
+                            .tag(Optional(key.id))
                         }
                     }
-                    Button("Connect with selected key") { model.connectSSHKey() }
-                        .disabled(model.selectedSSHKey == nil)
+                    .pickerStyle(.radioGroup)
+                    HStack {
+                        Button("Find Again") { model.discoverSSHKeys() }.disabled(model.busy)
+                        Spacer()
+                        Button("Connect") { model.connectSSHKey() }
+                            .buttonStyle(ProminentButtonStyle())
+                            .disabled(model.selectedSSHKey == nil || model.busy)
+                    }
                 }
-                DisclosureGroup("Advanced connection settings") {
-                    TextField("Public key fingerprint", text: $model.configuration.credentialFingerprint)
+                if model.busy { ProgressView("Checking with the server…").controlSize(.small) }
+            } header: {
+                Text("Sign-in key")
+            } footer: {
+                Text("Your SSH agent or 1Password approves each signature. Private keys never leave the agent.")
+            }
+
+            Section("Account") {
+                if let verified = model.verified {
+                    LabeledContent("Signed in") {
+                        HStack(spacing: 6) { StatusIcon(tone: .ok); Text("Verified \(ReceiptLabels.when(verified.verifiedAt))") }
+                    }
+                    LabeledContent("Credential", value: verified.credentialId)
+                } else {
+                    LabeledContent("Signed in", value: model.configuration.credentialFingerprint.isEmpty ? "Not connected" : "Not checked yet")
+                }
+                HStack {
+                    Spacer()
+                    Button("Check Again") { model.verifyConnection() }
+                        .disabled(model.configuration.serverURL.isEmpty || model.configuration.credentialFingerprint.isEmpty || model.busy)
+                }
+            }
+
+            Section {
+                DisclosureGroup("Advanced", isExpanded: $showAdvanced) {
+                    TextField("Key fingerprint", text: $model.configuration.credentialFingerprint)
                     TextField("Public key file", text: $model.configuration.publicKeyPath)
-                    TextField("SSH signing key reference", text: $model.configuration.signingKeyPath)
-                    TextField("SSH agent socket (optional)", text: Binding(get: { model.configuration.sshAgentSocket }, set: {
+                    TextField("Signing key reference", text: $model.configuration.signingKeyPath)
+                    TextField("SSH agent socket", text: Binding(get: { model.configuration.sshAgentSocket }, set: {
                         guard $0 != model.configuration.sshAgentSocket else { return }
                         model.configuration.sshAgentSocket = $0
                         model.clearDiscoveredKeys()
-                    }))
-                    Text("Keys found as public files must be loaded into your SSH agent before connecting. Your agent handles unlock and approval prompts. Private key files and passphrases are never copied into Scratchpad.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-            Section {
-                HStack {
-                    Button("Save connection") { model.saveConfiguration() }
-                    Button("Verify saved connection") { model.verifyConnection() }
-                        .disabled(model.configuration.serverURL.isEmpty || model.configuration.credentialFingerprint.isEmpty)
-                    if model.busy { ProgressView().controlSize(.small) }
-                }
-            }
-            if let verified = model.verified {
-                Section("Authenticated verification") {
-                    Label("Server proof succeeded", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
-                    LabeledContent("Server", value: verified.serverURL)
-                    LabeledContent("Credential", value: verified.credentialId)
-                    LabeledContent("Verified", value: verified.verifiedAt)
-                    Text("This confirms authenticated read access. It does not confirm capture-write permission.").font(.caption).foregroundStyle(.secondary)
+                    }), prompt: Text("Default agent"))
+                    HStack {
+                        Text("The same settings as scratchpad-mcp connect in Terminal.").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Save") { model.saveConfiguration() }.disabled(model.busy)
+                    }
                 }
             }
         }
         .formStyle(.grouped)
-        .disabled(model.busy)
-        .navigationTitle("Authentication")
+        .navigationTitle("Connection")
         .onAppear { model.loadConfiguration() }
     }
 }
 
-struct SettingsPage: View {
+struct ToolsPage: View {
+    @EnvironmentObject private var model: AppModel
+    @State private var reviewing: Review?
+    @State private var genericText: String?
+    @State private var message: String?
+    private let executable = Bundle.main.bundleURL.appending(path: "Contents/Helpers/scratchpad-mcp").path
+
+    struct Review: Identifiable {
+        let kind: MCPClientKind
+        let path: String
+        let before: String
+        let after: String
+        let file: ReviewedConfigFile
+        var id: String { path }
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach([MCPClientKind.claudeCode, .codex], id: \.self) { kind in
+                    let path = defaultPath(kind)
+                    let installed = isInstalled(path)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(kind.rawValue)
+                            Text(abbreviated(path)).font(.caption.monospaced()).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        HStack(spacing: 5) {
+                            StatusIcon(tone: installed ? .ok : .off, size: 11)
+                            Text(installed ? "Connected" : "Not set up")
+                        }
+                        .font(.callout).foregroundStyle(.secondary)
+                        if installed {
+                            Button("Review…") { prepare(kind, path: path) }
+                        } else {
+                            Button("Set Up…") { prepare(kind, path: path) }.buttonStyle(ProminentButtonStyle())
+                        }
+                    }
+                    .accessibilityElement(children: .contain)
+                }
+                HStack {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Another tool")
+                        Text("Any MCP client that runs a command").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Copy Config") { copyGeneric() }
+                }
+            } header: {
+                Text("AI tools on this Mac")
+            } footer: {
+                Text("Scratchpad adds one entry to each tool’s configuration and shows you the change first. Restart the tool afterwards.")
+            }
+            if let message {
+                Section { Text(message).foregroundStyle(.secondary) }
+            }
+            if let genericText {
+                Section("Configuration copied") {
+                    Text(genericText).font(.system(.caption, design: .monospaced)).textSelection(.enabled)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("AI Tools")
+        .sheet(item: $reviewing) { review in
+            ReviewSheet(review: review, onApply: { apply(review) }, onCancel: { reviewing = nil })
+        }
+    }
+
+    private func defaultPath(_ kind: MCPClientKind) -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        switch kind {
+        case .codex: return "\(home)/.codex/config.toml"
+        case .claudeCode: return "\(home)/.claude.json"
+        case .generic: return ""
+        }
+    }
+    private func abbreviated(_ path: String) -> String { (path as NSString).abbreviatingWithTildeInPath }
+    private func isInstalled(_ path: String) -> Bool {
+        guard let data = try? ClientConfiguration.readConfigFile(at: URL(fileURLWithPath: path)) else { return false }
+        return String(decoding: data, as: UTF8.self).contains("scratchpad-mcp")
+    }
+    private func prepare(_ kind: MCPClientKind, path: String) {
+        do {
+            let url = URL(fileURLWithPath: path)
+            let original = try ClientConfiguration.readConfigFile(at: url)
+            let data = original ?? Data()
+            let before = String(decoding: data, as: UTF8.self)
+            let after: String
+            switch kind {
+            case .codex:
+                after = try ClientConfiguration.codexPreview(existing: before, executable: executable, configuration: model.configuration)
+            case .claudeCode:
+                after = String(decoding: try ClientConfiguration.jsonPreview(existing: data.isEmpty ? Data("{}".utf8) : data, executable: executable, configuration: model.configuration), as: UTF8.self)
+            case .generic:
+                return
+            }
+            guard after != before else {
+                message = "\(kind.rawValue) already uses this Scratchpad. Nothing to change."
+                return
+            }
+            reviewing = Review(kind: kind, path: path, before: before, after: after,
+                               file: ReviewedConfigFile(path: url.path, originalContents: original, proposedContents: Data(after.utf8)))
+            message = nil
+        } catch {
+            message = "Could not prepare the change: \(error.localizedDescription)"
+        }
+    }
+    private func apply(_ review: Review) {
+        do {
+            try ClientConfiguration.applyReviewedFile(review.file, selectedURL: URL(fileURLWithPath: review.path))
+            message = "Added Scratchpad to \(review.kind.rawValue). Restart it to load the new tools."
+        } catch {
+            message = "Could not apply the change: \(error.localizedDescription)"
+        }
+        reviewing = nil
+    }
+    private func copyGeneric() {
+        do {
+            let text = String(decoding: try ClientConfiguration.genericEntry(executable: executable, configuration: model.configuration), as: UTF8.self)
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(text, forType: .string)
+            genericText = text
+        } catch {
+            message = "Could not create the configuration: \(error.localizedDescription)"
+        }
+    }
+}
+
+/// Shows only what changes, as added and removed lines.
+private struct ReviewSheet: View {
+    let review: ToolsPage.Review
+    let onApply: () -> Void
+    let onCancel: () -> Void
+
+    private var changes: [(String, Bool)] {
+        let before = review.before.components(separatedBy: "\n")
+        let after = review.after.components(separatedBy: "\n")
+        let removed = before.filter { line in !after.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty }
+        let added = after.filter { line in !before.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty }
+        return removed.map { ($0, false) } + added.map { ($0, true) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Add Scratchpad to \(review.kind.rawValue)?").font(.title3.weight(.bold))
+            Text("These lines change in \((review.path as NSString).abbreviatingWithTildeInPath). Nothing else in the file is touched.")
+                .foregroundStyle(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 2) {
+                    ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
+                        Text((change.1 ? "+ " : "− ") + change.0)
+                            .foregroundStyle(change.1 ? Color.green : Color.red)
+                            .accessibilityLabel((change.1 ? "Added: " : "Removed: ") + change.0)
+                    }
+                }
+                .font(.system(.callout, design: .monospaced))
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+            }
+            .frame(minHeight: 120, maxHeight: 260)
+            .background(.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 10))
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel, action: onCancel).keyboardShortcut(.cancelAction)
+                Button("Apply Change", action: onApply).buttonStyle(ProminentButtonStyle()).keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 560)
+    }
+}
+
+struct GeneralPage: View {
     @EnvironmentObject private var model: AppModel
     @AppStorage("incidentNotificationsEnabled") private var notificationsEnabled = false
     @State private var loginEnabled = false
     @State private var notificationPermission: IncidentNotifier.PermissionState = .notDetermined
+    @State private var confirmStop = false
 
     var body: some View {
         Form {
-            Section("Server connection") {
-                TextField("Server URL", text: $model.configuration.serverURL)
-                Button("Save connection") { model.saveConfiguration() }
-                    .disabled(model.busy)
-                LabeledContent("Local capture", value: LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
-                LabeledContent("Connection", value: connectionName)
-                Text("Pending captures stay bound to their original server and credential.").font(.caption).foregroundStyle(.secondary)
-                Button("View authentication") { NotificationCenter.default.post(name: .showAuthenticationPage, object: nil) }
-            }
-            Section("Background behavior") {
-                Toggle("Start capture service at login", isOn: $loginEnabled)
-                    .onChange(of: loginEnabled) { value in model.setStartAtLogin(value) }
-                if model.supervisor.loginItemStatus == .requiresApproval {
-                    Label("Login service needs approval in System Settings → General → Login Items.", systemImage: "exclamationmark.triangle")
-                        .font(.caption).foregroundStyle(.orange)
+            Section("Background") {
+                Toggle(isOn: $loginEnabled) {
+                    Text("Start capture service at login")
+                    Text("If you stop it yourself, it stays stopped.")
                 }
-                Text("A deliberately stopped service stays stopped until you start it.").font(.caption).foregroundStyle(.secondary)
-                Toggle("Incident notifications", isOn: $notificationsEnabled)
-                    .onChange(of: notificationsEnabled) { enabled in
-                        Task {
-                            notificationPermission = enabled
-                                ? await IncidentNotifier.requestPermission()
-                                : await IncidentNotifier.permissionState()
-                        }
+                .onChange(of: loginEnabled) { value in model.setStartAtLogin(value) }
+                if model.supervisor.loginItemStatus == .requiresApproval {
+                    Label("Approve Scratchpad in System Settings › General › Login Items.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+                Toggle(isOn: $notificationsEnabled) {
+                    Text("Notify me about problems")
+                    Text("Long outages, refused captures and saving failures. Counts only, never capture content.")
+                }
+                .onChange(of: notificationsEnabled) { enabled in
+                    Task {
+                        notificationPermission = enabled
+                            ? await IncidentNotifier.requestPermission()
+                            : await IncidentNotifier.permissionState()
                     }
-                if notificationsEnabled {
-                    switch notificationPermission {
-                    case .authorized:
-                        Text("Notifications are authorized. You can change delivery in System Settings → Notifications.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    case .denied:
-                        Text("macOS denied notifications. Enable them for Scratchpad in System Settings → Notifications.")
-                            .font(.caption).foregroundStyle(.orange)
-                    case .notDetermined:
-                        Text("macOS has not confirmed notification permission yet.")
-                            .font(.caption).foregroundStyle(.secondary)
+                }
+                if notificationsEnabled, notificationPermission == .denied {
+                    Label("macOS blocked notifications. Allow them in System Settings › Notifications › Scratchpad.", systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Section("About") {
+                LabeledContent("Scratchpad", value: AppIdentity.versionLabel)
+                LabeledContent("Capture service") {
+                    HStack(spacing: 6) {
+                        if case .restartNeeded = model.serviceUpdate { StatusIcon(tone: .update) }
+                        Text(serviceVersionLabel)
+                    }
+                }
+                LabeledContent("Server", value: serverVersionLabel)
+                LabeledContent("Updates") {
+                    Text("brew upgrade --cask scratchpad").font(.callout.monospaced()).textSelection(.enabled)
+                }
+                HStack {
+                    Link("Documentation", destination: URL(string: "https://alexcatdad.github.io/scratchpad/")!)
+                    Spacer()
+                    if case .restartNeeded = model.serviceUpdate {
+                        Button("Restart Capture Service") { model.restartService() }
+                            .buttonStyle(ProminentButtonStyle())
+                            .disabled(model.activity != nil)
+                    }
+                    Button("Copy Diagnostics") { copyDiagnostics() }
+                }
+            }
+
+            Section {
+                if model.status?.lifecycle == "stopped" || model.status == nil {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Capture service is stopped")
+                            Text("AI tools cannot save memory until you start it.").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Start") { model.startService() }.buttonStyle(ProminentButtonStyle())
                     }
                 } else {
-                    Text("Notification permission is requested only when you enable incident notifications.")
-                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Stop capture service")
+                            Text("AI tools cannot save memory until you start it again.").font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Button("Stop…", role: .destructive) { confirmStop = true }
+                    }
                 }
-                Text("Alerts cover sustained outages, blocked delivery and local-save failures. They include counts and safe descriptions only.").font(.caption).foregroundStyle(.secondary)
-            }
-            Section("About") {
-                LabeledContent("App", value: AppIdentity.versionLabel)
-                LabeledContent("Capture service", value: serviceVersionLabel)
-                LabeledContent("Server", value: serverVersionLabel)
-                if case .restartNeeded = model.serviceUpdate {
-                    Label("The capture service is running an older build. Choose Stop service and then Start service from the menu bar to finish updating.", systemImage: "arrow.up.circle")
-                        .font(.caption).foregroundStyle(.orange)
-                }
-                Text("Install and update Scratchpad with Homebrew: brew upgrade --cask scratchpad")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .navigationTitle("Settings")
-        .onAppear { loginEnabled = model.supervisor.loginItemStatus == .enabled; model.loadConfiguration() }
+        .navigationTitle("General")
+        .onAppear { loginEnabled = model.supervisor.loginItemStatus == .enabled }
         .task { notificationPermission = await IncidentNotifier.permissionState() }
+        .confirmationDialog("Stop the capture service?", isPresented: $confirmStop) {
+            Button("Stop Capture Service", role: .destructive) { model.setLifecycle("stop") }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("It stays stopped, even after you log in again, until you start it.")
+        }
     }
+
     private var serviceVersionLabel: String {
         guard let version = model.status?.serviceVersion else { return "Not reported" }
-        return ServiceUpdateState.label(version: version, build: model.status?.serviceBuild)
+        let label = ServiceUpdateState.label(version: version, build: model.status?.serviceBuild)
+        if case .restartNeeded = model.serviceUpdate { return "\(label), restart to update" }
+        return label
     }
     private var serverVersionLabel: String {
         guard let version = model.status?.serverVersion, !version.isEmpty else { return "Not reported" }
         guard let commit = model.status?.serverCommit, !commit.isEmpty else { return version }
         return "\(version) · \(commit)"
     }
-    private var connectionName: String {
-        switch model.status?.connection?.effectiveState() {
-        case "connected": "Reachable"
-        case "connectivity": "Offline"
-        case "authentication", "credential_changed": "Authentication needed"
-        case "server_incompatible": "Incompatible server"
-        default: "Not checked"
-        }
-    }
-}
-
-extension Notification.Name { static let showAuthenticationPage = Notification.Name("scratchpad.showAuthenticationPage") }
-
-struct MCPSetupPage: View {
-    @EnvironmentObject private var model: AppModel
-    @State private var kind: MCPClientKind = .codex
-    @State private var configPath = ""
-    @State private var before = ""
-    @State private var preview = ""
-    @State private var reviewedFile: ReviewedConfigFile?
-    @State private var problem: String?
-    @State private var showingApproval = false
-    @State private var genericText = ""
-    private let executable = Bundle.main.bundleURL.appending(path: "Contents/Helpers/scratchpad-mcp").path
-    private var isGeneric: Bool { kind == .generic }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("MCP setup").font(.largeTitle.bold())
-            Text("Preview the exact client change before applying it. Existing unrelated configuration is preserved.").foregroundStyle(.secondary)
-            Text("Launching a configured client asks its bundled Scratchpad MCP adapter to ensure the shared local collector is running. Persistent Stop is respected and must be cleared with Start in Scratchpad; closing a client leaves collector delivery running.")
-                .font(.caption).foregroundStyle(.secondary)
-            GroupBox("Scratchpad app status") {
-                VStack(alignment: .leading, spacing: 6) {
-                    LabeledContent("Local capture", value: LocalCaptureReadiness(status: model.status, observedAt: model.statusObservedAt).label)
-                    LabeledContent("Server connection", value: remoteConnectionName)
-                    Text("These statuses are checked separately. Local capture readiness describes the bundled collector; server connection reflects its latest connection observation.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, alignment: .leading)
-            }
-            Picker("Client", selection: $kind) { ForEach(MCPClientKind.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-            if !isGeneric {
-                TextField("Configuration file", text: $configPath).textFieldStyle(.roundedBorder)
-                HStack {
-                    Button("Load and preview") { makePreview() }
-                    Button("Apply this preview…") { showingApproval = true }.disabled(reviewedFile == nil || preview.isEmpty || preview == before)
-                }
-            } else {
-                Button("Generate generic stdio configuration") { makePreview() }
-                if !genericText.isEmpty {
-                    Text("Pass this entry to a compatible MCP client:").font(.subheadline.weight(.semibold))
-                    ScrollView { Text(genericText).font(.system(.caption, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(10) }
-                        .frame(maxHeight: 230).background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-                }
-            }
-            if !isGeneric && !preview.isEmpty {
-                HStack(spacing: 12) {
-                    ConfigColumn(title: "Current", text: before)
-                    ConfigColumn(title: "After applying", text: preview)
-                }
-            }
-            if let problem { Text(problem).foregroundStyle(.orange).font(.caption) }
-            Spacer()
-        }
-        .padding(22)
-        .navigationTitle("MCP setup")
-        .onAppear { setDefaultPath() }
-        .onChange(of: kind) { _ in setDefaultPath(); before = ""; preview = ""; reviewedFile = nil; genericText = ""; problem = nil }
-        .confirmationDialog("Apply this exact configuration?", isPresented: $showingApproval, titleVisibility: .visible) {
-            Button("Apply preview") { applyPreview() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This will update only the Scratchpad MCP entry in the selected client file. Review both columns before continuing.")
-        }
-    }
-
-    private func setDefaultPath() {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        switch kind {
-        case .codex: configPath = "\(home)/.codex/config.toml"
-        case .claudeCode: configPath = "\(home)/.claude.json"
-        case .generic: configPath = ""
-        }
-    }
-    private var remoteConnectionName: String {
-        switch model.status?.connection?.effectiveState() {
-        case "connected": "Reachable"
-        case "connectivity": "Offline"
-        case "authentication", "credential_changed": "Authentication needed"
-        case "server_incompatible": "Incompatible server"
-        default: "Not checked"
-        }
-    }
-    private func makePreview() {
-        do {
-            if isGeneric {
-                guard !model.configuration.serverURL.isEmpty, !model.configuration.publicKeyPath.isEmpty, !model.configuration.signingKeyPath.isEmpty else {
-                    throw SetupError.connectionNotConfigured
-                }
-                let data = try ClientConfiguration.genericEntry(executable: executable, configuration: model.configuration)
-                genericText = String(decoding: data, as: UTF8.self)
-                return
-            }
-            guard !model.configuration.serverURL.isEmpty, !model.configuration.publicKeyPath.isEmpty, !model.configuration.signingKeyPath.isEmpty else {
-                throw SetupError.connectionNotConfigured
-            }
-            let url = URL(fileURLWithPath: configPath)
-            let original = try ClientConfiguration.readConfigFile(at: url)
-            let data = original ?? Data()
-            before = String(decoding: data, as: UTF8.self)
-            switch kind {
-            case .codex:
-                preview = try ClientConfiguration.codexPreview(existing: before, executable: executable, configuration: model.configuration)
-            case .claudeCode:
-                let source = data.isEmpty ? Data("{}".utf8) : data
-                preview = String(decoding: try ClientConfiguration.jsonPreview(existing: source, executable: executable, configuration: model.configuration), as: UTF8.self)
-            case .generic: break
-            }
-            reviewedFile = ReviewedConfigFile(path: url.path, originalContents: original, proposedContents: Data(preview.utf8))
-            problem = nil
-        } catch { reviewedFile = nil; problem = "Could not prepare a configuration preview: \(error.localizedDescription)" }
-    }
-    private func applyPreview() {
-        do {
-            guard let reviewedFile else { throw ClientConfigurationError.contentsChanged }
-            try ClientConfiguration.applyReviewedFile(reviewedFile, selectedURL: URL(fileURLWithPath: configPath))
-            before = preview
-            preview = ""
-            self.reviewedFile = nil
-            problem = "Applied the reviewed configuration. Restart the coding tool to load Scratchpad MCP."
-        } catch { problem = "Could not apply the reviewed configuration: \(error.localizedDescription)" }
-    }
-}
-
-private enum SetupError: Error, LocalizedError {
-    case connectionNotConfigured
-    var errorDescription: String? { "Configure the server URL and SSH key references in Authentication before generating client setup." }
-}
-
-private struct ConfigColumn: View {
-    let title: String
-    let text: String
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.caption.weight(.semibold))
-            ScrollView([.horizontal, .vertical]) { Text(text.isEmpty ? "(empty file)" : text).font(.system(.caption2, design: .monospaced)).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading).padding(8) }
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-        }.frame(maxWidth: .infinity)
+    private func copyDiagnostics() {
+        let lines = [
+            "Scratchpad \(AppIdentity.versionLabel)",
+            "Capture service: \(serviceVersionLabel)",
+            "Server: \(serverVersionLabel)",
+            "Status: \(model.presentation.word)",
+            "Lifecycle: \(model.status?.lifecycle ?? "unavailable")",
+            "Connection: \(model.status?.connection?.effectiveState() ?? "unknown")",
+            "Waiting: \(model.status.map { $0.pending + $0.blocked + $0.rejected + $0.needsSelection } ?? 0)",
+            "macOS: \(ProcessInfo.processInfo.operatingSystemVersionString)",
+        ]
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(lines.joined(separator: "\n"), forType: .string)
     }
 }

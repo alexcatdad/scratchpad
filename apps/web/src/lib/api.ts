@@ -12,6 +12,14 @@ export type Project = {
     enabledRecordTypes?: string[];
   };
 };
+// GET /about: the running server build, for authenticated clients only.
+export type About = {
+  version: string;
+  commit: string;
+  database: "sqlite" | "postgres";
+  schemaVersion: number;
+  githubConfigured: boolean;
+};
 export type MemoryRecord = {
   id: string;
   projectId: string;

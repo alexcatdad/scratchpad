@@ -29,7 +29,7 @@ On macOS the Scratchpad app provides the binaries in
 
 It prints the service lifecycle, connection state and saved server and key as
 JSON. If it reports the service unavailable, have the owner open the app and choose
-**Start service** from its menu-bar icon. If it already shows the intended server
+**Start Capture Service** from its menu-bar icon. If it already shows the intended server
 and `connected`, skip to registering the MCP.
 
 For server initialization, OAuth configuration or recovery, consult the
