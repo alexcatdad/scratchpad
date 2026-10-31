@@ -24,22 +24,22 @@ repository and need to inspect the cask before installation, use
 `brew info --cask alexcatdad/tap/scratchpad`. No whole-tap trust or trust-bypass
 environment variable is needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 
-In the app, open **Authentication**, enter your existing server connection and
-local SSH signer details, save, and choose **Verify authenticated access**.
-The matching public key must already be authorized by the server. Keep private
-keys on the computer; the app reuses your SSH signer.
+In the app, open **Connection**, enter your server address, choose **Find
+Keys**, pick an accepted key and choose **Connect**. The matching public key must
+already be authorized by the server. Keep private keys on the computer; the app
+reuses your SSH signer.
 
-Open **MCP setup**, select your client, review the configuration preview, and
-apply it. Restart the client's MCP connection. Its command is the bundled
+Open **AI Tools**, choose **Set Up…** for your client, review the lines it adds
+and apply them. Restart the client's MCP connection. Its command is the bundled
 `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`, which obtains
 configuration and authenticated operations through the collector. Installing
 the standalone formula is not required. Verify a real authenticated read in
 your intended project after connecting.
 
 Homebrew manages app updates with `brew upgrade --cask scratchpad`. After an
-upgrade, choose **Stop service** and then **Start service** from the menu-bar
-icon so the capture service runs the new version; it also switches at your next
-login. Installing the app does not deploy a server or
+upgrade, the menu-bar popover shows **Update installed**; choose **Restart
+Capture Service** so the service runs the new version. It also switches at your
+next login. Installing the app does not deploy a server or
 transfer another computer's local configuration, signer or queued captures.
 See the [distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md).
 
