@@ -72,7 +72,7 @@ func aiFingerprint(cfg AIConfig) (string, error) {
 	return aiHash(map[string]any{"baseUrl": cfg.BaseURL, "model": cfg.Model, "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions})
 }
 func embeddingFingerprint(cfg AIConfig) (string, error) {
-	return aiHash(map[string]any{"baseUrl": cfg.BaseURL, "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions})
+	return aiHash(map[string]any{"baseUrl": cfg.embeddingURL(), "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions})
 }
 func aiScope(job map[string]any) (jobScope, error) {
 	raw, err := json.Marshal(job["scope"])

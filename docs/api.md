@@ -1956,4 +1956,6 @@ the same URL rules as `baseUrl`. The provider API key is sent only to `baseUrl`;
 a separate embedding endpoint receives no `Authorization` header. The passage
 index fingerprint uses the effective embedding endpoint, so changing it marks
 existing passages stale for reindexing, while leaving it empty keeps existing
-indexes current.
+indexes current. The fingerprint of ordinary record embeddings (`POST /ai/jobs`
+type `embed`) also uses the effective embedding endpoint, so moving to a
+different endpoint requires re-running the embed job.

@@ -537,3 +537,45 @@ func TestSeparateEmbeddingEndpointReceivesEmbeddingsWithoutTheProviderKey(t *tes
 		}
 	}
 }
+
+func TestChangingEmbeddingEndpointMakesOrdinaryEmbeddingsStale(t *testing.T) {
+	path, databaseURL := portableInstance(t, "sqlite")
+	embeddingService := func() *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		}))
+	}
+	first, second := embeddingService(), embeddingService()
+	defer first.Close()
+	defer second.Close()
+	origin := startServer(t, path, databaseURL)
+	status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "embeddingBaseUrl": first.URL + "/v1", "embeddingModel": "synthetic-embedding", "embeddingDimensions": 2})
+	if status != 200 {
+		t.Fatal("settings failed")
+	}
+	project := jobProject(t, origin, "Embedding endpoint move", true, false)
+	curationCapture(t, origin, project, "Durable semantic evidence")
+	status, queued := curationRequest(t, origin, "POST", "/ai/jobs", map[string]any{"type": "embed", "projectId": project})
+	if status != 202 {
+		t.Fatal("enqueue failed")
+	}
+	waitAIJob(t, origin, queued["job"].(map[string]any)["id"].(string), "completed")
+	results := func() int {
+		status, result := curationRequest(t, origin, "POST", "/search/semantic", map[string]any{"projectId": project, "query": "Retain durable knowledge"})
+		if status != 200 {
+			t.Fatalf("search failed: HTTP%d", status)
+		}
+		return len(result["results"].([]any))
+	}
+	if results() != 1 {
+		t.Fatal("index was not usable before the endpoint changed")
+	}
+	status, _ = curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 1, "embeddingBaseUrl": second.URL + "/v1"})
+	if status != 200 {
+		t.Fatal("endpoint update failed")
+	}
+	if results() != 0 {
+		t.Fatal("vectors from the previous embedding endpoint stayed current")
+	}
+}
