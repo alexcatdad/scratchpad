@@ -33,18 +33,28 @@ type AIConfig struct {
 	RequestTimeoutSeconds int      `json:"requestTimeoutSeconds"`
 	ReasoningEffort       string   `json:"reasoningEffort"`
 	ScheduleMinutes       int      `json:"scheduleMinutes"`
+	// EmbeddingBaseURL optionally sends embeddings to a separate endpoint;
+	// empty uses BaseURL. The API key is only ever sent to BaseURL.
+	EmbeddingBaseURL string `json:"embeddingBaseUrl"`
+}
+
+func (cfg AIConfig) embeddingURL() string {
+	if cfg.EmbeddingBaseURL == "" {
+		return cfg.BaseURL
+	}
+	return cfg.EmbeddingBaseURL
 }
 
 func NewAI(auth *SSH, box *secrets.Box, rag bool) *AI { return &AI{auth: auth, box: box, rag: rag} }
 
-var aiFields = []string{"enabled", "baseUrl", "model", "embeddingModel", "embeddingDimensions", "similarityThreshold", "analysisModes", "maxOutputTokens", "requestTimeoutSeconds", "reasoningEffort", "scheduleMinutes"}
+var aiFields = []string{"enabled", "baseUrl", "model", "embeddingModel", "embeddingDimensions", "similarityThreshold", "analysisModes", "maxOutputTokens", "requestTimeoutSeconds", "reasoningEffort", "scheduleMinutes", "embeddingBaseUrl"}
 
 func aiInvalid() error { return &protocolError{"VALIDATION_FAILED", "Invalid AI configuration.", 400} }
 func secretUnavailable() error {
 	return &protocolError{"SECRET_UNAVAILABLE", "The provider secret is unavailable. Supply the retained installation key or replace/remove the provider token.", 503}
 }
 func aiDefaults() AIConfig {
-	return AIConfig{false, "http://host.docker.internal:1234/v1", "qwen/qwen3.8-27b", "text-embedding-qwen3-embedding-4b", 2560, 0.5, append([]string{}, artifactKinds[:len(artifactKinds)-1]...), 4096, 600, "none", 60}
+	return AIConfig{false, "http://host.docker.internal:1234/v1", "qwen/qwen3.8-27b", "text-embedding-qwen3-embedding-4b", 2560, 0.5, append([]string{}, artifactKinds[:len(artifactKinds)-1]...), 4096, 600, "none", 60, ""}
 }
 func aiConfig(row map[string]any) (AIConfig, error) {
 	cfg := aiDefaults()
@@ -66,8 +76,7 @@ func aiConfig(row map[string]any) (AIConfig, error) {
 			return cfg, aiInvalid()
 		}
 	}
-	u, err := url.Parse(cfg.BaseURL)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+	if !providerURL(cfg.BaseURL) || (cfg.EmbeddingBaseURL != "" && !providerURL(cfg.EmbeddingBaseURL)) {
 		return cfg, aiInvalid()
 	}
 	if cfg.EmbeddingDimensions < 1 || cfg.EmbeddingDimensions > 16384 || cfg.SimilarityThreshold < -1 || cfg.SimilarityThreshold > 1 || cfg.MaxOutputTokens < 256 || cfg.MaxOutputTokens > 32768 || cfg.RequestTimeoutSeconds < 5 || cfg.RequestTimeoutSeconds > 3600 || cfg.ScheduleMinutes < 0 || cfg.ScheduleMinutes > 43200 {
@@ -89,6 +98,10 @@ func aiConfig(row map[string]any) (AIConfig, error) {
 	}
 	cfg.AnalysisModes = modes
 	return cfg, nil
+}
+func providerURL(value string) bool {
+	u, err := url.Parse(value)
+	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.RawQuery == "" && u.Fragment == ""
 }
 func aiConfigMap(cfg AIConfig) map[string]any {
 	raw, _ := json.Marshal(cfg)

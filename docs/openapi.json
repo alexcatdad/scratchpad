@@ -4074,6 +4074,10 @@
             "type": "string",
             "format": "uri"
           },
+          "embeddingBaseUrl": {
+            "type": "string",
+            "description": "Optional separate embedding endpoint; empty uses baseUrl."
+          },
           "model": {
             "type": "string"
           },
@@ -4149,6 +4153,10 @@
           "baseUrl": {
             "type": "string",
             "format": "uri"
+          },
+          "embeddingBaseUrl": {
+            "type": "string",
+            "description": "Optional separate embedding endpoint; empty uses baseUrl."
           },
           "model": {
             "type": "string"
