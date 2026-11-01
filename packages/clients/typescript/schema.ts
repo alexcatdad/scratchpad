@@ -1094,6 +1094,8 @@ export interface components {
             enabled: boolean;
             /** Format: uri */
             baseUrl?: string;
+            /** @description Optional separate embedding endpoint; empty uses baseUrl. */
+            embeddingBaseUrl?: string;
             model?: string;
             embeddingModel?: string;
             embeddingDimensions?: number;
@@ -1114,6 +1116,8 @@ export interface components {
             enabled?: boolean;
             /** Format: uri */
             baseUrl?: string;
+            /** @description Optional separate embedding endpoint; empty uses baseUrl. */
+            embeddingBaseUrl?: string;
             model?: string;
             embeddingModel?: string;
             embeddingDimensions?: number;

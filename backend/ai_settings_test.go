@@ -490,3 +490,50 @@ func TestAISettingsProtectWriteOnlySecretAcrossRestart(t *testing.T) {
 		})
 	}
 }
+
+func TestSeparateEmbeddingEndpointReceivesEmbeddingsWithoutTheProviderKey(t *testing.T) {
+	path, databaseURL := portableInstance(t, "sqlite")
+	t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", syntheticEncryptionKey(t, 45))
+	var completions, embeddings atomic.Int32
+	var completionAuth, embeddingAuth atomic.Value
+	completion := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(404)
+			return
+		}
+		completions.Add(1)
+		completionAuth.Store(r.Header.Get("Authorization"))
+		w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+	}))
+	defer completion.Close()
+	embedding := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path != "/v1/embeddings" {
+			w.WriteHeader(404)
+			return
+		}
+		embeddings.Add(1)
+		embeddingAuth.Store(r.Header.Get("Authorization"))
+		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+	}))
+	defer embedding.Close()
+	origin := startServer(t, path, databaseURL)
+	status, result := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "apiKey": "synthetic-completion-key", "baseUrl": completion.URL + "/v1", "embeddingBaseUrl": embedding.URL + "/v1", "embeddingDimensions": 2})
+	if status != 200 || result["embeddingBaseUrl"] != embedding.URL+"/v1" {
+		t.Fatal("separate embedding endpoint was not stored")
+	}
+	status, result = curationRequest(t, origin, "POST", "/ai/test", map[string]any{})
+	if status != 200 || result["ok"] != true || completions.Load() != 1 || embeddings.Load() != 1 {
+		t.Fatal("provider test did not use both endpoints")
+	}
+	if completionAuth.Load() != "Bearer synthetic-completion-key" || embeddingAuth.Load() != "" {
+		t.Fatal("provider key was sent to the separate embedding endpoint")
+	}
+	for _, invalid := range []string{"ftp://example.invalid/v1", "https://user:synthetic-secret@example.invalid/v1"} {
+		status, _ = curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 1, "embeddingBaseUrl": invalid})
+		if status != 400 {
+			t.Fatal("invalid embedding endpoint was accepted")
+		}
+	}
+}

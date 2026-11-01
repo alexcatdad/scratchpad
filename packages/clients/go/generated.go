@@ -1276,9 +1276,12 @@ func (e GetReady200JSONResponseBodyStatus) Valid() bool {
 
 // AiSettings defines model for AiSettings.
 type AiSettings struct {
-	AnalysisModes         *[]AiSettingsAnalysisModes `json:"analysisModes,omitempty"`
-	ApiKeyConfigured      *bool                      `json:"apiKeyConfigured,omitempty"`
-	BaseUrl               *string                    `json:"baseUrl,omitempty"`
+	AnalysisModes    *[]AiSettingsAnalysisModes `json:"analysisModes,omitempty"`
+	ApiKeyConfigured *bool                      `json:"apiKeyConfigured,omitempty"`
+	BaseUrl          *string                    `json:"baseUrl,omitempty"`
+
+	// EmbeddingBaseUrl Optional separate embedding endpoint; empty uses baseUrl.
+	EmbeddingBaseUrl      *string                    `json:"embeddingBaseUrl,omitempty"`
 	EmbeddingDimensions   *int                       `json:"embeddingDimensions,omitempty"`
 	EmbeddingModel        *string                    `json:"embeddingModel,omitempty"`
 	Enabled               *bool                      `json:"enabled,omitempty"`
@@ -1302,8 +1305,11 @@ type AiSettingsPatch struct {
 	AnalysisModes *[]AiSettingsPatchAnalysisModes `json:"analysisModes,omitempty"`
 
 	// ApiKey Omit to preserve the stored key; empty string removes it.
-	ApiKey                *string                         `json:"apiKey,omitempty"`
-	BaseUrl               *string                         `json:"baseUrl,omitempty"`
+	ApiKey  *string `json:"apiKey,omitempty"`
+	BaseUrl *string `json:"baseUrl,omitempty"`
+
+	// EmbeddingBaseUrl Optional separate embedding endpoint; empty uses baseUrl.
+	EmbeddingBaseUrl      *string                         `json:"embeddingBaseUrl,omitempty"`
 	EmbeddingDimensions   *int                            `json:"embeddingDimensions,omitempty"`
 	EmbeddingModel        *string                         `json:"embeddingModel,omitempty"`
 	Enabled               *bool                           `json:"enabled,omitempty"`

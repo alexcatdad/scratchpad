@@ -101,12 +101,16 @@ func (a *AI) postProviderGuarded(ctx context.Context, r *http.Request, snapshot 
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(snapshot.config.RequestTimeoutSeconds)*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(snapshot.config.BaseURL, "/")+"/"+path, bytes.NewReader(encoded))
+	base := snapshot.config.BaseURL
+	if path == "embeddings" {
+		base = snapshot.config.embeddingURL()
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST", strings.TrimSuffix(base, "/")+"/"+path, bytes.NewReader(encoded))
 	if err != nil {
 		return nil, aiUnavailable()
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if snapshot.key != "" {
+	if snapshot.key != "" && base == snapshot.config.BaseURL {
 		req.Header.Set("Authorization", "Bearer "+snapshot.key)
 	}
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}

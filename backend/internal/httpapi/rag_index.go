@@ -24,7 +24,7 @@ func ragFingerprint(cfg AIConfig) (string, error) {
 	if !ragDimensionsAvailable(cfg) {
 		return "", &protocolError{"VALIDATION_FAILED", "Passage RAG supports at most 16000 embedding dimensions.", 400}
 	}
-	return aiHash(map[string]any{"provider": cfg.BaseURL, "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions, "processingVersion": ragProcessingVersion})
+	return aiHash(map[string]any{"provider": cfg.embeddingURL(), "embeddingModel": cfg.EmbeddingModel, "dimensions": cfg.EmbeddingDimensions, "processingVersion": ragProcessingVersion})
 }
 func (a *AI) ragAvailable(ctx context.Context, q entityReader) error {
 	if !a.rag || a.auth.Store.Engine != "postgres" {

@@ -1610,6 +1610,7 @@ These extensions describe the source implementation after the SQLite MVP. They d
 type AiSettings = {
   enabled: boolean;
   baseUrl: string;
+  embeddingBaseUrl: string;
   model: string;
   embeddingModel: string;
   embeddingDimensions: number;
@@ -1624,7 +1625,7 @@ type AiSettings = {
 };
 ```
 
-`apiKey` is a write-only optional field: omitting it preserves a stored key; an empty string removes it. Responses and audit configuration snapshots expose only whether a key is configured. Provider URLs must be HTTP(S), without embedded credentials, a query, or a fragment. `enabled` defaults to false. A schedule of `0` means manual processing only. The API accepts similarity thresholds from `-1` to `1`; the dashboard presents the usual nonnegative range. Provider request timeouts are configurable from 5 to 3,600 seconds, default 600. Reasoning effort defaults to `none`; `default` omits the provider-specific override. Choose a supported effort for the configured model. `maxOutputTokens` limits generated output (256–32,768; default 4,096). Size the timeout to the model and hardware: a large local model may require more than 180 seconds.
+`apiKey` is a write-only optional field: omitting it preserves a stored key; an empty string removes it. `embeddingBaseUrl` optionally sends embedding requests to a separate endpoint; an empty string (the default) uses `baseUrl`. The API key is sent only to `baseUrl`, never to a separate embedding endpoint. Responses and audit configuration snapshots expose only whether a key is configured. Provider URLs must be HTTP(S), without embedded credentials, a query, or a fragment. `enabled` defaults to false. A schedule of `0` means manual processing only. The API accepts similarity thresholds from `-1` to `1`; the dashboard presents the usual nonnegative range. Provider request timeouts are configurable from 5 to 3,600 seconds, default 600. Reasoning effort defaults to `none`; `default` omits the provider-specific override. Choose a supported effort for the configured model. `maxOutputTokens` limits generated output (256–32,768; default 4,096). Size the timeout to the model and hardware: a large local model may require more than 180 seconds.
 
 Go `analysisModes` accepts `summary`, `classification`, `duplicate_candidate`, `relationship_candidate`, `contradiction`, `cluster`, `pattern`, and `recommendation`; an empty array disables analysis modes. Supplied `export` modes return HTTP 400 because documents require an explicit document job. Historical stored `export` entries are ignored in effective analysis settings without rewriting configuration at startup; ordinary memory, embedding and explicit document jobs remain available.
 
@@ -1944,3 +1945,15 @@ them, and servers that predate `GET /about` leave the server fields empty
 without affecting authentication or delivery. The app compares the service
 build with its own bundle version to detect a service that has not been
 restarted after an upgrade.
+
+## Accepted clarification: separate embedding endpoint (2026-11-01)
+
+Completion and embedding models may be served by different OpenAI-compatible
+endpoints. `AiSettings.embeddingBaseUrl` is optional; empty uses `baseUrl` for
+both. When set, `POST /embeddings` calls (provider test, passage indexing and
+semantic search) go to it, and completion calls stay on `baseUrl`. It follows
+the same URL rules as `baseUrl`. The provider API key is sent only to `baseUrl`;
+a separate embedding endpoint receives no `Authorization` header. The passage
+index fingerprint uses the effective embedding endpoint, so changing it marks
+existing passages stale for reindexing, while leaving it empty keeps existing
+indexes current.

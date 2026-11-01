@@ -4,6 +4,7 @@ import { api, post } from "../lib/api";
 export type AiConfiguration = {
   enabled: boolean;
   baseUrl: string;
+  embeddingBaseUrl: string;
   model: string;
   embeddingModel: string;
   embeddingDimensions: number;
@@ -75,6 +76,9 @@ export function AiSettings() {
                     enabled: form.get("enabled") === "on",
                     baseUrl: form.get("baseUrl"),
                     model: form.get("model"),
+                    embeddingBaseUrl: String(
+                      form.get("embeddingBaseUrl") ?? "",
+                    ).trim(),
                     embeddingModel: form.get("embeddingModel"),
                     embeddingDimensions: Number(
                       form.get("embeddingDimensions"),
@@ -117,8 +121,21 @@ export function AiSettings() {
               defaultValue={configuration.baseUrl}
             />
             <small>
-              For LM Studio on this Mac, Docker uses
-              http://host.docker.internal:1234/v1.
+              Used for the LLM, and for embeddings unless a separate endpoint is
+              set below.
+            </small>
+          </label>
+          <label>
+            Separate embeddings endpoint
+            <input
+              type="url"
+              name="embeddingBaseUrl"
+              placeholder="Same as the base URL"
+              defaultValue={configuration.embeddingBaseUrl}
+            />
+            <small>
+              Optional. The API key is sent only to the base URL, never to this
+              endpoint.
             </small>
           </label>
           <div className="form-grid">
