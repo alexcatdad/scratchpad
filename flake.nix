@@ -16,7 +16,24 @@
       packages = forAll (pkgs: rec {
         scratchpad-server = pkgs.callPackage ./nix/package.nix { inherit version commit; };
         scratchpad-dashboard = pkgs.callPackage ./nix/dashboard.nix { };
-        default = scratchpad-server;
+        # The homelab slots run bin/scratchpad-server and bin/scratchpad-dashboard
+        # from this one output; `nix run` still starts the server.
+        default = pkgs.symlinkJoin {
+          name = "scratchpad-${version}";
+          paths = [
+            (pkgs.writeShellApplication {
+              name = "scratchpad-server";
+              # SSH sign-in proofs are verified with `ssh-keygen -Y verify`.
+              runtimeInputs = [ pkgs.openssh ];
+              text = ''exec ${pkgs.lib.getExe scratchpad-server} "$@"'';
+            })
+            (pkgs.writeShellApplication {
+              name = "scratchpad-dashboard";
+              text = ''exec ${pkgs.lib.getExe pkgs.nodejs_24} ${scratchpad-dashboard}/apps/web/server.mjs "$@"'';
+            })
+          ];
+          meta.mainProgram = "scratchpad-server";
+        };
       });
 
       nixosModules.default = import ./nix/module.nix self;
