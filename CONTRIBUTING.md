@@ -15,6 +15,8 @@ Swift checks need Xcode for macOS 26. PostgreSQL, pgvector, browser and
 container acceptance need extra services; see
 [the development runbook](docs/runbooks/development.md).
 
+Go backend work also runs in the devcontainer / GitHub Codespaces (Linux; no Swift).
+
 ## Changes
 
 - The canonical repository is on Forgejo; GitHub is a push mirror. Branch from
