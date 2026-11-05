@@ -11,8 +11,9 @@ installs keep working, and `brew info` points users to the cask.
 Releases run locally through release-tools; see [release](release.md). One
 `task release` builds and signs `Scratchpad.app` from the selected commit,
 notarizes and staples `scratchpad-<version>-darwin-arm64.zip`, publishes the
-GitHub release and updates `Casks/scratchpad.rb` through the tap's
-`scripts/apply-release-update`.
+Forgejo release and updates `Casks/scratchpad.rb` through the tap's
+`scripts/apply-release-update`. The cask downloads from Forgejo, so it installs
+only on machines on the tailnet.
 
 The tap's updater rewrites only the version, URL and SHA-256 of an existing
 cask. The cask therefore lands in the tap at a placeholder version: merge that

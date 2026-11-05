@@ -6,6 +6,9 @@ requested_app=${1:?usage: package-app.sh /output/Scratchpad.app}
 developer_dir=${DEVELOPER_DIR:-/Library/Developer/CommandLineTools}
 version=${APP_VERSION:-1.0.0}
 build_number=${BUILD_NUMBER:-1}
+# Full release version (e.g. 2026.11.05.1). Apple bundle versions allow only three
+# integers, so it is stored in the ReleaseVersion key and stamped into the helpers.
+release_version=${RELEASE_DISPLAY_VERSION:-$version}
 export DEVELOPER_DIR="$developer_dir"
 
 case "$version" in
@@ -13,6 +16,8 @@ case "$version" in
   * ) echo "APP_VERSION must start with a digit" >&2; exit 1 ;;
 esac
 case "$version" in *[!A-Za-z0-9.+-]* ) echo "APP_VERSION contains unsupported characters" >&2; exit 1;; esac
+case "$release_version" in [0-9]*) ;; *) echo "RELEASE_DISPLAY_VERSION must start with a digit" >&2; exit 1;; esac
+case "$release_version" in *[!A-Za-z0-9.+-]* ) echo "RELEASE_DISPLAY_VERSION contains unsupported characters" >&2; exit 1;; esac
 case "$build_number" in
   ''|*[!0-9.]*|.*|*.) echo "BUILD_NUMBER must be a dotted numeric bundle build number" >&2; exit 1 ;;
   *..*) echo "BUILD_NUMBER must not contain empty components" >&2; exit 1 ;;
@@ -93,8 +98,8 @@ swift build --package-path "$repo_root/macos" --product scratchpad-keychain
 bin=$(swift build --package-path "$repo_root/macos" --show-bin-path)
 
 mkdir -p "$stage_root/helpers"
-go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
-go build -C "$repo_root/mcp" -ldflags "-X main.version=$version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
+go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
+go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
 
 mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Resources"
 cp "$bin/Scratchpad" "$candidate/Contents/MacOS/Scratchpad"
@@ -112,6 +117,8 @@ sh "$repo_root/macos/Scripts/configure-app-framework-rpath.sh" \
   "$candidate/Contents/MacOS/Scratchpad" "$repo_root" "$developer_dir"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$candidate/Contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Delete :ReleaseVersion" "$candidate/Contents/Info.plist" >/dev/null 2>&1 || true
+/usr/libexec/PlistBuddy -c "Add :ReleaseVersion string $release_version" "$candidate/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 

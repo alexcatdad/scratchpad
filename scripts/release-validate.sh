@@ -7,6 +7,8 @@ set -euo pipefail
 
 : "${RELEASE_VERSION:?Set RELEASE_VERSION}"
 : "${RELEASE_OUT:?Set RELEASE_OUT}"
+: "${MACOS_SHORT_VERSION:?Set MACOS_SHORT_VERSION}"
+: "${MACOS_BUNDLE_VERSION:?Set MACOS_BUNDLE_VERSION}"
 
 archive="$RELEASE_OUT/scratchpad-${RELEASE_VERSION}-darwin-arm64.zip"
 work=$(mktemp -d "${TMPDIR:-/tmp}/scratchpad-validate.XXXXXX")
@@ -18,7 +20,9 @@ fi
 ditto -x -k "$archive" "$work"
 app="$work/Scratchpad.app"
 codesign --verify --strict --deep "$app"
-[[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist") == "$RELEASE_VERSION" ]]
+[[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist") == "$MACOS_SHORT_VERSION" ]]
+[[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.plist") == "$MACOS_BUNDLE_VERSION" ]]
+[[ $(/usr/libexec/PlistBuddy -c 'Print ReleaseVersion' "$app/Contents/Info.plist") == "$RELEASE_VERSION" ]]
 [[ $("$app/Contents/Helpers/scratchpad-mcp" --version) == "scratchpad-mcp ${RELEASE_VERSION}" ]]
 "$app/Contents/Helpers/scratchpad-service" --version | grep -q "^scratchpad-service ${RELEASE_VERSION} "
 printf 'Validated Scratchpad.app %s\n' "$RELEASE_VERSION"

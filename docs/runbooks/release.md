@@ -4,10 +4,17 @@
 
 Releases are explicit, local and owner-initiated. An invocation of the Go Task
 entry points below, on the coordinator Mac, builds the distributables from the
-selected commit, signs and notarizes the macOS binaries, publishes a GitHub
-release and updates the Homebrew tap. GitHub Actions only validates: no workflow
-builds release artifacts, signs, tags, publishes, deploys, dispatches a release
-or updates the tap, and releases neither wait for nor read CI status.
+selected commit, signs and notarizes the macOS binaries, publishes a release on
+Forgejo (`https://forgejo.triceratops-dory.ts.net/alexcatdad/scratchpad`) and
+updates the Homebrew tap. No CI workflow builds release artifacts, signs, tags,
+publishes, deploys, dispatches a release or updates the tap, and releases
+neither wait for nor read CI status.
+
+Releases go to Forgejo only. `github.com/alexcatdad/scratchpad` stays a source
+push mirror: it receives the release tag through the mirror, but no GitHub
+release is created. Release tags do not trigger the homelab deployment; a
+deployment is a separate, owner-initiated step (see
+[Kubernetes deployment](homelab-deploy.md)).
 
 The tool is [release-tools](https://github.com/alexcatdad/release-tools)
 (`reltool`), pinned in `Taskfile.yml` to a tag and the commit it must resolve to.
@@ -15,27 +22,37 @@ The app-owned configuration is `release.json`; the build and validation recipes
 are `Taskfile.yml` tasks that call `scripts/release-app-build.sh` and
 `scripts/release-validate.sh`.
 
-Published versions are `YYYY.M.N` (UTC year and month without leading zeros, a
-monthly counter starting at 1) with tag `vYYYY.M.N`. Earlier `v0.x.y` tags and
-releases stay as history; the first calendar version sorts above them. The
+Published versions are daily CalVer `YYYY.MM.DD.N` (UTC date, month and day
+zero-padded, a daily counter starting at 1) with tag `vYYYY.MM.DD.N`, allocated
+by release-tools v0.4.0. Earlier `v0.x.y` tags and the monthly `vYYYY.M.N`
+releases (`v2026.10.1`) stay as history on GitHub; the first daily version sorts
+above them. The
 TypeScript/Go SDK packages are not part of this release contract (see
 [Open decisions](#open-decisions)).
 
 ## What a release publishes
 
-- `scratchpad-YYYY.M.N-darwin-arm64.zip`: `Scratchpad.app` for Apple Silicon,
+- `scratchpad-YYYY.MM.DD.N-darwin-arm64.zip`: `Scratchpad.app` for Apple Silicon,
   macOS 13 or later; Developer ID signed, notarized and stapled. It bundles the
   capture service, keychain helper and `scratchpad-mcp`.
 
 release-tools additionally uploads `SHA256SUMS` and
 `scratchpad-<version>.manifest.json`, then updates `Casks/scratchpad.rb` in
-`alexcatdad/homebrew-tap`. That cask is the only tap entry this app owns. The
+`alexcatdad/homebrew-tap`. That cask is the only tap entry this app owns. Its
+download URL points at the Forgejo release
+(`https://forgejo.triceratops-dory.ts.net/alexcatdad/scratchpad/releases/download/<tag>/...`),
+so the cask installs and upgrades only on machines on the tailnet. The
 `scratchpad-mcp` formula is deprecated in favor of the cask and receives no
 further releases; its v2026.10.1 assets remain as history.
 
-The app's marketing and bundle versions come only from `RELEASE_VERSION`
-(`MACOS_SHORT_VERSION`, `MACOS_BUNDLE_VERSION`); nothing is derived from CI
-variables, Git refs or commit messages.
+The app's versions come only from the release-tools environment; nothing is
+derived from CI variables, Git refs or commit messages. Apple bundle versions
+allow at most three integers, so `CFBundleShortVersionString` and
+`CFBundleVersion` both get `MACOS_SHORT_VERSION` (`2026.11.05.1` becomes
+`2026.1105.1`). The full `RELEASE_VERSION` goes into the app's `ReleaseVersion`
+Info.plist key, which the app shows, and into the bundled `scratchpad-service`
+and `scratchpad-mcp` (`--version`). `scripts/release-validate.sh` checks all
+three.
 
 The build signs with the keychain helper's Developer ID provisioning profile at
 `~/.config/scratchpad/keychain-helper.provisionprofile` (override with
@@ -59,27 +76,32 @@ in the release-tools repository). Provide:
   coordinator; Linux targets are `runs: any`, so workers are used only with
   `--workers`, and none is required.
 
-Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), `gh`
-authenticated with push access to this repository and `alexcatdad/homebrew-tap`,
+Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), a Forgejo
+access token with the `write:repository` scope for this repository, `gh`
+authenticated with push access to `alexcatdad/homebrew-tap`,
 Xcode command-line tools (`codesign`, `notarytool`), and the release-tools
 repository checked out next to this one at `../release-tools` with its tags
-fetched. Secret values never go into this repository, this documentation or
-logs; the config stores names only.
+fetched. reltool reads the Forgejo token from `FORGEJO_TOKEN`, then the `fj`
+key store (`fj -H forgejo.triceratops-dory.ts.net auth login`), then the macOS
+Keychain item `release-tools-forgejo`; it never prints the token. Secret values
+never go into this repository, this documentation or logs; the config stores
+names only.
 
 ## Release
 
-From a clean checkout of the commit to release, already pushed to GitHub:
+From a clean checkout of the commit to release, already pushed to Forgejo:
 
 ```sh
-task release:check     # read-only: next version, signing identity, tools, disk
+task release:check     # read-only: next version, signing identity, tools, disk (does not contact Forgejo)
 task release:prepare   # reserve version, run checks, build, sign, notarize, verify
 task release           # prepare, then draft release, SHA-256 verification, publish, tap
 ```
 
 `task release:check` and `task release:prepare` do not publish. `task release`
-creates a draft release, uploads every asset, verifies each by SHA-256 against
-the local final artifacts, publishes, confirms the tag, and updates the tap
-formula from the published release with the owner's local `gh` and Git. Pass
+creates a draft Forgejo release, uploads every asset, verifies each by
+downloading it and comparing its SHA-256 with the local final artifact,
+publishes, confirms the tag, and updates the tap cask from the published release
+with the owner's local `gh` and Git. It runs unattended once started. Pass
 reltool flags after `--`, for example `task release:prepare -- --workers`.
 
 The `check` task (Go format, vet and race tests for `mcp/`) runs as a required
@@ -95,14 +117,17 @@ task release:abandon -- VERSION  # only before publication; the counter stays co
 ```
 
 A failed tap step is retried by `task release:resume` without rebuilding or
-reserving a new version. Published assets are never replaced. State lives under
+reserving a new version. Published assets are never replaced. Forgejo has no
+immutable releases, so this is reltool's guarantee: never edit a published
+release's assets by hand. State lives under
 `$XDG_STATE_HOME/release-tools/scratchpad/`; back it up with the local config.
 
 ## Container image
 
 No container image is published. The owner's homelab deployment builds the
-`go-runtime` target of the `Dockerfile` itself from the release tag when it is
-deployed; see [Kubernetes deployment](homelab-deploy.md). Images published
+`go-runtime` target of the `Dockerfile` itself from the release tag when the
+owner deploys it; publishing a release or pushing its tag does not start a
+deployment; see [Kubernetes deployment](homelab-deploy.md). Images published
 before calendar versioning (up to `v0.3.0`) remain in the registry as history.
 
 ## Verify a published release

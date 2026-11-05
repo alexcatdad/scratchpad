@@ -2,6 +2,10 @@
   "schema": "release-tools/app/v1",
   "app": "scratchpad",
   "repo": "alexcatdad/scratchpad",
+  "host": {
+    "kind": "forgejo",
+    "url": "https://forgejo.triceratops-dory.ts.net"
+  },
   "checks": ["check"],
   "targets": [
     {

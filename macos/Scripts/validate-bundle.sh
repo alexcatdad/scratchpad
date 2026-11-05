@@ -24,6 +24,8 @@ test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$keychain_info")
 
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info")
 build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info")
+# Release builds keep the full CalVer version in ReleaseVersion; the helpers report it.
+release_version=$(/usr/libexec/PlistBuddy -c 'Print :ReleaseVersion' "$info" 2>/dev/null || printf '%s' "$version")
 schema=$(/usr/libexec/PlistBuddy -c 'Print :QueueSchemaVersion' "$info")
 min=$(/usr/libexec/PlistBuddy -c 'Print :QueueSchemaMinReadable' "$info")
 max=$(/usr/libexec/PlistBuddy -c 'Print :QueueSchemaMaxReadable' "$info")
@@ -33,8 +35,8 @@ test "$schema" -gt 0 && test "$min" -gt 0 && test "$min" -le "$schema" && test "
   exit 1
 }
 
-expected_mcp="scratchpad-mcp $version (build $build)"
-expected_service="scratchpad-service $version (build $build; queue-schema $schema)"
+expected_mcp="scratchpad-mcp $release_version (build $build)"
+expected_service="scratchpad-service $release_version (build $build; queue-schema $schema)"
 actual_mcp=$("$mcp" --build-info)
 actual_service=$("$service" --version)
 if invalid_keychain_output=$("$keychain_helper" invalid-arguments 2>/dev/null); then

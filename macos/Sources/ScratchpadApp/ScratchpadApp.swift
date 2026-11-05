@@ -8,7 +8,9 @@ private let windowLog = Logger(subsystem: "com.alexcatdad.scratchpad", category:
 enum AppIdentity {
     static let isDevelopment = Bundle.main.bundleIdentifier == "com.alexcatdad.scratchpad.dev"
     static let displayName = isDevelopment ? "Scratchpad DEV" : "Scratchpad"
-    static let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    // Release builds carry the full CalVer version in ReleaseVersion; development builds fall back.
+    static let version = (Bundle.main.object(forInfoDictionaryKey: "ReleaseVersion") as? String)
+        ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
     static var versionLabel: String { ServiceUpdateState.label(version: version ?? "unknown", build: build) }
 }

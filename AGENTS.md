@@ -67,10 +67,12 @@ current authority.
   `task release`); see `docs/runbooks/release.md`. Developer ID signed,
   notarized and stapled; keys stay in the local Keychain. CI never signs,
   publishes, deploys or updates the tap.
-- Versions move to CalVer `vYYYY.MM.DD.N` when `RELTOOL_TAG` is bumped to the
-  release-tools tag that supports it; until then the release runbook's scheme
-  applies. Releases are immutable: never replace published assets or move tags.
-- Distribution: Homebrew cask in `alexcatdad/homebrew-tap`. Never strip quarantine.
+- release-tools v0.4.0: daily CalVer `vYYYY.MM.DD.N`. Releases are immutable:
+  never replace published assets or move tags.
+- Releases publish to Forgejo only; GitHub stays a source mirror with no
+  releases. Release tags do not trigger the homelab deployment.
+- Distribution: Homebrew cask in `alexcatdad/homebrew-tap`, downloading from
+  Forgejo, so it installs only on the tailnet. Never strip quarantine.
 
 ## Git
 
