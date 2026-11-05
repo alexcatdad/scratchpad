@@ -14,7 +14,7 @@ buildNpmPackage {
   nodejs = nodejs_24;
   npmWorkspace = "apps/web";
 
-  npmDepsHash = "sha256-+3+s1F1JTPLnVQIMHcNHxGKYrllR8dgcbpOA1lHww4c=";
+  npmDepsHash = "sha256-TxrRGqGxrJDEk5kwvHzYcW54EXtMHPeVa5ivSpC1/oM=";
 
   # Only the web workspace is built; the dev-only dependencies are pruned.
   installPhase = ''
