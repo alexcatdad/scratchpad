@@ -10,10 +10,9 @@ let package = Package(
         .library(name: "ScratchpadNative", targets: ["ScratchpadNative"]),
     ],
     dependencies: [
-        // First-party tray, panel and notification building blocks. menubar-kit has
-        // no release tag yet (and SwiftPM cannot resolve its four-part CalVer tags),
-        // so it is pinned to an exact commit of main. Name the tag here once one exists.
-        .package(url: "https://github.com/alexcatdad/menubar-kit.git", revision: "7403cb02d14946d9d92f4d7b1dd441316745a622"),
+        // First-party tray, panel and notification building blocks.
+        // menubar-kit v2026.11.05.1 (SwiftPM cannot resolve four-part CalVer tags, so the tag's commit is pinned).
+        .package(url: "https://github.com/alexcatdad/menubar-kit.git", revision: "1e63329e0f4c42f0ed5dd4f629f7b7f0b0bac7f1"),
     ],
     targets: [
         .target(
