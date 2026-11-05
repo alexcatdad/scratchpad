@@ -103,21 +103,7 @@ The release validator checks version and queue-schema metadata and rejects retir
 
 ## Create a signed and notarized release archive
 
-Run only from a clean checkout of the exact stable tag on an Apple Silicon Mac. The owner supplies the Developer ID identity, team ID, provisioning profile and authorized access group used by `package-app.sh`, plus an existing `notarytool` Keychain profile. Credential values remain local; do not put secrets in the command or repository.
-
-```sh
-RELEASE_TAG=v1.0.0 \
-APPLE_SIGNING_IDENTITY='Developer ID Application: Example (TEAMID)' \
-APPLE_TEAM_ID='TEAMID' \
-KEYCHAIN_PROFILE='/secure/path/to/Scratchpad-Keychain.provisionprofile' \
-KEYCHAIN_ACCESS_GROUP='TEAMID.com.alexcatdad.scratchpad.keychain-helper' \
-NOTARYTOOL_PROFILE='scratchpad-notary' \
-bash scripts/release-macos-app.sh
-```
-
-The script calls the executable `macos/Scripts/package-app.sh`, verifies the signed bundle, submits a temporary ZIP to Apple, staples and assesses the accepted app, then creates the final `dist/release/scratchpad-vX.Y.Z-darwin-arm64.zip`, notarization receipt and `macos-app-release.json` checksum manifest. It does not upload or publish them. This release script has not yet been run with owner signing credentials; the commands above describe the prepared path, not completed signing or notarization evidence.
-
-Published releases go through `task release` instead (see [release](release.md)),
+Releases go through `task release` (see [release](release.md)),
 which builds with `scripts/release-app-build.sh`, notarizes, staples, publishes
 and updates the `scratchpad` cask. The cask installs the app without upgrade
 hooks: Homebrew 7 rejects Ruby `preflight` hooks, and its declarative steps cannot
