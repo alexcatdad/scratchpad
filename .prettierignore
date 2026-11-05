@@ -21,3 +21,4 @@ package-lock.json
 **/go.mod
 
 session-progress
+.claude/

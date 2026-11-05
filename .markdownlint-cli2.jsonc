@@ -6,6 +6,7 @@
     "**/.build/**",
     "**/.swiftpm/**",
     ".scratch/**",
+    ".claude/**",
     "**/.astro/**",
     "test-results/**",
     "playwright-report/**"

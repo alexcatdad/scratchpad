@@ -107,14 +107,10 @@ before calendar versioning (up to `v0.3.0`) remain in the registry as history.
 
 ## Verify a published release
 
-The manually dispatched `release-acceptance.yml` workflow (read-only, never a
-release gate) installs `alexcatdad/tap/scratchpad-mcp` on fresh macOS and Linux
-runners, checks the version, the macOS signature and the notarization
-requirement, and runs the end-to-end suite against the installed executable:
-
-```sh
-gh workflow run release-acceptance.yml --repo alexcatdad/scratchpad --ref main -f tag=vYYYY.M.N
-```
+Installed-release acceptance is manual and local: install the cask on a Mac,
+check the version, the signature and notarization (`spctl -a -vv`), and run the
+end-to-end suite against the installed executable. The former GitHub
+`release-acceptance.yml` workflow was removed when CI moved to Forgejo Actions.
 
 A green validation run, local signing, publication and installed acceptance are
 separate outcomes; record each one.
@@ -122,8 +118,7 @@ separate outcomes; record each one.
 ## Open decisions
 
 1. **Container images.** Not published (decided): the homelab builds the image
-   from the release tag at deployment. `release-acceptance.yml` no longer
-   verifies image pulls.
+   from the release tag at deployment.
 2. **TypeScript client package.** `scratchpad-api-client-X.Y.Z.tgz` was attached
    to v0.3.0 and is no longer published. The tap updater now ignores assets that
    no formula slot uses, so it could be added to the matrix. It is not a

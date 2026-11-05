@@ -9,18 +9,53 @@ vars:
   RELTOOL_TAG: v0.2.0
   RELTOOL_COMMIT: 6036a85828711fbfb908f67e159482597c4434c0 # commit of RELTOOL_TAG
   RELTOOL_SRC: ../release-tools
+  GOVULNCHECK_VERSION: v1.9.0
   RELTOOL:
     sh: echo "${XDG_CACHE_HOME:-$HOME/.cache}/release-tools/{{.RELTOOL_COMMIT}}/reltool"
 
 tasks:
   # --- app-owned recipes ---
   check:
-    desc: Go and native checks for the released app
+    desc: Full local gate (lint, type-check, build and tests for npm, Go and Swift)
     cmds:
-      - test -z "$(gofmt -l mcp)"
-      - go -C mcp vet ./...
+      - task: lint
+      - task: build
+      - task: test
+
+  lint:
+    desc: Format, lint and type checks
+    cmds:
+      - npm run lint
+      - npm run typecheck
+      - for: [backend, mcp, packages/clients/go]
+        cmd: test -z "$(gofmt -l {{.ITEM}})"
+      - for: [backend, mcp, packages/clients/go]
+        cmd: go -C {{.ITEM}} vet ./...
+
+  build:
+    desc: Build the web workspaces, Go binaries and the Swift package (SKIP_SWIFT=1 skips Swift)
+    cmds:
+      - npm run build
+      - go -C backend build ./...
+      - go -C mcp build ./...
+      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift build --package-path macos
+        if: '[ -z "$SKIP_SWIFT" ]'
+
+  test:
+    desc: npm, Go race and Swift tests (SKIP_SWIFT=1 skips Swift)
+    cmds:
+      - npm test
       - go -C mcp test -race -count=1 ./...
-      - DEVELOPER_DIR="$(xcode-select -p)" swift test --package-path macos
+      - go -C backend test -race -count=1 -timeout 20m ./...
+      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift test --package-path macos
+        if: '[ -z "$SKIP_SWIFT" ]'
+
+  security:
+    desc: Known-vulnerability scan for Go modules and production npm dependencies
+    cmds:
+      - for: [backend, mcp, packages/clients/go]
+        cmd: cd {{.ITEM}} && go run golang.org/x/vuln/cmd/govulncheck@{{.GOVULNCHECK_VERSION}} ./...
+      - npm audit --omit=dev --audit-level=high
 
   build:darwin-arm64:
     desc: Signed Scratchpad.app archive for the Homebrew cask
