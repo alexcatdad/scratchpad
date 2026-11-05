@@ -77,8 +77,3 @@ private func present(_ value: ServiceStatus?, update: ServiceUpdateState = .curr
                             connection: ConnectionObservation(state: "connected", checkedAt: "2020-01-01T00:00:00Z"), queueSchemaVersion: 1)
     #expect(present(old).word == "Checking")
 }
-
-@Test func everyToneHasADistinctSymbol() {
-    let tones: [StatusPresentation.Tone] = [.ok, .warning, .error, .off, .update]
-    #expect(Set(tones.map(\.symbol)).count == tones.count)
-}

@@ -1,32 +1,16 @@
 import Foundation
+import MenubarKit
 
 /// One description of the capture service's state, shared by the menu bar,
 /// the window sidebar and Overview so every surface uses the same words.
-/// Every tone has its own symbol shape, so state never depends on colour alone.
+/// Tones and rows are MenubarKit's, so the tray and panel read them directly.
 public struct StatusPresentation: Equatable, Sendable {
-    public enum Tone: Equatable, Sendable {
-        case ok, warning, error, off, update
-
-        public var symbol: String {
-            switch self {
-            case .ok: "checkmark.circle.fill"
-            case .warning: "exclamationmark.triangle.fill"
-            case .error: "xmark.octagon.fill"
-            case .off: "stop.circle.fill"
-            case .update: "arrow.up.circle.fill"
-            }
-        }
-    }
-
     public enum Action: Equatable, Sendable {
         case startService, restartService, resumeSyncing, checkAgain, reconnect, reviewCaptures
     }
 
-    public struct Row: Equatable, Sendable {
-        public let title: String
-        public let value: String
-        public let tone: Tone
-    }
+    public typealias Tone = StatusTone
+    public typealias Row = MenubarStatusRow
 
     public let tone: Tone
     /// The short status word, as used in the window sidebar.
@@ -35,6 +19,9 @@ public struct StatusPresentation: Equatable, Sendable {
     public let detail: String
     public let action: Action?
     public let rows: [Row]
+
+    /// The status shared with MenubarKit's tray label and panel header.
+    public var status: MenubarStatus { MenubarStatus(tone: tone, word: word, headline: headline, detail: detail) }
 
     public var actionTitle: String? {
         switch action {

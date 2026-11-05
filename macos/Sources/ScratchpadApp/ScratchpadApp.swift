@@ -1,4 +1,5 @@
 import SwiftUI
+import MenubarKit
 import ScratchpadNative
 import OSLog
 
@@ -16,7 +17,7 @@ enum AppIdentity {
 struct ScratchpadApp: App {
     @StateObject private var model = AppModel()
     @Environment(\.openWindow) private var openWindow
-    private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL)
+    private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL, baseName: "ScratchpadTrayIcon")
 
     var body: some Scene {
         Window(AppIdentity.displayName, id: "workspace") {
@@ -50,27 +51,13 @@ struct ScratchpadApp: App {
                 .environmentObject(model)
                 .onAppear { model.refresh(); model.loadReceipts() }
         } label: {
-            HStack(spacing: 3) {
-                if let image = trayIcon {
-                    Image(nsImage: image)
-                        .renderingMode(.template)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 18, height: 18)
-                } else {
-                    Image(systemName: "note.text")
-                }
-                // A visible mark, not just a colour change, when the state needs attention.
-                if model.presentation.tone != .ok {
-                    Image(systemName: "exclamationmark")
-                        .font(.system(size: 9, weight: .heavy))
-                }
-                if AppIdentity.isDevelopment {
-                    Text("DEV").font(.caption2.weight(.semibold))
-                }
-            }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(AppIdentity.displayName), \(model.presentation.word)")
+            TrayLabel(
+                icon: trayIcon,
+                fallbackSymbol: "note.text",
+                status: model.presentation.status,
+                appName: "Scratchpad",
+                isDevelopment: AppIdentity.isDevelopment
+            )
             .onAppear { windowLog.info("Tray label appeared") }
             .onDisappear { windowLog.info("Tray label disappeared") }
         }
@@ -114,47 +101,15 @@ struct MenuContent: View {
 
     var body: some View {
         let p = model.presentation
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 12) {
-                Image(systemName: p.tone.symbol)
-                    .font(.system(size: 30))
-                    .foregroundStyle(p.tone.color)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(p.headline).font(.headline)
-                    Text(model.activity ?? p.detail)
-                        .font(.callout).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-            .accessibilityElement(children: .combine)
-            .padding(.horizontal, 4)
-
-            VStack(spacing: 0) {
-                ForEach(p.rows, id: \.title) { row in
-                    HStack(spacing: 8) {
-                        StatusIcon(tone: row.tone)
-                        Text(row.title)
-                        Spacer()
-                        Text(row.value).foregroundStyle(.secondary)
-                    }
-                    .font(.callout)
-                    .padding(.horizontal, 12)
-                    .frame(minHeight: 28)
-                    .accessibilityElement(children: .combine)
-                }
-            }
-            .groupedTile()
+        MenubarPanel {
+            StatusHeader(p.status, detailOverride: model.activity)
+            StatusRowsTile(p.rows)
 
             if !model.receipts.isEmpty {
                 VStack(alignment: .leading, spacing: 0) {
-                    HStack {
-                        Text("Recent captures").font(.callout.weight(.semibold)).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Show All") { showWorkspace(.captures, model: model, openWindow: openWindow) }
-                            .buttonStyle(.link).font(.callout)
+                    TileHeader("Recent captures", linkTitle: "Show All") {
+                        showWorkspace(.captures, model: model, openWindow: openWindow)
                     }
-                    .padding(.horizontal, 12).padding(.vertical, 4)
                     ForEach(model.receipts.prefix(3)) { receipt in
                         HStack(spacing: 8) {
                             Text(ReceiptLabels.type(receipt))
@@ -175,17 +130,17 @@ struct MenuContent: View {
             }
 
             if let action = p.action, let title = p.actionTitle {
-                Button(title) { runStatusAction(action, model: model, openWindow: openWindow) }
-                    .buttonStyle(ProminentButtonStyle(fullWidth: true))
+                PrimaryActionButton(title) { runStatusAction(action, model: model, openWindow: openWindow) }
                     .disabled(model.activity != nil)
             }
             if let message = model.errorMessage {
-                Label(message, systemImage: "exclamationmark.triangle")
-                    .font(.caption).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                PanelNotice(message)
             }
 
-            VStack(spacing: 0) {
+            MenuSection(
+                quitTitle: "Quit Scratchpad",
+                quitHelp: "Closes the menu bar app. The capture service keeps saving captures."
+            ) {
                 Button("Open Scratchpad") { showWorkspace(.overview, model: model, openWindow: openWindow) }
                 if model.status?.lifecycle == "running" {
                     Button("Pause Syncing") { model.setLifecycle("pause_delivery") }
@@ -193,17 +148,9 @@ struct MenuContent: View {
                     Button("Resume Syncing") { model.setLifecycle("resume_delivery") }
                 }
                 Button("Settings…") { showWorkspace(.general, model: model, openWindow: openWindow) }
-                Divider().padding(.vertical, 4).padding(.horizontal, 10)
-                Button("Quit Scratchpad") { NSApp.terminate(nil) }
-                    .help("Closes the menu bar app. The capture service keeps saving captures.")
             }
-            .buttonStyle(MenuRowButtonStyle())
 
-            Text("Version \(AppIdentity.versionLabel)")
-                .font(.caption).foregroundStyle(.secondary)
-                .padding(.horizontal, 10)
+            VersionFooter(version: AppIdentity.version, build: AppIdentity.build)
         }
-        .padding(12)
-        .frame(width: 340)
     }
 }

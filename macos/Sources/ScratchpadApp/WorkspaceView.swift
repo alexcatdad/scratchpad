@@ -1,4 +1,5 @@
 import SwiftUI
+import MenubarKit
 import ScratchpadNative
 
 enum WorkspacePage: String, CaseIterable, Identifiable {
@@ -80,10 +81,7 @@ struct OverviewPage: View {
         Form {
             Section {
                 HStack(spacing: 16) {
-                    Image(systemName: p.tone.symbol)
-                        .font(.system(size: 40))
-                        .foregroundStyle(p.tone.color)
-                        .accessibilityHidden(true)
+                    StatusIcon(tone: p.tone, size: 40, weight: .regular)
                     VStack(alignment: .leading, spacing: 3) {
                         Text(p.headline).font(.title2.weight(.bold))
                         Text(model.activity ?? p.detail).foregroundStyle(.secondary)

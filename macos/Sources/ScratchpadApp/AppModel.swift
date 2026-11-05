@@ -1,6 +1,11 @@
 import Foundation
 import Combine
+import MenubarKit
 import ScratchpadNative
+
+/// The UserDefaults key behind the "Notify me about problems" toggle. Kept from
+/// before MenubarKit so users keep their setting.
+let incidentNotificationsKey = "incidentNotificationsEnabled"
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -34,6 +39,9 @@ final class AppModel: ObservableObject {
     var presentation: StatusPresentation { StatusPresentation(status: status, update: serviceUpdate) }
     let client = ServiceClient()
     let supervisor = ServiceSupervisor()
+    let notifier = MenubarNotifier(preferences: {
+        NotificationPreferences.standard(enabledKey: incidentNotificationsKey)
+    })
     private var incidentTracker = IncidentTracker(
         localSaveIncidentAlreadyNotified: UserDefaults.standard.bool(forKey: "localSaveIncidentActive")
     )
@@ -404,9 +412,10 @@ final class AppModel: ObservableObject {
 
     private func recordIncidentEvents(_ events: [IncidentEvent]) {
         UserDefaults.standard.set(incidentTracker.isLocalSaveIncidentActive, forKey: "localSaveIncidentActive")
-        let notificationsEnabled = UserDefaults.standard.bool(forKey: "incidentNotificationsEnabled")
-        for event in events {
-            if notificationsEnabled { IncidentNotifier.deliver(event) }
+        guard !events.isEmpty else { return }
+        let notifier = notifier
+        Task {
+            for event in events { await notifier.deliver(event.notification) }
         }
     }
 

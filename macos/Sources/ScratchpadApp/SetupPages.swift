@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import MenubarKit
 import ScratchpadNative
 
 struct ConnectionPage: View {
@@ -279,9 +280,9 @@ private struct ReviewSheet: View {
 
 struct GeneralPage: View {
     @EnvironmentObject private var model: AppModel
-    @AppStorage("incidentNotificationsEnabled") private var notificationsEnabled = false
+    @AppStorage(incidentNotificationsKey) private var notificationsEnabled = false
     @State private var loginEnabled = false
-    @State private var notificationPermission: IncidentNotifier.PermissionState = .notDetermined
+    @State private var notificationPermission: NotificationPermission = .notDetermined
     @State private var confirmStop = false
 
     var body: some View {
@@ -303,8 +304,8 @@ struct GeneralPage: View {
                 .onChange(of: notificationsEnabled) { enabled in
                     Task {
                         notificationPermission = enabled
-                            ? await IncidentNotifier.requestPermission()
-                            : await IncidentNotifier.permissionState()
+                            ? await model.notifier.userEnabledNotifications()
+                            : await model.notifier.permission()
                     }
                 }
                 if notificationsEnabled, notificationPermission == .denied {
@@ -362,7 +363,7 @@ struct GeneralPage: View {
         .formStyle(.grouped)
         .navigationTitle("General")
         .onAppear { loginEnabled = model.supervisor.loginItemStatus == .enabled }
-        .task { notificationPermission = await IncidentNotifier.permissionState() }
+        .task { notificationPermission = await model.notifier.permission() }
         .confirmationDialog("Stop the capture service?", isPresented: $confirmStop) {
             Button("Stop Capture Service", role: .destructive) { model.setLifecycle("stop") }
             Button("Cancel", role: .cancel) {}
