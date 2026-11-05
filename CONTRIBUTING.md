@@ -24,9 +24,9 @@ container acceptance need extra services; see
 - Use synthetic fixtures, never real credentials or personal data.
 - Describe the observable problem, the change, and the checks you ran.
 
-Forgejo Actions runs `task lint`, `task build` and `task test` on every pull
-request, without Swift; run `task check` locally for `macos/` changes. Pull
-requests are squash-merged.
+Pull requests get one server-side check, `homelab/build` (the homelab's
+git-hook build and deploy), which does not run the tests; run `task check`
+locally before pushing. Pull requests are squash-merged.
 
 ## Releases
 

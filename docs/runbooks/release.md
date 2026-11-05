@@ -110,7 +110,7 @@ before calendar versioning (up to `v0.3.0`) remain in the registry as history.
 Installed-release acceptance is manual and local: install the cask on a Mac,
 check the version, the signature and notarization (`spctl -a -vv`), and run the
 end-to-end suite against the installed executable. The former GitHub
-`release-acceptance.yml` workflow was removed when CI moved to Forgejo Actions.
+`release-acceptance.yml` workflow was removed; there is no hosted release CI.
 
 A green validation run, local signing, publication and installed acceptance are
 separate outcomes; record each one.

@@ -48,12 +48,14 @@ current authority.
 
 - `task check` — the full local gate: npm lint, typecheck and tests; gofmt, vet
   and race tests for `backend/` and `mcp/`; `swift test`. Run it before pushing.
-- `task lint`, `task build`, `task test`, `task security` — what Forgejo Actions
-  calls. `task security` runs `govulncheck` per Go module and
-  `npm audit --omit=dev --audit-level=high`.
-- Forgejo CI runs on the Linux `homelab` runner with `SKIP_SWIFT=1`, so it does
-  not cover Swift. Swift build and tests run only in local `task check` and
-  `task release:check`; run them before merging any `macos/` change.
+- `task lint`, `task build`, `task test`, `task security` — the parts of
+  `task check`. `task security` runs `govulncheck` per Go module and
+  `npm audit --omit=dev --audit-level=high`. `SKIP_SWIFT=1` skips Swift on
+  Linux hosts.
+- The only server-side check is `homelab/build`: a git-hook build on the
+  homelab that builds the Nix packages and deploys them. It does not run the
+  test suites or Swift, so run `task check` locally before every push and
+  `task release:check` before releasing.
 - PostgreSQL, pgvector, browser (`npm run test:e2e`) and container acceptance need
   extra services; see `docs/runbooks/development.md`.
 - Toolchain: Go 1.27.3, Swift 6 on Xcode for macOS 26, Task, Node 24 + npm.
@@ -79,9 +81,9 @@ current authority.
 - Branch from `main`, PR back to `main` on Forgejo, squash-merge. Conventional
   commit messages. Make small coherent commits; never commit secrets, local
   databases or test artifacts.
-- Forgejo Actions runs `task lint`, `task build` and `task test` on pull
-  requests and `task security` weekly. Workflows start from `permissions: {}`
-  where the host supports it; GitHub actions are pinned to full commit SHAs.
+- Forgejo Actions is not used: pull requests get the `homelab/build` hook
+  status only. GitHub workflows (`pages.yml`) start from `permissions: {}` and
+  pin actions to full commit SHAs.
 - Do not wait on or poll CI; one status check when a decision depends on it.
 - Agent parallelism is allowed. Coordinate file ownership, do not overwrite
   concurrent work, and stop agents when their task is done.
