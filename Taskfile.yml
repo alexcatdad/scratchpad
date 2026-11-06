@@ -22,8 +22,19 @@ tasks:
       - task: build
       - task: test
 
+  # Release-tools runs `check` in a clean checkout, so the npm tasks install
+  # the locked dependencies first. Skipped when node_modules matches the lock.
+  npm:install:
+    internal: true
+    status:
+      - test -x node_modules/.bin/biome
+      - test node_modules/.package-lock.json -nt package-lock.json
+    cmds:
+      - npm ci --no-audit --no-fund
+
   lint:
     desc: Format, lint and type checks
+    deps: [npm:install]
     cmds:
       - npm run lint
       - npm run typecheck
@@ -34,6 +45,7 @@ tasks:
 
   build:
     desc: Build the web workspaces, Go binaries and the Swift package (SKIP_SWIFT=1 skips Swift)
+    deps: [npm:install]
     cmds:
       - npm run build
       - go -C backend build ./...
@@ -43,6 +55,7 @@ tasks:
 
   test:
     desc: npm, Go race and Swift tests (SKIP_SWIFT=1 skips Swift)
+    deps: [npm:install]
     cmds:
       - npm test
       - go -C mcp test -race -count=1 ./...
