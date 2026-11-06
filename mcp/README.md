@@ -7,6 +7,29 @@ owns server configuration and SSH authentication. Requires Go
 1.27.3 to build and Git 2.36 or later plus OpenSSH `ssh-keygen` at runtime.
 Dependencies are pinned in `go.mod` / `go.sum`.
 
+## `scratchpad` CLI
+
+`cmd/scratchpad` is the command-line interface coding agents use instead of the
+MCP server. It hosts the same tool registry in-process and calls it over an
+in-memory MCP transport, so every tool, its validation and its output match
+`scratchpad-mcp`. Each call is a short process that runs the installed version,
+so app upgrades never leave stale servers behind.
+
+```sh
+scratchpad tools                          # list tools
+scratchpad tools record-decision          # one tool's input schema
+scratchpad get-project-context -F version=2
+scratchpad search-memory -f query="release signing"
+scratchpad record-finding --input finding.json   # or --input - for stdin
+scratchpad status                         # local capture service status
+```
+
+`-f key=value` sets a string field and `-F key=value` a JSON field. The project
+resolves from the current directory. The CLI never starts the capture service:
+from a sandboxed agent shell a started service would inherit the sandbox. It
+reports a stopped service instead, and the app starts it. The app bundles it as
+`Contents/Helpers/scratchpad`, and the Homebrew cask links it onto `PATH`.
+
 ## Development runbook
 
 Run from `mcp/`:

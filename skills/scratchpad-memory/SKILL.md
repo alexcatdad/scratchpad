@@ -1,27 +1,45 @@
 ---
 name: scratchpad-memory
-description: Use Scratchpad MCP to resume project work, recover earlier reasoning or investigations, and preserve useful decisions, findings, failures, constraints and state changes. Apply when a task needs durable project memory; routine edits alone do not require it.
+description: Use the Scratchpad CLI to resume project work, recover earlier reasoning or investigations, and preserve useful decisions, findings, failures, constraints and state changes. Apply when a task needs durable project memory; routine edits alone do not require it.
 ---
 
 # Scratchpad memory
 
 Use Scratchpad to retain why work happened and recover evidence for future work.
 The central API owns memory; the local capture service holds the server connection
-and authenticates, and the local stdio MCP supplies project discovery, tools and
-optional repository mirroring. Set up or repair the connection with the
-`scratchpad-connect` skill.
+and authenticates. The `scratchpad` command (installed with the Scratchpad app)
+supplies project discovery, the tools and optional repository mirroring. Set up or
+repair the connection with the `scratchpad-connect` skill.
 
-## Select the workflow and project
+## Run the CLI
 
-Use the connected Scratchpad MCP tools and their discovered schemas. Tool names
-below are logical names; clients may namespace them. Older binaries may expose
-fewer tools. If Scratchpad is unavailable, report that memory could not be read or
-saved and continue independent work where useful. Do not invent tool results or
-substitute another note service.
+Every tool below is a `scratchpad` subcommand; underscores become dashes
+(`record_decision` is `scratchpad record-decision`). Each call is a short process
+that always runs the installed version.
+
+- `scratchpad tools` lists the tools; `scratchpad tools <tool>` prints a tool's
+  input schema. Read the schema before a capture rather than guessing fields.
+- `-f key=value` sets a string field, and `-F key=value` sets a JSON field
+  (numbers, booleans, arrays, objects). For long or structured input, write a
+  JSON object and pass `--input file.json`, or `--input -` on stdin, so shell
+  quoting cannot mangle it.
+- Output is the tool's JSON result. A non-zero exit means the call failed; the
+  message is on stderr.
+- The project resolves from the current directory, so run commands from the
+  active checkout (or pass `-f workingDirectory=<abs path>` / `-f projectId=<id>`).
+- `scratchpad status` shows the local capture service. If it reports the service
+  is not running, ask the owner to open Scratchpad. The CLI never starts the
+  service itself.
+
+Tool names below are logical names. Older installs may lack the CLI or some
+tools. If the CLI is unavailable, use the Scratchpad MCP tools when the client has
+them; otherwise report that memory could not be read or saved and continue
+independent work where useful. Do not invent tool results or substitute another
+note service.
 
 For resumption or questions about earlier work, call `get_project_context` for the
-active checkout. Supply its absolute `workingDirectory` when the MCP launch
-directory is not reliably that checkout, or use a confirmed `projectId`. Inspect
+active checkout. Supply its absolute `workingDirectory` when the current
+directory is not that checkout, or use a confirmed `projectId`. Inspect
 returned scope before relying on results or capturing. Worktrees share project
 identity; branch, commit and worktree remain provenance.
 
@@ -108,7 +126,7 @@ capture; do not create a duplicate to repair a mirror.
 
 Mirroring is off by default and requires both local configuration and server
 policy. The default mirror is `scratchpad/decisions.jsonl`; append coordination is
-owned by the MCP. Do not manually append duplicate records to that file. A
+owned by the Scratchpad tools. Do not manually append duplicate records to that file. A
 project's contributor `decisions.jsonl` may have a different purpose and schema;
 follow its instructions separately and preserve prior entries. Runbooks remain
 repository files; captures can retain their rationale and references.
@@ -137,5 +155,6 @@ private deployment configuration belong in this skill.
 
 For setup or operational recovery, consult the public
 [agent integration guide](https://alexcatdad.github.io/scratchpad/guides/agents.md)
-and [MCP reference](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md).
-Runtime tool schemas take precedence over illustrative documentation.
+and [CLI and MCP reference](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md).
+Runtime tool schemas (`scratchpad tools <tool>`) take precedence over illustrative
+documentation.

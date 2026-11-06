@@ -26,7 +26,12 @@ cat > "$app/Contents/Helpers/scratchpad-service" <<'SH'
 test "${1:-}" = --version
 printf 'scratchpad-service 9.8.7 (build 42; queue-schema 1)\n'
 SH
-chmod +x "$app/Contents/Helpers/scratchpad-mcp" "$app/Contents/Helpers/scratchpad-service"
+cat > "$app/Contents/Helpers/scratchpad" <<'SH'
+#!/bin/sh
+test "${1:-}" = --version
+printf 'scratchpad 9.8.7\n'
+SH
+chmod +x "$app/Contents/Helpers/scratchpad-mcp" "$app/Contents/Helpers/scratchpad-service" "$app/Contents/Helpers/scratchpad"
 cp "$repo_root/macos/Resources/KeychainHelper-Info.plist" "$app/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 cat > "$app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain" <<'SH'
 #!/bin/sh
@@ -51,6 +56,25 @@ SH
 chmod +x "$app/Contents/Helpers/scratchpad-mcp"
 if "$repo_root/macos/Scripts/validate-bundle.sh" "$app" >/dev/null 2>&1; then
   echo "bundle validator accepted mismatched MCP build provenance" >&2
+  exit 1
+fi
+
+cat > "$app/Contents/Helpers/scratchpad-mcp" <<'SH'
+#!/bin/sh
+case "${1:-}" in
+  --version) printf 'scratchpad-mcp 9.8.7\n' ;;
+  --build-info) printf 'scratchpad-mcp 9.8.7 (build 42)\n' ;;
+  *) exit 1 ;;
+esac
+SH
+printf '#!/bin/sh\nprintf "scratchpad dev\\n"\n' > "$app/Contents/Helpers/scratchpad"
+if "$repo_root/macos/Scripts/validate-bundle.sh" "$app" >/dev/null 2>&1; then
+  echo "bundle validator accepted a mismatched CLI version" >&2
+  exit 1
+fi
+rm "$app/Contents/Helpers/scratchpad"
+if "$repo_root/macos/Scripts/validate-bundle.sh" "$app" >/dev/null 2>&1; then
+  echo "bundle validator accepted a bundle without the CLI" >&2
   exit 1
 fi
 

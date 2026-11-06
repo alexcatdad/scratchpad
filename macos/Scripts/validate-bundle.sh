@@ -11,6 +11,8 @@ keychain_info="$app/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist
 resources="$app/Contents/Resources"
 test -x "$service" || { echo "missing executable service helper" >&2; exit 1; }
 test -x "$mcp" || { echo "missing executable MCP helper" >&2; exit 1; }
+cli="$app/Contents/Helpers/scratchpad"
+test -x "$cli" || { echo "missing executable scratchpad CLI" >&2; exit 1; }
 test -x "$keychain_helper" || { echo "missing executable Keychain helper" >&2; exit 1; }
 test -f "$keychain_info" || { echo "missing Keychain helper app metadata" >&2; exit 1; }
 test -f "$resources/ScratchpadAppIcon.icns" || { echo "missing app icon resource" >&2; exit 1; }
@@ -44,6 +46,7 @@ if invalid_keychain_output=$("$keychain_helper" invalid-arguments 2>/dev/null); 
 else
   keychain_invalid_status=$?
 fi
+test "$("$cli" --version)" = "scratchpad $release_version" || { echo "CLI version does not match bundle metadata" >&2; exit 1; }
 test "$actual_mcp" = "$expected_mcp" || {
   echo "MCP version provenance does not match bundle metadata" >&2
   exit 1
