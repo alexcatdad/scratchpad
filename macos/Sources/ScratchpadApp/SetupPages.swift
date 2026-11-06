@@ -315,9 +315,7 @@ private struct ReviewSheet: View {
 
 struct GeneralPage: View {
     @EnvironmentObject private var model: AppModel
-    @AppStorage(incidentNotificationsKey) private var notificationsEnabled = false
     @State private var loginEnabled = false
-    @State private var notificationPermission: NotificationPermission = .notDetermined
     @State private var confirmStop = false
 
     var body: some View {
@@ -335,30 +333,19 @@ struct GeneralPage: View {
                     )
                     .foregroundStyle(.orange)
                 }
-                Toggle(isOn: $notificationsEnabled) {
-                    Text("Notify me about problems")
-                    Text("Long outages, refused captures and saving failures. Counts only, never capture content.")
-                }
-                .onChange(of: notificationsEnabled) { enabled in
-                    Task {
-                        notificationPermission =
-                            enabled
-                            ? await model.notifier.userEnabledNotifications()
-                            : await model.notifier.permission()
-                    }
-                }
-                if notificationsEnabled, notificationPermission == .denied {
-                    Label(
-                        "macOS blocked notifications. Allow them in System Settings › Notifications › Scratchpad.",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .foregroundStyle(.orange)
-                }
             }
 
-            Section("About") {
-                LabeledContent("Scratchpad", value: AppIdentity.versionLabel)
-                LabeledContent("Capture service") {
+            NotificationSettingsSection(
+                notifier: model.notifier,
+                toggleTitle: "Notify me about problems",
+                explanation: "Long outages, refused captures and saving failures. Counts only, never capture content.",
+                offersSound: true,
+                enabledKey: IncidentNotificationSettings.enabledKey,
+                soundEnabledKey: IncidentNotificationSettings.soundEnabledKey
+            )
+
+            Section("Capture service") {
+                LabeledContent("Version") {
                     HStack(spacing: 6) {
                         if case .restartNeeded = model.serviceUpdate { StatusIcon(tone: .update) }
                         Text(serviceVersionLabel)
@@ -403,11 +390,12 @@ struct GeneralPage: View {
                     }
                 }
             }
+
+            SettingsAboutSection(repository: URL(string: "https://github.com/alexcatdad/scratchpad"))
         }
         .formStyle(.grouped)
         .navigationTitle("General")
         .onAppear { loginEnabled = model.supervisor.loginItemStatus == .enabled }
-        .task { notificationPermission = await model.notifier.permission() }
         .confirmationDialog("Stop the capture service?", isPresented: $confirmStop) {
             Button("Stop Capture Service", role: .destructive) { model.setLifecycle("stop") }
             Button("Cancel", role: .cancel) {}
