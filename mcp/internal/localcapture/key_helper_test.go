@@ -22,7 +22,7 @@ func TestHelperKeyProviderUsesOperationAndIdentifierAndPreservesUnlockState(t *t
 printf '%s\n%s\n' "$1" "$2" > "$SCRATCHPAD_HELPER_ARGV"
 [ "$2" = com.alexcatdad.scratchpad.capture-queue.v1 ] || exit 1
 [ "$1" = get ] || [ "$1" = create ] || exit 1
-exec /bin/cat "$SCRATCHPAD_HELPER_KEY"
+exec cat "$SCRATCHPAD_HELPER_KEY"
 `
 	if err := os.WriteFile(helper, []byte(script), 0700); err != nil {
 		t.Fatal(err)

@@ -58,9 +58,17 @@ current authority.
   `npm audit --omit=dev --audit-level=high`. `SKIP_SWIFT=1` skips Swift on
   Linux hosts.
 - The only server-side check is `homelab/build`: a git-hook build on the
-  homelab that builds the Nix packages and deploys them. It does not run the
-  test suites or Swift, so run `task check` locally before every push and
-  `task release:check` before releasing.
+  homelab that runs `nix flake check` and `nix build .#default`, then deploys
+  `main`. The flake `checks` (`nix/checks.nix`) mirror the Linux parts of
+  `task lint` and `task test`: npm lint, typecheck and tests; gofmt, vet and
+  golangci-lint for every Go module; race tests with the `Taskfile.yml`
+  coverage floor for `mcp/`, and race tests for `packages/clients/go`. The
+  backend suite (~300 serial integration tests, ~13 min) is too heavy for the
+  shared builder, so the gate only compiles its tests. The build has no
+  network, so dependencies come from Nix (`vendorHash`, `npmDepsHash`); update
+  those hashes when `go.sum` or `package-lock.json` changes. The backend suite,
+  Swift and `task security` stay local-only, so still run `task check` before
+  every push and `task release:check` before releasing.
 - PostgreSQL, pgvector, browser (`npm run test:e2e`) and container acceptance need
   extra services; see `docs/runbooks/development.md`.
 - Toolchain: Go 1.27.3, Swift 6 on Xcode for macOS 26, Task, Node 24 + npm.

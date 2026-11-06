@@ -47,7 +47,7 @@ func syntheticProcessKeyHelper(t *testing.T, root string) (string, string) {
 [ "$#" = 2 ] || exit 1
 [ "$1" = get ] || [ "$1" = create ] || exit 1
 [ "$2" = synthetic-service-test ] || exit 1
-exec /bin/cat "$SCRATCHPAD_SYNTHETIC_KEY"
+exec cat "$SCRATCHPAD_SYNTHETIC_KEY"
 `
 	if err := os.WriteFile(helper, []byte(script), 0700); err != nil {
 		t.Fatal(err)
@@ -146,7 +146,7 @@ func (s *startedService) cleanup() {
 
 func TestStartedServiceCleanupCancelsBlockedProcess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(ctx, "/bin/sleep", "30")
+	cmd := exec.CommandContext(ctx, "sleep", "30")
 	service := &startedService{cmd: cmd, cancel: cancel, done: make(chan struct{})}
 	if err := startTrackedService(t, service); err != nil {
 		t.Fatal(err)
@@ -206,8 +206,8 @@ func TestProcessConcurrentStartsShareOneCollectorAndPreserveStop(t *testing.T) {
 [ "$2" = synthetic-service-test ] || exit 1
 printf 'call\n' >> "$SCRATCHPAD_SYNTHETIC_CALLS"
 touch "$SCRATCHPAD_SYNTHETIC_ENTERED"
-while [ ! -f "$SCRATCHPAD_SYNTHETIC_RELEASE" ]; do /bin/sleep 0.01; done
-exec /bin/cat "$SCRATCHPAD_SYNTHETIC_KEY"
+while [ ! -f "$SCRATCHPAD_SYNTHETIC_RELEASE" ]; do sleep 0.01; done
+exec cat "$SCRATCHPAD_SYNTHETIC_KEY"
 `
 	if err := os.WriteFile(helper, []byte(script), 0700); err != nil {
 		t.Fatal(err)

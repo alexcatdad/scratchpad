@@ -642,7 +642,7 @@ func startDurableServiceWithEnv(t *testing.T, base string, extraEnv ...string) (
 		t.Fatal(err)
 	}
 	helperPath := filepath.Join(privateDir, "synthetic-key-helper")
-	helper := "#!/bin/sh\nexec /bin/cat \"$SCRATCHPAD_TEST_QUEUE_KEY\"\n"
+	helper := "#!/bin/sh\nexec cat \"$SCRATCHPAD_TEST_QUEUE_KEY\"\n"
 	if err := os.WriteFile(helperPath, []byte(helper), 0700); err != nil {
 		t.Fatal(err)
 	}

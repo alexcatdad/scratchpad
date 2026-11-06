@@ -36,6 +36,13 @@
         };
       });
 
+      # Lint and tests, run by `nix flake check` (the homelab build gate).
+      checks = forAll (pkgs: import ./nix/checks.nix {
+        inherit pkgs;
+        inherit (pkgs) lib;
+        dashboard = self.packages.${pkgs.stdenv.hostPlatform.system}.scratchpad-dashboard;
+      });
+
       nixosModules.default = import ./nix/module.nix self;
     };
 }

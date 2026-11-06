@@ -54,7 +54,7 @@ printf "%%s %%s\\n" "$1" "$2" >> "$SCRATCHPAD_UPGRADE_TEST_CALLS"
 [ "$#" = 2 ] || exit 1
 [ "$1" = get ] || [ "$1" = create ] || exit 1
 [ "$2" = %q ] || exit 1
-exec /bin/cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
+exec cat "$SCRATCHPAD_UPGRADE_TEST_KEY"
 `, upgradeAcceptanceKeyID)
 			if err := os.WriteFile(keyHelper, []byte(keyHelperScript), 0700); err != nil {
 				t.Fatal(err)
