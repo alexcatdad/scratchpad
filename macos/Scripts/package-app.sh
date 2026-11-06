@@ -93,9 +93,20 @@ if [ -n "${SIGNING_IDENTITY:-}" ]; then
   profile_team=$(/usr/libexec/PlistBuddy -c 'Print :TeamIdentifier:0' "$stage_root/keychain-profile.plist")
 fi
 
-swift build --package-path "$repo_root/macos" --product Scratchpad
+# Record the current SDK in the binary. SwiftPM otherwise writes the minimum
+# OS (13.0) as the SDK version, and macOS then draws the app's windows in the
+# old compatibility style instead of the current one (usb-boop, an Xcode
+# build, gets the current style).
+SDK_VERSION=$(xcrun --show-sdk-version)
+swift build --package-path "$repo_root/macos" --product Scratchpad \
+  -Xlinker -platform_version -Xlinker macos -Xlinker 13.0 -Xlinker "$SDK_VERSION"
 swift build --package-path "$repo_root/macos" --product scratchpad-keychain
 bin=$(swift build --package-path "$repo_root/macos" --show-bin-path)
+linked_sdk=$(vtool -show-build "$bin/Scratchpad" | awk '$1 == "sdk" { print $2; exit }')
+if [ "$linked_sdk" != "$SDK_VERSION" ]; then
+  echo "Scratchpad links SDK ${linked_sdk:-unknown}, expected $SDK_VERSION" >&2
+  exit 1
+fi
 
 mkdir -p "$stage_root/helpers"
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
