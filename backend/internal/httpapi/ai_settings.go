@@ -106,7 +106,7 @@ func providerURL(value string) bool {
 func aiConfigMap(cfg AIConfig) map[string]any {
 	raw, _ := json.Marshal(cfg)
 	var value map[string]any
-	json.Unmarshal(raw, &value)
+	_ = json.Unmarshal(raw, &value)
 	return value
 }
 func (a *AI) public(row map[string]any) (map[string]any, error) {
@@ -268,9 +268,9 @@ func (a *AI) configure(ctx context.Context, conn *sql.Conn, body, actor map[stri
 	next["dispatchGeneration"] = generation + 1
 	var before map[string]any
 	if previous != nil {
-		oldCfg, err := aiConfig(previous)
-		if err != nil {
-			return nil, err
+		oldCfg, cfgErr := aiConfig(previous)
+		if cfgErr != nil {
+			return nil, cfgErr
 		}
 		before = aiConfigMap(oldCfg)
 		before["apiKeyConfigured"] = previous["apiKey"] != nil && previous["apiKey"] != ""

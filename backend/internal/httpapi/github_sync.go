@@ -66,7 +66,7 @@ func githubValidateKey(ctx context.Context, key string) error {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	if exec.CommandContext(ctx, "ssh-keygen", "-l", "-f", path).Run() != nil {
+	if exec.CommandContext(ctx, "ssh-keygen", "-l", "-f", path).Run() != nil { //nolint:gosec // fixed ssh-keygen invocation on a server-created temporary file
 		return githubUnavailable()
 	}
 	return nil
@@ -263,7 +263,7 @@ func (g *Github) status(ctx context.Context, r *http.Request) (map[string]any, e
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	session, cred, err := githubBrowser(ctx, tx, r)
 	if err != nil {
 		return nil, err

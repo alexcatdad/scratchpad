@@ -15,10 +15,10 @@ func TestRAGReplacementOutsideRequestedConsentDoesNotHideEvidence(t *testing.T) 
 	var outage atomic.Bool
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if outage.Load() {
-			http.Error(w, "synthetic outage", 503)
+			http.Error(w, "synthetic outage", http.StatusServiceUnavailable)
 			return
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -63,7 +63,7 @@ func TestRAGIndexedLexicalExcerptContainsLateMatchAndExactSourceBounds(t *testin
 	var outage atomic.Bool
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if outage.Load() {
-			http.Error(w, "synthetic outage", 503)
+			http.Error(w, "synthetic outage", http.StatusServiceUnavailable)
 			return
 		}
 		var input struct {
@@ -77,7 +77,7 @@ func TestRAGIndexedLexicalExcerptContainsLateMatchAndExactSourceBounds(t *testin
 		if strings.Contains(input.Input[0], "\n") {
 			vector = "[0,1]"
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":` + vector + `}]} `))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":` + vector + `}]} `))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

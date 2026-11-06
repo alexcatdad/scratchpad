@@ -75,7 +75,7 @@ func AuthStatus(store *persistence.Store, githubConfigured bool) http.HandlerFun
 			Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		owner, err := optional(ctx, tx, "owner", "owner")
 		if err != nil {
 			Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
@@ -180,7 +180,7 @@ func (p *Passkeys) Handler(operation string) http.HandlerFunc {
 	}
 }
 func (p *Passkeys) cookie(w http.ResponseWriter, token string, age int) {
-	http.SetCookie(w, &http.Cookie{Name: "scratchpad_session", Value: token, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/", MaxAge: age, Secure: strings.HasPrefix(p.auth.Origin, "https:")})
+	http.SetCookie(w, &http.Cookie{Name: "scratchpad_session", Value: token, HttpOnly: true, SameSite: http.SameSiteStrictMode, Path: "/", MaxAge: age, Secure: strings.HasPrefix(p.auth.Origin, "https:")}) //nolint:gosec // Secure is set for HTTPS origins; loopback HTTP development needs it off
 }
 func setupCapability(ctx context.Context, q entityReader, token string) (map[string]any, error) {
 	if token == "" || len(token) > 500 {
@@ -368,16 +368,16 @@ func (p *Passkeys) registrationVerify(ctx context.Context, r *http.Request, body
 	}
 	challenge, err := passkeyChallenge(ctx, tx, body.ChallengeID, "registration")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, "", err
 	}
 	_, err = registrationContext(ctx, tx, r, body, challenge)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, "", err
 	}
 	user, err := ownerUser(ctx, tx)
-	tx.Rollback()
+	_ = tx.Rollback()
 	if err != nil {
 		return nil, "", err
 	}
@@ -502,12 +502,12 @@ func (p *Passkeys) loginVerify(ctx context.Context, body passkeyRequest) (any, s
 	}
 	challenge, err := passkeyChallenge(ctx, tx, body.ChallengeID, "login")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, "", err
 	}
 	user, err := ownerUser(ctx, tx)
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return nil, "", err
 	}
 	field := `json_extract(data,'$.webauthnId')`
@@ -516,7 +516,7 @@ func (p *Passkeys) loginVerify(ctx context.Context, body passkeyRequest) (any, s
 	}
 	var raw []byte
 	err = tx.QueryRowContext(ctx, `SELECT data FROM entities WHERE kind='credential' AND `+field+`=$1`, base64.RawURLEncoding.EncodeToString(parsed.RawID)).Scan(&raw)
-	tx.Rollback()
+	_ = tx.Rollback()
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, "", invalidProof("AUTH_INVALID", "Unknown passkey.")
 	}
@@ -642,7 +642,7 @@ func (p *Passkeys) Credentials() http.HandlerFunc {
 			p.auth.fail(w, err)
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		if err := authorize(ctx, tx, r); err != nil {
 			p.auth.fail(w, invalidProof("AUTH_INVALID", "Sign in to Scratchpad."))
 			return

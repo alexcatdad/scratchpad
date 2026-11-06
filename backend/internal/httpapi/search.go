@@ -86,7 +86,7 @@ func (s *SSH) Search(post bool) http.HandlerFunc {
 			s.fail(w, err)
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		if _, err = apiActor(ctx, tx, r, s.Origin); err != nil {
 			s.fail(w, err)
 			return

@@ -196,7 +196,7 @@ func TestPostSearchUsesTheSameLexicalPage(t *testing.T) {
 	}
 	defer res.Body.Close()
 	var body map[string]any
-	json.NewDecoder(res.Body).Decode(&body)
+	_ = json.NewDecoder(res.Body).Decode(&body)
 	if res.StatusCode != 200 || len(body["records"].([]any)) != 1 || body["records"].([]any)[0].(map[string]any)["id"] != capture["record"].(map[string]any)["id"] {
 		t.Fatal("POST search changed retrieval contract")
 	}

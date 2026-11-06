@@ -31,7 +31,7 @@ func testRAGExactNumbers(t *testing.T, payload string) {
 			w.WriteHeader(503)
 			return
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

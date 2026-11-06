@@ -65,8 +65,8 @@ func TestPostgresNonOwnerMigrationReportsPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {
-		db.Exec(`DROP OWNED BY "` + role + `"`)
-		db.Exec(`DROP ROLE "` + role + `"`)
+		_, _ = db.Exec(`DROP OWNED BY "` + role + `"`)
+		_, _ = db.Exec(`DROP ROLE "` + role + `"`)
 	})
 	for _, statement := range []string{
 		`GRANT USAGE, CREATE ON SCHEMA public TO "` + role + `"`,

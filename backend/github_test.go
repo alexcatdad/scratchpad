@@ -75,7 +75,7 @@ func TestGithubSetupOptions(t *testing.T) {
 	t.Setenv("SCRATCHPAD_GITHUB_CLIENT_ID", "synthetic-client")
 	t.Setenv("SCRATCHPAD_GITHUB_CLIENT_SECRET", "synthetic-secret")
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	path := filepath.Join(dir, "owner.sqlite")
 	token := githubSetup(t, path, "")
 	origin := startServer(t, path, "")
@@ -93,7 +93,7 @@ func TestGithubSetupOptions(t *testing.T) {
 	}
 	defer res.Body.Close()
 	var status struct{ GithubConfigured bool }
-	json.NewDecoder(res.Body).Decode(&status)
+	_ = json.NewDecoder(res.Body).Decode(&status)
 	if !status.GithubConfigured {
 		t.Fatal("configured OAuth is hidden")
 	}
@@ -106,24 +106,24 @@ func TestGithubOAuthEstablishesBrowserOwner(t *testing.T) {
 		switch r.URL.Path {
 		case "/login/oauth/access_token":
 			exchanges.Add(1)
-			r.ParseForm()
+			_ = r.ParseForm()
 			if len(r.Form.Get("code_verifier")) != 43 || r.Form.Get("client_secret") != "synthetic-secret" {
 				http.Error(w, "invalid exchange", 400)
 				return
 			}
-			io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
+			_, _ = io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
 		case "/user":
 			if r.Header.Get("Authorization") != "Bearer synthetic-oauth-token" {
-				http.Error(w, "missing authorization", 401)
+				http.Error(w, "missing authorization", http.StatusUnauthorized)
 				return
 			}
-			io.WriteString(w, `{"id":42,"login":"owner-example","type":"User"}`)
+			_, _ = io.WriteString(w, `{"id":42,"login":"owner-example","type":"User"}`)
 		default:
-			http.Error(w, "not yet available", 503)
+			http.Error(w, "not yet available", http.StatusServiceUnavailable)
 		}
 	}))
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	path := filepath.Join(dir, "owner.sqlite")
 	token := githubSetup(t, path, "")
 	origin := startServer(t, path, "")
@@ -154,7 +154,7 @@ func TestGithubOAuthEstablishesBrowserOwner(t *testing.T) {
 	}
 	defer status.Body.Close()
 	var body struct{ Initialized, Authenticated bool }
-	json.NewDecoder(status.Body).Decode(&body)
+	_ = json.NewDecoder(status.Body).Decode(&body)
 	if !body.Initialized || !body.Authenticated {
 		t.Fatal("OAuth did not establish the owner")
 	}
@@ -191,26 +191,26 @@ func TestGithubCompleteKeySyncAndSSHLogin(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/login/oauth/access_token":
-			io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
+			_, _ = io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
 		case "/user", "/user/42", "/users/owner-example":
-			io.WriteString(w, `{"id":42,"login":"owner-example","type":"User"}`)
+			_, _ = io.WriteString(w, `{"id":42,"login":"owner-example","type":"User"}`)
 		case "/users/owner-example/keys":
-			json.NewEncoder(w).Encode([]any{map[string]any{"key": key + " comment"}})
+			_ = json.NewEncoder(w).Encode([]any{map[string]any{"key": key + " comment"}})
 		case "/users/owner-example/ssh_signing_keys":
 			signingPages.Add(1)
 			if r.URL.Query().Get("page") == "1" {
 				w.Header().Set("Link", `<https://api.github.com/users/owner-example/ssh_signing_keys?per_page=100&page=2>; rel="next last"`)
-				io.WriteString(w, `[]`)
+				_, _ = io.WriteString(w, `[]`)
 			} else {
 				w.Header().Set("Link", `<https://api.github.com/users/owner-example/ssh_signing_keys?per_page=100&page=2>; rel="last"`)
-				json.NewEncoder(w).Encode([]any{map[string]any{"key": key}})
+				_ = json.NewEncoder(w).Encode([]any{map[string]any{"key": key}})
 			}
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	path := filepath.Join(dir, "owner.sqlite")
 	token := githubSetup(t, path, "")
 	origin := startServer(t, path, "")
@@ -251,7 +251,7 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	if r.URL.Path == "/login/oauth/access_token" {
-		io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
+		_, _ = io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
 		return
 	}
 	login := f.login
@@ -263,11 +263,11 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		id = 42
 	}
 	if r.URL.Path == "/user" || r.URL.Path == "/user/42" || r.URL.Path == "/users/"+login {
-		json.NewEncoder(w).Encode(map[string]any{"id": id, "login": login, "type": "User"})
+		_ = json.NewEncoder(w).Encode(map[string]any{"id": id, "login": login, "type": "User"})
 		return
 	}
 	if r.URL.Path == "/users/"+login+"/ssh_signing_keys" && f.mode == "failure" {
-		http.Error(w, "synthetic-secret-must-not-leak", 429)
+		http.Error(w, "synthetic-secret-must-not-leak", http.StatusTooManyRequests)
 		return
 	}
 	if r.URL.Path == "/users/"+login+"/keys" || r.URL.Path == "/users/"+login+"/ssh_signing_keys" {
@@ -275,13 +275,13 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Query().Get("page") == "1" {
 				w.Header().Set("Link", `<https://api.github.com`+r.URL.Path+`?per_page=100&page=2&page=3>; rel="next"`)
 			}
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 			return
 		}
 		if f.mode == "partial" {
 			w.Header().Set("Content-Range", "bytes 0-1/100")
 			w.WriteHeader(http.StatusPartialContent)
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 			return
 		}
 		if f.mode == "unsafe" {
@@ -289,20 +289,20 @@ func (f *githubFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		if f.mode == "incomplete" {
 			w.Header().Set("Link", `<https://api.github.com/users/`+login+`/keys?per_page=100&page=2>; rel="last"`)
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 			return
 		}
 		if f.mode == "truncated" {
 			if r.URL.Query().Get("page") == "1" {
 				w.Header().Set("Link", `<https://api.github.com`+r.URL.Path+`?per_page=100&page=2>; rel="next", <https://api.github.com`+r.URL.Path+`?per_page=100&page=3>; rel="last"`)
 			}
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 			return
 		}
 		if f.mode == "removed" || f.mode == "failure" {
-			io.WriteString(w, `[]`)
+			_, _ = io.WriteString(w, `[]`)
 		} else {
-			json.NewEncoder(w).Encode([]any{map[string]any{"key": f.key}})
+			_ = json.NewEncoder(w).Encode([]any{map[string]any{"key": f.key}})
 		}
 		return
 	}
@@ -339,7 +339,7 @@ func TestGithubFailedSyncPreservesCompleteCache(t *testing.T) {
 			path, databaseURL := "", ""
 			if engine == "sqlite" {
 				dir := t.TempDir()
-				os.Chmod(dir, 0700)
+				_ = os.Chmod(dir, 0700)
 				path = filepath.Join(dir, "owner.sqlite")
 			} else {
 				databaseURL = legacyPostgres(t)
@@ -354,7 +354,7 @@ func TestGithubFailedSyncPreservesCompleteCache(t *testing.T) {
 				t.Fatalf("failed category sync did not fail safely: %d", res.StatusCode)
 			}
 			var failure map[string]any
-			json.NewDecoder(res.Body).Decode(&failure)
+			_ = json.NewDecoder(res.Body).Decode(&failure)
 			if failure["error"].(map[string]any)["code"] != "GITHUB_RATE_LIMITED" {
 				t.Fatal("rate-limit error contract regressed")
 			}
@@ -411,7 +411,7 @@ func TestGithubFailedSyncPreservesCompleteCache(t *testing.T) {
 			}
 			defer check.Body.Close()
 			var auth struct{ Authenticated bool }
-			json.NewDecoder(check.Body).Decode(&auth)
+			_ = json.NewDecoder(check.Body).Decode(&auth)
 			if auth.Authenticated {
 				t.Fatal("removed key session remained valid")
 			}
@@ -768,13 +768,13 @@ func TestGithubRejectsMalformedAccountAuthority(t *testing.T) {
 			githubService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/login/oauth/access_token" {
-					io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
+					_, _ = io.WriteString(w, `{"access_token":"synthetic-oauth-token","token_type":"bearer"}`)
 				} else {
-					io.WriteString(w, account)
+					_, _ = io.WriteString(w, account)
 				}
 			}))
 			dir := t.TempDir()
-			os.Chmod(dir, 0700)
+			_ = os.Chmod(dir, 0700)
 			path := filepath.Join(dir, "owner.sqlite")
 			token := githubSetup(t, path, "")
 			origin := startServer(t, path, "")

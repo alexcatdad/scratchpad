@@ -11,7 +11,9 @@ import (
 
 func TestRAGRawLexicalScopeDistinguishesRecordMatchesFromCitedExcerpt(t *testing.T) {
 	path, databaseURL := ragInstance(t)
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "synthetic outage", 503) }))
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "synthetic outage", http.StatusServiceUnavailable)
+	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
 	if status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "embeddingDimensions": 2}); status != 200 {

@@ -113,7 +113,7 @@ func (c *Client) rawWithHTTP(ctx context.Context, httpClient *http.Client, metho
 		if json.Unmarshal(data, &envelope) == nil && envelope.Error.Code != "" {
 			return &envelope.Error
 		}
-		return fmt.Errorf("Scratchpad HTTP %d", res.StatusCode)
+		return fmt.Errorf("scratchpad HTTP %d", res.StatusCode)
 	}
 	if out != nil && len(data) > 0 {
 		decoder := json.NewDecoder(bytes.NewReader(data))
@@ -122,7 +122,7 @@ func (c *Client) rawWithHTTP(ctx context.Context, httpClient *http.Client, metho
 			return err
 		}
 		if err := decoder.Decode(new(any)); err != io.EOF {
-			return errors.New("Scratchpad returned more than one JSON value")
+			return errors.New("scratchpad returned more than one JSON value")
 		}
 		return nil
 	}
@@ -207,7 +207,7 @@ func (c *Client) authenticate(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", errors.New("invalid signing proof")
 	}
-	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", c.Config.SigningKeyPath, "-n", "scratchpad-auth-v2")
+	cmd := exec.CommandContext(ctx, "ssh-keygen", "-Y", "sign", "-f", c.Config.SigningKeyPath, "-n", "scratchpad-auth-v2") //nolint:gosec // fixed ssh-keygen sign invocation; the key path is owner configuration
 	if c.Config.SSHAgentSocket != "" {
 		cmd.Env = append(cmd.Environ(), "SSH_AUTH_SOCK="+c.Config.SSHAgentSocket)
 	}

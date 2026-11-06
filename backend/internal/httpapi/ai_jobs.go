@@ -211,12 +211,12 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 				a.auth.fail(w, err)
 				return
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			if _, err = apiActor(ctx, tx, r, a.auth.Origin); err != nil {
 				a.auth.fail(w, err)
 				return
 			}
-			rows, err := tx.QueryContext(ctx, "SELECT data,"+ordering+",created_at,id FROM entities WHERE "+where+" ORDER BY "+ordering+" DESC,created_at,id LIMIT $"+strconv.Itoa(len(args)), args...)
+			rows, err := tx.QueryContext(ctx, "SELECT data,"+ordering+",created_at,id FROM entities WHERE "+where+" ORDER BY "+ordering+" DESC,created_at,id LIMIT $"+strconv.Itoa(len(args)), args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 			jobs := []map[string]any{}
 			var last []string
 			hasMore := false
@@ -236,7 +236,7 @@ func (a *AI) Jobs(operation string) http.HandlerFunc {
 						break
 					}
 					if job == nil {
-						err = errors.New("Invalid persisted AI job.")
+						err = errors.New("invalid persisted AI job")
 						break
 					}
 					jobs = append(jobs, job)

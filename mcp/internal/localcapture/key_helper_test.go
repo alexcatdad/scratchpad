@@ -2,6 +2,7 @@ package localcapture
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,7 +51,7 @@ exec /bin/cat "$SCRATCHPAD_HELPER_KEY"
 		t.Fatal(err)
 	}
 	_, err = (HelperKeyProvider{Path: unlocking, Identifier: "synthetic"}).Load(context.Background())
-	if err != ErrKeyUnlockRequiredSentinel {
+	if !errors.Is(err, ErrKeyUnlockRequiredSentinel) {
 		t.Fatalf("exit 2 was not preserved as keychain unlock required: %v", err)
 	}
 	missing := filepath.Join(dir, "missing.synthetic.sh")
@@ -58,7 +59,7 @@ exec /bin/cat "$SCRATCHPAD_HELPER_KEY"
 		t.Fatal(err)
 	}
 	_, err = (HelperKeyProvider{Path: missing, Identifier: "synthetic"}).Load(context.Background())
-	if err != ErrKeyUnavailableSentinel {
+	if !errors.Is(err, ErrKeyUnavailableSentinel) {
 		t.Fatalf("exit 3 was not classified unavailable: %v", err)
 	}
 }
@@ -74,7 +75,7 @@ func TestOpenStorePreservesKeychainUnlockRequirement(t *testing.T) {
 		t.Fatal(err)
 	}
 	keys.loadErr = ErrKeyUnlockRequiredSentinel
-	if _, err = OpenStore(path, keys); err != ErrKeyUnlockRequiredSentinel {
+	if _, err = OpenStore(path, keys); !errors.Is(err, ErrKeyUnlockRequiredSentinel) {
 		t.Fatalf("OpenStore collapsed keychain unlock requirement: %v", err)
 	}
 }

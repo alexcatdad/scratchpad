@@ -38,6 +38,18 @@ for the authentication and recovery model.
 
 Releases are built and Developer ID signed locally, notarized by Apple and
 stapled. Signing keys and notarization credentials stay in the maintainer's
-local Keychain. GitHub releases are immutable; verify a release's attestation
-with `gh release verify <tag> -R alexcatdad/scratchpad`. The Homebrew cask does
-not remove quarantine.
+local Keychain. Releases are published on Forgejo only; GitHub carries no
+release assets. Forgejo releases are not immutable, but release-tools never
+edits a release's assets after publishing it. To verify a download from the
+Forgejo release:
+
+1. Download `SHA256SUMS` and `scratchpad-<version>.manifest.json` from the same
+   release, run `shasum -a 256 -c SHA256SUMS` next to the archive, and check
+   that the manifest names the same version, tag and archive digest.
+2. Unzip the archive and check the signature with
+   `codesign -dv --verbose=2 Scratchpad.app` (Developer ID Application,
+   hardened runtime).
+3. Check Gatekeeper and notarization with `spctl -a -vv Scratchpad.app` and the
+   stapled ticket with `xcrun stapler validate Scratchpad.app`.
+
+The Homebrew cask does not remove quarantine.

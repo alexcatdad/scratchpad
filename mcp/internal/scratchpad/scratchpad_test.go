@@ -68,7 +68,7 @@ func TestMirrorConcurrentRetry(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	data, err := os.ReadFile(filepath.Join(root, "scratchpad/decisions.jsonl"))
+	data, err := os.ReadFile(filepath.Join(root, "scratchpad", "decisions.jsonl"))
 	if err != nil || strings.Count(string(data), "\n") != 1 {
 		t.Fatalf("%s %v", data, err)
 	}
@@ -98,7 +98,7 @@ func TestProtocolToolsAndCapture(t *testing.T) {
 				t.Error("missing payload")
 			}
 			record["id"] = "rec_one"
-			json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
 		default:
 			t.Errorf("unexpected %s", r.URL.Path)
 		}
@@ -169,7 +169,7 @@ func TestSSHChallengeAuthentication(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/api/v1/auth/mcp/challenge":
-			json.NewEncoder(w).Encode(map[string]any{"challengeId": "challenge", "nonce": "random-nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": recipient(r), "expiresAt": expiresAt})
+			_ = json.NewEncoder(w).Encode(map[string]any{"challengeId": "challenge", "nonce": "random-nonce", "namespace": "scratchpad-auth-v2", "version": 2, "purpose": "ssh_login", "recipient": recipient(r), "expiresAt": expiresAt})
 		case "/api/v1/auth/mcp/verify":
 			var body map[string]string
 			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -260,7 +260,7 @@ func TestSSHChallengeRejectsUntrustedContextBeforeSigning(t *testing.T) {
 				case "expired":
 					challenge["expiresAt"] = time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
 				}
-				json.NewEncoder(w).Encode(challenge)
+				_ = json.NewEncoder(w).Encode(challenge)
 			}))
 			defer api.Close()
 			c, err := NewClient(Config{URL: api.URL, PublicKeyPath: pub, SigningKeyPath: filepath.Join(dir, "nonexistent-private-key")})
@@ -299,7 +299,7 @@ func TestCaptureMirrorGatesAndPartialSuccess(t *testing.T) {
 					record := body["record"].(map[string]any)
 					record["id"] = "rec_mirror"
 					record["type"] = "decision"
-					json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": tc.eligible}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": tc.eligible}})
 				case "/api/v1/records/rec_mirror/mirror":
 					reports++
 					fmt.Fprint(w, `{}`)

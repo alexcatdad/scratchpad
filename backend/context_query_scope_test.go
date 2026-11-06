@@ -40,7 +40,7 @@ func TestCompactContextResumesAmongLongHistoricalRecords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	long := strings.Repeat("Synthetic historical evidence. ", 3200)
 	for i := range count {
 		record := map[string]any{"id": fmt.Sprintf("rec_long_history_%06d", i), "version": 1, "projectId": id, "type": "finding", "title": "Historical finding", "authority": "observed", "confidence": "high", "createdAt": "2026-01-01T00:00:00.000Z", "recordedAt": "2026-01-01T00:00:00.000Z", "payload": map[string]any{"finding": long}, "content": "finding: " + long}

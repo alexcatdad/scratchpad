@@ -32,7 +32,7 @@ func NewGithub(auth *SSH, passkeys *Passkeys, clientID, secret string) (*Github,
 }
 func (g *Github) Configured() bool { return g.clientID != "" && g.secret != "" }
 func (g *Github) stateCookie(w http.ResponseWriter, value string, age int) {
-	http.SetCookie(w, &http.Cookie{Name: "scratchpad_github_state", Value: value, HttpOnly: true, SameSite: http.SameSiteLaxMode, Path: "/api/v1/auth/github", MaxAge: age, Secure: strings.HasPrefix(g.auth.Origin, "https:")})
+	http.SetCookie(w, &http.Cookie{Name: "scratchpad_github_state", Value: value, HttpOnly: true, SameSite: http.SameSiteLaxMode, Path: "/api/v1/auth/github", MaxAge: age, Secure: strings.HasPrefix(g.auth.Origin, "https:")}) //nolint:gosec // Secure is set for HTTPS origins; loopback HTTP development needs it off
 }
 func githubInvalid() error {
 	return invalidProof("AUTH_INVALID", "GitHub authorization is invalid, expired or revoked.")
@@ -124,20 +124,21 @@ func (g *Github) Options() http.HandlerFunc {
 				}
 				entry["bindingGeneration"] = b["generation"]
 			}
-			if body.Intent == "setup" || body.Intent == "recover" {
-				cap, err := setupCapability(ctx, conn, body.SetupToken)
+			switch body.Intent {
+			case "setup", "recover":
+				capability, err := setupCapability(ctx, conn, body.SetupToken)
 				if err != nil {
 					return err
 				}
-				if (cap["recovery"] == true) != (body.Intent == "recover") {
+				if (capability["recovery"] == true) != (body.Intent == "recover") {
 					return githubInvalid()
 				}
-				entry["setupTokenId"] = cap["id"]
-			} else if body.Intent == "login" {
+				entry["setupTokenId"] = capability["id"]
+			case "login":
 				if bound == nil {
 					return githubInvalid()
 				}
-			} else {
+			default:
 				session, cred, err := githubBrowser(ctx, conn, r)
 				if err != nil {
 					return err
@@ -277,19 +278,19 @@ func (g *Github) callbackAuthorization(ctx context.Context, q entityReader, entr
 		}
 	}
 	if id := stringValue(entry, "setupTokenId"); id != "" {
-		cap, err := entityMap(ctx, q, "setup_token", id)
+		capability, err := entityMap(ctx, q, "setup_token", id)
 		if errors.Is(err, sql.ErrNoRows) {
 			return githubInvalid()
 		}
 		if err != nil {
 			return err
 		}
-		expiry, _ := time.Parse(time.RFC3339Nano, stringValue(cap, "expiresAt"))
+		expiry, _ := time.Parse(time.RFC3339Nano, stringValue(capability, "expiresAt"))
 		owner, err := optional(ctx, q, "owner", "owner")
 		if err != nil {
 			return err
 		}
-		if !expiry.After(time.Now()) || (cap["recovery"] != true && owner != nil) || (cap["recovery"] == true) != (entry["intent"] == "recover") {
+		if !expiry.After(time.Now()) || (capability["recovery"] != true && owner != nil) || (capability["recovery"] == true) != (entry["intent"] == "recover") {
 			return githubInvalid()
 		}
 	}
@@ -529,7 +530,7 @@ func revokeGithubSessions(ctx context.Context, conn *sql.Conn, ids map[string]bo
 	credential := "(SELECT value FROM json_each(" + validData + ") WHERE key='credentialId' ORDER BY id DESC LIMIT 1)"
 	stringID := "(SELECT type FROM json_each(" + validData + ") WHERE key='credentialId' ORDER BY id DESC LIMIT 1)='text'"
 	if engine == "postgres" {
-		credential = `data->>'credentialId'`
+		credential = `data->>'credentialId'` //nolint:gosec // a SQL fragment naming the credentialId field, not a credential
 		stringID = `jsonb_typeof(data->'credentialId')='string'`
 	}
 	if ids == nil {
@@ -544,7 +545,7 @@ func revokeGithubSessions(ctx context.Context, conn *sql.Conn, ids map[string]bo
 			args = append(args, id)
 			places[i] = fmt.Sprintf("$%d", i+1)
 		}
-		_, err := conn.ExecContext(ctx, "DELETE FROM entities WHERE kind='session' AND "+stringID+" AND "+credential+" IN ("+strings.Join(places, ",")+")", args...)
+		_, err := conn.ExecContext(ctx, "DELETE FROM entities WHERE kind='session' AND "+stringID+" AND "+credential+" IN ("+strings.Join(places, ",")+")", args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 		if err != nil {
 			return err
 		}

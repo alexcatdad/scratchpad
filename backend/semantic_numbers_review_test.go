@@ -72,7 +72,7 @@ func TestAnalysisExactNumericalSourcesPreserveFinalSourceFenceAndReadableArtifac
 
 func testSemanticExactNumbers(t *testing.T, engine, payload string, historical bool) {
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	path, databaseURL := portableInstance(t, engine)

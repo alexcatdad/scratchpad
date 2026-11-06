@@ -79,7 +79,7 @@ func TestStdioEvidenceCallerCancellationReachesHTTP(t *testing.T) {
 	release := make(chan struct{})
 	defer close(release)
 	ctx, session := presenceStdioSession(t, func(w http.ResponseWriter, r *http.Request) {
-		io.Copy(io.Discard, r.Body)
+		_, _ = io.Copy(io.Discard, r.Body)
 		close(started)
 		select {
 		case <-r.Context().Done():

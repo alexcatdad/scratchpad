@@ -78,7 +78,7 @@ func TestDormantRAGJobsDoNotKeepPollingActiveAndResumeWithCompatibleSettings(t *
 		for i := range request.Input {
 			data = append(data, map[string]any{"index": i, "embedding": []int{1, 0}})
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": data})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

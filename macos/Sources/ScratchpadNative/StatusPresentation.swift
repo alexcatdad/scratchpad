@@ -37,16 +37,20 @@ public struct StatusPresentation: Equatable, Sendable {
 
     public init(status: ServiceStatus?, update: ServiceUpdateState, now: Date = .now) {
         guard let status else {
-            self.init(tone: .off, word: "Not running", headline: "Capture service not running",
-                      detail: "AI tools cannot save memory until it starts.", action: .startService,
-                      rows: [Row(title: "Capture service", value: "Not running", tone: .off),
-                             Row(title: "Server", value: "Not checked", tone: .off)])
+            self.init(
+                tone: .off, word: "Not running", headline: "Capture service not running",
+                detail: "AI tools cannot save memory until it starts.", action: .startService,
+                rows: [
+                    Row(title: "Capture service", value: "Not running", tone: .off),
+                    Row(title: "Server", value: "Not checked", tone: .off),
+                ])
             return
         }
         let waiting = status.pending + status.blocked + status.rejected + status.needsSelection
-        let waitingRow = Row(title: "Waiting to sync",
-                             value: waiting == 0 ? "None" : Self.captures(waiting),
-                             tone: waiting == 0 ? .ok : .warning)
+        let waitingRow = Row(
+            title: "Waiting to sync",
+            value: waiting == 0 ? "None" : Self.captures(waiting),
+            tone: waiting == 0 ? .ok : .warning)
         let serviceRow: Row
         switch status.lifecycle {
         case "running": serviceRow = Row(title: "Capture service", value: "Running", tone: .ok)
@@ -59,62 +63,75 @@ public struct StatusPresentation: Equatable, Sendable {
         switch connection {
         case "connected": serverRow = Row(title: "Server", value: "Connected", tone: .ok)
         case "connectivity": serverRow = Row(title: "Server", value: "Unreachable", tone: .warning)
-        case "authentication", "credential_changed": serverRow = Row(title: "Server", value: "Sign-in needed", tone: .error)
+        case "authentication", "credential_changed":
+            serverRow = Row(title: "Server", value: "Sign-in needed", tone: .error)
         case "server_incompatible": serverRow = Row(title: "Server", value: "Needs an update", tone: .error)
         default: serverRow = Row(title: "Server", value: "Checking", tone: .off)
         }
         let rows = [serviceRow, serverRow, waitingRow]
 
         if status.lifecycle == "stopped" {
-            self.init(tone: .off, word: "Stopped", headline: "Capture service stopped",
-                      detail: "AI tools cannot save memory until you start it.", action: .startService, rows: rows)
+            self.init(
+                tone: .off, word: "Stopped", headline: "Capture service stopped",
+                detail: "AI tools cannot save memory until you start it.", action: .startService, rows: rows)
         } else if status.lifecycle == "quiescing" {
-            self.init(tone: .off, word: "Restarting", headline: "Capture service restarting",
-                      detail: "Captures already saved on this Mac are kept.", action: nil, rows: rows)
+            self.init(
+                tone: .off, word: "Restarting", headline: "Capture service restarting",
+                detail: "Captures already saved on this Mac are kept.", action: nil, rows: rows)
         } else if !status.keyAvailable || status.storageAvailable == false {
-            self.init(tone: .error, word: "Cannot save", headline: "Cannot save on this Mac",
-                      detail: status.keyAvailable
-                          ? "The local capture storage is unavailable."
-                          : "The capture queue key is locked. Unlock your login keychain.",
-                      action: nil, rows: rows)
+            self.init(
+                tone: .error, word: "Cannot save", headline: "Cannot save on this Mac",
+                detail: status.keyAvailable
+                    ? "The local capture storage is unavailable."
+                    : "The capture queue key is locked. Unlock your login keychain.",
+                action: nil, rows: rows)
         } else if case .restartNeeded(let running) = update {
-            self.init(tone: .update, word: "Finish update", headline: "Update installed",
-                      detail: "The capture service is still running \(running). Restarting keeps every queued capture.",
-                      action: .restartService, rows: rows)
+            self.init(
+                tone: .update, word: "Finish update", headline: "Update installed",
+                detail: "The capture service is still running \(running). Restarting keeps every queued capture.",
+                action: .restartService, rows: rows)
         } else if status.lifecycle == "paused" {
-            self.init(tone: .warning, word: "Paused", headline: "Syncing paused",
-                      detail: "Captures are saved on this Mac and sync when you resume.", action: .resumeSyncing, rows: rows)
+            self.init(
+                tone: .warning, word: "Paused", headline: "Syncing paused",
+                detail: "Captures are saved on this Mac and sync when you resume.", action: .resumeSyncing, rows: rows)
         } else {
             switch connection {
             case "connectivity":
-                self.init(tone: .warning, word: "Unreachable", headline: "Saving on this Mac",
-                          detail: waiting == 0
-                              ? "The server is unreachable. New captures sync when it is back."
-                              : "The server is unreachable. \(Self.captures(waiting)) will sync when it is back.",
-                          action: .checkAgain, rows: rows)
+                self.init(
+                    tone: .warning, word: "Unreachable", headline: "Saving on this Mac",
+                    detail: waiting == 0
+                        ? "The server is unreachable. New captures sync when it is back."
+                        : "The server is unreachable. \(Self.captures(waiting)) will sync when it is back.",
+                    action: .checkAgain, rows: rows)
             case "authentication", "credential_changed":
-                self.init(tone: .error, word: "Sign-in needed", headline: "Reconnect to keep syncing",
-                          detail: "The server no longer accepts this Mac’s key. Captures are still saved here.",
-                          action: .reconnect, rows: rows)
+                self.init(
+                    tone: .error, word: "Sign-in needed", headline: "Reconnect to keep syncing",
+                    detail: "The server no longer accepts this Mac’s key. Captures are still saved here.",
+                    action: .reconnect, rows: rows)
             case "server_incompatible":
-                self.init(tone: .error, word: "Server outdated", headline: "Server needs an update",
-                          detail: "Captures are saved on this Mac until the server is updated.", action: nil, rows: rows)
+                self.init(
+                    tone: .error, word: "Server outdated", headline: "Server needs an update",
+                    detail: "Captures are saved on this Mac until the server is updated.", action: nil, rows: rows)
             case "connected":
                 if status.needsSelection > 0 || status.blocked > 0 || status.rejected > 0 {
                     let count = status.needsSelection + status.blocked + status.rejected
-                    self.init(tone: .warning, word: "Needs you", headline: "\(Self.captures(count)) need\(count == 1 ? "s" : "") you",
-                              detail: "Choose a project or review why the server refused them.",
-                              action: .reviewCaptures, rows: rows)
+                    self.init(
+                        tone: .warning, word: "Needs you",
+                        headline: "\(Self.captures(count)) need\(count == 1 ? "s" : "") you",
+                        detail: "Choose a project or review why the server refused them.",
+                        action: .reviewCaptures, rows: rows)
                 } else {
-                    self.init(tone: .ok, word: "Connected", headline: "Saving and syncing",
-                              detail: status.pending == 0
-                                  ? "Every capture has reached the server."
-                                  : "\(Self.captures(status.pending)) syncing now.",
-                              action: nil, rows: rows)
+                    self.init(
+                        tone: .ok, word: "Connected", headline: "Saving and syncing",
+                        detail: status.pending == 0
+                            ? "Every capture has reached the server."
+                            : "\(Self.captures(status.pending)) syncing now.",
+                        action: nil, rows: rows)
                 }
             default:
-                self.init(tone: .off, word: "Checking", headline: "Checking the server",
-                          detail: "Captures are saved on this Mac while the connection is checked.", action: nil, rows: rows)
+                self.init(
+                    tone: .off, word: "Checking", headline: "Checking the server",
+                    detail: "Captures are saved on this Mac while the connection is checked.", action: nil, rows: rows)
             }
         }
     }

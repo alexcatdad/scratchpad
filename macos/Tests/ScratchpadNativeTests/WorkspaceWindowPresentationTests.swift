@@ -1,11 +1,15 @@
 import AppKit
-import Testing
 import ScratchpadNative
+import Testing
 
 @Test @MainActor func workspacePresentationShowsTheWorkspaceInsteadOfTheTrayWindow() {
     _ = NSApplication.shared
-    let tray = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
-    let workspace = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
+    let tray = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false
+    )
+    let workspace = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false
+    )
     tray.isReleasedWhenClosed = false
     workspace.isReleasedWhenClosed = false
     tray.identifier = NSUserInterfaceItemIdentifier("tray-popover")
@@ -19,7 +23,9 @@ import ScratchpadNative
 
 @Test @MainActor func workspacePresentationDoesNotRaiseAnUnrelatedWindow() {
     _ = NSApplication.shared
-    let unrelated = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false)
+    let unrelated = NSWindow(
+        contentRect: NSRect(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: false
+    )
     unrelated.isReleasedWhenClosed = false
     unrelated.identifier = NSUserInterfaceItemIdentifier("other")
     defer { unrelated.close() }

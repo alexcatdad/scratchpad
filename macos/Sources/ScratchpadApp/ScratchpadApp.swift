@@ -1,7 +1,7 @@
-import SwiftUI
 import MenubarKit
-import ScratchpadNative
 import OSLog
+import ScratchpadNative
+import SwiftUI
 
 private let windowLog = Logger(subsystem: "com.alexcatdad.scratchpad", category: "Windowing")
 
@@ -9,7 +9,8 @@ enum AppIdentity {
     static let isDevelopment = Bundle.main.bundleIdentifier == "com.alexcatdad.scratchpad.dev"
     static let displayName = isDevelopment ? "Scratchpad DEV" : "Scratchpad"
     // Release builds carry the full CalVer version in ReleaseVersion; development builds fall back.
-    static let version = (Bundle.main.object(forInfoDictionaryKey: "ReleaseVersion") as? String)
+    static let version =
+        (Bundle.main.object(forInfoDictionaryKey: "ReleaseVersion") as? String)
         ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
     static var versionLabel: String { ServiceUpdateState.label(version: version ?? "unknown", build: build) }
@@ -19,7 +20,8 @@ enum AppIdentity {
 struct ScratchpadApp: App {
     @StateObject private var model = AppModel()
     @Environment(\.openWindow) private var openWindow
-    private let trayIcon = TrayIconLoader.load(resourcesDirectory: Bundle.main.resourceURL, baseName: "ScratchpadTrayIcon")
+    private let trayIcon = TrayIconLoader.load(
+        resourcesDirectory: Bundle.main.resourceURL, baseName: "ScratchpadTrayIcon")
 
     var body: some Scene {
         Window(AppIdentity.displayName, id: "workspace") {
@@ -51,7 +53,9 @@ struct ScratchpadApp: App {
         MenuBarExtra {
             MenuContent()
                 .environmentObject(model)
-                .onAppear { model.refresh(); model.loadReceipts() }
+                .onAppear {
+                    model.refresh(); model.loadReceipts()
+                }
         } label: {
             TrayLabel(
                 icon: trayIcon,
@@ -81,7 +85,9 @@ func showWorkspace(_ page: WorkspacePage, model: AppModel, openWindow: OpenWindo
 @MainActor
 private func logWorkspaceState(_ event: String) {
     let window = NSApp.windows.first { $0.identifier == WorkspaceWindowPresentation.identifier }
-    windowLog.info("\(event, privacy: .public): found=\(window != nil) visible=\(window?.isVisible ?? false) key=\(window?.isKeyWindow ?? false) active=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)")
+    windowLog.info(
+        "\(event, privacy: .public): found=\(window != nil) visible=\(window?.isVisible ?? false) key=\(window?.isKeyWindow ?? false) active=\(NSApp.isActive) policy=\(NSApp.activationPolicy().rawValue)"
+    )
 }
 
 /// Runs a status action from any surface, so the popover and the window behave the same.
@@ -119,8 +125,11 @@ struct MenuContent: View {
                                 .frame(width: 64, alignment: .leading)
                             Text(ReceiptLabels.title(receipt)).lineLimit(1).truncationMode(.tail)
                             Spacer(minLength: 4)
-                            Text(receipt.state == "delivered" ? ReceiptLabels.when(receipt.acceptedAt) : ReceiptLabels.state(receipt.state))
-                                .font(.caption).foregroundStyle(.secondary)
+                            Text(
+                                receipt.state == "delivered"
+                                    ? ReceiptLabels.when(receipt.acceptedAt) : ReceiptLabels.state(receipt.state)
+                            )
+                            .font(.caption).foregroundStyle(.secondary)
                         }
                         .font(.callout)
                         .padding(.horizontal, 12)

@@ -1,11 +1,14 @@
 import Foundation
 import Testing
+
 @testable import ScratchpadNative
 
 private let now = Date(timeIntervalSince1970: 1_800_000_000)
 
-private func status(lifecycle: String = "running", pending: Int = 0, blocked: Int = 0, needsSelection: Int = 0,
-                    keyAvailable: Bool = true, storageAvailable: Bool? = true, connection: String? = "connected") -> ServiceStatus {
+private func status(
+    lifecycle: String = "running", pending: Int = 0, blocked: Int = 0, needsSelection: Int = 0,
+    keyAvailable: Bool = true, storageAvailable: Bool? = true, connection: String? = "connected"
+) -> ServiceStatus {
     let checkedAt = ISO8601DateFormatter().string(from: now.addingTimeInterval(-5))
     return ServiceStatus(
         lifecycle: lifecycle, pending: pending, blocked: blocked, rejected: 0, needsSelection: needsSelection,
@@ -72,8 +75,9 @@ private func present(_ value: ServiceStatus?, update: ServiceUpdateState = .curr
 }
 
 @Test func staleConnectionIsShownAsChecking() {
-    let old = ServiceStatus(lifecycle: "running", pending: 0, blocked: 0, rejected: 0, needsSelection: 0, keyAvailable: true,
-                            storageAvailable: true, lastDelivery: nil,
-                            connection: ConnectionObservation(state: "connected", checkedAt: "2020-01-01T00:00:00Z"), queueSchemaVersion: 1)
+    let old = ServiceStatus(
+        lifecycle: "running", pending: 0, blocked: 0, rejected: 0, needsSelection: 0, keyAvailable: true,
+        storageAvailable: true, lastDelivery: nil,
+        connection: ConnectionObservation(state: "connected", checkedAt: "2020-01-01T00:00:00Z"), queueSchemaVersion: 1)
     #expect(present(old).word == "Checking")
 }

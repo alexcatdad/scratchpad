@@ -27,7 +27,7 @@ func TestGeneratedClientsCallAuthenticatedGoBackend(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			cmd := exec.Command("node", filepath.Join(root, "node_modules/tsx/dist/cli.mjs"), filepath.Join(root, "packages/clients/test.ts"))
+			cmd := exec.Command("node", filepath.Join(root, "node_modules", "tsx", "dist", "cli.mjs"), filepath.Join(root, "packages", "clients", "test.ts"))
 			cmd.Dir = root
 			cmd.Env = append(os.Environ(), "SCRATCHPAD_SDK_TEST_URL="+origin, "SCRATCHPAD_SDK_SIGNING_KEY="+private)
 			out, err := cmd.CombinedOutput()

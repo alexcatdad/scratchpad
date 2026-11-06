@@ -1,7 +1,7 @@
-import SwiftUI
 import AppKit
 import MenubarKit
 import ScratchpadNative
+import SwiftUI
 
 // Tokens, the status icon, button styles and grouped tiles come from
 // MenubarKit, whose default theme is Scratchpad amber.
@@ -35,10 +35,12 @@ enum ReceiptLabels {
     static func when(_ timestamp: String) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let date = formatter.date(from: timestamp) ?? {
-            formatter.formatOptions = [.withInternetDateTime]
-            return formatter.date(from: timestamp)
-        }()
+        let date =
+            formatter.date(from: timestamp)
+            ?? {
+                formatter.formatOptions = [.withInternetDateTime]
+                return formatter.date(from: timestamp)
+            }()
         guard let date else { return timestamp }
         return date.formatted(.relative(presentation: .named, unitsStyle: .abbreviated))
     }

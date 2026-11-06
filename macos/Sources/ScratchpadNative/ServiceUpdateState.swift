@@ -13,7 +13,8 @@ public enum ServiceUpdateState: Equatable, Sendable {
 
     public init(status: ServiceStatus?, appVersion: String?, appBuild: String?) {
         guard let version = status?.serviceVersion, !version.isEmpty,
-              let appVersion, !appVersion.isEmpty else {
+            let appVersion, !appVersion.isEmpty
+        else {
             self = .unknown
             return
         }

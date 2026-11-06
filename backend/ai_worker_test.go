@@ -29,7 +29,7 @@ func TestEmbeddingWorkerPreservesUnicodeAcrossLongRecordChunks(t *testing.T) {
 			fox.Store(true)
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	path, databaseURL := portableInstance(t, "sqlite")
@@ -67,7 +67,7 @@ func TestEmbeddingWorkerDiscardsResultsAfterConsentRevocation(t *testing.T) {
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			}))
 			defer func() { unblock(); provider.Close() }()
 			path, databaseURL := portableInstance(t, engine)
@@ -123,7 +123,7 @@ func TestEmbeddingWorkerRecoversExpiredLeaseAcrossCompetingServers(t *testing.T)
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				w.Header().Set("Content-Type", "application/json")
-				w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)
@@ -204,7 +204,7 @@ func TestEmbeddingWorkerMakesSemanticResultsDurable(t *testing.T) {
 					data = append(data, map[string]any{"index": index, "embedding": []float64{1, 0}})
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]any{"data": data})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)

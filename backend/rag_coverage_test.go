@@ -12,7 +12,7 @@ import (
 func TestRAGCoverageRequiresSourceFaithfulPassagesAndRebuildRestoresCoverage(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -84,7 +84,7 @@ func TestRAGCoverageRequiresSourceFaithfulPassagesAndRebuildRestoresCoverage(t *
 		t.Fatal(err)
 	}
 	for _, fault := range []string{"embedding='[0,0]'::vector", "embedding='[1,0]'::vector,source_start=source_start-1"} {
-		if _, err = db.Exec(`UPDATE rag_passages SET `+fault+` WHERE record_id=$1 AND source_start>0`, record["id"]); err != nil {
+		if _, err = db.Exec(`UPDATE rag_passages SET `+fault+` WHERE record_id=$1 AND source_start>0`, record["id"]); err != nil { //nolint:gosec // fault is one of the fixed SQL fragments above
 			t.Fatal(err)
 		}
 		status, coverage = curationRequest(t, origin, "GET", route, nil)
@@ -101,7 +101,7 @@ func TestRAGCoverageRequiresSourceFaithfulPassagesAndRebuildRestoresCoverage(t *
 func TestRAGCoverageDistinguishesQueuedCompleteAndIncompatibleEvidence(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -157,7 +157,7 @@ func TestRAGCoverageDistinguishesQueuedCompleteAndIncompatibleEvidence(t *testin
 func TestRAGCurrentGenerationDoesNotWaitBehindStaleQueuedHistory(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

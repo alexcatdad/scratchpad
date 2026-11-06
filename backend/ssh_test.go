@@ -180,7 +180,7 @@ func TestConcurrentSSHProofCreatesOneSession(t *testing.T) {
 				statuses <- 0
 				return
 			}
-			io.Copy(io.Discard, response.Body)
+			_, _ = io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 			statuses <- response.StatusCode
 		}()

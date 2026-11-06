@@ -39,7 +39,7 @@ func TestAIJobSurvivesOperationalSQLiteRestore(t *testing.T) {
 	}
 	job := result["job"]
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	snapshot := filepath.Join(dir, "queue.sqlite")
 	if out, err := backupCommand(path, "", snapshot).CombinedOutput(); err != nil {
 		t.Fatalf("queue snapshot failed: %v %s", err, out)
@@ -135,11 +135,11 @@ func TestAIJobRetryPreservesIdentityAndChecksVersionAndConsent(t *testing.T) {
 			if status != 200 {
 				t.Fatal("consent restoration failed")
 			}
-			status, result := curationRequest(t, origin, "POST", "/ai/jobs/job_historical/retry", map[string]any{"expectedVersion": 2})
+			status, _ = curationRequest(t, origin, "POST", "/ai/jobs/job_historical/retry", map[string]any{"expectedVersion": 2})
 			if status != 409 {
 				t.Fatal("stale retry accepted")
 			}
-			status, result = curationRequest(t, origin, "POST", "/ai/jobs/job_historical/retry", map[string]any{"expectedVersion": 3})
+			status, result := curationRequest(t, origin, "POST", "/ai/jobs/job_historical/retry", map[string]any{"expectedVersion": 3})
 			if status != 202 {
 				t.Fatal("failed job retry rejected")
 			}
@@ -236,7 +236,7 @@ func TestAIJobScopeRequiresExplicitParticipationAndCurrentConsent(t *testing.T) 
 			if status != 202 || !reflect.DeepEqual(result["job"].(map[string]any)["scope"], map[string]any{"projectIds": []any{allowed}, "crossProject": true}) {
 				t.Fatal("implicit cross-project scope included private/denied projects")
 			}
-			status, result = curationRequest(t, origin, "POST", "/ai/jobs", map[string]any{"type": "embed", "projectId": private})
+			status, _ = curationRequest(t, origin, "POST", "/ai/jobs", map[string]any{"type": "embed", "projectId": private})
 			if status != 202 {
 				t.Fatal("single-project private processing refused")
 			}

@@ -36,7 +36,7 @@ CREATE VIEW entities AS SELECT * FROM suggestion_entities WHERE suggestion_read_
 			if _, err = lock.ExecContext(ctx, "SELECT pg_advisory_lock(77497)"); err != nil {
 				t.Fatal(err)
 			}
-			defer lock.ExecContext(context.Background(), "SELECT pg_advisory_unlock(77497)")
+			defer func() { _, _ = lock.ExecContext(context.Background(), "SELECT pg_advisory_unlock(77497)") }()
 			type response struct {
 				status int
 				body   map[string]any

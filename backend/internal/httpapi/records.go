@@ -270,13 +270,14 @@ func Records(store *persistence.Store) http.HandlerFunc {
 			Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
 			return
 		}
-		defer tx.Rollback()
+		defer func() { _ = tx.Rollback() }()
 		if err := authorize(ctx, tx, r); err != nil {
-			if errors.Is(err, errAuthRequired) {
+			switch {
+			case errors.Is(err, errAuthRequired):
 				Error(w, 401, "AUTH_REQUIRED", "Sign in to Scratchpad.")
-			} else if errors.Is(err, errUnauthorized) {
+			case errors.Is(err, errUnauthorized):
 				Error(w, 401, "AUTH_INVALID", "Session expired or revoked.")
-			} else {
+			default:
 				Error(w, 503, "DATABASE_NOT_READY", "Persistence is unavailable.")
 			}
 			return

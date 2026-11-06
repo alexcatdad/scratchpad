@@ -71,7 +71,7 @@ func TestCaptureRetriesBindSubmittedGitContext(t *testing.T) {
 			if status != 409 {
 				t.Fatal("omitting original context reused capture identity")
 			}
-			status, first = reviewCapture(t, origin, "absent-context", body)
+			status, _ = reviewCapture(t, origin, "absent-context", body)
 			if status != 201 {
 				t.Fatal("capture without context failed")
 			}

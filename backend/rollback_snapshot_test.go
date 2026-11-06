@@ -62,7 +62,7 @@ func historicalAPIURL(t *testing.T) string {
 			if err := os.MkdirAll(destination, 0o700); err != nil {
 				t.Fatal(err)
 			}
-		case tar.TypeReg, tar.TypeRegA:
+		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(destination), 0o700); err != nil {
 				t.Fatal(err)
 			}
@@ -70,7 +70,7 @@ func historicalAPIURL(t *testing.T) string {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if _, err = io.Copy(file, reader); err != nil {
+			if _, err = io.Copy(file, reader); err != nil { //nolint:gosec // the archive is a snapshot this test just built
 				file.Close()
 				t.Fatal(err)
 			}

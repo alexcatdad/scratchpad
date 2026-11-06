@@ -13,7 +13,7 @@ func TestAIAndRetrievalRejectConflictingProjectSelectors(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			}))
 			defer provider.Close()
 			status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "embeddingDimensions": 2})

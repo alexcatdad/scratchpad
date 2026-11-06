@@ -133,7 +133,7 @@ func serverOrigin(raw string) (string, error) {
 	}
 	host := strings.ToLower(u.Hostname())
 	loopback := host == "localhost" || host == "127.0.0.1" || host == "::1"
-	if u.Scheme != "https" && !(u.Scheme == "http" && loopback) {
+	if u.Scheme != "https" && (u.Scheme != "http" || !loopback) {
 		return "", invalid
 	}
 	return u.Scheme + "://" + u.Host, nil
@@ -150,14 +150,14 @@ func agentSockets(preferred string) []string {
 				return
 			}
 		}
-		if _, err := os.Stat(s); err == nil {
+		if _, err := os.Stat(s); err == nil { //nolint:gosec // fixed candidate SSH agent socket paths under the user's home
 			out = append(out, s)
 		}
 	}
 	add(preferred)
 	add(os.Getenv("SSH_AUTH_SOCK"))
 	if home, err := os.UserHomeDir(); err == nil {
-		add(filepath.Join(home, "Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"))
+		add(filepath.Join(home, "Library", "Group Containers", "2BUA8C4S2C.com.1password", "t", "agent.sock"))
 	}
 	return out
 }
@@ -205,7 +205,7 @@ func readPublicKeyFile(path, socket string) (keyCandidate, error) {
 	if err != nil || !info.Mode().IsRegular() || info.Size() > 32768 {
 		return keyCandidate{}, fmt.Errorf("%s is not a readable public key file", path)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // the user's own configuration file
 	if err != nil {
 		return keyCandidate{}, err
 	}
@@ -241,7 +241,7 @@ func eligibleKeys(origin string, candidates []keyCandidate) ([]keyCandidate, err
 		body, _ := json.Marshal(map[string]string{"publicKey": key.publicKey})
 		resp, err := client.Post(origin+"/api/v1/auth/mcp/challenge", "application/json", bytes.NewReader(body))
 		if err != nil {
-			return nil, fmt.Errorf("server unreachable: %v", err)
+			return nil, fmt.Errorf("server unreachable: %w", err)
 		}
 		data, _ := io.ReadAll(io.LimitReader(resp.Body, 65536))
 		resp.Body.Close()

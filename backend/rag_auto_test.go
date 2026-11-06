@@ -62,7 +62,7 @@ func TestRAGAutomaticCaptureQueuesWhileProviderSecretCannotBeDecrypted(t *testin
 	var calls atomic.Int32
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
-		http.Error(w, "unexpected provider call", 503)
+		http.Error(w, "unexpected provider call", http.StatusServiceUnavailable)
 	}))
 	defer provider.Close()
 	var projectID string
@@ -78,9 +78,9 @@ func TestRAGAutomaticCaptureQueuesWhileProviderSecretCannotBeDecrypted(t *testin
 	t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", "")
 	origin := startServer(t, path, databaseURL)
 	record := curationCapture(t, origin, projectID, "Source availability is independent of the provider key")
-	jobs := waitRAGJobs(t, origin, 1)
+	waitRAGJobs(t, origin, 1)
 	time.Sleep(1200 * time.Millisecond)
-	jobs = waitRAGJobs(t, origin, 1)
+	jobs := waitRAGJobs(t, origin, 1)
 	job := jobs[0].(map[string]any)
 	if job["recordId"] != record["id"] || job["status"] != "queued" || job["attempts"] != float64(0) || calls.Load() != 0 {
 		t.Fatal("missing provider key blocked capture or permitted provider dispatch")
@@ -185,7 +185,7 @@ func TestRAGHistoryEnqueueContinuesWhileEmbeddingProviderIsBlocked(t *testing.T)
 				return
 			}
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer func() { close(release); provider.Close() }()
 	t.Run("history", func(t *testing.T) {

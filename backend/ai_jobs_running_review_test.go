@@ -59,7 +59,7 @@ func TestJobActivityDistinguishesLiveLeasesFromUnclaimableRunningHistory(t *test
 						t.Fatalf("running activity mismatch for %s: HTTP %d %+v", check.name, status, result)
 					}
 					var expected map[string]any
-					json.Unmarshal(raw, &expected)
+					_ = json.Unmarshal(raw, &expected)
 					if len(result["jobs"].([]any)) != 1 || !reflect.DeepEqual(result["jobs"].([]any)[0], expected) {
 						t.Fatal("activity read rewrote running history or lease provenance")
 					}
@@ -83,7 +83,7 @@ func TestExpiredRunningRAGHistoryResumesOnlyWithCompatibleSettings(t *testing.T)
 		for i := range request.Input {
 			data = append(data, map[string]any{"index": i, "embedding": []int{1, 0}})
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": data})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

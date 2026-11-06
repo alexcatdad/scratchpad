@@ -93,7 +93,7 @@ func (c *IPCClient) Capture(ctx context.Context, r CaptureRequest) (CaptureOutco
 	if err := c.call(ctx, OpCapture, r, &out); err != nil {
 		return CaptureOutcome{}, err
 	}
-	return CaptureOutcome{Outcome: out.Outcome, Receipt: out.Receipt, CentralRecord: out.CentralRecord, CentralProject: out.CentralProject, Mirror: out.Mirror}, nil
+	return CaptureOutcome(out), nil
 }
 func (c *IPCClient) LookupReceipt(ctx context.Context, id string) (Receipt, error) {
 	var out Receipt
@@ -168,7 +168,6 @@ type IPCServer struct {
 	SocketPath     string
 	listener       *net.UnixListener
 	socketInfo     os.FileInfo
-	mu             sync.Mutex
 	RequestTimeout time.Duration
 	ControlTimeout time.Duration
 	operationMu    sync.RWMutex
@@ -189,7 +188,7 @@ func DefaultSocketPath() string {
 	// Native clients, login agents and manually launched MCP processes may
 	// inherit different TMPDIR values. Keep the fallback stable across those
 	// environments; only a validated Linux XDG runtime directory overrides it.
-	return filepath.Join("/tmp", "scratchpad-"+uid, "service.sock")
+	return filepath.Join(string(filepath.Separator), "tmp", "scratchpad-"+uid, "service.sock")
 }
 
 func ListenIPC(path string, svc Service) (*IPCServer, error) {
@@ -632,7 +631,7 @@ func writeFrame(w io.Writer, data []byte) error {
 		return ErrConflictSentinel
 	}
 	var header [4]byte
-	binary.BigEndian.PutUint32(header[:], uint32(len(data)))
+	binary.BigEndian.PutUint32(header[:], uint32(len(data))) //nolint:gosec // len(data) is checked against MaxFrameBytes above
 	if _, err := io.Copy(w, bytes.NewReader(header[:])); err != nil {
 		return err
 	}

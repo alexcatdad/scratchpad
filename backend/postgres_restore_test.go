@@ -42,7 +42,7 @@ func postgresArchiveCommand(t *testing.T, tool, databaseURL string, args ...stri
 			dockerArgs = append(dockerArgs, "--env", name)
 		}
 		dockerArgs = append(dockerArgs, container, tool)
-		cmd = exec.CommandContext(ctx, "docker", append(dockerArgs, args...)...)
+		cmd = exec.CommandContext(ctx, "docker", append(dockerArgs, args...)...) //nolint:gosec // fixed docker exec of a PostgreSQL client tool in the test container
 	} else {
 		if _, err := exec.LookPath(tool); err != nil {
 			t.Fatalf("%s is required when TEST_POSTGRES_URL is configured", tool)
@@ -80,14 +80,14 @@ func postgresOperationalRestore(t *testing.T, rag bool) {
 	const secret = "synthetic-postgres-restore-provider-token"
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer "+secret {
-			http.Error(w, "unexpected synthetic credential", 401)
+			http.Error(w, "unexpected synthetic credential", http.StatusUnauthorized)
 			return
 		}
 		calls.Add(1)
 		if r.URL.Path == "/v1/embeddings" {
-			w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 		} else {
-			w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 		}
 	}))
 	defer provider.Close()
@@ -144,9 +144,10 @@ func postgresOperationalRestore(t *testing.T, rag bool) {
 	for _, phase := range []string{"retained-key", "wrong-key", "missing-key"} {
 		t.Run(phase, func(t *testing.T) {
 			file := key
-			if phase == "wrong-key" {
+			switch phase {
+			case "wrong-key":
 				file = syntheticEncryptionKey(t, 84)
-			} else if phase == "missing-key" {
+			case "missing-key":
 				file = ""
 			}
 			t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", file)

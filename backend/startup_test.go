@@ -17,6 +17,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -50,7 +51,17 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binary = filepath.Join(dir, "scratchpad-server")
-	build := exec.Command("go", "build", "-race", "-o", binary, "./cmd/scratchpad-server")
+	buildArgs := []string{"build", "-race"}
+	// The suite drives the server as a separate process, so coverage comes from
+	// a -cover build writing to GOCOVERDIR (scripts/coverage-backend.sh).
+	if coverDir := os.Getenv("SCRATCHPAD_SERVER_COVERDIR"); coverDir != "" {
+		buildArgs = append(buildArgs, "-cover", "-covermode=atomic", "-coverpkg=./internal/...,./cmd/...")
+		if err = os.Setenv("GOCOVERDIR", coverDir); err != nil {
+			_ = os.RemoveAll(dir)
+			panic(err)
+		}
+	}
+	build := exec.Command("go", append(buildArgs, "-o", binary, "./cmd/scratchpad-server")...)
 	build.Stdout, build.Stderr = os.Stdout, os.Stderr
 	if err := build.Run(); err != nil {
 		os.RemoveAll(dir)
@@ -419,7 +430,7 @@ func newCommittedResponseDropProxy(t *testing.T, backendOrigin string) *committe
 	}
 	proxy := &committedResponseDropProxy{origin: "http://" + listener.Addr().String()}
 	transport := &http.Transport{Proxy: nil}
-	proxy.server = &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+	proxy.server = &http.Server{ReadHeaderTimeout: 10 * time.Second, Handler: http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		upstream := request.Clone(request.Context())
 		upstream.URL.Scheme = "http"
 		upstream.URL.Host = strings.TrimPrefix(backendOrigin, "http://")
@@ -466,7 +477,7 @@ func (p *committedResponseDropProxy) dropNextCaptureResponse() { p.armDrop.Store
 
 func TestGoServerReadiness(t *testing.T) {
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	origin := startServer(t, filepath.Join(dir, "memory.sqlite"), "")
 	response, err := http.Get(origin + "/ready")
 	if err != nil {
@@ -756,7 +767,7 @@ func runMCPPhase(t *testing.T, origin, socket, workspace, signingKey, statePath,
 		}
 		environment = append(environment, entry)
 	}
-	command.Env = append(environment,
+	command.Env = append(slices.Clone(environment),
 		"HOME="+testHome,
 		"XDG_CONFIG_HOME="+testHome,
 		"SSH_AUTH_SOCK=",
@@ -925,7 +936,7 @@ func TestRestoredSQLiteRecordSurvivesUpgradeAndRestart(t *testing.T) {
 				t.Fatalf("restored session could not read history: %d %+v", status, value)
 			}
 			var expected map[string]any
-			json.Unmarshal([]byte(restoredRecord), &expected)
+			_ = json.Unmarshal([]byte(restoredRecord), &expected)
 			if !reflect.DeepEqual(value["record"], expected) {
 				t.Fatal("immutable record changed")
 			}
@@ -1080,7 +1091,7 @@ func TestSQLiteBackupRestorePreservesHistory(t *testing.T) {
 	origin := startServer(t, restored, "")
 	status, value := fetchRecord(t, origin, restoredToken)
 	var expected map[string]any
-	json.Unmarshal([]byte(restoredRecord), &expected)
+	_ = json.Unmarshal([]byte(restoredRecord), &expected)
 	if status != 200 || !reflect.DeepEqual(value["record"], expected) {
 		t.Fatal("restored backup did not preserve authenticated history")
 	}
@@ -1101,7 +1112,7 @@ func TestInterruptedSQLiteStartupCanBeRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	cmd.Process.Kill()
+	_ = cmd.Process.Kill()
 	if err := cmd.Wait(); err == nil {
 		t.Fatal("startup did not wait for the migration lock")
 	}
@@ -1173,7 +1184,7 @@ func TestContextHeaderMigrationConflictRetriesAndPreservesHistory(t *testing.T) 
 					origin := startServer(t, path, databaseURL)
 					status, detail := fetchRecord(t, origin, restoredToken)
 					var original map[string]any
-					json.Unmarshal([]byte(restoredRecord), &original)
+					_ = json.Unmarshal([]byte(restoredRecord), &original)
 					if status != 200 || !reflect.DeepEqual(detail["record"], original) {
 						t.Fatal("projection upgrade changed original authenticated history")
 					}

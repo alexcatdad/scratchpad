@@ -30,11 +30,11 @@ func TestAdmittedProviderTLSWaitAllowsWritesAndFencesLaterRequests(t *testing.T)
 				if r.URL.Path == "/v1/embeddings" {
 					embeddings.Add(1)
 					oldCredential.Store(r.Header.Get("Authorization") == "Bearer synthetic-admitted-token")
-					w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+					_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 					return
 				}
 				completions.Add(1)
-				w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+				_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 			}))
 			provider.TLS = &tls.Config{GetConfigForClient: func(hello *tls.ClientHelloInfo) (*tls.Config, error) {
 				startedOnce.Do(func() { close(started) })

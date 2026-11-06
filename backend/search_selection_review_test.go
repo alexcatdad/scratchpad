@@ -95,7 +95,7 @@ func TestSearchRetainsHistoricalOffsetFractionCursorOrder(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			for _, fixture := range []struct{ id, at string }{{"rec_offset", "2026-10-01T00:00:00.001+00:00"}, {"rec_canonical", "2026-10-01T00:00:00.9Z"}} {
 				seedSearchHistoricalRow(t, tx, project, fixture.id, fixture.at)
 			}
@@ -138,7 +138,7 @@ func TestSearchEnglishTimestampTieGroupSpansNativeWindows(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			ids := []string{}
 			for i := 0; i < 300; i++ {
 				id := fmt.Sprintf("rec_tie_%03d", i)

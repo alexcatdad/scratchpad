@@ -18,3 +18,5 @@ mcp/bin/
 .swiftpm/
 
 /session-progress/
+.tools/
+.task/

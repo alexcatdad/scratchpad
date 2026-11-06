@@ -39,7 +39,7 @@ func launchCollectorProcess(executable, socketPath string) (<-chan error, error)
 	if socketPath != "" {
 		args = append(args, "--socket", socketPath)
 	}
-	command := exec.Command(executable, args...)
+	command := exec.Command(executable, args...) //nolint:gosec // the bundled collector next to this executable
 	command.Env = collectorEnvironment()
 	// A long-lived child must not keep a stdio MCP client's pipes open.
 	// nil stdout/stderr connect to the null device and cannot pollute MCP stdout.
@@ -117,7 +117,7 @@ func waitForCollector(ctx context.Context, socketPath string, client collectorSt
 			// when this child failed to acquire the database or socket.
 		case <-ticker.C:
 			if finished == nil && childExited && childExit != nil && starts < collectorMaxStarts {
-				finished, childExit = nil, nil
+				childExit = nil
 				childExited = false
 				var startErr error
 				finished, startErr = start(socketPath)

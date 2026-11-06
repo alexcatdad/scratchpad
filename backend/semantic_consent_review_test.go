@@ -31,7 +31,7 @@ func TestAllProjectSemanticSearchRejectsConsentWithdrawnDuringProviderWait(t *te
 						return
 					}
 				}
-				json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
 			}))
 			defer func() { unblock(); provider.Close() }()
 			path, databaseURL := portableInstance(t, engine)

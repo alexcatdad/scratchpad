@@ -54,7 +54,7 @@ func Mirror(ctx context.Context, root, path string, record map[string]any) error
 		case <-time.After(25 * time.Millisecond):
 		}
 	}
-	defer scoped.Remove(lock)
+	defer func() { _ = scoped.Remove(lock) }()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -150,8 +150,8 @@ func (r mirrorReader) Read(p []byte) (int, error) {
 		p = p[:32<<10]
 	}
 	n, err := r.file.Read(p)
-	if cancelled := r.ctx.Err(); cancelled != nil {
-		return n, cancelled
+	if canceled := r.ctx.Err(); canceled != nil {
+		return n, canceled
 	}
 	return n, err
 }

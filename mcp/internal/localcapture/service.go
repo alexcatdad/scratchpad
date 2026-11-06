@@ -871,11 +871,12 @@ func (r *Runtime) Status(ctx context.Context) (ServiceStatus, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	lifecycle := r.lifecycle
-	if r.stopped {
+	switch {
+	case r.stopped:
 		lifecycle = LifecycleStopped
-	} else if r.quiescing {
+	case r.quiescing:
 		lifecycle = LifecycleQuiescing
-	} else if r.paused {
+	case r.paused:
 		lifecycle = LifecyclePaused
 	}
 	connection := r.connection
@@ -930,11 +931,11 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	}
 	r.mu.Unlock()
 	r.intakeMu.Lock()
-	r.intakeMu.Unlock()
+	r.intakeMu.Unlock() //nolint:gocritic,staticcheck // barrier: wait for in-flight intake, then release
 	// Drain an admitted delivery or health probe before acknowledging Stop.
 	// Late admissions observe stopped after they acquire the work lock.
 	r.workMu.Lock()
-	r.workMu.Unlock()
+	r.workMu.Unlock() //nolint:gocritic,staticcheck // barrier: wait for in-flight work, then release
 	r.stopOnce.Do(func() { close(r.stop) })
 	return nil
 }
@@ -944,9 +945,9 @@ func (r *Runtime) Quiesce(ctx context.Context) error {
 	r.lifecycle = LifecycleQuiescing
 	r.mu.Unlock()
 	r.intakeMu.Lock()
-	r.intakeMu.Unlock()
+	r.intakeMu.Unlock() //nolint:gocritic,staticcheck // barrier: wait for in-flight intake, then release
 	r.workMu.Lock()
-	r.workMu.Unlock()
+	r.workMu.Unlock() //nolint:gocritic,staticcheck // barrier: wait for in-flight work, then release
 	return nil
 }
 

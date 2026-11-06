@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -171,7 +172,7 @@ func TestOnlineReadsReuseSessionWithinAuthenticationAdmissionBudget(t *testing.T
 		t.Fatal(err)
 	}
 	out, err = adapter.OnlineRequest(context.Background(), changed, localcapture.OnlineRequest{Method: "GET", Path: "/records/rec_synthetic"})
-	if failure, ok := err.(*localcapture.DeliveryFailure); !ok || failure.Code != localcapture.DeliveryCredentialChanged || len(out.Body) != 0 {
+	if failure := (*localcapture.DeliveryFailure)(nil); !errors.As(err, &failure) || failure.Code != localcapture.DeliveryCredentialChanged || len(out.Body) != 0 {
 		t.Fatalf("changed public key reused cached credentials: %+v %v", out, err)
 	}
 	if reads.Load() != beforeReads || challenges.Load() != 9 {

@@ -58,7 +58,7 @@ func TestLegacyNumericIdentityMatchesFrozenImporterGoldenWithoutRoundingEvidence
 				fresh := startServer(t, freshPath, freshURL)
 				encoded, _ := json.Marshal(archive)
 				var historical map[string]any
-				json.Unmarshal(encoded, &historical)
+				_ = json.Unmarshal(encoded, &historical)
 				if !withRawLine {
 					for _, value := range historical["data"].(map[string]any)["record"].([]any) {
 						entry := value.(map[string]any)

@@ -122,7 +122,7 @@ func TestMirrorCancelledScanReleasesLock(t *testing.T) {
 	}
 	after, _ := os.Stat(path)
 	if after.Size() != before.Size() {
-		t.Fatal("cancelled scan changed mirror")
+		t.Fatal("canceled scan changed mirror")
 	}
 	if err = os.WriteFile(path, []byte("{\"id\":\"existing\"}\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -140,7 +140,7 @@ func TestMirrorRejectsDevice(t *testing.T) {
 
 func TestAcceptanceSpecialMirrorPreservesCentralCaptureAndRetry(t *testing.T) {
 	dir := initializedRepository(t)
-	target := filepath.Join(dir, "scratchpad/decisions.jsonl")
+	target := filepath.Join(dir, "scratchpad", "decisions.jsonl")
 	if err := os.MkdirAll(filepath.Dir(target), 0700); err != nil {
 		t.Fatal(err)
 	}

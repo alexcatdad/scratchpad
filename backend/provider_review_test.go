@@ -31,7 +31,7 @@ func TestPassageCompletionConfigChangeStopsAdditionalProviderBatches(t *testing.
 				return
 			}
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer func() { unblock(); provider.Close() }()
 	origin := startServer(t, path, databaseURL)
@@ -129,7 +129,7 @@ func TestProviderTransportInitiationReleasesWritesBeforeTLSHandshake(t *testing.
 			var newCalls atomic.Int32
 			replacement := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				newCalls.Add(1)
-				http.Error(w, "unexpected later request", 503)
+				http.Error(w, "unexpected later request", http.StatusServiceUnavailable)
 			}))
 			defer replacement.Close()
 			origin := startServer(t, path, databaseURL)
@@ -177,11 +177,11 @@ func TestProviderTransportInitiationReleasesWritesBeforeTLSHandshake(t *testing.
 					t.Fatal(reply.err)
 				}
 				if reply.status != 503 {
-					t.Fatalf("cancelled transport returned HTTP %d", reply.status)
+					t.Fatalf("canceled transport returned HTTP %d", reply.status)
 				}
 			case <-time.After(7 * time.Second):
 				unblock()
-				t.Fatal("cancelled TLS transport did not finish")
+				t.Fatal("canceled TLS transport did not finish")
 			}
 			if newCalls.Load() != 0 {
 				t.Fatal("provider test continued after failed prior transport")
@@ -196,7 +196,10 @@ func TestProviderPreTransportFailureReleasesConfigurationWrites(t *testing.T) {
 			t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", syntheticEncryptionKey(t, 97))
 			path, databaseURL := portableInstance(t, engine)
 			var calls atomic.Int32
-			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); http.Error(w, "unexpected dispatch", 503) }))
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				http.Error(w, "unexpected dispatch", http.StatusServiceUnavailable)
+			}))
 			defer provider.Close()
 			origin := startServer(t, path, databaseURL)
 			// A retained user-supplied token containing a newline fails HTTP header

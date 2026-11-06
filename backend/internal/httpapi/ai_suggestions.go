@@ -35,7 +35,7 @@ func referencedEntities(ctx context.Context, conn *sql.Conn, kind string, ids ma
 			marks[i] = fmt.Sprintf("$%d", i+2)
 			args = append(args, id)
 		}
-		rows, err := conn.QueryContext(ctx, "SELECT data FROM entities WHERE kind=$1 AND id IN ("+strings.Join(marks, ",")+")", args...)
+		rows, err := conn.QueryContext(ctx, "SELECT data FROM entities WHERE kind=$1 AND id IN ("+strings.Join(marks, ",")+")", args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 		if err != nil {
 			return nil, err
 		}
@@ -170,19 +170,21 @@ func compareSuggestionKeys(left, right []string, scoped bool) int {
 	leftSeconds, leftFraction, leftErr := suggestionInstant(left[0])
 	rightSeconds, rightFraction, rightErr := suggestionInstant(right[0])
 	order := 0
-	if leftErr != nil || rightErr != nil {
-		if leftErr == nil && rightErr != nil {
+	switch {
+	case leftErr != nil || rightErr != nil:
+		switch {
+		case leftErr == nil:
 			order = 1
-		} else if leftErr != nil && rightErr == nil {
+		case rightErr == nil:
 			order = -1
-		} else {
+		default:
 			order = strings.Compare(left[0], right[0])
 		}
-	} else if leftSeconds < rightSeconds {
+	case leftSeconds < rightSeconds:
 		order = -1
-	} else if leftSeconds > rightSeconds {
+	case leftSeconds > rightSeconds:
 		order = 1
-	} else {
+	default:
 		width := max(len(leftFraction), len(rightFraction))
 		order = strings.Compare(leftFraction+strings.Repeat("0", width-len(leftFraction)), rightFraction+strings.Repeat("0", width-len(rightFraction)))
 	}
@@ -293,7 +295,7 @@ func (a *AI) suggestionWindow(ctx context.Context, conn *sql.Conn, scope jobScop
 		args = append(args, row.key[2])
 		byID[row.key[2]] = i
 	}
-	rows, err := conn.QueryContext(ctx, "SELECT id,data FROM entities WHERE kind='ai_artifact' AND id IN ("+strings.Join(marks, ",")+")", args...)
+	rows, err := conn.QueryContext(ctx, "SELECT id,data FROM entities WHERE kind='ai_artifact' AND id IN ("+strings.Join(marks, ",")+")", args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 	if err != nil {
 		return nil, err
 	}
@@ -379,7 +381,7 @@ func (a *AI) Suggestions() http.HandlerFunc {
 			if _, err = conn.ExecContext(ctx, begin); err != nil {
 				return err
 			}
-			defer conn.ExecContext(context.Background(), "ROLLBACK")
+			defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 			if _, err := apiActor(ctx, conn, r, a.auth.Origin); err != nil {
 				return err
 			}

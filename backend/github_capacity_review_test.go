@@ -79,7 +79,7 @@ func TestBlockedGithubCallbacksDoNotConsumeIndependentProofCapacity(t *testing.T
 						done <- 0
 						return
 					}
-					io.Copy(io.Discard, res.Body)
+					_, _ = io.Copy(io.Discard, res.Body)
 					res.Body.Close()
 					done <- res.StatusCode
 				}(req)

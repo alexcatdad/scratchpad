@@ -86,7 +86,7 @@ func run() error {
 		}
 		verified, err := service.VerifyConnection(ctx)
 		if err != nil || verified.CredentialID == "" || !contains(verified.CaptureCapabilities, localcapture.CapabilityClientSavedAtV1) {
-			return fmt.Errorf("real Scratchpad authentication/capability check failed: %+v %v", verified, err)
+			return fmt.Errorf("real Scratchpad authentication/capability check failed: %+v %w", verified, err)
 		}
 		fmt.Println("PASS configure-service: actual Scratchpad SSH identity and capture timestamp capability")
 		return nil
@@ -172,7 +172,7 @@ func run() error {
 	if *phase == "service-unavailable" {
 		_, err := call(ctx, session, "get_project_context", map[string]any{"projectId": "proj_synthetic"})
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "service") {
-			return fmt.Errorf("read bypassed unavailable collector: %v", err)
+			return fmt.Errorf("read bypassed unavailable collector: %w", err)
 		}
 		_, err = call(ctx, session, "record_finding", map[string]any{
 			"projectId": "proj_unavailable_service", "requestId": "service-unavailable-no-fallback",
@@ -180,7 +180,7 @@ func run() error {
 			"finding": "The MCP client must require durable local intake.",
 		})
 		if err == nil || !strings.Contains(strings.ToLower(err.Error()), "service") {
-			return fmt.Errorf("capture did not fail clearly when local service was unavailable: %v", err)
+			return fmt.Errorf("capture did not fail clearly when local service was unavailable: %w", err)
 		}
 		fmt.Println("PASS service-unavailable: reads and captures failed through local IPC")
 		return nil
@@ -237,10 +237,10 @@ func run() error {
 		}
 		result, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "record_finding", Arguments: input})
 		if err != nil || result.IsError {
-			return fmt.Errorf("initial durable intake failed: %v", err)
+			return fmt.Errorf("initial durable intake failed: %w", err)
 		}
 		// Deliberately discard the caller-visible result. The next process has
-		// only the same request ID and input, modelling a lost MCP acknowledgement.
+		// only the same request ID and input, modeling a lost MCP acknowledgement.
 		fmt.Println("PASS lost-response-capture: intake accepted; caller acknowledgement intentionally discarded")
 		return nil
 	}
@@ -392,7 +392,7 @@ func run() error {
 				}
 				retried, retryErr := call(ctx, session, item.Tool, item.Arguments)
 				if retryErr != nil || retried["record"].(map[string]any)["id"] != item.RecordID {
-					return fmt.Errorf("stable receipt retry changed central identity: %v %v", retried, retryErr)
+					return fmt.Errorf("stable receipt retry changed central identity: %v %w", retried, retryErr)
 				}
 				fmt.Println("PASS receipt: pending capture survived service restart, delivered once and retries by original identity")
 				return nil
@@ -508,9 +508,10 @@ func run() error {
 		return nil
 	}
 	items := append(append([]capture(nil), saved.Captures...), saved.ProjectScenarios...)
-	if *phase == "verify" {
+	switch *phase {
+	case "verify":
 		items = saved.Captures
-	} else if *phase == "verify-projects" {
+	case "verify-projects":
 		items = saved.ProjectScenarios
 	}
 	for _, item := range items {
@@ -520,13 +521,13 @@ func run() error {
 			scope, _ := content["scope"].(map[string]any)
 			expectedDirectory, _ := item.Arguments["workingDirectory"].(string)
 			if callErr != nil || receipt["state"] != "needs_selection" || receipt["centralRecordId"] != nil || receipt["centralProjectId"] != nil || scope["workingDirectory"] != expectedDirectory {
-				return fmt.Errorf("ambiguous capture was not preserved for owner selection after restart: %v %v", receipt, callErr)
+				return fmt.Errorf("ambiguous capture was not preserved for owner selection after restart: %v %w", receipt, callErr)
 			}
 			if *phase == "verify" || *phase == "verify-projects" || *phase == "records" {
 				replayed, replayErr := call(ctx, session, item.Tool, item.Arguments)
 				replayReceipt, _ := replayed["receipt"].(map[string]any)
 				if replayErr != nil || replayed["outcome"] != "saved_pending" || replayReceipt["receiptId"] != item.ReceiptID || replayReceipt["state"] != "needs_selection" {
-					return fmt.Errorf("held capture replay changed its receipt after restart: %v %v", replayed, replayErr)
+					return fmt.Errorf("held capture replay changed its receipt after restart: %v %w", replayed, replayErr)
 				}
 			}
 			continue
@@ -534,7 +535,7 @@ func run() error {
 		if item.ReceiptID != "" {
 			receipt, err := call(ctx, session, "get_capture_receipt", map[string]any{"receiptId": item.ReceiptID})
 			if err != nil || receipt["state"] != "delivered" || receipt["centralRecordId"] != item.RecordID || receipt["centralProjectId"] != item.ProjectID {
-				return fmt.Errorf("receipt lookup disagrees with central capture %s: %v %v", item.RecordID, receipt, err)
+				return fmt.Errorf("receipt lookup disagrees with central capture %s: %v %w", item.RecordID, receipt, err)
 			}
 		}
 		out, err := call(ctx, session, "get_record", map[string]any{"id": item.RecordID})

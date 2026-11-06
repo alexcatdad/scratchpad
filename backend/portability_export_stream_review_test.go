@@ -35,14 +35,14 @@ func measuredExportServer(t *testing.T, path, databaseURL string) (string, int) 
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	t.Cleanup(func() {
-		cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Process.Signal(syscall.SIGTERM)
 		select {
 		case err := <-done:
 			if err != nil {
 				t.Errorf("measured server exit: %v", err)
 			}
 		case <-time.After(10 * time.Second):
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 			t.Error("measured server did not stop")
 		}
@@ -52,7 +52,7 @@ func measuredExportServer(t *testing.T, path, databaseURL string) (string, int) 
 		scanner := bufio.NewScanner(stdout)
 		if scanner.Scan() {
 			var report struct{ Address string }
-			json.Unmarshal(scanner.Bytes(), &report)
+			_ = json.Unmarshal(scanner.Bytes(), &report)
 			startup <- report.Address
 		} else {
 			startup <- ""
@@ -201,24 +201,24 @@ CREATE TRIGGER export_write INSTEAD OF INSERT OR UPDATE ON entities FOR EACH ROW
 	defer cancel()
 	request, _ := http.NewRequestWithContext(ctx, "POST", origin+"/api/v1/export", nil)
 	request.Header.Set("Authorization", "Bearer "+restoredToken)
-	cancelled := make(chan error, 1)
+	canceled := make(chan error, 1)
 	go func() {
 		response, err := http.DefaultClient.Do(request)
 		if response != nil {
-			io.Copy(io.Discard, response.Body)
+			_, _ = io.Copy(io.Discard, response.Body)
 			response.Body.Close()
 		}
-		cancelled <- err
+		canceled <- err
 	}()
 	barrier()
 	cancel()
 	select {
-	case err := <-cancelled:
+	case err := <-canceled:
 		if !errors.Is(err, context.Canceled) {
 			t.Fatal("export ignored client cancellation")
 		}
 	case <-time.After(5 * time.Second):
-		t.Fatal("cancelled export did not finish")
+		t.Fatal("canceled export did not finish")
 	}
 	// The fixture is still locked: cleanup must follow cancellation itself.
 	waitExportTempDirectoryEmpty(t, spoolDirectory)
@@ -286,7 +286,7 @@ func TestNativeLargeExportUsesBoundedServerMemoryAndRemainsReplayable(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			text := strings.Repeat("Synthetic immutable export evidence. ", 14000)
 			for i := 0; i < 48; i++ {
 				id := fmt.Sprintf("rec_large_export_%03d", i)
@@ -356,9 +356,9 @@ func TestNativeLargeExportUsesBoundedServerMemoryAndRemainsReplayable(t *testing
 				t.Fatalf("large export exceeds broad server memory bound: %d MiB", peak/(1024*1024))
 			}
 			// Parse one entity at a time after child RSS sampling has stopped.
-			file.Seek(0, io.SeekStart)
+			_, _ = file.Seek(0, io.SeekStart)
 			decoder := json.NewDecoder(file)
-			decoder.Token()
+			_, _ = decoder.Token()
 			count := 0
 			for decoder.More() {
 				key, _ := decoder.Token()
@@ -369,10 +369,10 @@ func TestNativeLargeExportUsesBoundedServerMemoryAndRemainsReplayable(t *testing
 					}
 					continue
 				}
-				decoder.Token()
+				_, _ = decoder.Token()
 				for decoder.More() {
 					kind, _ := decoder.Token()
-					decoder.Token()
+					_, _ = decoder.Token()
 					for decoder.More() {
 						var value json.RawMessage
 						if err = decoder.Decode(&value); err != nil {
@@ -385,14 +385,14 @@ func TestNativeLargeExportUsesBoundedServerMemoryAndRemainsReplayable(t *testing
 							}
 						}
 					}
-					decoder.Token()
+					_, _ = decoder.Token()
 				}
-				decoder.Token()
+				_, _ = decoder.Token()
 			}
 			if _, err = decoder.Token(); err != nil || count != 48 {
 				t.Fatal("large archive lost records or malformed its envelope")
 			}
-			file.Seek(0, io.SeekStart)
+			_, _ = file.Seek(0, io.SeekStart)
 			request, _ = http.NewRequestWithContext(context.Background(), "POST", origin+"/api/v1/import", file)
 			request.Header.Set("Authorization", "Bearer "+restoredToken)
 			response, err = http.DefaultClient.Do(request)

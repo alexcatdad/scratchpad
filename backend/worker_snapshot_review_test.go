@@ -20,9 +20,9 @@ func TestPostgresWorkerInputReadDoesNotBlockIndependentCuration(t *testing.T) {
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				if kind == "embed" {
-					json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
 				} else {
-					json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
 				}
 			}))
 			defer provider.Close()
@@ -45,7 +45,7 @@ func TestPostgresWorkerInputReadDoesNotBlockIndependentCuration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer barrier.Rollback()
+			defer func() { _ = barrier.Rollback() }()
 			// Block only the native source projection read. Metadata writes to
 			// entities must remain responsive while the worker input scan waits.
 			if _, err = barrier.ExecContext(ctx, "LOCK TABLE context_headers IN ACCESS EXCLUSIVE MODE"); err != nil {
@@ -120,9 +120,9 @@ func TestHistoricalWorkerDiscardsAdmittedOutputAfterInputConsentWithdrawal(t *te
 							return
 						}
 						if kind == "embed" {
-							json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
+							_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
 						} else {
-							json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
+							_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
 						}
 					}))
 					defer func() { unblock(); provider.Close() }()
@@ -215,9 +215,9 @@ func TestPostgresHistoricalWorkerRejectsInputConsentWithdrawnDuringSnapshot(t *t
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				if kind == "embed" {
-					json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
 				} else {
-					json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": `{"artifacts":[]}`}}}})
 				}
 			}))
 			defer provider.Close()
@@ -250,7 +250,7 @@ func TestPostgresHistoricalWorkerRejectsInputConsentWithdrawnDuringSnapshot(t *t
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer barrier.Rollback()
+			defer func() { _ = barrier.Rollback() }()
 			if _, err = barrier.ExecContext(ctx, "LOCK TABLE context_headers IN ACCESS EXCLUSIVE MODE"); err != nil {
 				t.Fatal(err)
 			}

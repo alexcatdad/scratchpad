@@ -25,10 +25,10 @@ func TestSQLiteBackupRefusesUnsafeOrExistingPathsWithoutChangingFiles(t *testing
 		t.Run(mode, func(t *testing.T) {
 			path := legacyFixture(t)
 			dir := t.TempDir()
-			os.Chmod(dir, 0700)
+			_ = os.Chmod(dir, 0700)
 			destination := filepath.Join(dir, "snapshot.sqlite")
 			retained := filepath.Join(dir, "retained.txt")
-			os.WriteFile(retained, []byte("retain existing file"), 0600)
+			_ = os.WriteFile(retained, []byte("retain existing file"), 0600)
 			switch mode {
 			case "relative":
 				destination = "relative-snapshot.sqlite"
@@ -47,9 +47,9 @@ func TestSQLiteBackupRefusesUnsafeOrExistingPathsWithoutChangingFiles(t *testing
 					t.Fatal(err)
 				}
 			case "unsafe-parent":
-				os.Chmod(dir, 0755)
+				_ = os.Chmod(dir, 0755)
 			case "unsafe-source":
-				os.Chmod(path, 0644)
+				_ = os.Chmod(path, 0644)
 			case "source-hardlink":
 				if err := os.Link(path, filepath.Join(filepath.Dir(path), "alias.sqlite")); err != nil {
 					t.Fatal(err)
@@ -113,7 +113,7 @@ func TestSQLiteBackupRefusesUnsafeOrExistingPathsWithoutChangingFiles(t *testing
 
 func TestPostgresBackupDelegatesWithoutConnectingOrPrintingConfiguration(t *testing.T) {
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	source, destination := filepath.Join(dir, "missing.sqlite"), filepath.Join(dir, "snapshot.sqlite")
 	out, err := backupCommand(source, "postgres://synthetic-user:synthetic-credential@127.0.0.1:1/private", destination).CombinedOutput()
 	if err == nil || !strings.Contains(string(out), "BACKUP_EXTERNAL") || strings.Contains(string(out), "synthetic-credential") {
@@ -133,7 +133,7 @@ func TestSQLiteConcurrentBackupsPublishOneSnapshotWithoutOverwrite(t *testing.T)
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	destination := filepath.Join(dir, "snapshot.sqlite")
 	commands := []*exec.Cmd{backupCommand(path, "", destination), backupCommand(path, "", destination)}
 	outputs := []bytes.Buffer{{}, {}}
@@ -144,8 +144,8 @@ func TestSQLiteConcurrentBackupsPublishOneSnapshotWithoutOverwrite(t *testing.T)
 		}
 		t.Cleanup(func() {
 			if cmd.ProcessState == nil {
-				cmd.Process.Kill()
-				cmd.Wait()
+				_ = cmd.Process.Kill()
+				_ = cmd.Wait()
 			}
 		})
 	}
@@ -189,9 +189,9 @@ func TestSQLiteBackupCancellationCleansStagingAndRetainsSource(t *testing.T) {
 	if _, err = db.Exec("BEGIN EXCLUSIVE"); err != nil {
 		t.Fatal(err)
 	}
-	defer db.Exec("ROLLBACK")
+	defer func() { _, _ = db.Exec("ROLLBACK") }()
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	destination := filepath.Join(dir, "snapshot.sqlite")
 	cmd := backupCommand(path, "", destination)
 	var output bytes.Buffer
@@ -204,7 +204,7 @@ func TestSQLiteBackupCancellationCleansStagingAndRetainsSource(t *testing.T) {
 	exited := false
 	t.Cleanup(func() {
 		if !exited {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 		}
 	})
@@ -232,21 +232,21 @@ func TestSQLiteBackupCancellationCleansStagingAndRetainsSource(t *testing.T) {
 	case err = <-done:
 		exited = true
 		if err == nil {
-			t.Fatal("cancelled backup succeeded")
+			t.Fatal("canceled backup succeeded")
 		}
 	case <-time.After(8 * time.Second):
 		t.Fatal("backup did not stop after cancellation")
 	}
 	if _, err = os.Stat(destination); !os.IsNotExist(err) {
-		t.Fatal("cancelled backup published a snapshot")
+		t.Fatal("canceled backup published a snapshot")
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil || len(entries) != 0 {
-		t.Fatal("cancelled backup left a partial staging file")
+		t.Fatal("canceled backup left a partial staging file")
 	}
 	after, err := os.ReadFile(path)
 	if err != nil || !bytes.Equal(before, after) {
-		t.Fatal("cancelled backup changed its source")
+		t.Fatal("canceled backup changed its source")
 	}
 }
 
@@ -257,7 +257,7 @@ func restoreSnapshotFixture(t *testing.T, snapshot string) string {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	path := filepath.Join(dir, "restored.sqlite")
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
 	if err != nil {
@@ -286,7 +286,7 @@ func TestSQLiteBackupPreservesPreUpgradeSchemaAndAuthenticatedHistory(t *testing
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	destination := filepath.Join(dir, "snapshot.sqlite")
 	out, err := backupCommand(path, "", destination).CombinedOutput()
 	if err != nil {
@@ -314,7 +314,7 @@ func TestSQLiteBackupPreservesPreUpgradeSchemaAndAuthenticatedHistory(t *testing
 		t.Fatal("backup lost authenticated history")
 	}
 	var record map[string]any
-	json.Unmarshal([]byte(restoredRecord), &record)
+	_ = json.Unmarshal([]byte(restoredRecord), &record)
 	if !reflect.DeepEqual(detail["record"], record) || len(detail["revisions"].([]any)) != 1 || len(detail["evidence"].([]any)) != 1 || len(detail["audit"].([]any)) != 1 {
 		t.Fatal("backup rewrote or lost immutable history")
 	}
@@ -350,7 +350,7 @@ func TestSQLiteOnlineBackupRestoresWALRetryAndCurationState(t *testing.T) {
 		t.Fatal("fixture does not contain a live WAL")
 	}
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	destination := filepath.Join(dir, "snapshot.sqlite")
 	if out, err := backupCommand(path, "", destination).CombinedOutput(); err != nil {
 		t.Fatalf("online backup failed: %v %s", err, out)

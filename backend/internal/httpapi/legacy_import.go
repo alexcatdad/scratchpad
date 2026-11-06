@@ -552,7 +552,7 @@ func importLegacy(ctx context.Context, conn *sql.Conn, body, actor map[string]an
 }
 
 func legacyHistoricalID(id string) bool {
-	if len(id) > 200 || len(id) == 0 || !((id[0] >= 'A' && id[0] <= 'Z') || (id[0] >= 'a' && id[0] <= 'z') || (id[0] >= '0' && id[0] <= '9')) {
+	if len(id) > 200 || len(id) == 0 || (id[0] < 'A' || id[0] > 'Z') && (id[0] < 'a' || id[0] > 'z') && (id[0] < '0' || id[0] > '9') {
 		return false
 	}
 	return portableID(id) && !strings.ContainsAny(id, "~")

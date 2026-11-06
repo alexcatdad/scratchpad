@@ -98,7 +98,7 @@ func TestAIEmbeddingLoadsOnlyAdmittedIndexedProjectSources(t *testing.T) {
 					http.Error(w, "scope violation", 400)
 					return
 				}
-				w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)

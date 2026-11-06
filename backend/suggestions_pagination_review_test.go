@@ -30,18 +30,18 @@ func TestSuggestionPagesBoundReadableHistoryAndPreserveScopeOrdering(t *testing.
 				t.Fatal(err)
 			}
 			for i := 0; i < 207; i++ {
-				copy := map[string]any{}
+				copied := map[string]any{}
 				for k, v := range base {
-					copy[k] = v
+					copied[k] = v
 				}
 				id := fmt.Sprintf("artifact_%03d", i)
-				copy["id"] = id
+				copied["id"] = id
 				// Malformed historical content must be filtered before deciding
 				// whether a readable continuation exists, including across windows.
 				if i >= 200 {
-					copy["content"] = map[string]any{"text": ""}
+					copied["content"] = map[string]any{"text": ""}
 				}
-				raw, _ := json.Marshal(copy)
+				raw, _ := json.Marshal(copied)
 				stored := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Millisecond).Format("2006-01-02T15:04:05.000Z")
 				if _, err = db.Exec("INSERT INTO entities(kind,id,data,version,created_at) VALUES('ai_artifact',$1,$2,1,$3)", id, string(raw), stored); err != nil {
 					t.Fatal(err)
@@ -123,12 +123,12 @@ func TestSuggestionContinuationReplaysLongImportedScope(t *testing.T) {
 			data["project"] = projects
 			artifacts := []any{}
 			for _, id := range []string{"artifact_long_a", "artifact_long_b"} {
-				copy := map[string]any{}
+				copied := map[string]any{}
 				for key, value := range artifact {
-					copy[key] = value
+					copied[key] = value
 				}
-				copy["id"] = id
-				artifacts = append(artifacts, copy)
+				copied["id"] = id
+				artifacts = append(artifacts, copied)
 			}
 			data["ai_artifact"] = artifacts
 			status, response = curationRequest(t, origin, "POST", "/import", archive)

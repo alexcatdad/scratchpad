@@ -6,10 +6,15 @@ version: "3"
 # the tap.
 
 vars:
-  RELTOOL_TAG: v0.4.0
-  RELTOOL_COMMIT: ff2121719c23b0149c16d5a0b2f5e580257947c5 # commit of RELTOOL_TAG
-  RELTOOL_SRC: ../release-tools
+  RELTOOL_TAG: v0.4.1
+  RELTOOL_COMMIT: e5dbed8034b899e5a7091ef1d3edf8e8da7989ab # commit of RELTOOL_TAG
+  # release-tools checkout used to build the pinned reltool. Override with the
+  # RELTOOL_SRC environment variable or `task release:check RELTOOL_SRC=...`.
+  RELTOOL_SRC: '{{.RELTOOL_SRC | default "../../../infrastructure/release-tools"}}'
   GOVULNCHECK_VERSION: v1.9.0
+  MCP_COVERAGE_FLOOR: 64
+  BACKEND_COVERAGE_FLOOR: 68
+  SWIFT_COVERAGE_FLOOR: 66
   RELTOOL:
     sh: echo "${XDG_CACHE_HOME:-$HOME/.cache}/release-tools/{{.RELTOOL_COMMIT}}/reltool"
 
@@ -32,9 +37,20 @@ tasks:
     cmds:
       - npm ci --no-audit --no-fund
 
+  # golangci-lint is pinned in tools/lint/go.mod and built into .tools/.
+  golangci-lint:install:
+    internal: true
+    sources:
+      - tools/lint/go.mod
+      - tools/lint/go.sum
+    generates:
+      - .tools/golangci-lint
+    cmds:
+      - go -C tools/lint build -o ../../.tools/golangci-lint github.com/golangci/golangci-lint/v2/cmd/golangci-lint
+
   lint:
-    desc: Format, lint and type checks
-    deps: [npm:install]
+    desc: Format, lint and type checks (npm, gofmt, go vet, golangci-lint, swift-format; SKIP_SWIFT=1 skips Swift)
+    deps: [npm:install, golangci-lint:install]
     cmds:
       - npm run lint
       - npm run typecheck
@@ -42,6 +58,10 @@ tasks:
         cmd: test -z "$(gofmt -l {{.ITEM}})"
       - for: [backend, mcp, packages/clients/go]
         cmd: go -C {{.ITEM}} vet ./...
+      - for: [backend, mcp, packages/clients/go]
+        cmd: cd {{.ITEM}} && "{{.ROOT_DIR}}/.tools/golangci-lint" run --config "{{.ROOT_DIR}}/.golangci.yml" ./...
+      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift format lint --strict --recursive macos/Package.swift macos/Sources macos/Tests
+        if: '[ -z "$SKIP_SWIFT" ]'
 
   build:
     desc: Build the web workspaces, Go binaries and the Swift package (SKIP_SWIFT=1 skips Swift)
@@ -50,17 +70,21 @@ tasks:
       - npm run build
       - go -C backend build ./...
       - go -C mcp build ./...
-      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift build --package-path macos
+      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift build --package-path macos --build-tests -Xswiftc -warnings-as-errors
         if: '[ -z "$SKIP_SWIFT" ]'
 
+  # Coverage floors: measured value rounded down, minus 2 (never below 60%).
+  # The web workspace (1.3%) and packages/clients/go (2.4%, mostly generated
+  # code) are under 60% and have no floor yet.
   test:
-    desc: npm, Go race and Swift tests (SKIP_SWIFT=1 skips Swift)
+    desc: npm, Go race and Swift tests with coverage floors (SKIP_SWIFT=1 skips Swift)
     deps: [npm:install]
     cmds:
       - npm test
-      - go -C mcp test -race -count=1 ./...
-      - go -C backend test -race -count=1 -timeout 20m ./...
-      - cmd: DEVELOPER_DIR="$(xcode-select -p)" swift test --package-path macos
+      - sh scripts/coverage-go.sh mcp {{.MCP_COVERAGE_FLOOR}} ./internal/...,./cmd/...
+      - sh scripts/coverage-backend.sh {{.BACKEND_COVERAGE_FLOOR}} -timeout 30m
+      - go -C packages/clients/go test -race -count=1 ./...
+      - cmd: DEVELOPER_DIR="$(xcode-select -p)" sh scripts/coverage-swift.sh {{.SWIFT_COVERAGE_FLOOR}}
         if: '[ -z "$SKIP_SWIFT" ]'
 
   security:
@@ -85,6 +109,12 @@ tasks:
     status:
       - test -x "{{.RELTOOL}}"
     cmds:
+      - |
+        git -C "{{.RELTOOL_SRC}}" rev-parse --git-dir >/dev/null 2>&1 || {
+          echo "release-tools checkout not found at {{.RELTOOL_SRC}} (relative to {{.ROOT_DIR}})." >&2
+          echo "Clone it there or set RELTOOL_SRC to its path." >&2
+          exit 1
+        }
       - git -C "{{.RELTOOL_SRC}}" show "{{.RELTOOL_COMMIT}}:scripts/install-reltool.sh" | sh -s -- "{{.RELTOOL_SRC}}" "{{.RELTOOL_TAG}}" "{{.RELTOOL_COMMIT}}"
 
   release:check:

@@ -19,7 +19,8 @@ func TestStdioAIJobsPreservesContinuationAndSpecificJobPolling(t *testing.T) {
 			fmt.Fprint(w, `{"jobs":[]}`)
 			return
 		}
-		if r.Method != "GET" || r.URL.Path != "/api/v1/ai/jobs" || !((query.Get("limit") == "2" && query.Get("cursor") == "synthetic-next") || query.Get("jobId") == "job_old" || query.Get("limit") == "1" || query.Get("limit") == "200") {
+		known := (query.Get("limit") == "2" && query.Get("cursor") == "synthetic-next") || query.Get("jobId") == "job_old" || query.Get("limit") == "1" || query.Get("limit") == "200"
+		if r.Method != "GET" || r.URL.Path != "/api/v1/ai/jobs" || !known {
 			http.Error(w, "job query changed", 400)
 			return
 		}

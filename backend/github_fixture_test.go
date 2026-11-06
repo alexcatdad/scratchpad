@@ -38,12 +38,12 @@ func githubService(t *testing.T, handler http.Handler) {
 	t.Cleanup(server.Close)
 	proxy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "CONNECT" || (r.Host != "github.com:443" && r.Host != "api.github.com:443") {
-			http.Error(w, "unexpected destination", 403)
+			http.Error(w, "unexpected destination", http.StatusForbidden)
 			return
 		}
 		upstream, err := net.Dial("tcp", server.Listener.Addr().String())
 		if err != nil {
-			http.Error(w, "fixture unavailable", 503)
+			http.Error(w, "fixture unavailable", http.StatusServiceUnavailable)
 			return
 		}
 		client, buffer, err := w.(http.Hijacker).Hijack()
@@ -51,10 +51,10 @@ func githubService(t *testing.T, handler http.Handler) {
 			upstream.Close()
 			return
 		}
-		buffer.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
+		_, _ = buffer.WriteString("HTTP/1.1 200 Connection Established\r\n\r\n")
 		buffer.Flush()
-		go func() { defer client.Close(); defer upstream.Close(); io.Copy(upstream, client) }()
-		go func() { defer client.Close(); defer upstream.Close(); io.Copy(client, upstream) }()
+		go func() { defer client.Close(); defer upstream.Close(); _, _ = io.Copy(upstream, client) }()
+		go func() { defer client.Close(); defer upstream.Close(); _, _ = io.Copy(client, upstream) }()
 	}))
 	t.Cleanup(proxy.Close)
 	dir := t.TempDir()

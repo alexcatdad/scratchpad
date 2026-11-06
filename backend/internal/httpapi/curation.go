@@ -25,13 +25,13 @@ func copyEntity(value map[string]any) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	var copy map[string]any
-	err = json.Unmarshal(data, &copy)
-	return copy, err
+	var copied map[string]any
+	err = json.Unmarshal(data, &copied)
+	return copied, err
 }
-func curationText(value any, max int) (string, error) {
+func curationText(value any, limit int) (string, error) {
 	text, ok := value.(string)
-	if !ok || len(utf16.Encode([]rune(text))) > max {
+	if !ok || len(utf16.Encode([]rune(text))) > limit {
 		return "", validationProject()
 	}
 	return text, nil
@@ -89,7 +89,7 @@ func amendMetadata(ctx context.Context, conn *sql.Conn, r *http.Request, body, a
 	if err != nil {
 		return nil, err
 	}
-	raw := any(body)
+	var raw any
 	if revisions {
 		raw = body["changes"]
 	} else {
@@ -259,9 +259,9 @@ func reportMirror(ctx context.Context, conn *sql.Conn, id string, body, actor ma
 		if err = json.Unmarshal(raw, &previous); err != nil {
 			return nil, err
 		}
-		current, err := copyEntity(previous)
-		if err != nil {
-			return nil, err
+		current, copyErr := copyEntity(previous)
+		if copyErr != nil {
+			return nil, copyErr
 		}
 		for key, value := range next {
 			current[key] = value

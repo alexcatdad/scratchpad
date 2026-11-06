@@ -25,7 +25,7 @@ func TestAIScheduleDeadlineSurvivesOperationalSQLiteRestore(t *testing.T) {
 	id := job["id"].(string)
 	waitAIJob(t, origin, id, "completed")
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	snapshot := filepath.Join(dir, "schedule.sqlite")
 	if out, err := backupCommand(path, "", snapshot).CombinedOutput(); err != nil {
 		t.Fatalf("schedule backup failed: %v %s", err, out)
@@ -91,7 +91,7 @@ func TestAIScheduleWithNoAnalysisModesIndexesRealSourcesOnly(t *testing.T) {
 					data = append(data, map[string]any{"index": index, "embedding": []float64{1, 0}})
 				}
 				w.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(w).Encode(map[string]any{"data": data})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)

@@ -14,7 +14,7 @@ import (
 func TestRAGSuccessfulReadKeepsIndependentCaptureAndCurationResponsive(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -39,7 +39,7 @@ func TestRAGSuccessfulReadKeepsIndependentCaptureAndCurationResponsive(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer barrier.Rollback()
+	defer func() { _ = barrier.Rollback() }()
 	// Optional passage reads wait; entities/context_headers remain writable.
 	if _, err = barrier.ExecContext(ctx, "LOCK TABLE rag_passages IN ACCESS EXCLUSIVE MODE"); err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestRAGSnapshotRejectsEvidenceChangedBeforeResponse(t *testing.T) {
 				if input.Input[0] == "RAG_SNAPSHOT_EVIDENCE" {
 					queries <- dispatch{input.Model, r.Header.Get("Authorization")}
 				}
-				w.Write([]byte(`{"data":[{"index":0,"embedding":` + vector + `}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":` + vector + `}]}`))
 			}))
 			defer provider.Close()
 			origin := startServer(t, path, databaseURL)
@@ -166,7 +166,7 @@ func TestRAGSnapshotRejectsEvidenceChangedBeforeResponse(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer barrier.Rollback()
+			defer func() { _ = barrier.Rollback() }()
 			if _, err = barrier.ExecContext(ctx, "LOCK TABLE rag_passages IN ACCESS EXCLUSIVE MODE"); err != nil {
 				t.Fatal(err)
 			}

@@ -83,7 +83,7 @@ func TestStdioExplicitScopeOnlyToolsBypassGit(t *testing.T) {
 				http.Error(w, "undiscovered provenance claimed", 400)
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]any{"record": body["record"], "mirror": map[string]any{"eligible": false}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"record": body["record"], "mirror": map[string]any{"eligible": false}})
 		default:
 			http.Error(w, "unexpected route", 404)
 		}

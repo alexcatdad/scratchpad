@@ -163,7 +163,7 @@ func TestStartedServiceCleanupCancelsBlockedProcess(t *testing.T) {
 		t.Fatal("cleanup did not cancel and reap the blocked process")
 	}
 	if err := service.wait(); err == nil {
-		t.Fatal("cancelled process unexpectedly exited successfully")
+		t.Fatal("canceled process unexpectedly exited successfully")
 	}
 }
 

@@ -73,7 +73,7 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 			options = append(options, "-c", driver+".clean=", "-c", driver+".smudge=", "-c", driver+".process=", "-c", driver+".required=false")
 		}
 	}
-	cmd := exec.CommandContext(ctx, "git", append(options, args...)...)
+	cmd := exec.CommandContext(ctx, "git", append(options, args...)...) //nolint:gosec // git with fixed options; arguments are passed as argv, not a shell
 	out, err := cmd.Output()
 	return strings.TrimSpace(string(out)), err
 }

@@ -47,7 +47,7 @@ func TestHistoricalExportModeDoesNotEnableAnalysisDocumentsOrBlockOrdinaryMemory
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/v1/embeddings" {
 					embeddings.Add(1)
-					json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": []int{1, 0}}}})
 					return
 				}
 				completions.Add(1)
@@ -67,7 +67,7 @@ func TestHistoricalExportModeDoesNotEnableAnalysisDocumentsOrBlockOrdinaryMemory
 				}
 				id := input["records"].([]any)[0].(map[string]any)["id"]
 				output, _ := json.Marshal(map[string]any{"artifacts": []any{map[string]any{"kind": "export", "title": "Explicit private document", "content": map[string]any{"text": "Retain cited source evidence", "markdown": "## Explicitly requested document"}, "sourceRecordIds": []any{id}}}})
-				json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(output)}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(output)}}}})
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)

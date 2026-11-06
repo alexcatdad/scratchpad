@@ -52,7 +52,7 @@ func (a *Adapter) authenticatedClient(ctx context.Context, binding localcapture.
 func NewAdapter() *Adapter { return &Adapter{} }
 
 func publicKeyFingerprint(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // the service's own credential file path from its configuration
 	if err != nil {
 		return "", localcaptureFailure(localcapture.DeliveryAuthentication, false)
 	}

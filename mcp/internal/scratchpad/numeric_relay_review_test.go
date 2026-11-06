@@ -28,7 +28,7 @@ func TestStdioRelayPreservesExactAPINumericalEvidence(t *testing.T) {
 				t.Error(err)
 			}
 			central["clientSavedAt"] = request["record"].(map[string]any)["clientSavedAt"]
-			json.NewEncoder(w).Encode(map[string]any{"record": central, "mirror": map[string]any{"eligible": false}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"record": central, "mirror": map[string]any{"eligible": false}})
 		case r.URL.Path == "/api/v1/records":
 			fmt.Fprint(w, `{"records":[`+record+`],"nextCursor":null}`)
 		case r.URL.Path == "/api/v1/projects/proj_number/context":

@@ -44,7 +44,7 @@ func assertRAGEvidenceFields(t *testing.T, results []any, record map[string]any,
 func TestRAGPassageLexicalMatchCannotBeCrowdedOutByRepeatedTitles(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -80,7 +80,7 @@ func TestRAGPassageLexicalMatchCannotBeCrowdedOutByRepeatedTitles(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	// Synthetic source-faithful historical projections avoid 114 worker ticks.
 	for _, raw := range jobs {
 		job := raw.(map[string]any)
@@ -165,7 +165,7 @@ func TestRAGCompleteTitleQueryDoesNotCitePartiallyMatchingBody(t *testing.T) {
 		if strings.Contains(body.Input[0], "\n") {
 			vector = []int{0, 1}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

@@ -17,7 +17,7 @@ func profileUsername(value any) (string, error) {
 	}
 	return name, nil
 }
-func nullableProfileText(body map[string]any, key string, max int) (any, error) {
+func nullableProfileText(body map[string]any, key string, limit int) (any, error) {
 	value, exists := body[key]
 	if !exists {
 		return nil, validationProject()
@@ -25,7 +25,7 @@ func nullableProfileText(body map[string]any, key string, max int) (any, error) 
 	if value == nil {
 		return nil, nil
 	}
-	return curationText(value, max)
+	return curationText(value, limit)
 }
 func profileAvatar(value any) (any, error) {
 	if value == nil || value == "" {

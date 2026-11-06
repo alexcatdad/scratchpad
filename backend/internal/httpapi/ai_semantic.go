@@ -107,7 +107,7 @@ func (a *AI) SemanticSearch() http.HandlerFunc {
 			if _, err := conn.ExecContext(ctx, begin); err != nil {
 				return err
 			}
-			defer conn.ExecContext(context.Background(), "ROLLBACK")
+			defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 			records, err := a.aiRecords(ctx, conn, scope)
 			if err != nil {
 				return err

@@ -26,7 +26,7 @@ import (
 
 const sshNamespace = "scratchpad-auth-v2"
 
-var keyPattern = regexp.MustCompile(`^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+|sk-ssh-ed25519@openssh.com|sk-ecdsa-sha2-nistp256@openssh.com) [A-Za-z0-9+/=]+(?: [^\r\n]*)?$`)
+var keyPattern = regexp.MustCompile(`^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp\d+|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/=]+(?: [^\r\n]*)?$`)
 
 type protocolError struct {
 	code, message string
@@ -428,7 +428,7 @@ func (s *SSH) verifySignature(ctx context.Context, id, key, purpose, signature s
 	}
 	verifyCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	verifier := exec.CommandContext(verifyCtx, "ssh-keygen", "-Y", "verify", "-f", filepath.Join(dir, "allowed"), "-I", "owner", "-n", sshNamespace, "-s", filepath.Join(dir, "signature"))
+	verifier := exec.CommandContext(verifyCtx, "ssh-keygen", "-Y", "verify", "-f", filepath.Join(dir, "allowed"), "-I", "owner", "-n", sshNamespace, "-s", filepath.Join(dir, "signature")) //nolint:gosec // fixed ssh-keygen invocation on server-created temporary files
 	verifier.Stdin = bytes.NewReader(proof)
 	verifier.Stdout = io.Discard
 	verifier.Stderr = io.Discard

@@ -26,7 +26,7 @@ func (a *AI) lexicalFallback(w http.ResponseWriter, r *http.Request, scope jobSc
 		a.auth.fail(w, err)
 		return
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err = apiActor(ctx, tx, r, a.auth.Origin); err != nil {
 		a.auth.fail(w, err)
 		return

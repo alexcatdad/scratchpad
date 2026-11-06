@@ -92,7 +92,7 @@ func hydrateContextRecords(ctx context.Context, tx *sql.Tx, records []map[string
 		args = append(args, id)
 		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT id,data FROM entities WHERE kind='record' AND id IN ("+strings.Join(placeholders, ",")+")", args...)
+	rows, err := tx.QueryContext(ctx, "SELECT id,data FROM entities WHERE kind='record' AND id IN ("+strings.Join(placeholders, ",")+")", args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 	if err != nil {
 		return err
 	}

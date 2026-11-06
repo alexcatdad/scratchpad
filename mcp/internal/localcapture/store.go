@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	_ "modernc.org/sqlite"
+	_ "modernc.org/sqlite" // registers the "sqlite" database/sql driver
 )
 
 const (
@@ -81,7 +81,7 @@ func OpenStore(path string, keys KeyProvider) (*Store, error) {
 			clear(key)
 			return nil, ErrKeyUnavailableSentinel
 		}
-		f, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+		f, createErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600) //nolint:gosec // the private database path validated above
 		if createErr != nil {
 			clear(key)
 			return nil, ErrStorageFailedSentinel
@@ -283,7 +283,7 @@ func securePrivateDirectory(path string) error {
 	if err != nil || !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 || !ownedByCurrentUser(fi) {
 		return ErrStorageFailedSentinel
 	}
-	if err = os.Chmod(path, 0700); err != nil {
+	if err = os.Chmod(path, 0700); err != nil { //nolint:gosec // a directory: 0700 is owner-only
 		return ErrStorageFailedSentinel
 	}
 	return verifyPrivateDirectory(path)
@@ -345,31 +345,6 @@ func safeID() (string, error) {
 		return "", ErrStorageFailedSentinel
 	}
 	return base64.RawURLEncoding.EncodeToString(b[:]), nil
-}
-
-func (s *Store) insert(env storedEnvelope) error {
-	id, err := safeID()
-	if err != nil {
-		return err
-	}
-	env.Version = envelopeV1
-	blob, err := s.seal(id, env)
-	if err != nil {
-		return err
-	}
-	requestKey := ""
-	if env.Request != nil {
-		requestKey = s.digest(env.Request.RequestID)
-	}
-	if requestKey == "" {
-		requestKey = s.digest("receipt/" + id)
-	}
-	created, _ := time.Parse(time.RFC3339Nano, env.Receipt.AcceptedAt)
-	_, err = s.db.Exec(`INSERT INTO capture_items(receipt_key,request_key,created_ns,state,next_attempt_ns,attempts,envelope) VALUES(?,?,?,?,?,?,?)`, id, requestKey, created.UnixNano(), env.Receipt.State, 0, 0, blob)
-	if err != nil {
-		return ErrStorageFailedSentinel
-	}
-	return nil
 }
 
 func (s *Store) accept(req CaptureRequest, receipt Receipt) (Receipt, error) {
@@ -516,13 +491,6 @@ func (s *Store) saveSettings(settings storedEnvelope) error {
 		return ErrStorageFailedSentinel
 	}
 	return nil
-}
-
-func (s *Store) markAttempt(id string, env storedEnvelope, request CaptureRequest, credentialID string) error {
-	env.Request = &request
-	env.CredentialID = credentialID
-	env.DeliveryAttempted = true
-	return s.updateEnvelope(id, env, time.Time{}, 0)
 }
 
 func (s *Store) due(now time.Time, limit int) ([]struct {

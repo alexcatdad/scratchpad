@@ -32,7 +32,7 @@ func TestFailedPassageRetryRejectsUnavailableOrChangedGenerationWithoutRewriting
 				for i := range body.Input {
 					data = append(data, map[string]any{"index": i, "embedding": []int{1, 0}})
 				}
-				json.NewEncoder(w).Encode(map[string]any{"data": data})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 			}))
 			defer provider.Close()
 			origin := startServer(t, path, databaseURL)
@@ -116,7 +116,10 @@ func TestRequestedDocumentWithNoSourcesFailsClearlyWithoutCallingProvider(t *tes
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			var calls atomic.Int32
-			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); http.Error(w, "unexpected", 503) }))
+			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls.Add(1)
+				http.Error(w, "unexpected", http.StatusServiceUnavailable)
+			}))
 			defer provider.Close()
 			origin := startServer(t, path, databaseURL)
 			status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "analysisModes": []any{}})

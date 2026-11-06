@@ -1,5 +1,5 @@
-import Foundation
 import Combine
+import Foundation
 import MenubarKit
 import ScratchpadNative
 
@@ -42,6 +42,11 @@ final class AppModel: ObservableObject {
     let notifier = MenubarNotifier(preferences: {
         NotificationPreferences.standard(enabledKey: incidentNotificationsKey)
     })
+    // One long-lived consumer posts incident notifications in the order the
+    // polls observed them; per-poll tasks could reorder offline and recovered.
+    private lazy var incidentDelivery = SerialDelivery<MenubarNotification> { [notifier] notification in
+        _ = await notifier.deliver(notification)
+    }
     private var incidentTracker = IncidentTracker(
         localSaveIncidentAlreadyNotified: UserDefaults.standard.bool(forKey: "localSaveIncidentActive")
     )
@@ -79,7 +84,8 @@ final class AppModel: ObservableObject {
     init() {
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "serviceAbsenceSuppressed"),
-           defaults.bool(forKey: "serviceExpectedToRun") {
+            defaults.bool(forKey: "serviceExpectedToRun")
+        {
             defaults.set(false, forKey: "serviceAbsenceSuppressed")
             defaults.set(defaults.integer(forKey: "serviceLifecycleRevision") + 1, forKey: "serviceLifecycleRevision")
         }
@@ -102,8 +108,9 @@ final class AppModel: ObservableObject {
         let revision = currentObservationRevision()
         Task { @MainActor [weak self] in
             let outcome: OperationOutcome<ServiceStatus> = await Task.detached {
-                do { return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) }
-                catch { return .failure(error.localizedDescription) }
+                do {
+                    return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self))
+                } catch { return .failure(error.localizedDescription) }
             }.value
             guard let self, self.isCurrentObservation(revision) else { return }
             switch outcome {
@@ -113,11 +120,12 @@ final class AppModel: ObservableObject {
                 self.status = nil
                 self.statusObservedAt = nil
                 guard !self.observationRevision.isStartPending else { return }
-                self.recordIncidentEvents(self.incidentTracker.observe(
-                    nil,
-                    serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
-                    absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
-                ))
+                self.recordIncidentEvents(
+                    self.incidentTracker.observe(
+                        nil,
+                        serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
+                        absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
+                    ))
             }
         }
     }
@@ -130,7 +138,8 @@ final class AppModel: ObservableObject {
                     guard let self else { return }
                     self.upgradeRecoveryProcess = nil
                     if exitCode != 0 && exitCode != Int32(75) {
-                        self.errorMessage = "Scratchpad could not finish the app update. It will retry when the tray refreshes."
+                        self.errorMessage =
+                            "Scratchpad could not finish the app update. It will retry when the tray refreshes."
                     }
                     if exitCode == 0 { self.refresh() }
                 }
@@ -143,25 +152,29 @@ final class AppModel: ObservableObject {
     func loadReceipts() {
         let client = self.client
         let pageCount = receiptPageCursors.count
-        perform({
-            var pages: [[Receipt]] = []
-            var cursors: [String?] = []
-            var cursor: String?
-            for _ in 0..<pageCount {
-                cursors.append(cursor)
-                let page = try client.call("list_receipts", body: ListReceiptsBody(limit: 100, cursor: cursor, state: nil), as: ReceiptList.self)
-                pages.append(page.receipts)
-                cursor = page.nextCursor
-                if cursor == nil { break }
-            }
-            return ReceiptPages(pages: pages, cursors: cursors, nextCursor: cursor)
-        }, queueKey: "receipt-pages") { (result: ReceiptPages) in
+        perform(
+            {
+                var pages: [[Receipt]] = []
+                var cursors: [String?] = []
+                var cursor: String?
+                for _ in 0..<pageCount {
+                    cursors.append(cursor)
+                    let page = try client.call(
+                        "list_receipts", body: ListReceiptsBody(limit: 100, cursor: cursor, state: nil),
+                        as: ReceiptList.self)
+                    pages.append(page.receipts)
+                    cursor = page.nextCursor
+                    if cursor == nil { break }
+                }
+                return ReceiptPages(pages: pages, cursors: cursors, nextCursor: cursor)
+            }, queueKey: "receipt-pages"
+        ) { (result: ReceiptPages) in
             self.receiptPageCursors = result.cursors
             self.nextReceiptCursor = result.nextCursor
             self.hasMoreReceipts = result.nextCursor != nil
             self.receipts = result.pages.flatMap { $0 }
             guard let selected = self.selectedReceiptID,
-                  self.receipts.contains(where: { $0.receiptId == selected })
+                self.receipts.contains(where: { $0.receiptId == selected })
             else {
                 self.selectedReceiptID = nil
                 self.selectedReceipt = nil
@@ -174,9 +187,13 @@ final class AppModel: ObservableObject {
         guard !loadingMoreReceipts, let cursor = nextReceiptCursor else { return }
         loadingMoreReceipts = true
         let client = self.client
-        perform({
-            try client.call("list_receipts", body: ListReceiptsBody(limit: 100, cursor: cursor, state: nil), as: ReceiptList.self)
-        }, queueKey: "receipt-page-\(cursor)") { (result: ReceiptList) in
+        perform(
+            {
+                try client.call(
+                    "list_receipts", body: ListReceiptsBody(limit: 100, cursor: cursor, state: nil),
+                    as: ReceiptList.self)
+            }, queueKey: "receipt-page-\(cursor)"
+        ) { (result: ReceiptList) in
             self.loadingMoreReceipts = false
             self.receiptPageCursors.append(cursor)
             let knownIDs = Set(self.receipts.map(\.receiptId))
@@ -189,7 +206,10 @@ final class AppModel: ObservableObject {
     }
     func loadReceiptDetail(_ receiptID: String) {
         let client = self.client
-        perform({ try client.call("lookup_receipt", body: ReceiptBody(receiptId: receiptID), as: Receipt.self) }, queueKey: "receipt-detail") { value in
+        perform(
+            { try client.call("lookup_receipt", body: ReceiptBody(receiptId: receiptID), as: Receipt.self) },
+            queueKey: "receipt-detail"
+        ) { value in
             guard self.selectedReceiptID == receiptID else { return }
             self.selectedReceipt = value
         }
@@ -208,12 +228,17 @@ final class AppModel: ObservableObject {
     }
     func loadProjects() {
         let client = self.client
-        perform({ try client.call("list_projects", body: EmptyBody(), as: ProjectList.self) }) { self.projects = $0.projects }
+        perform({ try client.call("list_projects", body: EmptyBody(), as: ProjectList.self) }) {
+            self.projects = $0.projects
+        }
     }
     func loadConfiguration() {
         let client = self.client
         let revision = configurationRevision
-        perform({ try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self) }, queueKey: "configuration-read") { result in
+        perform(
+            { try client.call("get_configuration", body: EmptyBody(), as: ConfigurationResult.self) },
+            queueKey: "configuration-read"
+        ) { result in
             guard self.configurationRevision == revision else { return }
             if self.configuration != result.configuration { self.configuration = result.configuration }
         }
@@ -221,7 +246,9 @@ final class AppModel: ObservableObject {
     func saveConfiguration() {
         let client = self.client
         let configuration = self.configuration
-        perform({ try client.saveConfiguration(configuration); return EmptyResponse() }) { _ in
+        perform({
+            try client.saveConfiguration(configuration); return EmptyResponse()
+        }) { _ in
             self.verified = nil
             self.errorMessage = "Connection settings saved. Verify the connection before relying on delivery."
         }
@@ -230,13 +257,16 @@ final class AppModel: ObservableObject {
         let client = ServiceClient(timeout: ServiceClient.timeout(for: "verify_connection"))
         let revision = configurationRevision
         verified = nil
-        perform({ try client.call("verify_connection", body: EmptyBody(), as: VerifyResult.self) }, completion: { result in
-            guard self.configurationRevision == revision else { return }
-            self.verified = result
-            self.refresh()
-        }, onFailure: { _ in
-            self.refresh()
-        })
+        perform(
+            { try client.call("verify_connection", body: EmptyBody(), as: VerifyResult.self) },
+            completion: { result in
+                guard self.configurationRevision == revision else { return }
+                self.verified = result
+                self.refresh()
+            },
+            onFailure: { _ in
+                self.refresh()
+            })
     }
 
     func clearDiscoveredKeys() {
@@ -261,12 +291,15 @@ final class AppModel: ObservableObject {
                 let candidates = try await Task.detached {
                     try SSHKeyDiscovery.localCandidates(preferredAgentSocket: configuration.sshAgentSocket)
                 }.value
-                let eligible = try await SSHKeyDiscovery.eligibleCandidates(candidates, serverURL: configuration.serverURL)
+                let eligible = try await SSHKeyDiscovery.eligibleCandidates(
+                    candidates, serverURL: configuration.serverURL)
                 guard self.configurationRevision == revision else { return }
                 self.sshKeys = eligible
-                self.selectedSSHKey = eligible.first(where: { $0.fingerprint == configuration.credentialFingerprint })?.id
+                self.selectedSSHKey =
+                    eligible.first(where: { $0.fingerprint == configuration.credentialFingerprint })?.id
                     ?? (eligible.count == 1 ? eligible.first?.id : nil)
-                self.keyDiscoveryMessage = eligible.isEmpty
+                self.keyDiscoveryMessage =
+                    eligible.isEmpty
                     ? "No accepted local key was found. Unlock your SSH agent and confirm the server has linked your GitHub account and synchronized this machine's public key. Independent enrolled keys also work."
                     : "Found \(eligible.count) accepted key\(eligible.count == 1 ? "" : "s"). Connect to prove possession; your signer may ask you to unlock or approve."
             } catch {
@@ -281,36 +314,49 @@ final class AppModel: ObservableObject {
         let agentSocket = configuration.sshAgentSocket
         let revision = configurationRevision
         let client = ServiceClient(timeout: ServiceClient.timeout(for: "verify_connection"))
-        perform({
-            let support = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-            let configuration = try candidate.configuration(serverURL: serverURL, directory: support.appendingPathComponent("Scratchpad/public-keys", isDirectory: true))
-            let verification = try client.call("verify_connection", body: ConfigurationBody(configuration: configuration), as: VerifyResult.self)
-            return ConnectedKey(configuration: configuration, verification: verification)
-        }, completion: { result in
-            guard self.configurationRevision == revision, self.configuration.serverURL == serverURL, self.configuration.sshAgentSocket == agentSocket else { return }
-            self.configuration = result.configuration
-            self.verified = result.verification
-            self.refresh()
-        }, onFailure: { message in
-            self.errorMessage = message + " Unlock your SSH agent and confirm the selected key is loaded, then retry."
-            self.refresh()
-        })
+        perform(
+            {
+                let support = try FileManager.default.url(
+                    for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
+                let configuration = try candidate.configuration(
+                    serverURL: serverURL,
+                    directory: support.appendingPathComponent("Scratchpad/public-keys", isDirectory: true))
+                let verification = try client.call(
+                    "verify_connection", body: ConfigurationBody(configuration: configuration), as: VerifyResult.self)
+                return ConnectedKey(configuration: configuration, verification: verification)
+            },
+            completion: { result in
+                guard self.configurationRevision == revision, self.configuration.serverURL == serverURL,
+                    self.configuration.sshAgentSocket == agentSocket
+                else { return }
+                self.configuration = result.configuration
+                self.verified = result.verification
+                self.refresh()
+            },
+            onFailure: { message in
+                self.errorMessage =
+                    message + " Unlock your SSH agent and confirm the selected key is loaded, then retry."
+                self.refresh()
+            })
     }
     func setLifecycle(_ operation: String) {
         let revision = beginLifecycleIntent(operation: operation)
         let client = ServiceClient(timeout: ServiceClient.timeout(for: operation))
-        perform({ try client.call(operation, body: EmptyBody(), as: EmptyResponse.self) }, completion: { _ in
-            guard self.finishLifecycleIntent(revision, operation: operation, succeeded: true) else { return }
-            if operation == "stop" {
-                self.incidentTracker.resetLocalSaveIncident()
-                self.recordIncidentEvents([])
-            }
-            self.refresh()
-        }, onFailure: { error in
-            guard self.finishLifecycleIntent(revision, operation: operation, succeeded: false) else { return }
-            self.errorMessage = error
-            self.refresh()
-        })
+        perform(
+            { try client.call(operation, body: EmptyBody(), as: EmptyResponse.self) },
+            completion: { _ in
+                guard self.finishLifecycleIntent(revision, operation: operation, succeeded: true) else { return }
+                if operation == "stop" {
+                    self.incidentTracker.resetLocalSaveIncident()
+                    self.recordIncidentEvents([])
+                }
+                self.refresh()
+            },
+            onFailure: { error in
+                guard self.finishLifecycleIntent(revision, operation: operation, succeeded: false) else { return }
+                self.errorMessage = error
+                self.refresh()
+            })
     }
     func startService() {
         let revision = beginStartIntent()
@@ -321,7 +367,8 @@ final class AppModel: ObservableObject {
                     _ = self.observationRevision.finishStartFailure(revision)
                     self.persistLifecyclePolicy()
                     self.startupProcess = nil; self.activity = nil
-                    self.errorMessage = exitCode == 1
+                    self.errorMessage =
+                        exitCode == 1
                         ? "The capture service exited during startup (code 1). Unlock the queue Keychain and check local queue access before retrying."
                         : "The capture service exited during startup (code \(exitCode)). Check its local configuration before retrying."
                     self.recordLocalSaveUnavailable()
@@ -340,8 +387,9 @@ final class AppModel: ObservableObject {
         Task { @MainActor [weak self] in
             for _ in 0..<20 {
                 let outcome: OperationOutcome<ServiceStatus> = await Task.detached {
-                    do { return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) }
-                    catch { return .failure(error.localizedDescription) }
+                    do {
+                        return .success(try ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self))
+                    } catch { return .failure(error.localizedDescription) }
                 }.value
                 guard let self, self.isCurrentStartIntent(revision) else { return }
                 if case .success(let status) = outcome {
@@ -362,7 +410,8 @@ final class AppModel: ObservableObject {
             _ = self.observationRevision.finishStartFailure(revision)
             self.persistLifecyclePolicy()
             self.startupProcess = nil; self.activity = nil
-            self.errorMessage = "The capture service has not become available yet. Check queue Keychain unlock and local storage status."
+            self.errorMessage =
+                "The capture service has not become available yet. Check queue Keychain unlock and local storage status."
             self.recordLocalSaveUnavailable()
         }
     }
@@ -373,25 +422,28 @@ final class AppModel: ObservableObject {
         let revision = beginLifecycleIntent(operation: "stop")
         let client = ServiceClient(timeout: ServiceClient.timeout(for: "stop"))
         activity = "Restarting the capture service…"
-        perform({ try client.call("stop", body: EmptyBody(), as: EmptyResponse.self) }, completion: { _ in
-            guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: true) else { return }
-            Task { @MainActor [weak model = self] in
-                // Wait for the old process to release its socket before starting the new one.
-                for _ in 0..<40 {
-                    let gone = await Task.detached {
-                        (try? ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) == nil
-                    }.value
-                    if gone { break }
-                    try? await Task.sleep(for: .milliseconds(250))
+        perform(
+            { try client.call("stop", body: EmptyBody(), as: EmptyResponse.self) },
+            completion: { _ in
+                guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: true) else { return }
+                Task { @MainActor [weak model = self] in
+                    // Wait for the old process to release its socket before starting the new one.
+                    for _ in 0..<40 {
+                        let gone = await Task.detached {
+                            (try? ServiceClient().call("status", body: EmptyBody(), as: ServiceStatus.self)) == nil
+                        }.value
+                        if gone { break }
+                        try? await Task.sleep(for: .milliseconds(250))
+                    }
+                    model?.startService()
                 }
-                model?.startService()
-            }
-        }, onFailure: { error in
-            self.activity = nil
-            guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: false) else { return }
-            self.errorMessage = error
-            self.refresh()
-        })
+            },
+            onFailure: { error in
+                self.activity = nil
+                guard self.finishLifecycleIntent(revision, operation: "stop", succeeded: false) else { return }
+                self.errorMessage = error
+                self.refresh()
+            })
     }
 
     private func recordLocalSaveUnavailable() {
@@ -403,20 +455,18 @@ final class AppModel: ObservableObject {
         statusObservedAt = .now
         observationRevision.observeLifecycle(value.lifecycle)
         persistLifecyclePolicy()
-        recordIncidentEvents(incidentTracker.observe(
-            value,
-            serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
-            absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
-        ))
+        recordIncidentEvents(
+            incidentTracker.observe(
+                value,
+                serviceExpected: UserDefaults.standard.bool(forKey: "serviceExpectedToRun"),
+                absenceSuppressed: UserDefaults.standard.bool(forKey: "serviceAbsenceSuppressed")
+            ))
     }
 
     private func recordIncidentEvents(_ events: [IncidentEvent]) {
         UserDefaults.standard.set(incidentTracker.isLocalSaveIncidentActive, forKey: "localSaveIncidentActive")
         guard !events.isEmpty else { return }
-        let notifier = notifier
-        Task {
-            for event in events { await notifier.deliver(event.notification) }
-        }
+        incidentDelivery.submit(events.map(\.notification))
     }
 
     private func currentObservationRevision() -> Int {
@@ -469,7 +519,9 @@ final class AppModel: ObservableObject {
 
     func discard(_ receipt: Receipt) {
         let client = self.client
-        perform({ try client.call("discard_receipt", body: ReceiptBody(receiptId: receipt.receiptId), as: Receipt.self) }) { _ in
+        perform({
+            try client.call("discard_receipt", body: ReceiptBody(receiptId: receipt.receiptId), as: Receipt.self)
+        }) { _ in
             self.selectedReceipt = nil
             self.selectedReceiptID = nil
             self.loadReceipts()
@@ -483,8 +535,7 @@ final class AppModel: ObservableObject {
         }
     }
     func setStartAtLogin(_ value: Bool) {
-        do { try supervisor.setStartAtLogin(value) }
-        catch { errorMessage = error.localizedDescription }
+        do { try supervisor.setStartAtLogin(value) } catch { errorMessage = error.localizedDescription }
     }
 
     private func perform<T: Decodable & Sendable>(
@@ -497,22 +548,23 @@ final class AppModel: ObservableObject {
             if let queueKey, let pending = queuedOperations.firstIndex(where: { $0.key == queueKey }) {
                 queuedOperations.remove(at: pending)
             }
-            queuedOperations.append(QueuedOperation(key: queueKey) { [weak self] in
-                self?.perform(operation, queueKey: queueKey, completion: completion, onFailure: onFailure)
-            })
+            queuedOperations.append(
+                QueuedOperation(key: queueKey) { [weak self] in
+                    self?.perform(operation, queueKey: queueKey, completion: completion, onFailure: onFailure)
+                })
             return
         }
         busy = true
         errorMessage = nil
         Task { @MainActor [weak self] in
             let outcome: OperationOutcome<T> = await Task.detached {
-                do { return .success(try operation()) }
-                catch { return .failure(error.localizedDescription) }
+                do { return .success(try operation()) } catch { return .failure(error.localizedDescription) }
             }.value
             guard let self else { return }
             switch outcome {
             case .success(let value): completion(value)
-            case .failure(let message): self.errorMessage = message
+            case .failure(let message):
+                self.errorMessage = message
                 onFailure(message)
             }
             self.busy = false

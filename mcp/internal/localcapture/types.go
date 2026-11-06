@@ -201,7 +201,7 @@ type DeliveryCode string
 const (
 	DeliveryConnectivity       DeliveryCode = "connectivity"
 	DeliveryAuthentication     DeliveryCode = "authentication"
-	DeliveryCredentialChanged  DeliveryCode = "credential_changed"
+	DeliveryCredentialChanged  DeliveryCode = "credential_changed" //nolint:gosec // a delivery state name, not a credential
 	DeliveryServerIncompatible DeliveryCode = "server_incompatible"
 	DeliveryProjectAmbiguous   DeliveryCode = "project_ambiguous"
 	DeliveryServerRejected     DeliveryCode = "server_rejected"
@@ -300,7 +300,7 @@ const (
 	ConnectionConnected          ConnectionState = "connected"
 	ConnectionConnectivity       ConnectionState = "connectivity"
 	ConnectionAuthentication     ConnectionState = "authentication"
-	ConnectionCredentialChanged  ConnectionState = "credential_changed"
+	ConnectionCredentialChanged  ConnectionState = "credential_changed" //nolint:gosec // a connection state name, not a credential
 	ConnectionServerIncompatible ConnectionState = "server_incompatible"
 )
 

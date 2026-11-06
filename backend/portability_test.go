@@ -198,7 +198,7 @@ func TestNativeImportRejectsConflictsAndCyclesWithoutPartialWrites(t *testing.T)
 					case "replacement-cycle":
 						encoded, _ := json.Marshal(data["record"].([]any)[0])
 						var record map[string]any
-						json.Unmarshal(encoded, &record)
+						_ = json.Unmarshal(encoded, &record)
 						record["id"] = "rec_second"
 						data["record"] = []any{record}
 						data["metadata"] = []any{map[string]any{"id": "rec_second", "recordId": "rec_second", "version": float64(1), "createdAt": "2026-10-01T00:00:00Z", "tags": []any{}}}
@@ -294,7 +294,7 @@ func TestNativeImportPreservesDerivedArtifactsWithAIProcessingDisabled(t *testin
 			artifact := map[string]any{"id": "artifact_portable", "version": float64(1), "createdAt": "2026-10-01T00:00:00.000Z", "authority": "derived", "kind": "summary", "content": map[string]any{"text": "Source-backed historical summary" + strings.Repeat(" ", 301)}, "generator": map[string]any{"model": "synthetic"}, "sourceRecordIds": []any{"rec:portable"}, "projectIds": []any{"proj_portable"}, "status": "accepted", "privacyDependencies": map[string]any{"version": float64(1), "recordIds": []any{"rec:portable"}, "projectIds": []any{"proj_portable"}, "crossProject": false}}
 			encoded, _ := json.Marshal(artifact)
 			var curated map[string]any
-			json.Unmarshal(encoded, &curated)
+			_ = json.Unmarshal(encoded, &curated)
 			curated["id"], curated["artifactId"] = "curated_portable", "artifact_portable"
 			delete(curated, "status")
 			data["ai_artifact"], data["curated_artifact"] = []any{artifact}, []any{curated}
@@ -342,7 +342,7 @@ func TestNativeImportRejectsInvalidDerivedEvidenceAtomically(t *testing.T) {
 					case "curated-mismatch", "unaccepted-curation":
 						encoded, _ := json.Marshal(artifact)
 						var curated map[string]any
-						json.Unmarshal(encoded, &curated)
+						_ = json.Unmarshal(encoded, &curated)
 						curated["id"], curated["artifactId"] = "curated_portable", "artifact_portable"
 						delete(curated, "status")
 						data["curated_artifact"] = []any{curated}
@@ -354,7 +354,7 @@ func TestNativeImportRejectsInvalidDerivedEvidenceAtomically(t *testing.T) {
 					case "replacement-candidate":
 						encoded, _ := json.Marshal(data["record"].([]any)[0])
 						var record map[string]any
-						json.Unmarshal(encoded, &record)
+						_ = json.Unmarshal(encoded, &record)
 						record["id"] = "rec_second"
 						data["record"] = append(data["record"].([]any), record)
 						data["metadata"] = append(data["metadata"].([]any), map[string]any{"id": "rec_second", "recordId": "rec_second", "version": float64(1), "createdAt": "2026-10-01T00:00:00Z", "tags": []any{}})

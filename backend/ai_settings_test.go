@@ -19,7 +19,7 @@ import (
 func syntheticEncryptionKey(t *testing.T, value byte) string {
 	t.Helper()
 	dir := t.TempDir()
-	os.Chmod(dir, 0700)
+	_ = os.Chmod(dir, 0700)
 	path := filepath.Join(dir, "installation-key")
 	if err := os.WriteFile(path, []byte(base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{value}, 32))+"\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -43,11 +43,11 @@ func TestProviderConfigurationChangeStopsFutureRequestsWithoutHoldingWrites(t *t
 			case <-r.Context().Done():
 				return
 			}
-			w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			return
 		}
 		completions.Add(1)
-		w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 	}))
 	defer func() { unblock(); provider.Close() }()
 	origin := startServer(t, path, databaseURL)
@@ -60,7 +60,7 @@ func TestProviderConfigurationChangeStopsFutureRequestsWithoutHoldingWrites(t *t
 	go func() {
 		request, _ := http.NewRequest("POST", origin+"/api/v1/ai/test", strings.NewReader(`{}`))
 		request.Header.Set("Authorization", "Bearer "+restoredToken)
-		response, err := http.DefaultClient.Do(request)
+		response, err := http.DefaultClient.Do(request) //nolint:bodyclose // the receiving select closes the body
 		if err != nil {
 			errors <- err
 			return
@@ -90,7 +90,7 @@ func TestProviderConfigurationChangeStopsFutureRequestsWithoutHoldingWrites(t *t
 	case response = <-done:
 		defer response.Body.Close()
 		var result map[string]any
-		json.NewDecoder(response.Body).Decode(&result)
+		_ = json.NewDecoder(response.Body).Decode(&result)
 		if response.StatusCode != 503 || result["error"].(map[string]any)["code"] != "AI_CONFIGURATION_CHANGED" || completions.Load() != 0 {
 			t.Fatal("changed generation permitted a later provider request")
 		}
@@ -161,15 +161,15 @@ func TestEncryptedProviderSecretSupportsRestartAndBlocksWrongKeys(t *testing.T) 
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				calls.Add(1)
 				if r.Header.Get("Authorization") != "Bearer "+secret {
-					http.Error(w, "synthetic secret must not leak", 401)
+					http.Error(w, "synthetic secret must not leak", http.StatusUnauthorized)
 					return
 				}
 				w.Header().Set("Content-Type", "application/json")
 				switch r.URL.Path {
 				case "/v1/embeddings":
-					w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+					_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 				case "/v1/chat/completions":
-					w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+					_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 				default:
 					http.NotFound(w, r)
 				}
@@ -216,7 +216,7 @@ func TestEncryptedProviderSecretSupportsRestartAndBlocksWrongKeys(t *testing.T) 
 func TestProjectedKeyMountAndRecoveryByReplacingLostToken(t *testing.T) {
 	path, databaseURL := portableInstance(t, "sqlite")
 	key := syntheticEncryptionKey(t, 11)
-	os.Chmod(key, 0440)
+	_ = os.Chmod(key, 0440)
 	mount := filepath.Join(filepath.Dir(key), "projected-key")
 	if err := os.Symlink(key, mount); err != nil {
 		t.Fatal(err)
@@ -325,7 +325,7 @@ func TestAIConfigurationSupportsIfMatchAndRejectsInvalidChanges(t *testing.T) {
 func TestProviderWithoutTokenWorksWhenKeyConfigurationIsInvalid(t *testing.T) {
 	path, databaseURL := portableInstance(t, "sqlite")
 	key := syntheticEncryptionKey(t, 55)
-	os.Chmod(key, 0644)
+	_ = os.Chmod(key, 0644)
 	t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", key)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "" {
@@ -334,9 +334,9 @@ func TestProviderWithoutTokenWorksWhenKeyConfigurationIsInvalid(t *testing.T) {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/v1/embeddings" {
-			w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 		} else {
-			w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+			_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 		}
 	}))
 	defer provider.Close()
@@ -363,10 +363,10 @@ func TestProviderRejectsMissingOrNullEmbeddingFields(t *testing.T) {
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/v1/embeddings" {
-					w.Write([]byte(embedding))
+					_, _ = w.Write([]byte(embedding))
 				} else {
 					completions.Add(1)
-					w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+					_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 				}
 			}))
 			defer provider.Close()
@@ -475,7 +475,7 @@ func TestAISettingsProtectWriteOnlySecretAcrossRestart(t *testing.T) {
 					}
 					if engine == "sqlite" {
 						dir := t.TempDir()
-						os.Chmod(dir, 0700)
+						_ = os.Chmod(dir, 0700)
 						snapshot := filepath.Join(dir, "settings.sqlite")
 						if out, err := backupCommand(path, "", snapshot).CombinedOutput(); err != nil {
 							t.Fatalf("secret backup failed: %v %s", err, out)
@@ -504,7 +504,7 @@ func TestSeparateEmbeddingEndpointReceivesEmbeddingsWithoutTheProviderKey(t *tes
 		}
 		completions.Add(1)
 		completionAuth.Store(r.Header.Get("Authorization"))
-		w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"content":"{\"ok\":true}"}}]}`))
 	}))
 	defer completion.Close()
 	embedding := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -515,7 +515,7 @@ func TestSeparateEmbeddingEndpointReceivesEmbeddingsWithoutTheProviderKey(t *tes
 		}
 		embeddings.Add(1)
 		embeddingAuth.Store(r.Header.Get("Authorization"))
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer embedding.Close()
 	origin := startServer(t, path, databaseURL)
@@ -543,7 +543,7 @@ func TestChangingEmbeddingEndpointMakesOrdinaryEmbeddingsStale(t *testing.T) {
 	embeddingService := func() *httptest.Server {
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
-			w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+			_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 		}))
 	}
 	first, second := embeddingService(), embeddingService()

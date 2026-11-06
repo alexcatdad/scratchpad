@@ -10,7 +10,7 @@ import (
 func TestDashboardRenderingDoesNotReceiveAPICredentialsOrHandleAPIRoutes(t *testing.T) {
 	renderer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Set-Cookie", "scratchpad_session=synthetic-renderer-cookie")
-		json.NewEncoder(w).Encode(map[string]string{"authorization": r.Header.Get("Authorization"), "cookie": r.Header.Get("Cookie"), "forwarded": r.Header.Get("X-Forwarded-For")})
+		_ = json.NewEncoder(w).Encode(map[string]string{"authorization": r.Header.Get("Authorization"), "cookie": r.Header.Get("Cookie"), "forwarded": r.Header.Get("X-Forwarded-For")})
 	}))
 	defer renderer.Close()
 	t.Setenv("SCRATCHPAD_DASHBOARD_URL", renderer.URL)

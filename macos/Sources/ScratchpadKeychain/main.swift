@@ -1,6 +1,6 @@
 import Foundation
-import Security
 import ScratchpadNative
+import Security
 
 private enum ExitCode: Int32 {
     case success = 0

@@ -56,7 +56,7 @@ func TestRealStdioInitializationRecommendsSecretReferences(t *testing.T) {
 	if err = cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
-	defer func() { input.Close(); cmd.Process.Kill(); cmd.Wait() }()
+	defer func() { _ = input.Close(); _ = cmd.Process.Kill(); _ = cmd.Wait() }()
 	if _, err = input.Write([]byte("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{},\"clientInfo\":{\"name\":\"synthetic-guidance-check\",\"version\":\"1\"}}}\n")); err != nil {
 		t.Fatal(err)
 	}

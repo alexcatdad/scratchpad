@@ -179,7 +179,7 @@ func snapshotFiles(t *testing.T, root string) map[string][32]byte {
 		if entry.IsDir() {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(path) //nolint:gosec // walks a fixture tree this test created
 		if err != nil {
 			return err
 		}
@@ -299,7 +299,7 @@ func TestAcceptanceMirrorDefaultTypesRetryAndCentralFailure(t *testing.T) {
 		acceptanceCall(t, session, "record_"+item.kind, args)
 		acceptanceCall(t, session, "record_"+item.kind, args)
 	}
-	path := filepath.Join(dir, "scratchpad/decisions.jsonl")
+	path := filepath.Join(dir, "scratchpad", "decisions.jsonl")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)

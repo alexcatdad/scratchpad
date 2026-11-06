@@ -53,7 +53,7 @@ func TestCompletionOrdersMinuteSecondAndPreciseInstantsWithStableTies(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			expected := []string{}
 			for _, fixture := range []struct{ id, at string }{
 				{"rec_0_minute", "2026-10-01T00:00Z"},

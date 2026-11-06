@@ -296,7 +296,7 @@ func searchSelectedCandidates(ctx context.Context, tx *sql.Tx, engine string, pa
 	lastKey, lastID := "", ""
 	for {
 		windowArgs := append([]any{}, args...)
-		statement := base + "sort_key IS NOT NULL"
+		statement := base + "sort_key IS NOT NULL" //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 		if cursor != nil {
 			if key := searchChronologicalKey(cursor.date); key != "" {
 				windowArgs = append(windowArgs, key)
@@ -356,7 +356,7 @@ func validateSearchPageHeaders(ctx context.Context, tx *sql.Tx, records []map[st
 		args = append(args, record["id"])
 		places = append(places, fmt.Sprintf("$%d", len(args)))
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT data FROM context_headers WHERE record_id IN ("+strings.Join(places, ",")+")", args...)
+	rows, err := tx.QueryContext(ctx, "SELECT data FROM context_headers WHERE record_id IN ("+strings.Join(places, ",")+")", args...) //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 	if err != nil {
 		return err
 	}

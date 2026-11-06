@@ -114,9 +114,10 @@ func validatePostgresColumns(ctx context.Context, q queryer, version int) error 
 	}
 	for name, definition := range indexes {
 		table := "entities"
-		if name == "record_search_document" {
+		switch name {
+		case "record_search_document":
 			table = "record_search"
-		} else if name == "context_headers_project" {
+		case "context_headers_project":
 			table = "context_headers"
 		}
 		rows, err := q.QueryContext(ctx, `SELECT indexdef FROM pg_indexes WHERE schemaname=current_schema() AND indexname=$1 AND tablename=$2`, name, table)

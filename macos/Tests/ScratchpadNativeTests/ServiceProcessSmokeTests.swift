@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import ScratchpadNative
 
 private struct SmokeRecord: Encodable, Sendable {
@@ -40,7 +41,7 @@ private struct SmokeEmptyResponse: Decodable, Sendable {}
 
 @Test func swiftClientSpeaksToIsolatedGoServiceProcess() throws {
     guard let servicePath = ProcessInfo.processInfo.environment["SCRATCHPAD_TEST_SERVICE"],
-          FileManager.default.isExecutableFile(atPath: servicePath)
+        FileManager.default.isExecutableFile(atPath: servicePath)
     else { return }
 
     let root = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
@@ -53,17 +54,19 @@ private struct SmokeEmptyResponse: Decodable, Sendable {}
     let databasePath = root.appendingPathComponent("captures.sqlite").path
     let helperPath = root.appendingPathComponent("synthetic-key-helper").path
     let helper = """
-    #!/bin/sh
-    [ "$#" -eq 2 ] || exit 1
-    [ "$2" = "\(QueueKeyIdentifier.captureQueue)" ] || exit 1
-    case "$1" in get|create) printf '0123456789abcdef0123456789abcdef' ;; *) exit 1 ;; esac
-    """
+        #!/bin/sh
+        [ "$#" -eq 2 ] || exit 1
+        [ "$2" = "\(QueueKeyIdentifier.captureQueue)" ] || exit 1
+        case "$1" in get|create) printf '0123456789abcdef0123456789abcdef' ;; *) exit 1 ;; esac
+        """
     try Data(helper.utf8).write(to: URL(fileURLWithPath: helperPath), options: .atomic)
     try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: helperPath)
 
     let process = Process()
     process.executableURL = URL(fileURLWithPath: servicePath)
-    process.arguments = ["--socket", socketPath, "--database", databasePath, "--key-helper", helperPath, "--explicit-start"]
+    process.arguments = [
+        "--socket", socketPath, "--database", databasePath, "--key-helper", helperPath, "--explicit-start",
+    ]
     var environment = ProcessInfo.processInfo.environment
     environment["HOME"] = root.path
     environment["XDG_CONFIG_HOME"] = root.path
@@ -121,19 +124,25 @@ private struct SmokeEmptyResponse: Decodable, Sendable {}
 
     let request = SmokeCaptureRequest(
         requestId: UUID().uuidString,
-        record: SmokeRecord(type: "finding", title: "Synthetic service seam", authority: "observed", confidence: "high", payload: .object(["value": .number(Decimal(17)), "synthetic": .bool(true)])),
+        record: SmokeRecord(
+            type: "finding", title: "Synthetic service seam", authority: "observed", confidence: "high",
+            payload: .object(["value": .number(Decimal(17)), "synthetic": .bool(true)])),
         scope: SmokeScope(workingDirectory: "/private/tmp/scratchpad-fixture", projectId: "proj_synthetic"),
         gitContext: .object(["repositoryIdentity": .string("example.invalid/synthetic")]),
         clientSavedAt: ISO8601DateFormatter().string(from: Date()),
-        binding: SmokeBinding(serverURL: configuration.serverURL, credentialFingerprint: configuration.credentialFingerprint, publicKeyPath: configuration.publicKeyPath, signingKeyPath: configuration.signingKeyPath)
+        binding: SmokeBinding(
+            serverURL: configuration.serverURL, credentialFingerprint: configuration.credentialFingerprint,
+            publicKeyPath: configuration.publicKeyPath, signingKeyPath: configuration.signingKeyPath)
     )
     let saved = try client.call("capture", body: request, as: SmokeCaptureOutcome.self)
     #expect(saved.outcome == "saved_pending")
     #expect(saved.receipt.state == "pending")
 
-    let list = try client.call("list_receipts", body: ListReceiptsBody(limit: 20, cursor: nil, state: nil), as: ReceiptList.self)
+    let list = try client.call(
+        "list_receipts", body: ListReceiptsBody(limit: 20, cursor: nil, state: nil), as: ReceiptList.self)
     #expect(list.receipts.contains(where: { $0.receiptId == saved.receipt.receiptId }))
-    let detail = try client.call("lookup_receipt", body: ReceiptBody(receiptId: saved.receipt.receiptId), as: Receipt.self)
+    let detail = try client.call(
+        "lookup_receipt", body: ReceiptBody(receiptId: saved.receipt.receiptId), as: Receipt.self)
     #expect(detail.content?.record.title == "Synthetic service seam")
     #expect(detail.content?.record.payload.prettyPrinted()?.contains("17") == true)
     #expect(detail.content?.scope.projectId == "proj_synthetic")

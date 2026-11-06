@@ -64,7 +64,7 @@ func TestCapturePersistsImmutableRecordAndProvenance(t *testing.T) {
 			}
 			defer res.Body.Close()
 			var detail map[string]any
-			json.NewDecoder(res.Body).Decode(&detail)
+			_ = json.NewDecoder(res.Body).Decode(&detail)
 			detailRecord := detail["record"].(map[string]any)
 			if res.StatusCode != 200 || detailRecord["content"] != saved["content"] || detailRecord["clientSavedAt"] != clientSavedAt || detailRecord["recordedAt"] != saved["recordedAt"] || detail["metadata"].(map[string]any)["archived"] != false || len(detail["audit"].([]any)) != 1 {
 				t.Fatal("capture detail did not preserve raw history and audit")
@@ -161,7 +161,7 @@ func TestCaptureRenderingPreservesNestedPayloadOrderAndNull(t *testing.T) {
 	}
 	defer res.Body.Close()
 	var body map[string]any
-	json.NewDecoder(res.Body).Decode(&body)
+	_ = json.NewDecoder(res.Body).Decode(&body)
 	if res.StatusCode != 201 || body["record"].(map[string]any)["content"] != `decision: Choice
 
 details: null
@@ -241,7 +241,7 @@ func TestConcurrentRetriesUseOneCaptureAndCurrentMirrorConsent(t *testing.T) {
 			}
 			defer res.Body.Close()
 			var detail map[string]any
-			json.NewDecoder(res.Body).Decode(&detail)
+			_ = json.NewDecoder(res.Body).Decode(&detail)
 			if len(detail["audit"].([]any)) != 1 {
 				t.Fatal("retry duplicated the creation audit")
 			}
@@ -302,7 +302,7 @@ func TestCaptureRetryIdentityIsScopedToCredential(t *testing.T) {
 	}
 	defer res.Body.Close()
 	var second map[string]any
-	json.NewDecoder(res.Body).Decode(&second)
+	_ = json.NewDecoder(res.Body).Decode(&second)
 	if res.StatusCode != 201 || first["record"].(map[string]any)["id"] == second["record"].(map[string]any)["id"] {
 		t.Fatal("different credential reused another credential's capture identity")
 	}

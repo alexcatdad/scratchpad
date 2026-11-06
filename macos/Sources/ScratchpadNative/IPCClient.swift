@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 public struct ServiceError: Error, LocalizedError, Decodable, Sendable {
     public let code: String
@@ -111,13 +111,21 @@ public enum JSONValue: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
-        if container.decodeNil() { self = .null }
-        else if let value = try? container.decode(Bool.self) { self = .bool(value) }
-        else if let value = try? container.decode(String.self) { self = .string(value) }
-        else if let value = try? container.decode(Decimal.self) { self = .number(value) }
-        else if let value = try? container.decode([JSONValue].self) { self = .array(value) }
-        else if let value = try? container.decode([String: JSONValue].self) { self = .object(value) }
-        else { throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value") }
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode(Decimal.self) {
+            self = .number(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else if let value = try? container.decode([String: JSONValue].self) {
+            self = .object(value)
+        } else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Unsupported JSON value")
+        }
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -154,7 +162,10 @@ public struct ServiceConfiguration: Codable, Equatable, Sendable {
     public var publicKeyPath: String
     public var signingKeyPath: String
     public var sshAgentSocket: String
-    public init(serverURL: String = "", credentialFingerprint: String = "", publicKeyPath: String = "", signingKeyPath: String = "", sshAgentSocket: String = "") {
+    public init(
+        serverURL: String = "", credentialFingerprint: String = "", publicKeyPath: String = "",
+        signingKeyPath: String = "", sshAgentSocket: String = ""
+    ) {
         self.serverURL = serverURL
         self.credentialFingerprint = credentialFingerprint
         self.publicKeyPath = publicKeyPath
@@ -162,7 +173,9 @@ public struct ServiceConfiguration: Codable, Equatable, Sendable {
         self.sshAgentSocket = sshAgentSocket
     }
 
-    private enum CodingKeys: String, CodingKey { case serverURL, credentialFingerprint, publicKeyPath, signingKeyPath, sshAgentSocket }
+    private enum CodingKeys: String, CodingKey {
+        case serverURL, credentialFingerprint, publicKeyPath, signingKeyPath, sshAgentSocket
+    }
     public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         serverURL = try values.decode(String.self, forKey: .serverURL)
@@ -191,7 +204,9 @@ public struct ListReceiptsBody: Encodable, Sendable {
     public let limit: Int
     public let cursor: String?
     public let state: String?
-    public init(limit: Int, cursor: String?, state: String?) { self.limit = limit; self.cursor = cursor; self.state = state }
+    public init(limit: Int, cursor: String?, state: String?) {
+        self.limit = limit; self.cursor = cursor; self.state = state
+    }
 }
 public struct ProjectSelectionBody: Encodable, Sendable {
     public let receiptId: String
@@ -227,10 +242,14 @@ public struct ServiceClient: Sendable {
     }
 
     public func saveConfiguration(_ configuration: ServiceConfiguration) throws {
-        _ = try call("set_configuration", body: ConfigurationBody(configuration: configuration), as: ConfigurationAcknowledgement.self)
+        _ = try call(
+            "set_configuration", body: ConfigurationBody(configuration: configuration),
+            as: ConfigurationAcknowledgement.self)
     }
 
-    public func call<Body: Encodable & Sendable, Result: Decodable & Sendable>(_ operation: String, body: Body, as resultType: Result.Type = Result.self) throws -> Result {
+    public func call<Body: Encodable & Sendable, Result: Decodable & Sendable>(
+        _ operation: String, body: Body, as resultType: Result.Type = Result.self
+    ) throws -> Result {
         let requestID = UUID().uuidString.lowercased()
         let request = try JSONEncoder().encode(RequestEnvelope(id: requestID, op: operation, body: body))
         guard request.count <= 4 * 1024 * 1024 else { throw LocalClientError.frameTooLarge }
@@ -239,14 +258,17 @@ public struct ServiceClient: Sendable {
         defer { _ = close(fd) }
         var noSignal: Int32 = 1
         _ = setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, socklen_t(MemoryLayout<Int32>.size))
-        var sendTimeout = timeval(tv_sec: Int(timeout), tv_usec: Int32(timeout.truncatingRemainder(dividingBy: 1) * 1_000_000))
+        var sendTimeout = timeval(
+            tv_sec: Int(timeout), tv_usec: Int32(timeout.truncatingRemainder(dividingBy: 1) * 1_000_000))
         _ = setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &sendTimeout, socklen_t(MemoryLayout<timeval>.size))
         _ = setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &sendTimeout, socklen_t(MemoryLayout<timeval>.size))
 
         var address = sockaddr_un()
         address.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = Array(socketPath.utf8) + [0]
-        guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else { throw LocalClientError.invalidSocketPath }
+        guard pathBytes.count <= MemoryLayout.size(ofValue: address.sun_path) else {
+            throw LocalClientError.invalidSocketPath
+        }
         withUnsafeMutableBytes(of: &address.sun_path) { buffer in
             buffer.copyBytes(from: pathBytes)
         }

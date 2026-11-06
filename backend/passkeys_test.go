@@ -110,7 +110,7 @@ func TestHistoricalPasskeyLoginAndProofFailures(t *testing.T) {
 					t.Fatal(err)
 				}
 				var result map[string]any
-				json.NewDecoder(response.Body).Decode(&result)
+				_ = json.NewDecoder(response.Body).Decode(&result)
 				response.Body.Close()
 				if body == "" && response.StatusCode != 200 {
 					t.Fatal("bodyless login options regressed")
@@ -193,7 +193,7 @@ func TestHistoricalPasskeyLoginAndProofFailures(t *testing.T) {
 				t.Fatal(err)
 			}
 			var current map[string]any
-			json.NewDecoder(res.Body).Decode(&current)
+			_ = json.NewDecoder(res.Body).Decode(&current)
 			res.Body.Close()
 			if current["authenticated"] != true {
 				t.Fatal("historical passkey session cannot authenticate")
@@ -204,7 +204,7 @@ func TestHistoricalPasskeyLoginAndProofFailures(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			json.NewDecoder(res.Body).Decode(&current)
+			_ = json.NewDecoder(res.Body).Decode(&current)
 			res.Body.Close()
 			if current["authenticated"] != false {
 				t.Fatal("browser session accepted as bearer")
@@ -235,7 +235,7 @@ func TestHistoricalPasskeyLoginAndProofFailures(t *testing.T) {
 				}()
 			}
 			first, second := <-results, <-results
-			if !((first == 200 && second == 401) || (first == 401 && second == 200)) {
+			if (first != 200 || second != 401) && (first != 401 || second != 200) {
 				t.Fatalf("concurrent passkey consumption: %d %d", first, second)
 			}
 		})

@@ -143,7 +143,7 @@ func TestRealStdioAIWorkflowUsesGoWorkers(t *testing.T) {
 					for index := range body["input"].([]any) {
 						data = append(data, map[string]any{"index": index, "embedding": []float64{1, 0}})
 					}
-					json.NewEncoder(w).Encode(map[string]any{"data": data})
+					_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 					return
 				}
 				if r.URL.Path != "/v1/chat/completions" {
@@ -169,7 +169,7 @@ func TestRealStdioAIWorkflowUsesGoWorkers(t *testing.T) {
 					content["markdown"] = "## Private handoff\n\nPreserve original evidence."
 				}
 				encoded, _ := json.Marshal(map[string]any{"artifacts": []any{map[string]any{"kind": kind, "title": "Synthetic source-linked output", "content": content, "sourceRecordIds": ids}}})
-				json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(encoded)}}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(encoded)}}}})
 			}))
 			defer provider.Close()
 			path, databaseURL, local := githubHistoricalBrowser(t, engine)
@@ -238,7 +238,7 @@ func completionService(t *testing.T, produce func(map[string]any) any) *httptest
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(content)}}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": string(content)}}}})
 	}))
 }
 

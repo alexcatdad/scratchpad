@@ -46,8 +46,13 @@ current authority.
 
 ## Build & verify
 
-- `task check` — the full local gate: npm lint, typecheck and tests; gofmt, vet
-  and race tests for `backend/` and `mcp/`; `swift test`. Run it before pushing.
+- `task check` — the full local gate: npm lint, typecheck and tests; gofmt,
+  vet and golangci-lint (`.golangci.yml`, pinned in `tools/lint`) for every Go
+  module; race tests with coverage floors for `backend/` and `mcp/`;
+  `swift format lint --strict`, a warnings-as-errors Swift build and Swift tests
+  with a coverage floor on `ScratchpadNative`. Run it before pushing.
+- Coverage floors live in `Taskfile.yml` (measured value rounded down, minus 2,
+  never below 60%). Raise them when coverage rises; never lower them to pass.
 - `task lint`, `task build`, `task test`, `task security` — the parts of
   `task check`. `task security` runs `govulncheck` per Go module and
   `npm audit --omit=dev --audit-level=high`. `SKIP_SWIFT=1` skips Swift on
@@ -67,7 +72,7 @@ current authority.
   `task release`); see `docs/runbooks/release.md`. Developer ID signed,
   notarized and stapled; keys stay in the local Keychain. CI never signs,
   publishes, deploys or updates the tap.
-- release-tools v0.4.0: daily CalVer `vYYYY.MM.DD.N`. Releases are immutable:
+- release-tools v0.4.1: daily CalVer `vYYYY.MM.DD.N`. Releases are immutable:
   never replace published assets or move tags.
 - Releases publish to Forgejo only; GitHub stays a source mirror with no
   releases. Release tags do not trigger the homelab deployment.

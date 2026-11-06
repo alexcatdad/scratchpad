@@ -1,8 +1,12 @@
 import Foundation
 import Testing
+
 @testable import ScratchpadNative
 
-private func serviceStatus(keyAvailable: Bool = true, storageAvailable: Bool? = true, lifecycle: String = "running", connection: ConnectionObservation? = nil) -> ServiceStatus {
+private func serviceStatus(
+    keyAvailable: Bool = true, storageAvailable: Bool? = true, lifecycle: String = "running",
+    connection: ConnectionObservation? = nil
+) -> ServiceStatus {
     ServiceStatus(
         lifecycle: lifecycle,
         pending: 0,
@@ -38,7 +42,7 @@ private func iso8601(_ date: Date) -> String {
 
 @Test func expectedServiceDisappearanceNotifiesOnceAndRecoversOnce() {
     var tracker = IncidentTracker()
-    #expect(tracker.observe(nil).isEmpty) // Initial absence is unknown.
+    #expect(tracker.observe(nil).isEmpty)  // Initial absence is unknown.
     #expect(tracker.observe(serviceStatus()).isEmpty)
     #expect(tracker.observe(nil, serviceExpected: true) == [.localSavingUnavailable])
     #expect(tracker.observe(nil, serviceExpected: true).isEmpty)

@@ -27,7 +27,7 @@ func retainedTypeScriptAPI(t *testing.T, databaseURL string, readyStatus int) st
 		t.Fatal(err)
 	}
 	apiURL := historicalAPIURL(t)
-	loader := filepath.Join(root, "node_modules/tsx/dist/cli.mjs")
+	loader := filepath.Join(root, "node_modules", "tsx", "dist", "cli.mjs")
 	if _, err = os.Stat(loader); err != nil {
 		t.Fatal("npm ci is required for retained TypeScript rollback verification")
 	}
@@ -38,7 +38,7 @@ func retainedTypeScriptAPI(t *testing.T, databaseURL string, readyStatus int) st
 	address := listener.Addr().String()
 	listener.Close()
 	origin := "http://" + address
-	cmd := exec.Command("node", "--import", "tsx", filepath.Join(root, "tests/typescript-api-fixture.ts"))
+	cmd := exec.Command("node", "--import", "tsx", filepath.Join(root, "tests", "typescript-api-fixture.ts"))
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "SCRATCHPAD_DATABASE_URL="+databaseURL, "SCRATCHPAD_PUBLIC_URL="+origin, "SCRATCHPAD_LEGACY_API_MODULE="+apiURL, "SCRATCHPAD_GITHUB_CLIENT_ID=", "SCRATCHPAD_GITHUB_CLIENT_SECRET=")
 	if err = cmd.Start(); err != nil {
@@ -47,14 +47,14 @@ func retainedTypeScriptAPI(t *testing.T, databaseURL string, readyStatus int) st
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	t.Cleanup(func() {
-		cmd.Process.Signal(syscall.SIGTERM)
+		_ = cmd.Process.Signal(syscall.SIGTERM)
 		select {
 		case err := <-done:
 			if err != nil {
 				t.Error("retained TypeScript API did not stop cleanly")
 			}
 		case <-time.After(10 * time.Second):
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			<-done
 			t.Error("retained TypeScript API shutdown timed out")
 		}

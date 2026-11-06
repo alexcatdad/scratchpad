@@ -28,7 +28,7 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 		command := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
 		out, err := command.CombinedOutput()
 		if err != nil {
-			return "", fmt.Errorf("Git fixture setup: %w: %s", err, out)
+			return "", fmt.Errorf("git fixture setup: %w: %s", err, out)
 		}
 		return strings.TrimSpace(string(out)), nil
 	}
@@ -167,7 +167,7 @@ func projectScenarios(ctx context.Context, session *mcp.ClientSession, workspace
 	heldReplay, err := call(ctx, session, "record_decision", heldArguments)
 	heldReplayReceipt, _ := heldReplay["receipt"].(map[string]any)
 	if err != nil || heldReplay["outcome"] != "saved_pending" || heldReplayReceipt["receiptId"] != receipt["receiptId"] || heldReplayReceipt["state"] != "needs_selection" {
-		return nil, fmt.Errorf("unchanged non-Git capture replay changed its receipt: %v %v", heldReplay, err)
+		return nil, fmt.Errorf("unchanged non-Git capture replay changed its receipt: %v %w", heldReplay, err)
 	}
 	resolved, err := call(ctx, session, "resolve_project", map[string]any{"workingDirectory": nonGit, "name": "Owner confirmed non-Git " + filepath.Base(fixture)})
 	if err != nil {

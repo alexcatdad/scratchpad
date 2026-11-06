@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"math"
 	"net/http"
@@ -29,7 +30,7 @@ func aiChanged() error {
 }
 func (a *AI) provider(ctx context.Context) (providerSnapshot, error) {
 	row, err := entityMap(ctx, a.auth.Store.DB, "ai_settings", "global")
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		row = nil
 		err = nil
 	}
@@ -149,7 +150,7 @@ func (a *AI) postProviderGuarded(ctx context.Context, r *http.Request, snapshot 
 		// Transport initiation, rather than goroutine scheduling, is the
 		// dispatch boundary. Release before DNS, dial, TLS or response latency.
 		launched = true
-		go func() { value, err := client.Do(req); done <- response{value, err} }()
+		go func() { value, err := client.Do(req); done <- response{value, err} }() //nolint:bodyclose // finish() hands the response on; every path closes its body
 		select {
 		case <-started:
 			return nil

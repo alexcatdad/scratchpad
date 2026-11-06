@@ -37,7 +37,7 @@ func (c *Client) ResolveGitProject(ctx context.Context, git json.RawMessage) (ma
 		return nil, err
 	}
 	if result.Project == nil || result.Project["id"] == "" {
-		return nil, errors.New("Scratchpad project resolution returned no project identity")
+		return nil, errors.New("scratchpad project resolution returned no project identity")
 	}
 	return result.Project, nil
 }
@@ -68,7 +68,7 @@ func (c *Client) CaptureCentral(ctx context.Context, projectID string, record ma
 		return out, err
 	}
 	if clientSavedAt != "" && out.Record["clientSavedAt"] != clientSavedAt {
-		return out, fmt.Errorf("Scratchpad server did not preserve clientSavedAt: expected %q, got %v", clientSavedAt, out.Record["clientSavedAt"])
+		return out, fmt.Errorf("scratchpad server did not preserve clientSavedAt: expected %q, got %v", clientSavedAt, out.Record["clientSavedAt"])
 	}
 	out.Project = map[string]any{"id": projectID}
 	if c.Config.Mirror && out.Mirror["eligible"] == true && len(git) > 0 {

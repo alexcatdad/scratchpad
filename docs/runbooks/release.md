@@ -24,7 +24,7 @@ are `Taskfile.yml` tasks that call `scripts/release-app-build.sh` and
 
 Published versions are daily CalVer `YYYY.MM.DD.N` (UTC date, month and day
 zero-padded, a daily counter starting at 1) with tag `vYYYY.MM.DD.N`, allocated
-by release-tools v0.4.0. Earlier `v0.x.y` tags and the monthly `vYYYY.M.N`
+by release-tools (v0.4.0 and later; pinned to v0.4.1). Earlier `v0.x.y` tags and the monthly `vYYYY.M.N`
 releases (`v2026.10.1`) stay as history on GitHub; the first daily version sorts
 above them. The
 TypeScript/Go SDK packages are not part of this release contract (see
@@ -79,9 +79,12 @@ in the release-tools repository). Provide:
 Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), a Forgejo
 access token with the `write:repository` scope for this repository, `gh`
 authenticated with push access to `alexcatdad/homebrew-tap`,
-Xcode command-line tools (`codesign`, `notarytool`), and the release-tools
-repository checked out next to this one at `../release-tools` with its tags
-fetched. reltool reads the Forgejo token from `FORGEJO_TOKEN`, then the `fj`
+Xcode command-line tools (`codesign`, `notarytool`), Node 24 (see
+[Release](#release)), and the release-tools repository with its tags fetched.
+`Taskfile.yml` looks for it at `../../../infrastructure/release-tools` relative
+to this checkout (the owner's `alexcatdad/infrastructure/release-tools` layout);
+set `RELTOOL_SRC` to use another path. `task release:*` stops with an error if
+neither exists and the pinned reltool is not already built in the cache. reltool reads the Forgejo token from `FORGEJO_TOKEN`, then the `fj`
 key store (`fj -H forgejo.triceratops-dory.ts.net auth login`), then the macOS
 Keychain item `release-tools-forgejo`; it never prints the token. Secret values
 never go into this repository, this documentation or logs; the config stores
@@ -89,7 +92,10 @@ names only.
 
 ## Release
 
-From a clean checkout of the commit to release, already pushed to Forgejo:
+From a clean checkout of the commit to release, already pushed to Forgejo.
+Run the release under Node 24: the SDK integration test in `task check`
+requires a `v24.` runtime, so a newer default Node fails the check step. With
+fnm, prefix each command, for example `fnm exec --using 24 -- task release`.
 
 ```sh
 task release:check     # read-only: next version, signing identity, tools, disk (does not contact Forgejo)
@@ -104,10 +110,8 @@ publishes, confirms the tag, and updates the tap cask from the published release
 with the owner's local `gh` and Git. It runs unattended once started. Pass
 reltool flags after `--`, for example `task release:prepare -- --workers`.
 
-The `check` task (Go format, vet and race tests for `mcp/`) runs as a required
-step. The wider CI suite is independent validation; the release does not depend
-on it. Run `npm run lint`, `npm test` and the other [quality gates](../../README.md)
-yourself when the change warrants it.
+The `check` task (the full local gate: lint, build and tests with coverage
+floors for npm, Go and Swift) runs as a required step in a clean checkout.
 
 ## Recovery
 

@@ -129,7 +129,7 @@ func TestRestoredPostgresSurvivesCompetingUpgradeAndRestart(t *testing.T) {
 				t.Fatalf("restored credential failed: %d %+v", status, value)
 			}
 			var expected map[string]any
-			json.Unmarshal([]byte(restoredRecord), &expected)
+			_ = json.Unmarshal([]byte(restoredRecord), &expected)
 			if !reflect.DeepEqual(value["record"], expected) {
 				t.Fatal("immutable PostgreSQL capture changed")
 			}
@@ -188,7 +188,7 @@ func TestInterruptedPostgresStartupCanBeRetried(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(1397772880)`); err != nil {
 		t.Fatal(err)
 	}
@@ -197,11 +197,11 @@ func TestInterruptedPostgresStartupCanBeRetried(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	cmd.Process.Kill()
+	_ = cmd.Process.Kill()
 	if err := cmd.Wait(); err == nil {
 		t.Fatal("startup did not wait for the migration lock")
 	}
-	tx.Rollback()
+	_ = tx.Rollback()
 	if out, err := postgresCommand(databaseURL).CombinedOutput(); err != nil {
 		t.Fatalf("restart after interruption failed: %v %s", err, out)
 	}

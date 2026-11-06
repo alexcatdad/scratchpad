@@ -1154,9 +1154,8 @@ func TestIdleHealthProbeDetectsOutageRecoveryAndThrottles(t *testing.T) {
 	if err != nil || status.Connection.State != ConnectionConnectivity {
 		t.Fatalf("idle outage was not observed: connection=%+v err=%v", status.Connection, err)
 	}
-	firstCount := authCalls.Load()
 	time.Sleep(60 * time.Millisecond)
-	firstCount = authCalls.Load()
+	firstCount := authCalls.Load()
 	time.Sleep(60 * time.Millisecond)
 	if count := authCalls.Load(); count != firstCount {
 		t.Fatalf("health probing was not throttled to its configured cadence: first=%d later=%d", firstCount, count)
@@ -2018,7 +2017,7 @@ func TestIPCServerCleanupDoesNotUnlinkReplacementSocket(t *testing.T) {
 func TestDefaultSocketPathIgnoresEnvironmentSpecificTempDirectory(t *testing.T) {
 	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "environment-specific-tmp"))
 	t.Setenv("XDG_RUNTIME_DIR", "")
-	want := filepath.Join("/tmp", "scratchpad-"+strconv.Itoa(os.Getuid()), "service.sock")
+	want := filepath.Join(string(filepath.Separator), "tmp", "scratchpad-"+strconv.Itoa(os.Getuid()), "service.sock")
 	if got := DefaultSocketPath(); got != want {
 		t.Fatalf("default socket path depends on process TMPDIR: got %q want %q", got, want)
 	}

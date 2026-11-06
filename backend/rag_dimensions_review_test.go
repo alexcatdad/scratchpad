@@ -110,7 +110,7 @@ func TestLegacySemanticDimensionsRemainUsableWhenPassageRAGIsUnavailable(t *test
 			vector := make([]float64, 16384)
 			vector[0] = 1
 			provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 			}))
 			defer provider.Close()
 			origin := startServer(t, path, databaseURL)

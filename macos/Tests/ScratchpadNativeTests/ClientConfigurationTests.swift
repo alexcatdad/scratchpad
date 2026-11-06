@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import ScratchpadNative
 
 private let testConfiguration = ServiceConfiguration(
@@ -11,18 +12,20 @@ private let testConfiguration = ServiceConfiguration(
 
 @Test func codexPreviewPreservesOtherTablesAndMirrorPreferences() throws {
     let existing = """
-    model = "example"
-    [mcp_servers.other]
-    command = "other-tool"
-    [mcp_servers.scratchpad]
-    command = "old"
-    [mcp_servers.scratchpad.env]
-    SCRATCHPAD_MIRROR = "true"
-    SCRATCHPAD_MIRROR_PATH = "/tmp/synthetic-mirror"
-    [ui]
-    theme = "dark"
-    """
-    let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp", configuration: testConfiguration)
+        model = "example"
+        [mcp_servers.other]
+        command = "other-tool"
+        [mcp_servers.scratchpad]
+        command = "old"
+        [mcp_servers.scratchpad.env]
+        SCRATCHPAD_MIRROR = "true"
+        SCRATCHPAD_MIRROR_PATH = "/tmp/synthetic-mirror"
+        [ui]
+        theme = "dark"
+        """
+    let result = try ClientConfiguration.codexPreview(
+        existing: existing, executable: "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp",
+        configuration: testConfiguration)
     #expect(result.contains("model = \"example\""))
     #expect(result.contains("[mcp_servers.other]"))
     #expect(result.contains("theme = \"dark\""))
@@ -34,20 +37,21 @@ private let testConfiguration = ServiceConfiguration(
 
 @Test func codexPreviewUpdatesQuotedCommentedTablesInPlace() throws {
     let existing = """
-    model = "example"
-    [mcp_servers."scratchpad"] # quoted table with legal comment
-    command = "old" # replace command only
-    args = ["--stdio"]
-    enabled = true
-    startup_timeout_ms = 9000
-    [mcp_servers."scratchpad".env] # env settings
-    SCRATCHPAD_MIRROR = "true" # preserve mirror policy
-    SCRATCHPAD_MIRROR_PATH = "/tmp/synthetic-mirror"
-    KEEP = "value"
-    [ui]
-    theme = "dark"
-    """
-    let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
+        model = "example"
+        [mcp_servers."scratchpad"] # quoted table with legal comment
+        command = "old" # replace command only
+        args = ["--stdio"]
+        enabled = true
+        startup_timeout_ms = 9000
+        [mcp_servers."scratchpad".env] # env settings
+        SCRATCHPAD_MIRROR = "true" # preserve mirror policy
+        SCRATCHPAD_MIRROR_PATH = "/tmp/synthetic-mirror"
+        KEEP = "value"
+        [ui]
+        theme = "dark"
+        """
+    let result = try ClientConfiguration.codexPreview(
+        existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
     #expect(result.contains("[mcp_servers.\"scratchpad\"] # quoted table with legal comment"))
     #expect(result.contains("[mcp_servers.\"scratchpad\".env] # env settings"))
     #expect(result.contains("command = \"/tmp/new-mcp\" # replace command only"))
@@ -64,33 +68,38 @@ private let testConfiguration = ServiceConfiguration(
 @Test func codexPreviewFailsClosedOnUnsupportedScratchpadTables() {
     let existing = "[[mcp_servers.scratchpad]]\ncommand = \"old\"\n"
     #expect(throws: ClientConfigurationError.self) {
-        try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
+        try ClientConfiguration.codexPreview(
+            existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
     }
 }
 
 @Test func codexPreviewHonorsArrayTableBoundaryAndFailsClosedOnAmbiguousForms() throws {
     let existing = """
-    [mcp_servers.scratchpad]
-    command = "old"
-    enabled = true
-    [[telemetry.routes]]
-    endpoint = "https://example.test"
-    """
-    let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
+        [mcp_servers.scratchpad]
+        command = "old"
+        enabled = true
+        [[telemetry.routes]]
+        endpoint = "https://example.test"
+        """
+    let result = try ClientConfiguration.codexPreview(
+        existing: existing, executable: "/tmp/new-mcp", configuration: testConfiguration)
     #expect(result.contains("[[telemetry.routes]]"))
     #expect(result.contains("endpoint = \"https://example.test\""))
     #expect(!result.contains("[mcp_servers.scratchpad.env]"))
-    #expect(result.range(of: "command = \"/tmp/new-mcp\"")!.lowerBound < result.range(of: "[[telemetry.routes]]")!.lowerBound)
+    #expect(
+        result.range(of: "command = \"/tmp/new-mcp\"")!.lowerBound
+            < result.range(of: "[[telemetry.routes]]")!.lowerBound)
 
     let unsupported = [
         "[mcp_servers.\"scrat\\u0063hpad\"]\ncommand = \"old\"\n",
         "mcp_servers.scratchpad.command = \"old\"\n",
         "[mcp_servers.scratchpad]\nenv = { SCRATCHPAD_URL = \"old\" }\n",
-        "[mcp_servers.scratchpad]\nargs = [\n  \"--legacy\"\n]\n"
+        "[mcp_servers.scratchpad]\nargs = [\n  \"--legacy\"\n]\n",
     ]
     for value in unsupported {
         #expect(throws: ClientConfigurationError.self) {
-            try ClientConfiguration.codexPreview(existing: value, executable: "/tmp/new-mcp", configuration: testConfiguration)
+            try ClientConfiguration.codexPreview(
+                existing: value, executable: "/tmp/new-mcp", configuration: testConfiguration)
         }
     }
 }
@@ -101,8 +110,11 @@ private let testConfiguration = ServiceConfiguration(
 }
 
 @Test func claudePreviewMergesEnvironmentAndRetainsUnrelatedSettings() throws {
-    let existing = Data(#"{"theme":"dark","mcpServers":{"other":{"command":"other"},"scratchpad":{"command":"old","env":{"SCRATCHPAD_MIRROR":"true","KEEP":"value"}}}}"#.utf8)
-    let result = try ClientConfiguration.jsonPreview(existing: existing, executable: "/tmp/synthetic-mcp", configuration: testConfiguration)
+    let existing = Data(
+        #"{"theme":"dark","mcpServers":{"other":{"command":"other"},"scratchpad":{"command":"old","env":{"SCRATCHPAD_MIRROR":"true","KEEP":"value"}}}}"#
+            .utf8)
+    let result = try ClientConfiguration.jsonPreview(
+        existing: existing, executable: "/tmp/synthetic-mcp", configuration: testConfiguration)
     let root = try #require(JSONSerialization.jsonObject(with: result) as? [String: Any])
     #expect(root["theme"] as? String == "dark")
     let servers = try #require(root["mcpServers"] as? [String: Any])
@@ -120,15 +132,18 @@ private let testConfiguration = ServiceConfiguration(
 
 @Test func malformedClientConfigurationIsRejectedWithoutReplacement() {
     #expect(throws: (any Error).self) {
-        try ClientConfiguration.jsonPreview(existing: Data("[]".utf8), executable: "/tmp/mcp", configuration: testConfiguration)
+        try ClientConfiguration.jsonPreview(
+            existing: Data("[]".utf8), executable: "/tmp/mcp", configuration: testConfiguration)
     }
     #expect(throws: (any Error).self) {
-        try ClientConfiguration.jsonPreview(existing: Data(#"{"mcpServers":[]}"#.utf8), executable: "/tmp/mcp", configuration: testConfiguration)
+        try ClientConfiguration.jsonPreview(
+            existing: Data(#"{"mcpServers":[]}"#.utf8), executable: "/tmp/mcp", configuration: testConfiguration)
     }
 }
 
 @Test func reviewedApplyRejectsAChangedSelectionAndConcurrentEdits() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("scratchpad-config-review-\(UUID().uuidString)", isDirectory: true)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "scratchpad-config-review-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -140,14 +155,16 @@ private let testConfiguration = ServiceConfiguration(
     try original.write(to: selected)
     try different.write(to: other)
 
-    let changedPathPreview = ReviewedConfigFile(path: selected.path, originalContents: original, proposedContents: proposed)
+    let changedPathPreview = ReviewedConfigFile(
+        path: selected.path, originalContents: original, proposedContents: proposed)
     #expect(throws: (any Error).self) {
         try ClientConfiguration.applyReviewedFile(changedPathPreview, selectedURL: other)
     }
     #expect(try Data(contentsOf: selected) == original)
     #expect(try Data(contentsOf: other) == different)
 
-    let concurrentPreview = ReviewedConfigFile(path: selected.path, originalContents: original, proposedContents: proposed)
+    let concurrentPreview = ReviewedConfigFile(
+        path: selected.path, originalContents: original, proposedContents: proposed)
     let concurrentEdit = Data("model = \"another editor's change\"\n".utf8)
     try concurrentEdit.write(to: selected)
     #expect(throws: (any Error).self) {
@@ -157,7 +174,8 @@ private let testConfiguration = ServiceConfiguration(
 }
 
 @Test func reviewedApplyAllowsCreateAndRejectsSymbolicLinkTargets() throws {
-    let directory = FileManager.default.temporaryDirectory.appendingPathComponent("scratchpad-config-symlink-\(UUID().uuidString)", isDirectory: true)
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "scratchpad-config-symlink-\(UUID().uuidString)", isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
 
@@ -171,7 +189,8 @@ private let testConfiguration = ServiceConfiguration(
     let link = directory.appendingPathComponent("link.json")
     try contents.write(to: target)
     try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
-    let linkPreview = ReviewedConfigFile(path: link.path, originalContents: contents, proposedContents: Data("{\"changed\":true}\n".utf8))
+    let linkPreview = ReviewedConfigFile(
+        path: link.path, originalContents: contents, proposedContents: Data("{\"changed\":true}\n".utf8))
     #expect(throws: (any Error).self) {
         try ClientConfiguration.applyReviewedFile(linkPreview, selectedURL: link)
     }
@@ -179,8 +198,10 @@ private let testConfiguration = ServiceConfiguration(
 }
 
 @Test func commandOnlySetupRemovesLegacyConnectionSettings() throws {
-    let existing = "[mcp_servers.scratchpad]\ncommand = \"old\"\n[mcp_servers.scratchpad.env]\nSCRATCHPAD_URL = \"https://old.example.test\"\nSCRATCHPAD_PUBLIC_KEY = \"/tmp/old.pub\"\nSCRATCHPAD_SIGNING_KEY = \"/tmp/old\"\n[ui]\ntheme = \"dark\"\n"
-    let result = try ClientConfiguration.codexPreview(existing: existing, executable: "/tmp/mcp", configuration: testConfiguration)
+    let existing =
+        "[mcp_servers.scratchpad]\ncommand = \"old\"\n[mcp_servers.scratchpad.env]\nSCRATCHPAD_URL = \"https://old.example.test\"\nSCRATCHPAD_PUBLIC_KEY = \"/tmp/old.pub\"\nSCRATCHPAD_SIGNING_KEY = \"/tmp/old\"\n[ui]\ntheme = \"dark\"\n"
+    let result = try ClientConfiguration.codexPreview(
+        existing: existing, executable: "/tmp/mcp", configuration: testConfiguration)
     #expect(!result.contains("SCRATCHPAD_URL"))
     #expect(!result.contains("SCRATCHPAD_PUBLIC_KEY"))
     #expect(!result.contains("SCRATCHPAD_SIGNING_KEY"))

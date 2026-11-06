@@ -30,7 +30,7 @@ func TestRAGFusedOmissionsCountAllDistinctCandidates(t *testing.T) {
 			}
 			data = append(data, map[string]any{"index": i, "embedding": vector})
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": data})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -67,7 +67,7 @@ func TestRAGFusedOmissionsCountAllDistinctCandidates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, value := range jobs {
 		job := value.(map[string]any)
 		record := records[job["recordId"].(string)]

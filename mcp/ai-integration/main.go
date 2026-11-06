@@ -32,7 +32,7 @@ func run() error {
 	denied := flag.String("denied-project", "", "Project denying AI processing")
 	flag.Parse()
 	if *endpoint == "" || *public == "" || *private == "" || *workspace == "" || *binary == "" || *other == "" || *denied == "" {
-		return errors.New("All integration flags are required")
+		return errors.New("all integration flags are required")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
@@ -56,7 +56,7 @@ func run() error {
 	project, _ := projectContext["project"].(map[string]any)
 	local, _ := project["id"].(string)
 	if local == "" {
-		return errors.New("Checkout discovery returned no project")
+		return errors.New("checkout discovery returned no project")
 	}
 	localScope := map[string]any{"projectId": local}
 	crossScope := map[string]any{"crossProject": true, "projectIds": []string{local, *other}}
@@ -89,7 +89,7 @@ func run() error {
 		}
 		matches, _ := result["results"].([]any)
 		if len(matches) == 0 {
-			return errors.New("Semantic tool returned no source-linked records")
+			return errors.New("semantic tool returned no source-linked records")
 		}
 		seen := map[string]bool{}
 		for _, item := range matches {
@@ -97,12 +97,12 @@ func run() error {
 			record, _ := match["record"].(map[string]any)
 			pid, _ := record["projectId"].(string)
 			if record["id"] == "" || pid != local && (scope["crossProject"] != true || pid != *other) {
-				return fmt.Errorf("Semantic result escaped requested consent scope: %v", record)
+				return fmt.Errorf("semantic result escaped requested consent scope: %v", record)
 			}
 			seen[pid] = true
 		}
 		if !seen[local] || scope["crossProject"] == true && !seen[*other] {
-			return errors.New("Semantic result omitted indexed requested project")
+			return errors.New("semantic result omitted indexed requested project")
 		}
 		input["type"] = "analyze"
 		out, err = call(ctx, session, "process_memory", input)
@@ -131,7 +131,7 @@ func run() error {
 	}
 	items, _ := suggestions["suggestions"].([]any)
 	if len(items) < 2 {
-		return errors.New("Local suggestions omitted analysis or generated document")
+		return errors.New("local suggestions omitted analysis or generated document")
 	}
 	document := false
 	for _, item := range items {
@@ -145,13 +145,13 @@ func run() error {
 		if artifact["kind"] == "export" {
 			content, _ := artifact["content"].(map[string]any)
 			if content["markdown"] == "" || artifact["format"] != "handoff" {
-				return errors.New("Generated handoff lost private Markdown output")
+				return errors.New("generated handoff lost private Markdown output")
 			}
 			document = true
 		}
 	}
 	if !document {
-		return errors.New("Document tool did not produce a source-linked handoff")
+		return errors.New("document tool did not produce a source-linked handoff")
 	}
 	suggestions, err = call(ctx, session, "get_suggestions", crossScope)
 	if err != nil {
@@ -172,7 +172,7 @@ func run() error {
 		}
 	}
 	if !crossFound {
-		return errors.New("Explicit cross-project suggestions missing")
+		return errors.New("explicit cross-project suggestions missing")
 	}
 	for _, tool := range []string{"process_memory", "semantic_search"} {
 		args := map[string]any{"crossProject": true, "projectIds": []string{local, *denied}, "type": "analyze", "query": "private memory"}
@@ -187,7 +187,7 @@ func run() error {
 		for _, value := range values {
 			artifact, _ := value.(map[string]any)
 			if err := verifyArtifact(artifact, local, *other, false); err != nil {
-				return errors.New("Suggestion retrieval exposed denied project sources")
+				return errors.New("suggestion retrieval exposed denied project sources")
 			}
 		}
 	}
@@ -199,10 +199,10 @@ func verifyScope(job, expected map[string]any) error {
 	ids, _ := scope["projectIds"].([]any)
 	if expected["crossProject"] == true {
 		if len(ids) != 2 || scope["crossProject"] != true {
-			return errors.New("Cross-project job scope changed")
+			return errors.New("cross-project job scope changed")
 		}
 	} else if len(ids) != 1 || ids[0] != expected["projectId"] {
-		return errors.New("Default local job escaped checkout project")
+		return errors.New("default local job escaped checkout project")
 	}
 	return nil
 }
@@ -214,7 +214,7 @@ func verifyArtifact(item map[string]any, local, other string, cross bool) error 
 	}
 	for _, project := range projects {
 		if project != local && (!cross || project != other) {
-			return errors.New("Suggestion escaped selected projects")
+			return errors.New("suggestion escaped selected projects")
 		}
 	}
 	return nil
@@ -231,7 +231,7 @@ func verifySources(ctx context.Context, session *mcp.ClientSession, artifact map
 		}
 		raw, _ := record["record"].(map[string]any)
 		if raw["id"] != source {
-			return errors.New("Derived citation could not reread its immutable source")
+			return errors.New("derived citation could not reread its immutable source")
 		}
 		belongs := false
 		for _, project := range projects {
@@ -240,10 +240,10 @@ func verifySources(ctx context.Context, session *mcp.ClientSession, artifact map
 			}
 		}
 		if !belongs {
-			return errors.New("Cited source belongs to a different project")
+			return errors.New("cited source belongs to a different project")
 		}
 		if artifact["kind"] == "export" && !strings.Contains(markdown, source.(string)) {
-			return errors.New("Export Markdown omitted its source citation")
+			return errors.New("export Markdown omitted its source citation")
 		}
 	}
 	return nil

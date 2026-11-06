@@ -42,7 +42,7 @@ func TestRAGLexicalFallbackRechecksCurrentScopeSourcesAndCitations(t *testing.T)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer barrier.Rollback()
+			defer func() { _ = barrier.Rollback() }()
 			// Disabled AI excludes background workers. The passage barrier pauses
 			// fallback coverage after its auth/scope snapshot, without locking
 			// source, lifecycle, project or cited-edge writes.

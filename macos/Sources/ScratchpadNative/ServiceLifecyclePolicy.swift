@@ -64,7 +64,10 @@ public struct ServiceLifecycleObservationRevision: Sendable {
     }
 
     public mutating func synchronize(to revision: Int, serviceExpectedToRun: Bool, absenceSuppressed: Bool) {
-        guard revision != value || serviceExpectedToRun != self.serviceExpectedToRun || absenceSuppressed != self.absenceSuppressed else { return }
+        guard
+            revision != value || serviceExpectedToRun != self.serviceExpectedToRun
+                || absenceSuppressed != self.absenceSuppressed
+        else { return }
         value = revision
         self.serviceExpectedToRun = serviceExpectedToRun
         self.absenceSuppressed = absenceSuppressed

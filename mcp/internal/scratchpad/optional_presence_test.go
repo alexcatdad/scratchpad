@@ -69,7 +69,7 @@ func TestStdioQARejectsExplicitEmptyAnswer(t *testing.T) {
 			}
 		}
 		record["id"] = "rec_presence"
-		json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
 	})
 	for _, scenario := range []struct {
 		name, answer string
@@ -164,7 +164,7 @@ func TestStdioOptionalNullValuesDoNotSelectDefaults(t *testing.T) {
 			return
 		}
 		record["id"] = "rec_presence"
-		json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": false}})
 	})
 	for _, field := range []string{"version", "limit", "maxChars", "previewChars"} {
 		t.Run(field, func(t *testing.T) {

@@ -31,7 +31,7 @@ func Load(path string) *Box {
 	if path == "" {
 		return b
 	}
-	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0) //nolint:gosec // the key file path is owner-held server configuration
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			b.issue = "KEY_INVALID"

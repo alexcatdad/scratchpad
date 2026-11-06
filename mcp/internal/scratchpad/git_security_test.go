@@ -100,7 +100,7 @@ func TestScopedToolsDoNotExecuteCheckoutHelpers(t *testing.T) {
 				t.Errorf("lost provenance: %+v", body.GitContext)
 			}
 			body.Record["id"] = "synthetic-record"
-			json.NewEncoder(w).Encode(map[string]any{"record": body.Record, "mirror": map[string]any{"eligible": false}})
+			_ = json.NewEncoder(w).Encode(map[string]any{"record": body.Record, "mirror": map[string]any{"eligible": false}})
 			return
 		}
 		fmt.Fprint(w, `{"records":[],"artifacts":[],"job":{"id":"synthetic-job"}}`)

@@ -129,7 +129,7 @@ func (s *SSH) Projects(operation string) http.HandlerFunc {
 				s.fail(w, err)
 				return
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			if _, err = apiActor(ctx, tx, r, s.Origin); err != nil {
 				s.fail(w, err)
 				return
@@ -225,7 +225,7 @@ func (s *SSH) Projects(operation string) http.HandlerFunc {
 					return err
 				}
 				for _, candidate := range projects {
-					if strings.ToLower(stringValue(candidate, "name")) == strings.ToLower(name) {
+					if strings.EqualFold(stringValue(candidate, "name"), name) {
 						if project != nil {
 							return &protocolError{"PROJECT_IDENTITY_AMBIGUOUS", "Select an existing project by projectId.", 409}
 						}

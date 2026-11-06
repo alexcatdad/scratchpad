@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -63,7 +64,7 @@ func TestOldVerifyResponseBlocksBeforeCapturePost(t *testing.T) {
 		Scope:         localcapture.Scope{ProjectID: "proj_synthetic"},
 		Binding:       localcapture.Binding{ServerURL: origin, CredentialFingerprint: fingerprint, PublicKeyPath: keyPath + ".pub", SigningKeyPath: keyPath},
 	})
-	if failure, ok := err.(*localcapture.DeliveryFailure); !ok || failure.Code != localcapture.DeliveryServerIncompatible {
+	if failure := (*localcapture.DeliveryFailure)(nil); !errors.As(err, &failure) || failure.Code != localcapture.DeliveryServerIncompatible {
 		t.Fatalf("old server should be blocked as incompatible, got %T %v (pub bytes %d)", err, err, len(pub))
 	}
 	if recordPosts != 0 {
@@ -118,7 +119,7 @@ func TestVerifyConnectionRequiresAuthenticatedProjectsRead(t *testing.T) {
 		ServerURL: origin, CredentialFingerprint: fingerprint,
 		PublicKeyPath: keyPath + ".pub", SigningKeyPath: keyPath,
 	})
-	if failure, ok := err.(*localcapture.DeliveryFailure); !ok || failure.Code != localcapture.DeliveryServerRejected {
+	if failure := (*localcapture.DeliveryFailure)(nil); !errors.As(err, &failure) || failure.Code != localcapture.DeliveryServerRejected {
 		t.Fatalf("resource-read rejection should fail verification with a safe category, identity=%+v err=%T %v verifyCalls=%d projectReads=%d", identity, err, err, verifyCalls, projectReads)
 	}
 	if identity.CredentialID != "" || verifyCalls != 1 || projectReads != 1 {

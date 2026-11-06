@@ -62,7 +62,7 @@ func TestCompletionModelChangeRetainsOrdinarySemanticEmbeddings(t *testing.T) {
 				for i := range body.Input {
 					data = append(data, map[string]any{"index": i, "embedding": []int{1, 0}})
 				}
-				json.NewEncoder(w).Encode(map[string]any{"data": data})
+				_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 			}))
 			defer provider.Close()
 			path, databaseURL := portableInstance(t, engine)

@@ -33,9 +33,10 @@ func requestOrigin(u *url.URL) string {
 		port = strconv.Itoa(number)
 	}
 	if port == "" {
-		if u.Scheme == "https" {
+		switch u.Scheme {
+		case "https":
 			port = "443"
-		} else if u.Scheme == "http" {
+		case "http":
 			port = "80"
 		}
 	}
@@ -98,9 +99,9 @@ func NewAuthenticatedClient(baseURL string, auth Auth) (*ClientWithResponses, er
 		transport = &http.Client{}
 	}
 	if client, ok := transport.(*http.Client); ok {
-		copy := *client
-		copy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
-		transport = &copy
+		noRedirect := *client
+		noRedirect.CheckRedirect = func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }
+		transport = &noRedirect
 	}
 	options = append(options, WithHTTPClient(authenticatedTransport{client: transport, origin: requestOrigin(u)}))
 	return NewClientWithResponses(strings.TrimRight(baseURL, "/"), options...)

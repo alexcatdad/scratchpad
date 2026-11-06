@@ -51,7 +51,7 @@ func TestRAGHistoryLifecycleIsNotTruncatedWithRelationshipPreviews(t *testing.T)
 		if strings.Contains(body.Input[0], "Related source") {
 			vector = []int{0, 1}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -107,7 +107,7 @@ func TestRAGResponseBudgetRetainsCitedUnicodeEvidenceWithOmissions(t *testing.T)
 		if strings.Contains(body.Input[0], "Supporting source") {
 			vector = []int{0, 1}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -169,7 +169,7 @@ func TestRAGCompletionModelChangeDoesNotDiscardInFlightPassageEmbedding(t *testi
 				return
 			}
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer func() { unblock(); provider.Close() }()
 	origin := startServer(t, path, databaseURL)
@@ -227,7 +227,7 @@ func TestRAGRechecksConsentProviderEnablementModelAndTokenBeforeActivation(t *te
 						return
 					}
 				}
-				w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 			}))
 			defer func() { unblock(); provider.Close() }()
 			origin := startServer(t, path, databaseURL)
@@ -313,7 +313,7 @@ func TestRAGRejectsMalformedProjectionMarkerWithoutRepair(t *testing.T) {
 func TestRAGPassagesSurviveRestartAndExplicitRebuildWithoutRewritingHistory(t *testing.T) {
 	path, databaseURL := ragInstance(t)
 	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer provider.Close()
 	var record, completed map[string]any
@@ -383,7 +383,7 @@ func TestRAGRetrievesSeparateCitedPassagesAcrossCompletionModelChange(t *testing
 			http.Error(w, "unexpected provider call", 400)
 			return
 		}
-		calls.Add(int32(len(body.Input)))
+		calls.Add(int32(len(body.Input))) //nolint:gosec // a test request carries a handful of inputs
 		data := []any{}
 		for index, input := range body.Input {
 			vector := []int{0, 1}
@@ -392,7 +392,7 @@ func TestRAGRetrievesSeparateCitedPassagesAcrossCompletionModelChange(t *testing
 			}
 			data = append(data, map[string]any{"index": index, "embedding": vector})
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": data})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)

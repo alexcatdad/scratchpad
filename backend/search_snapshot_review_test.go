@@ -15,7 +15,7 @@ func TestSearchOrdersImportedTimestampPrecisionChronologically(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			var archive map[string]any
-			json.Unmarshal([]byte(exactNumberArchive), &archive)
+			_ = json.Unmarshal([]byte(exactNumberArchive), &archive)
 			data := archive["data"].(map[string]any)
 			base := data["record"].([]any)[0].(map[string]any)
 			records, metadata := []any{}, []any{}
@@ -84,7 +84,7 @@ CREATE VIEW entities AS SELECT kind,id,metadata_read_gate(kind,data) AS data,ver
 	if _, err = lock.ExecContext(context.Background(), `SELECT pg_advisory_lock(77493)`); err != nil {
 		t.Fatal(err)
 	}
-	defer lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77493)`)
+	defer func() { _, _ = lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77493)`) }()
 	type response struct {
 		status int
 		body   map[string]any

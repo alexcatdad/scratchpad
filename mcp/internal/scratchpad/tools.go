@@ -62,23 +62,6 @@ func (c *Client) resolve(ctx context.Context, s Scope) (map[string]any, *GitCont
 	err = c.request(ctx, "POST", "/projects/resolve", map[string]any{"context": map[string]any{"git": g}}, "", &result)
 	return result.Project, g, err
 }
-func (c *Client) resolveCapture(ctx context.Context, s Scope) (map[string]any, *GitContext, error) {
-	if s.ProjectID == "" {
-		return c.resolve(ctx, s)
-	}
-	dir := s.WorkingDirectory
-	if dir == "" {
-		dir = c.Config.WorkingDirectory
-	}
-	dir, err := filepath.Abs(dir)
-	if err != nil {
-		return nil, nil, err
-	}
-	// Capture retains known checkout provenance after explicit owner selection,
-	// including partial context when discovery reports ambiguous remotes.
-	g, _ := Discover(ctx, dir)
-	return map[string]any{"id": s.ProjectID}, g, nil
-}
 
 func (c *Client) capture(ctx context.Context, kind string, common Common, payload any) (*mcp.CallToolResult, CaptureResult, error) {
 	out := CaptureResult{}
@@ -93,7 +76,7 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 	dir := captureWorkingDirectory(c, common.Scope)
 	g, err := Discover(ctx, dir)
 	var discoveryAPIError *APIError
-	if err != nil && !(common.Scope.ProjectID != "" && g != nil && errors.As(err, &discoveryAPIError) && discoveryAPIError.Code == "PROJECT_IDENTITY_AMBIGUOUS") {
+	if err != nil && (common.ProjectID == "" || g == nil || !errors.As(err, &discoveryAPIError) || discoveryAPIError.Code != "PROJECT_IDENTITY_AMBIGUOUS") {
 		return nil, out, err
 	}
 	configuration, err := c.CaptureService.GetConfiguration(ctx)
@@ -120,7 +103,7 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 	if g != nil {
 		gitContext, err = json.Marshal(g)
 		if err != nil {
-			return nil, out, errors.New("Git provenance snapshot is invalid")
+			return nil, out, errors.New("git provenance snapshot is invalid")
 		}
 	}
 	request := localcapture.CaptureRequest{
@@ -128,7 +111,7 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 		Record:    record,
 		Scope: localcapture.Scope{
 			WorkingDirectory: captureWorkingDirectory(c, common.Scope),
-			ProjectID:        common.Scope.ProjectID,
+			ProjectID:        common.ProjectID,
 		},
 		GitContext: gitContext,
 		Mirror: localcapture.MirrorConsent{

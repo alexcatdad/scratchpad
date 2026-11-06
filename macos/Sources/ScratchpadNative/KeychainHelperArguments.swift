@@ -26,8 +26,8 @@ public struct KeychainHelperArguments: Equatable, Sendable {
     /// intentionally scoped to the one queue key it owns.
     public init?(arguments: [String]) {
         guard arguments.count == 2,
-              let operation = Operation(rawValue: arguments[0]),
-              arguments[1] == QueueKeyIdentifier.captureQueue
+            let operation = Operation(rawValue: arguments[0]),
+            arguments[1] == QueueKeyIdentifier.captureQueue
         else { return nil }
 
         self.operation = operation

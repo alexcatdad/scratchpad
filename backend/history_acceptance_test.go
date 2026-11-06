@@ -32,8 +32,8 @@ func TestPrivateHistoryAcceptance(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Minute)
 	defer cancel()
 	command := exec.CommandContext(ctx, "node", append([]string{
-		"--import", filepath.Join(root, "node_modules/tsx/dist/loader.mjs"),
-		filepath.Join(root, "scripts/validate-history.ts"),
+		"--import", filepath.Join(root, "node_modules", "tsx", "dist", "loader.mjs"),
+		filepath.Join(root, "scripts", "validate-history.ts"),
 	}, args...)...)
 	command.Dir = root
 	command.Env = append(os.Environ(), "SCRATCHPAD_HISTORY_FIXTURE_URL="+origin, "SCRATCHPAD_HISTORY_FIXTURE_TOKEN="+restoredToken, "SCRATCHPAD_HISTORY_ARGS_JSON=")

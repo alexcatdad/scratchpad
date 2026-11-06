@@ -23,7 +23,7 @@ func (p HelperKeyProvider) run(ctx context.Context, operation string) ([]byte, e
 	if strings.TrimSpace(p.Path) == "" || strings.TrimSpace(p.Identifier) == "" {
 		return nil, ErrKeyUnavailableSentinel
 	}
-	cmd := exec.CommandContext(ctx, p.Path, operation, p.Identifier)
+	cmd := exec.CommandContext(ctx, p.Path, operation, p.Identifier) //nolint:gosec // the bundled Keychain helper with a fixed operation set
 	var stdout bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &bytes.Buffer{}

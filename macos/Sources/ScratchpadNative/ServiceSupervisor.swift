@@ -12,10 +12,12 @@ public struct ServiceSupervisor {
     }
 
     public static var hasPendingUpgrade: Bool {
-        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else {
+        guard let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        else {
             return false
         }
-        return FileManager.default.fileExists(atPath: support.appending(path: "Scratchpad/upgrade-in-progress.json").path)
+        return FileManager.default.fileExists(
+            atPath: support.appending(path: "Scratchpad/upgrade-in-progress.json").path)
     }
 
     /// Start is deliberately an explicit UI action. It starts the bundled
@@ -26,14 +28,20 @@ public struct ServiceSupervisor {
     }
 
     @discardableResult
-    public func finishUpgrade(bundle: Bundle = .main, onTermination: (@Sendable (Int32) -> Void)? = nil) throws -> Process {
+    public func finishUpgrade(bundle: Bundle = .main, onTermination: (@Sendable (Int32) -> Void)? = nil) throws
+        -> Process
+    {
         try launch(bundle: bundle, arguments: ["--finish-upgrade"], onTermination: onTermination)
     }
 
     @discardableResult
-    private func launch(bundle: Bundle, arguments: [String], onTermination: (@Sendable (Int32) -> Void)? = nil) throws -> Process {
+    private func launch(bundle: Bundle, arguments: [String], onTermination: (@Sendable (Int32) -> Void)? = nil) throws
+        -> Process
+    {
         let executable = Self.serviceURL(bundle: bundle)
-        guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw SupervisorError.serviceMissing }
+        guard FileManager.default.isExecutableFile(atPath: executable.path) else {
+            throw SupervisorError.serviceMissing
+        }
         let process = Process()
         process.executableURL = executable
         process.arguments = arguments
@@ -60,5 +68,7 @@ public struct ServiceSupervisor {
 
 public enum SupervisorError: Error, LocalizedError {
     case serviceMissing
-    public var errorDescription: String? { "The bundled capture service is missing. Reinstall Scratchpad to repair this app." }
+    public var errorDescription: String? {
+        "The bundled capture service is missing. Reinstall Scratchpad to repair this app."
+    }
 }

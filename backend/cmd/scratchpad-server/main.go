@@ -49,7 +49,7 @@ func run() error {
 		defer cancel()
 		token, err := httpapi.AuthorizeSetup(ctx, store, os.Args[1] == "recover")
 		if err != nil {
-			return fmt.Errorf("%s: owner authorization failed", err)
+			return fmt.Errorf("%w: owner authorization failed", err)
 		}
 		fmt.Fprintln(os.Stdout, "One-use owner setup or recovery token (expires in 15 minutes):")
 		fmt.Fprintln(os.Stdout, token)

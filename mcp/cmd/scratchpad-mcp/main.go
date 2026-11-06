@@ -43,7 +43,8 @@ func main() {
 	c, err := scratchpad.NewLocalClient(socketPath)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		cancel()
+		os.Exit(1) //nolint:gocritic // cancel() runs explicitly on the line above
 	}
 	c.Config.Mirror = os.Getenv("SCRATCHPAD_MIRROR") == "true"
 	c.Config.MirrorPath = os.Getenv("SCRATCHPAD_MIRROR_PATH")

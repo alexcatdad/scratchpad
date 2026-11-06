@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 	"modernc.org/sqlite"
 )
 
@@ -120,7 +120,7 @@ func (s *Store) migrate(ctx context.Context) error {
 	if _, err := conn.ExecContext(ctx, begin); err != nil {
 		return err
 	}
-	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 	if s.Engine == "postgres" {
 		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1397772880)`); err != nil {
 			return err
@@ -331,7 +331,7 @@ func (s *Store) Write(ctx context.Context, work func(*sql.Conn) error) error {
 	if _, err := conn.ExecContext(ctx, begin); err != nil {
 		return err
 	}
-	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 	if s.Engine == "postgres" {
 		if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_xact_lock(1397772880)`); err != nil {
 			return err

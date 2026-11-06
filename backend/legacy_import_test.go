@@ -186,7 +186,7 @@ func TestLegacyJSONLWarnsForSparseAndUnsupportedClaimsWithoutInventingValues(t *
 		t.Fatal("unsupported claims became invented values")
 	}
 	var original map[string]any
-	json.Unmarshal([]byte(line), &original)
+	_ = json.Unmarshal([]byte(line), &original)
 	if !reflect.DeepEqual(payload["legacyOriginal"], original) || record["gitContext"].(map[string]any)["branch"] != "historical" {
 		t.Fatal("sparse source evidence lost")
 	}
@@ -268,7 +268,7 @@ func TestLegacyJSONLRetainsSourceEvidenceAndUnverifiedAuthority(t *testing.T) {
 			record := detail["record"].(map[string]any)
 			payload := record["payload"].(map[string]any)
 			var original map[string]any
-			json.Unmarshal([]byte(first), &original)
+			_ = json.Unmarshal([]byte(first), &original)
 			if !reflect.DeepEqual(payload["legacyOriginal"], original) || payload["decision"] != "Keep public metadata.\nSeparate measurements from claims." || payload["rationale"] != "Allows later verification." {
 				t.Fatal("legacy payload lost original fields or array prose")
 			}

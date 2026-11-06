@@ -175,7 +175,7 @@ func TestRealStdioMCPToDurableServiceToSSHHTTP(t *testing.T) {
 			_ = json.NewEncoder(w).Encode(map[string]any{"record": record, "mirror": map[string]any{"eligible": true}})
 		case strings.HasPrefix(r.URL.Path, "/api/v1/records/") && r.Method == http.MethodGet:
 			if r.Header.Get("Authorization") != "Bearer synthetic-session" {
-				http.Error(w, "unauthorized", 401)
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 			_ = json.NewEncoder(w).Encode(map[string]any{"record": map[string]any{"id": "record-synthetic-read"}})

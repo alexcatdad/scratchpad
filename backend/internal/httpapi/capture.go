@@ -22,10 +22,10 @@ import (
 
 var clientSavedAtPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])$`)
 
-func captureText(value any, max int) (string, error) {
+func captureText(value any, limit int) (string, error) {
 	text, ok := value.(string)
 	text = strings.TrimSpace(text)
-	if !ok || text == "" || len(utf16.Encode([]rune(text))) > max {
+	if !ok || text == "" || len(utf16.Encode([]rune(text))) > limit {
 		return "", validationProject()
 	}
 	return text, nil

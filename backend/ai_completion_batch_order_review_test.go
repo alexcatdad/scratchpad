@@ -49,7 +49,7 @@ func TestCrossProjectCompletionOrdersSelectedBatchesWithoutChangingFairCoverage(
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer tx.Rollback()
+			defer func() { _ = tx.Rollback() }()
 			instants := map[string]string{}
 			content := "Complete source: " + strings.Repeat("α", 3900) + "💡end"
 			for _, fixture := range []struct{ id, project, at string }{

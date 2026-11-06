@@ -26,7 +26,7 @@ func TestPostgresSemanticCorpusReadDoesNotBlockIndependentCuration(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer barrier.Rollback()
+	defer func() { _ = barrier.Rollback() }()
 	// Pause the native corpus query, without locking entities used by metadata
 	// curation. Public writes must not inherit the semantic reader's writer lock.
 	if _, err = barrier.ExecContext(ctx, "LOCK TABLE context_headers IN ACCESS EXCLUSIVE MODE"); err != nil {

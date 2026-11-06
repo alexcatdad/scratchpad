@@ -6,7 +6,7 @@ func TestServerOrigin(t *testing.T) {
 	for raw, want := range map[string]string{
 		"https://memory.example.com":   "https://memory.example.com",
 		"https://memory.example.com/":  "https://memory.example.com",
-		" http://localhost:3000 ":      "http://localhost:3000",
+		" http://localhost:3000 ":      "http://localhost:3000", //nolint:gocritic // the surrounding whitespace is the input under test
 		"https://memory.example.com/x": "",
 		"http://memory.example.com":    "",
 		"https://u:p@memory.example":   "",

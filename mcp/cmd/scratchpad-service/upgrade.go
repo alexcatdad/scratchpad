@@ -203,7 +203,7 @@ func finishUpgrade(socketPath, databasePath, helperPath, keyIdentifier, serviceP
 		return localcapture.ClearUpgradeState()
 	}
 
-	command := exec.Command(servicePath, "--upgrade-resume", "--socket", socketPath, "--database", databasePath, "--key-helper", helperPath, "--key-identifier", keyIdentifier)
+	command := exec.Command(servicePath, "--upgrade-resume", "--socket", socketPath, "--database", databasePath, "--key-helper", helperPath, "--key-identifier", keyIdentifier) //nolint:gosec // the installed service binary with fixed flags
 	command.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	command.Stdin, command.Stdout, command.Stderr = nil, nil, nil
 	if err = command.Start(); err != nil {

@@ -52,7 +52,7 @@ func TestPublicGithubProfileDoesNotAuthorizeOwner(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"login":"Owner-Example","type":"User","name":"Synthetic public owner","avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}`)
+		_, _ = io.WriteString(w, `{"login":"Owner-Example","type":"User","name":"Synthetic public owner","avatar_url":"https://avatars.githubusercontent.com/u/42?v=4"}`)
 	}))
 	path, _, local := githubHistoricalBrowser(t, "sqlite")
 	origin := startServer(t, path, "")
@@ -84,15 +84,15 @@ func TestPublicGithubFailuresKeepProfileUnchanged(t *testing.T) {
 					w.Header().Set("Location", "https://attacker.invalid/")
 					w.WriteHeader(302)
 				case "oversized":
-					io.WriteString(w, strings.Repeat("x", 65537))
+					_, _ = io.WriteString(w, strings.Repeat("x", 65537))
 				case "missing":
 					http.Error(w, "synthetic-secret", 404)
 				case "rate-limit":
-					http.Error(w, "synthetic-secret", 429)
+					http.Error(w, "synthetic-secret", http.StatusTooManyRequests)
 				case "organization":
-					io.WriteString(w, `{"login":"owner-example","type":"Organization","name":null,"avatar_url":null}`)
+					_, _ = io.WriteString(w, `{"login":"owner-example","type":"Organization","name":null,"avatar_url":null}`)
 				default:
-					io.WriteString(w, `{"login":"another-owner","type":"User","name":null,"avatar_url":null}`)
+					_, _ = io.WriteString(w, `{"login":"another-owner","type":"User","name":null,"avatar_url":null}`)
 				}
 			}))
 			path, _, _ := githubHistoricalBrowser(t, "sqlite")
@@ -127,7 +127,7 @@ func TestGithubProfileRechecksVersionAfterExternalWait(t *testing.T) {
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"login":"owner-example","type":"User","name":null,"avatar_url":null}`)
+		_, _ = io.WriteString(w, `{"login":"owner-example","type":"User","name":null,"avatar_url":null}`)
 	}))
 	path, _, _ := githubHistoricalBrowser(t, "sqlite")
 	origin := startServer(t, path, "")
@@ -137,7 +137,7 @@ func TestGithubProfileRechecksVersionAfterExternalWait(t *testing.T) {
 	result := make(chan *http.Response, 1)
 	failures := make(chan error, 1)
 	go func() {
-		res, err := http.DefaultClient.Do(req)
+		res, err := http.DefaultClient.Do(req) //nolint:bodyclose // the receiving select closes the body
 		if err != nil {
 			failures <- err
 		} else {
@@ -196,7 +196,7 @@ func TestImportedGithubPresentationOmitsUnsafeUrlsAndFields(t *testing.T) {
 func TestPublicAvatarNormalizesAllowedOrigin(t *testing.T) {
 	githubService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		io.WriteString(w, `{"login":"owner-example","type":"User","name":null,"avatar_url":"HTTPS://AVATARS.GITHUBUSERCONTENT.COM:443"}`)
+		_, _ = io.WriteString(w, `{"login":"owner-example","type":"User","name":null,"avatar_url":"HTTPS://AVATARS.GITHUBUSERCONTENT.COM:443"}`)
 	}))
 	path, _, _ := githubHistoricalBrowser(t, "sqlite")
 	origin := startServer(t, path, "")

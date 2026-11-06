@@ -1,6 +1,6 @@
-import SwiftUI
 import MenubarKit
 import ScratchpadNative
+import SwiftUI
 
 enum WorkspacePage: String, CaseIterable, Identifiable {
     case overview = "Overview"
@@ -59,13 +59,24 @@ struct WorkspaceView: View {
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
-                Button { model.refresh(); model.loadReceipts() } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                Button {
+                    model.refresh(); model.loadReceipts()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
             }
         }
-        .onAppear { model.refresh(); model.loadConfiguration(); model.loadReceipts() }
-        .alert("Scratchpad", isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })) {
+        .onAppear {
+            model.refresh(); model.loadConfiguration(); model.loadReceipts()
+        }
+        .alert(
+            "Scratchpad",
+            isPresented: Binding(get: { model.errorMessage != nil }, set: { if !$0 { model.errorMessage = nil } })
+        ) {
             Button("OK", role: .cancel) { model.errorMessage = nil }
-        } message: { Text(model.errorMessage ?? "") }
+        } message: {
+            Text(model.errorMessage ?? "")
+        }
     }
     private var attentionCount: Int {
         guard let s = model.status else { return 0 }
@@ -99,8 +110,12 @@ struct OverviewPage: View {
             Section("Status") {
                 ForEach(p.rows, id: \.title) { row in
                     LabeledContent {
-                        HStack(spacing: 6) { StatusIcon(tone: row.tone); Text(row.value) }
-                    } label: { Text(row.title) }
+                        HStack(spacing: 6) {
+                            StatusIcon(tone: row.tone); Text(row.value)
+                        }
+                    } label: {
+                        Text(row.title)
+                    }
                 }
                 if let server = model.configuration.serverURL.nilIfEmpty {
                     LabeledContent("Server address", value: server)
@@ -112,8 +127,10 @@ struct OverviewPage: View {
                 } else {
                     ForEach(model.receipts.prefix(6)) { receipt in
                         HStack(spacing: 10) {
-                            Text(ReceiptLabels.type(receipt)).font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                                .frame(width: 76, alignment: .leading)
+                            Text(ReceiptLabels.type(receipt)).font(.caption.weight(.semibold)).foregroundStyle(
+                                .secondary
+                            )
+                            .frame(width: 76, alignment: .leading)
                             Text(ReceiptLabels.title(receipt)).lineLimit(1)
                             Spacer()
                             HStack(spacing: 5) {
@@ -170,14 +187,19 @@ struct CapturesPage: View {
                 .padding(.horizontal, 10)
                 .padding(.top, 10)
                 if filtered.isEmpty {
-                    EmptyStateView(title: filter == .all ? "No captures yet" : "Nothing here", symbol: "tray", detail: filter == .all ? "Captures from your AI tools appear here." : "No captures match this filter.")
+                    EmptyStateView(
+                        title: filter == .all ? "No captures yet" : "Nothing here", symbol: "tray",
+                        detail: filter == .all
+                            ? "Captures from your AI tools appear here." : "No captures match this filter.")
                 } else {
                     List(filtered, selection: $selection) { receipt in
                         VStack(alignment: .leading, spacing: 3) {
                             Text(ReceiptLabels.title(receipt)).font(.body.weight(.medium)).lineLimit(2)
                             HStack(spacing: 5) {
                                 StatusIcon(tone: ReceiptLabels.tone(receipt.state), size: 10)
-                                Text("\(ReceiptLabels.type(receipt)) · \(ReceiptLabels.state(receipt.state)) · \(ReceiptLabels.when(receipt.acceptedAt))")
+                                Text(
+                                    "\(ReceiptLabels.type(receipt)) · \(ReceiptLabels.state(receipt.state)) · \(ReceiptLabels.when(receipt.acceptedAt))"
+                                )
                             }
                             .font(.caption).foregroundStyle(.secondary)
                         }
@@ -185,7 +207,9 @@ struct CapturesPage: View {
                         .tag(receipt.receiptId)
                         .accessibilityElement(children: .combine)
                         .contextMenu {
-                            if receipt.state != "delivered" { Button("Discard…", role: .destructive) { discardTarget = receipt } }
+                            if receipt.state != "delivered" {
+                                Button("Discard…", role: .destructive) { discardTarget = receipt }
+                            }
                         }
                     }
                     if model.hasMoreReceipts {
@@ -201,7 +225,8 @@ struct CapturesPage: View {
                 if let receipt = currentReceipt {
                     CaptureDetail(receipt: receipt) { discardTarget = receipt }
                 } else {
-                    EmptyStateView(title: "Select a capture", symbol: "doc.text", detail: "Details and actions appear here.")
+                    EmptyStateView(
+                        title: "Select a capture", symbol: "doc.text", detail: "Details and actions appear here.")
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -213,10 +238,18 @@ struct CapturesPage: View {
         .onChange(of: model.selectedReceiptID) { receiptID in
             if selection != receiptID { selection = receiptID }
         }
-        .confirmationDialog("Discard this capture?", isPresented: Binding(get: { discardTarget != nil }, set: { if !$0 { discardTarget = nil } }), titleVisibility: .visible) {
-            Button("Discard Capture", role: .destructive) { if let target = discardTarget { model.discard(target) }; discardTarget = nil }
+        .confirmationDialog(
+            "Discard this capture?",
+            isPresented: Binding(get: { discardTarget != nil }, set: { if !$0 { discardTarget = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Discard Capture", role: .destructive) {
+                if let target = discardTarget { model.discard(target) }; discardTarget = nil
+            }
             Button("Cancel", role: .cancel) { discardTarget = nil }
-        } message: { Text("It has not reached the server. Discarding removes it from this Mac permanently.") }
+        } message: {
+            Text("It has not reached the server. Discarding removes it from this Mac permanently.")
+        }
     }
 
     private var currentReceipt: Receipt? {
@@ -256,17 +289,22 @@ private struct CaptureDetail: View {
                             Text("Choose a project").tag("")
                             ForEach(model.projects) { Text($0.name).tag($0.id) }
                         }
-                        Button("Assign") { model.selectProject(receiptID: receipt.receiptId, projectID: selectedProject) }
-                            .buttonStyle(ProminentButtonStyle())
-                            .disabled(selectedProject.isEmpty)
+                        Button("Assign") {
+                            model.selectProject(receiptID: receipt.receiptId, projectID: selectedProject)
+                        }
+                        .buttonStyle(ProminentButtonStyle())
+                        .disabled(selectedProject.isEmpty)
                     }
                 }
             }
             if let content = receipt.content {
                 Section("Details") {
                     LabeledContent("Project", value: projectName(content.scope.projectId))
-                    LabeledContent("Saved on this Mac", value: ReceiptLabels.when(receipt.clientSavedAt ?? receipt.acceptedAt))
-                    LabeledContent("Source", value: "\(content.record.authority.capitalized), \(content.record.confidence) confidence")
+                    LabeledContent(
+                        "Saved on this Mac", value: ReceiptLabels.when(receipt.clientSavedAt ?? receipt.acceptedAt))
+                    LabeledContent(
+                        "Source",
+                        value: "\(content.record.authority.capitalized), \(content.record.confidence) confidence")
                     if let directory = content.scope.workingDirectory, !directory.isEmpty {
                         LabeledContent("Working directory", value: directory)
                     }
@@ -312,7 +350,9 @@ private struct CaptureDetail: View {
         default: "Saved on this Mac."
         }
     }
-    private var code: String { receipt.deliveryCode?.replacingOccurrences(of: "_", with: " ").lowercased() ?? "no reason given" }
+    private var code: String {
+        receipt.deliveryCode?.replacingOccurrences(of: "_", with: " ").lowercased() ?? "no reason given"
+    }
     private func projectName(_ id: String?) -> String {
         guard let id else { return "Not assigned" }
         return model.projects.first { $0.id == id }?.name ?? id

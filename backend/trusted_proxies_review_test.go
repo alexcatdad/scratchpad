@@ -28,7 +28,7 @@ func proxyAuthRequest(t *testing.T, origin, method, path, forwarded string, body
 	}
 	defer response.Body.Close()
 	var result map[string]any
-	json.NewDecoder(response.Body).Decode(&result)
+	_ = json.NewDecoder(response.Body).Decode(&result)
 	return response.StatusCode, result
 }
 

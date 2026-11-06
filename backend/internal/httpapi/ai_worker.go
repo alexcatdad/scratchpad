@@ -105,7 +105,7 @@ func (a *AI) aiScopedEntities(ctx context.Context, conn *sql.Conn, scope jobScop
 	if a.auth.Store.Engine == "postgres" {
 		project = "data->>'projectId'"
 	}
-	query := "SELECT data FROM entities WHERE kind=$1 AND " + project + " IN (" + strings.Join(placeholders, ",") + ") ORDER BY created_at,id"
+	query := "SELECT data FROM entities WHERE kind=$1 AND " + project + " IN (" + strings.Join(placeholders, ",") + ") ORDER BY created_at,id" //nolint:gosec // only generated $N placeholders and fixed SQL fragments are concatenated; values are bound
 	if kind == "record" {
 		args = args[1:]
 		for i := range placeholders {
@@ -306,7 +306,7 @@ func (a *AI) readWorkerInputs(ctx context.Context, job map[string]any, snapshot 
 		if _, err = conn.ExecContext(ctx, begin); err != nil {
 			return nil, err
 		}
-		defer conn.ExecContext(context.Background(), "ROLLBACK")
+		defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 		return read(conn)
 	}()
 	if err != nil {
@@ -518,11 +518,12 @@ func (a *AI) Run(ctx context.Context) {
 		if err != nil || job == nil {
 			return
 		}
-		if job["type"] == "rag_index" {
+		switch job["type"] {
+		case "rag_index":
 			err = a.executeRAGIndex(ctx, job, snapshot)
-		} else if job["type"] == "embed" {
+		case "embed":
 			err = a.executeEmbedding(ctx, job, snapshot)
-		} else {
+		default:
 			err = a.executeCompletion(ctx, job, snapshot)
 		}
 		if err != nil && ctx.Err() == nil {

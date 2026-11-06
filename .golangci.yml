@@ -1,0 +1,85 @@
+version: "2"
+
+# One config for every Go module (backend, mcp, packages/clients/go).
+# `task lint` runs golangci-lint from each module directory with this file.
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gocritic
+    - gosec
+    - misspell
+    - revive
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+      disabled-checks:
+        # Opinionated style check: `err = f()` reusing an outer error is the
+        # idiom across the handlers and is not a defect.
+        - sloppyReassign
+    misspell:
+      locale: US
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: errorf
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unreachable-code
+        - name: var-declaration
+  exclusions:
+    generated: lax
+    presets:
+      - std-error-handling
+    rules:
+      # errcheck reports a bare `<-done` receive from a chan error with this
+      # message, while staticcheck S1005 rejects `_ = <-done`. Waiting on the
+      # goroutine is the point of those receives; call results stay checked.
+      - linters: [errcheck]
+        text: "^Error return value is not checked$"
+      # G104 duplicates errcheck, which stays enabled everywhere.
+      - linters: [gosec]
+        text: "G104:"
+      # Tests launch freshly built binaries and git/ssh fixtures, and read and
+      # write files under t.TempDir() with fake credentials, and send client-side
+      # request cookies (G124 targets Set-Cookie), and re-exec os.Args[0] as a
+      # helper process (G702). Only these gosec
+      # rules are relaxed, and only in _test.go files.
+      - path: _test\.go$
+        linters: [gosec]
+        text: "G(101|124|204|301|302|304|306|702|703):"
+      # githubRequest registers t.Cleanup(res.Body.Close) and the passkey
+      # post helper defers Body.Close, which bodyclose cannot follow.
+      - path: backend/(github|github_stdio|passkeys)_test\.go$
+        linters: [bodyclose]
+      # Developer harnesses: they launch the binary under test and read the
+      # files named by their own command-line flags or fixture trees.
+      - path: mcp/(ai-integration|benchmark|integration|rag-integration)/
+        linters: [gosec]
+        text: "G(122|204|304):"
+      # The local service's private socket, lock and database paths come from
+      # its own configuration and are checked (Lstat, owner, mode, no symlink)
+      # before use; the taint analysis cannot see those checks.
+      - path: mcp/internal/localcapture/(ipc|store|startup_lock_unix)\.go$
+        linters: [gosec]
+        text: "G(703|704):"
+      # These errors are the documented operator- and agent-facing messages
+      # (stable CODE: sentence. text), printed as-is and asserted by tests.
+      - path: (backend/cmd/scratchpad-server/main|backend/internal/persistence/backup|mcp/cmd/scratchpad-mcp/startup)\.go$
+        linters: [revive, staticcheck]
+        text: "(error-strings|ST1005):"
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

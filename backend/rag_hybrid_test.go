@@ -11,7 +11,9 @@ import (
 
 func TestRAGProviderOutageReturnsCitedLexicalEvidenceAndIndexUncertainty(t *testing.T) {
 	path, databaseURL := ragInstance(t)
-	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { http.Error(w, "synthetic-private-provider-error", 503) }))
+	provider := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "synthetic-private-provider-error", http.StatusServiceUnavailable)
+	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
 	status, _ := curationRequest(t, origin, "PATCH", "/ai/settings", map[string]any{"expectedVersion": 0, "enabled": true, "scheduleMinutes": 0, "baseUrl": provider.URL + "/v1", "embeddingDimensions": 2})
@@ -49,7 +51,7 @@ func TestRAGHybridRetrievalKeepsExactIdentifiersAndSemanticParaphrases(t *testin
 		if strings.Contains(body.Input[0], "EXACT_FUSION_ID_9") && strings.Contains(body.Input[0], "\n") {
 			vector = []int{0, 1}
 		}
-		json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []any{map[string]any{"index": 0, "embedding": vector}}})
 	}))
 	defer provider.Close()
 	origin := startServer(t, path, databaseURL)
@@ -100,7 +102,7 @@ func TestRAGPendingIndexReturnsRawLexicalEvidenceWithHealthyQueryProvider(t *tes
 				return
 			}
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer func() { close(release); provider.Close() }()
 	origin := startServer(t, path, databaseURL)
@@ -162,7 +164,7 @@ func TestRAGPartialIndexCombinesSemanticEvidenceWithPendingLexicalSources(t *tes
 				return
 			}
 		}
-		w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]}]}`))
 	}))
 	defer func() { close(release); provider.Close() }()
 	origin := startServer(t, path, databaseURL)

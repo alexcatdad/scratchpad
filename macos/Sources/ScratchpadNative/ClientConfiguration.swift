@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 
 public enum MCPClientKind: String, CaseIterable, Identifiable, Sendable {
     case codex = "Codex"
@@ -57,7 +57,9 @@ public enum ClientConfiguration {
         try writeAtomically(preview.proposedContents, to: URL(fileURLWithPath: selectedPath))
     }
 
-    public static func codexPreview(existing: String, executable: String, configuration: ServiceConfiguration) throws -> String {
+    public static func codexPreview(existing: String, executable: String, configuration: ServiceConfiguration) throws
+        -> String
+    {
         guard !existing.contains("\"\"\""), !existing.contains("'''") else {
             throw ClientConfigurationError.unsupportedTOMLSyntax
         }
@@ -83,7 +85,8 @@ public enum ClientConfiguration {
             throw ClientConfigurationError.unsupportedTOMLSyntax
         }
         if let args = assignmentLine("args", in: targetSection, lines: lines) {
-            let value = String(stripTOMLComment(lines[args]).split(separator: "=", maxSplits: 1).last ?? "").trimmingCharacters(in: .whitespaces)
+            let value = String(stripTOMLComment(lines[args]).split(separator: "=", maxSplits: 1).last ?? "")
+                .trimmingCharacters(in: .whitespaces)
             guard hasBalancedInlineCollections(value) else { throw ClientConfigurationError.unsupportedTOMLSyntax }
             lines.remove(at: args)
         }
@@ -106,47 +109,68 @@ public enum ClientConfiguration {
                     lines[index] = ""
                 }
             }
-            if lines[(envSection.header + 1)..<envSection.end].allSatisfy({ stripTOMLComment($0).trimmingCharacters(in: .whitespaces).isEmpty }) {
+            if lines[(envSection.header + 1)..<envSection.end].allSatisfy({
+                stripTOMLComment($0).trimmingCharacters(in: .whitespaces).isEmpty
+            }) {
                 lines.removeSubrange(envSection.header..<envSection.end)
             }
         }
         return lines.joined(separator: "\n") + "\n"
     }
 
-    public static func jsonPreview(existing: Data, executable: String, configuration: ServiceConfiguration) throws -> Data {
+    public static func jsonPreview(existing: Data, executable: String, configuration: ServiceConfiguration) throws
+        -> Data
+    {
         var root: [String: Any]
-        if existing.isEmpty { root = [:] }
-        else {
-            guard let parsed = try JSONSerialization.jsonObject(with: existing) as? [String: Any] else { throw ClientConfigurationError.invalidJSONRoot }
+        if existing.isEmpty {
+            root = [:]
+        } else {
+            guard let parsed = try JSONSerialization.jsonObject(with: existing) as? [String: Any] else {
+                throw ClientConfigurationError.invalidJSONRoot
+            }
             root = parsed
         }
         var servers: [String: Any]
         if let existingServers = root["mcpServers"] {
-            guard let dictionary = existingServers as? [String: Any] else { throw ClientConfigurationError.invalidMCPServers }
+            guard let dictionary = existingServers as? [String: Any] else {
+                throw ClientConfigurationError.invalidMCPServers
+            }
             servers = dictionary
-        } else { servers = [:] }
+        } else {
+            servers = [:]
+        }
         var entry: [String: Any]
         if let current = servers["scratchpad"] {
-            guard let dictionary = current as? [String: Any] else { throw ClientConfigurationError.invalidScratchpadEntry }
+            guard let dictionary = current as? [String: Any] else {
+                throw ClientConfigurationError.invalidScratchpadEntry
+            }
             entry = dictionary
-        } else { entry = [:] }
+        } else {
+            entry = [:]
+        }
         var environment: [String: String]
         if let current = entry["env"] {
-            guard let dictionary = current as? [String: String] else { throw ClientConfigurationError.invalidEntryEnvironment }
+            guard let dictionary = current as? [String: String] else {
+                throw ClientConfigurationError.invalidEntryEnvironment
+            }
             environment = dictionary
-        } else { environment = [:] }
+        } else {
+            environment = [:]
+        }
         connectionEnvironmentKeys.forEach { environment.removeValue(forKey: $0) }
         entry["command"] = executable
         entry.removeValue(forKey: "args")
-        if environment.isEmpty { entry.removeValue(forKey: "env") }
-        else { entry["env"] = environment }
+        if environment.isEmpty { entry.removeValue(forKey: "env") } else { entry["env"] = environment }
         servers["scratchpad"] = entry
         root["mcpServers"] = servers
-        return try JSONSerialization.data(withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
+        return try JSONSerialization.data(
+            withJSONObject: root, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
     }
 
     public static func genericEntry(executable: String, configuration: ServiceConfiguration) throws -> Data {
-        try JSONSerialization.data(withJSONObject: ["command": executable], options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]) + Data([0x0A])
+        try JSONSerialization.data(
+            withJSONObject: ["command": executable], options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+            + Data([0x0A])
     }
 
     public static func writeAtomically(_ bytes: Data, to url: URL) throws {
@@ -161,7 +185,8 @@ public enum ClientConfiguration {
         case .symbolicLink: throw ClientConfigurationError.symbolicLink
         }
         let directory = url.deletingLastPathComponent()
-        try manager.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        try manager.createDirectory(
+            at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
         try bytes.write(to: URL(fileURLWithPath: path), options: .atomic)
         try manager.setAttributes([.posixPermissions: existingMode ?? 0o600], ofItemAtPath: path)
     }
@@ -179,7 +204,9 @@ public enum ClientConfiguration {
         throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
     }
 
-    private static let connectionEnvironmentKeys = ["SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"]
+    private static let connectionEnvironmentKeys = [
+        "SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY",
+    ]
 
     private static func tomlEscape(_ value: String) -> String {
         value.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
@@ -199,18 +226,23 @@ public enum ClientConfiguration {
             let arrayTable = content.hasPrefix("[[")
             let inner: String
             if arrayTable {
-                guard content.hasSuffix("]]"), content.count > 4 else { throw ClientConfigurationError.unsupportedTOMLSyntax }
+                guard content.hasSuffix("]]"), content.count > 4 else {
+                    throw ClientConfigurationError.unsupportedTOMLSyntax
+                }
                 inner = String(content.dropFirst(2).dropLast(2))
             } else {
                 guard content.last == "]" else { throw ClientConfigurationError.unsupportedTOMLSyntax }
                 inner = String(content.dropFirst().dropLast())
             }
-            if inner.contains("\\") && (inner.contains("mcp_servers") || inner.localizedCaseInsensitiveContains("scratchpad")) {
+            if inner.contains("\\")
+                && (inner.contains("mcp_servers") || inner.localizedCaseInsensitiveContains("scratchpad"))
+            {
                 throw ClientConfigurationError.unsupportedTOMLSyntax
             }
             let path = try parseTOMLPath(inner)
             if path.count >= 2, path[0] == "mcp_servers", path[1].localizedCaseInsensitiveContains("scratchpad"),
-               arrayTable || (path != ["mcp_servers", "scratchpad"] && path != ["mcp_servers", "scratchpad", "env"]) {
+                arrayTable || (path != ["mcp_servers", "scratchpad"] && path != ["mcp_servers", "scratchpad", "env"])
+            {
                 throw ClientConfigurationError.unsupportedTOMLSyntax
             }
             if path.count >= 2, path[0] == "mcp_servers", path[1].contains("\\") {
@@ -219,8 +251,9 @@ public enum ClientConfiguration {
             found.append((path, index))
         }
         return found.enumerated().map { offset, section in
-            TOMLSection(path: section.path, header: section.header,
-                        end: offset + 1 < found.count ? found[offset + 1].header : lines.count)
+            TOMLSection(
+                path: section.path, header: section.header,
+                end: offset + 1 < found.count ? found[offset + 1].header : lines.count)
         }
     }
 
@@ -231,19 +264,28 @@ public enum ClientConfiguration {
         var escaped = false
         for character in text {
             if let quote = quoteCharacter {
-                if quote == "\"", escaped { token.append(character); escaped = false }
-                else if quote == "\"", character == "\\" { escaped = true }
-                else if character == quote { quoteCharacter = nil }
-                else { token.append(character) }
+                if quote == "\"", escaped {
+                    token.append(character); escaped = false
+                } else if quote == "\"", character == "\\" {
+                    escaped = true
+                } else if character == quote {
+                    quoteCharacter = nil
+                } else {
+                    token.append(character)
+                }
             } else if character == "\"" || character == "'" {
-                guard token.trimmingCharacters(in: .whitespaces).isEmpty else { throw ClientConfigurationError.unsupportedTOMLSyntax }
+                guard token.trimmingCharacters(in: .whitespaces).isEmpty else {
+                    throw ClientConfigurationError.unsupportedTOMLSyntax
+                }
                 token = ""
                 quoteCharacter = character
             } else if character == "." {
                 let part = token.trimmingCharacters(in: .whitespaces)
                 guard !part.isEmpty else { throw ClientConfigurationError.unsupportedTOMLSyntax }
                 parts.append(part); token = ""
-            } else { token.append(character) }
+            } else {
+                token.append(character)
+            }
         }
         let part = token.trimmingCharacters(in: .whitespaces)
         guard quoteCharacter == nil, !part.isEmpty else { throw ClientConfigurationError.unsupportedTOMLSyntax }
@@ -256,11 +298,18 @@ public enum ClientConfiguration {
         var escaped = false
         for (index, character) in line.enumerated() {
             if let currentQuote = quote {
-                if currentQuote == "\"", escaped { escaped = false }
-                else if currentQuote == "\"", character == "\\" { escaped = true }
-                else if character == currentQuote { quote = nil }
-            } else if character == "\"" || character == "'" { quote = character }
-            else if character == "#" { return String(line.prefix(index)) }
+                if currentQuote == "\"", escaped {
+                    escaped = false
+                } else if currentQuote == "\"", character == "\\" {
+                    escaped = true
+                } else if character == currentQuote {
+                    quote = nil
+                }
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if character == "#" {
+                return String(line.prefix(index))
+            }
         }
         return line
     }
@@ -284,12 +333,20 @@ public enum ClientConfiguration {
                 let rawKey = content[..<equal].trimmingCharacters(in: .whitespaces)
                 guard !rawKey.contains(".") else { throw ClientConfigurationError.unsupportedTOMLSyntax }
                 let key = parseTOMLKey(rawKey)
-                if let key, ["command", "args", "env", "SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"].contains(key), !keys.insert(key).inserted {
+                if let key,
+                    ["command", "args", "env", "SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"]
+                        .contains(key), !keys.insert(key).inserted
+                {
                     throw ClientConfigurationError.unsupportedTOMLSyntax
                 }
-                if let key, ["command", "args", "env", "SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"].contains(key) {
+                if let key,
+                    ["command", "args", "env", "SCRATCHPAD_URL", "SCRATCHPAD_PUBLIC_KEY", "SCRATCHPAD_SIGNING_KEY"]
+                        .contains(key)
+                {
                     let value = content[content.index(after: equal)...].trimmingCharacters(in: .whitespaces)
-                    if value.contains("\"\"\""), value.components(separatedBy: "\"\"\"").count < 3 { throw ClientConfigurationError.unsupportedTOMLSyntax }
+                    if value.contains("\"\"\""), value.components(separatedBy: "\"\"\"").count < 3 {
+                        throw ClientConfigurationError.unsupportedTOMLSyntax
+                    }
                     if value.contains("'''") { throw ClientConfigurationError.unsupportedTOMLSyntax }
                 }
             }
@@ -310,9 +367,13 @@ public enum ClientConfiguration {
             if currentPath == ["mcp_servers", "scratchpad"] || currentPath == ["mcp_servers", "scratchpad", "env"] {
                 if rawKey.contains(".") { throw ClientConfigurationError.unsupportedTOMLSyntax }
             } else if currentPath.isEmpty {
-                if rawKey.hasPrefix("mcp_servers.") && rawKey.contains("\\") { throw ClientConfigurationError.unsupportedTOMLSyntax }
+                if rawKey.hasPrefix("mcp_servers.") && rawKey.contains("\\") {
+                    throw ClientConfigurationError.unsupportedTOMLSyntax
+                }
                 let keyPath = try? parseTOMLPath(rawKey)
-                if keyPath?.starts(with: ["mcp_servers", "scratchpad"]) == true { throw ClientConfigurationError.unsupportedTOMLSyntax }
+                if keyPath?.starts(with: ["mcp_servers", "scratchpad"]) == true {
+                    throw ClientConfigurationError.unsupportedTOMLSyntax
+                }
                 if parseTOMLKey(rawKey) == "mcp_servers" { throw ClientConfigurationError.unsupportedTOMLSyntax }
             }
         }
@@ -325,14 +386,24 @@ public enum ClientConfiguration {
         var escaped = false
         for character in value {
             if let currentQuote = quote {
-                if currentQuote == "\"", escaped { escaped = false }
-                else if currentQuote == "\"", character == "\\" { escaped = true }
-                else if character == currentQuote { quote = nil }
-            } else if character == "\"" || character == "'" { quote = character }
-            else if character == "[" { square += 1 }
-            else if character == "]" { square -= 1 }
-            else if character == "{" { curly += 1 }
-            else if character == "}" { curly -= 1 }
+                if currentQuote == "\"", escaped {
+                    escaped = false
+                } else if currentQuote == "\"", character == "\\" {
+                    escaped = true
+                } else if character == currentQuote {
+                    quote = nil
+                }
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if character == "[" {
+                square += 1
+            } else if character == "]" {
+                square -= 1
+            } else if character == "{" {
+                curly += 1
+            } else if character == "}" {
+                curly -= 1
+            }
             if square < 0 || curly < 0 { return false }
         }
         return quote == nil && square == 0 && curly == 0
@@ -378,11 +449,14 @@ public enum ClientConfigurationError: Error, LocalizedError {
         case .invalidMCPServers: "The existing mcpServers setting is not an object; it was left unchanged."
         case .invalidScratchpadEntry: "The existing Scratchpad entry is not an object; it was left unchanged."
         case .invalidEntryEnvironment: "The existing Scratchpad environment is not a string map; it was left unchanged."
-        case .unsupportedTOMLSyntax: "The existing Codex TOML uses unsupported or ambiguous Scratchpad syntax; it was left unchanged."
-        case .targetChanged: "The selected configuration file changed after preview. Review a fresh preview for the current file."
+        case .unsupportedTOMLSyntax:
+            "The existing Codex TOML uses unsupported or ambiguous Scratchpad syntax; it was left unchanged."
+        case .targetChanged:
+            "The selected configuration file changed after preview. Review a fresh preview for the current file."
         case .contentsChanged: "The configuration file changed after preview. Review a fresh preview before applying."
         case .notRegularFile: "The selected configuration path is not a regular file."
-        case .symbolicLink: "The selected configuration file is a symbolic link. Choose the resolved file path and review it directly."
+        case .symbolicLink:
+            "The selected configuration file is a symbolic link. Choose the resolved file path and review it directly."
         }
     }
 }

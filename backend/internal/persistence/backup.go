@@ -101,7 +101,7 @@ func sqliteSnapshot(ctx context.Context, source, destination string) (int, error
 	if _, err = conn.ExecContext(ctx, "BEGIN"); err != nil {
 		return 0, err
 	}
-	defer conn.ExecContext(context.Background(), "ROLLBACK")
+	defer func() { _, _ = conn.ExecContext(context.Background(), "ROLLBACK") }()
 	version, err := validate(ctx, conn, "sqlite")
 	if err != nil {
 		return 0, err
@@ -120,7 +120,7 @@ func sqliteSnapshot(ctx context.Context, source, destination string) (int, error
 		finished := false
 		defer func() {
 			if !finished {
-				backup.Finish()
+				_ = backup.Finish()
 			}
 		}()
 		for {
@@ -167,7 +167,7 @@ func sqliteSnapshot(ctx context.Context, source, destination string) (int, error
 	if integrity != "ok" {
 		return 0, errors.New("backup integrity check failed")
 	}
-	snapshot, err := os.OpenFile(staged, os.O_RDWR, 0)
+	snapshot, err := os.OpenFile(staged, os.O_RDWR, 0) //nolint:gosec // the staged backup path is created by this function
 	if err != nil {
 		return 0, err
 	}
@@ -187,7 +187,7 @@ func sqliteSnapshot(ctx context.Context, source, destination string) (int, error
 	if err = os.Remove(staged); err != nil {
 		return 0, err
 	}
-	directory, err := os.Open(dir)
+	directory, err := os.Open(dir) //nolint:gosec // the destination directory was validated as an absolute operator path
 	if err != nil {
 		return 0, err
 	}

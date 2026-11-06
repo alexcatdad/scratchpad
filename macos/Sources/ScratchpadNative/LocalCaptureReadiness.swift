@@ -13,7 +13,8 @@ public enum LocalCaptureReadiness: Equatable, Sendable {
 
     public init(status: ServiceStatus?, observedAt: Date?, now: Date = .now, maxAge: TimeInterval = 30) {
         guard let observedAt, now.timeIntervalSince(observedAt) >= -5,
-              now.timeIntervalSince(observedAt) <= maxAge else {
+            now.timeIntervalSince(observedAt) <= maxAge
+        else {
             self = .unconfirmed
             return
         }

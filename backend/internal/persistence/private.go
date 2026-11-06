@@ -28,7 +28,7 @@ func inspectPrivate(path string, directory bool) error {
 		return errors.New("unsafe database file")
 	}
 	if runtime.GOOS == "darwin" {
-		out, err := exec.Command("/bin/ls", "-lde", "--", path).Output()
+		out, err := exec.Command("/bin/ls", "-lde", "--", path).Output() //nolint:gosec // fixed /bin/ls invocation; the path is passed after --
 		if err != nil {
 			// Another SQLite process may close and remove a sidecar between
 			// lstat and the ACL query. Only optional sidecar callers accept absence.

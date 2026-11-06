@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -40,7 +41,7 @@ func (a *AI) readRAGSnapshot(ctx context.Context, read func(scopeReader) error) 
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	return read(tx)
 }
 
@@ -133,7 +134,7 @@ func ragCurrentEvidence(ctx context.Context, q scopeReader, projects []string, i
 				var err error
 				edge, err = entityMap(ctx, q, "relationship", edgeID)
 				if err != nil {
-					if err == sql.ErrNoRows {
+					if errors.Is(err, sql.ErrNoRows) {
 						return aiChanged()
 					}
 					return err

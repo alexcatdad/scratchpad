@@ -1,7 +1,7 @@
-import SwiftUI
 import AppKit
 import MenubarKit
 import ScratchpadNative
+import SwiftUI
 
 struct ConnectionPage: View {
     @EnvironmentObject private var model: AppModel
@@ -10,22 +10,30 @@ struct ConnectionPage: View {
     var body: some View {
         Form {
             Section {
-                TextField("Address", text: Binding(get: { model.configuration.serverURL }, set: {
-                    guard $0 != model.configuration.serverURL else { return }
-                    model.configuration.serverURL = $0
-                    model.clearDiscoveredKeys()
-                }), prompt: Text("https://scratchpad.example.com"))
+                TextField(
+                    "Address",
+                    text: Binding(
+                        get: { model.configuration.serverURL },
+                        set: {
+                            guard $0 != model.configuration.serverURL else { return }
+                            model.configuration.serverURL = $0
+                            model.clearDiscoveredKeys()
+                        }), prompt: Text("https://scratchpad.example.com"))
                 LabeledContent("Status") {
                     let server = model.presentation.rows.first { $0.title == "Server" }
                     HStack(spacing: 6) {
                         StatusIcon(tone: server?.tone ?? .off)
-                        Text([server?.value, model.status?.serverVersion.map { "server \($0)" }].compactMap { $0 }.joined(separator: " · "))
+                        Text(
+                            [server?.value, model.status?.serverVersion.map { "server \($0)" }].compactMap { $0 }
+                                .joined(separator: " · "))
                     }
                 }
             } header: {
                 Text("Server")
             } footer: {
-                Text("Link GitHub in the server dashboard first. Scratchpad then finds keys on this Mac that the server accepts.")
+                Text(
+                    "Link GitHub in the server dashboard first. Scratchpad then finds keys on this Mac that the server accepts."
+                )
             }
 
             Section {
@@ -66,16 +74,22 @@ struct ConnectionPage: View {
             Section("Account") {
                 if let verified = model.verified {
                     LabeledContent("Signed in") {
-                        HStack(spacing: 6) { StatusIcon(tone: .ok); Text("Verified \(ReceiptLabels.when(verified.verifiedAt))") }
+                        HStack(spacing: 6) {
+                            StatusIcon(tone: .ok); Text("Verified \(ReceiptLabels.when(verified.verifiedAt))")
+                        }
                     }
                     LabeledContent("Credential", value: verified.credentialId)
                 } else {
-                    LabeledContent("Signed in", value: model.configuration.credentialFingerprint.isEmpty ? "Not connected" : "Not checked yet")
+                    LabeledContent(
+                        "Signed in",
+                        value: model.configuration.credentialFingerprint.isEmpty ? "Not connected" : "Not checked yet")
                 }
                 HStack {
                     Spacer()
                     Button("Check Again") { model.verifyConnection() }
-                        .disabled(model.configuration.serverURL.isEmpty || model.configuration.credentialFingerprint.isEmpty || model.busy)
+                        .disabled(
+                            model.configuration.serverURL.isEmpty || model.configuration.credentialFingerprint.isEmpty
+                                || model.busy)
                 }
             }
 
@@ -84,13 +98,18 @@ struct ConnectionPage: View {
                     TextField("Key fingerprint", text: $model.configuration.credentialFingerprint)
                     TextField("Public key file", text: $model.configuration.publicKeyPath)
                     TextField("Signing key reference", text: $model.configuration.signingKeyPath)
-                    TextField("SSH agent socket", text: Binding(get: { model.configuration.sshAgentSocket }, set: {
-                        guard $0 != model.configuration.sshAgentSocket else { return }
-                        model.configuration.sshAgentSocket = $0
-                        model.clearDiscoveredKeys()
-                    }), prompt: Text("Default agent"))
+                    TextField(
+                        "SSH agent socket",
+                        text: Binding(
+                            get: { model.configuration.sshAgentSocket },
+                            set: {
+                                guard $0 != model.configuration.sshAgentSocket else { return }
+                                model.configuration.sshAgentSocket = $0
+                                model.clearDiscoveredKeys()
+                            }), prompt: Text("Default agent"))
                     HStack {
-                        Text("The same settings as scratchpad-mcp connect in Terminal.").font(.caption).foregroundStyle(.secondary)
+                        Text("The same settings as scratchpad-mcp connect in Terminal.").font(.caption).foregroundStyle(
+                            .secondary)
                         Spacer()
                         Button("Save") { model.saveConfiguration() }.disabled(model.busy)
                     }
@@ -155,7 +174,9 @@ struct ToolsPage: View {
             } header: {
                 Text("AI tools on this Mac")
             } footer: {
-                Text("Scratchpad adds one entry to each tool’s configuration and shows you the change first. Restart the tool afterwards.")
+                Text(
+                    "Scratchpad adds one entry to each tool’s configuration and shows you the change first. Restart the tool afterwards."
+                )
             }
             if let message {
                 Section { Text(message).foregroundStyle(.secondary) }
@@ -195,9 +216,13 @@ struct ToolsPage: View {
             let after: String
             switch kind {
             case .codex:
-                after = try ClientConfiguration.codexPreview(existing: before, executable: executable, configuration: model.configuration)
+                after = try ClientConfiguration.codexPreview(
+                    existing: before, executable: executable, configuration: model.configuration)
             case .claudeCode:
-                after = String(decoding: try ClientConfiguration.jsonPreview(existing: data.isEmpty ? Data("{}".utf8) : data, executable: executable, configuration: model.configuration), as: UTF8.self)
+                after = String(
+                    decoding: try ClientConfiguration.jsonPreview(
+                        existing: data.isEmpty ? Data("{}".utf8) : data, executable: executable,
+                        configuration: model.configuration), as: UTF8.self)
             case .generic:
                 return
             }
@@ -205,8 +230,10 @@ struct ToolsPage: View {
                 message = "\(kind.rawValue) already uses this Scratchpad. Nothing to change."
                 return
             }
-            reviewing = Review(kind: kind, path: path, before: before, after: after,
-                               file: ReviewedConfigFile(path: url.path, originalContents: original, proposedContents: Data(after.utf8)))
+            reviewing = Review(
+                kind: kind, path: path, before: before, after: after,
+                file: ReviewedConfigFile(path: url.path, originalContents: original, proposedContents: Data(after.utf8))
+            )
             message = nil
         } catch {
             message = "Could not prepare the change: \(error.localizedDescription)"
@@ -223,7 +250,9 @@ struct ToolsPage: View {
     }
     private func copyGeneric() {
         do {
-            let text = String(decoding: try ClientConfiguration.genericEntry(executable: executable, configuration: model.configuration), as: UTF8.self)
+            let text = String(
+                decoding: try ClientConfiguration.genericEntry(
+                    executable: executable, configuration: model.configuration), as: UTF8.self)
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(text, forType: .string)
             genericText = text
@@ -242,16 +271,21 @@ private struct ReviewSheet: View {
     private var changes: [(String, Bool)] {
         let before = review.before.components(separatedBy: "\n")
         let after = review.after.components(separatedBy: "\n")
-        let removed = before.filter { line in !after.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty }
-        let added = after.filter { line in !before.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty }
+        let removed = before.filter { line in
+            !after.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty
+        }
+        let added = after.filter { line in !before.contains(line) && !line.trimmingCharacters(in: .whitespaces).isEmpty
+        }
         return removed.map { ($0, false) } + added.map { ($0, true) }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Add Scratchpad to \(review.kind.rawValue)?").font(.title3.weight(.bold))
-            Text("These lines change in \((review.path as NSString).abbreviatingWithTildeInPath). Nothing else in the file is touched.")
-                .foregroundStyle(.secondary)
+            Text(
+                "These lines change in \((review.path as NSString).abbreviatingWithTildeInPath). Nothing else in the file is touched."
+            )
+            .foregroundStyle(.secondary)
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
@@ -270,7 +304,8 @@ private struct ReviewSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel, action: onCancel).keyboardShortcut(.cancelAction)
-                Button("Apply Change", action: onApply).buttonStyle(ProminentButtonStyle()).keyboardShortcut(.defaultAction)
+                Button("Apply Change", action: onApply).buttonStyle(ProminentButtonStyle()).keyboardShortcut(
+                    .defaultAction)
             }
         }
         .padding(20)
@@ -294,8 +329,11 @@ struct GeneralPage: View {
                 }
                 .onChange(of: loginEnabled) { value in model.setStartAtLogin(value) }
                 if model.supervisor.loginItemStatus == .requiresApproval {
-                    Label("Approve Scratchpad in System Settings › General › Login Items.", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                    Label(
+                        "Approve Scratchpad in System Settings › General › Login Items.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.orange)
                 }
                 Toggle(isOn: $notificationsEnabled) {
                     Text("Notify me about problems")
@@ -303,14 +341,18 @@ struct GeneralPage: View {
                 }
                 .onChange(of: notificationsEnabled) { enabled in
                     Task {
-                        notificationPermission = enabled
+                        notificationPermission =
+                            enabled
                             ? await model.notifier.userEnabledNotifications()
                             : await model.notifier.permission()
                     }
                 }
                 if notificationsEnabled, notificationPermission == .denied {
-                    Label("macOS blocked notifications. Allow them in System Settings › Notifications › Scratchpad.", systemImage: "exclamationmark.triangle.fill")
-                        .foregroundStyle(.orange)
+                    Label(
+                        "macOS blocked notifications. Allow them in System Settings › Notifications › Scratchpad.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .foregroundStyle(.orange)
                 }
             }
 
@@ -343,7 +385,8 @@ struct GeneralPage: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Capture service is stopped")
-                            Text("AI tools cannot save memory until you start it.").font(.caption).foregroundStyle(.secondary)
+                            Text("AI tools cannot save memory until you start it.").font(.caption).foregroundStyle(
+                                .secondary)
                         }
                         Spacer()
                         Button("Start") { model.startService() }.buttonStyle(ProminentButtonStyle())
@@ -352,7 +395,8 @@ struct GeneralPage: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 1) {
                             Text("Stop capture service")
-                            Text("AI tools cannot save memory until you start it again.").font(.caption).foregroundStyle(.secondary)
+                            Text("AI tools cannot save memory until you start it again.").font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button("Stop…", role: .destructive) { confirmStop = true }

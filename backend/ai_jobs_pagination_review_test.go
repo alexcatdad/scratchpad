@@ -70,7 +70,7 @@ CREATE VIEW entities AS SELECT kind,id,job_read_gate(kind,data) AS data,version,
 	if _, err = lock.ExecContext(ctx, `SELECT pg_advisory_lock(77494)`); err != nil {
 		t.Fatal(err)
 	}
-	defer lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77494)`)
+	defer func() { _, _ = lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77494)`) }()
 	type response struct {
 		status int
 		body   map[string]any

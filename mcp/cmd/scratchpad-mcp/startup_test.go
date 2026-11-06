@@ -410,7 +410,7 @@ func serveFixtureStatus(connection net.Conn) {
 	if err != nil {
 		return
 	}
-	binary.BigEndian.PutUint32(size[:], uint32(len(response)))
+	binary.BigEndian.PutUint32(size[:], uint32(len(response))) //nolint:gosec // test frames are far below 4 GiB
 	_, _ = connection.Write(append(size[:], response...))
 }
 

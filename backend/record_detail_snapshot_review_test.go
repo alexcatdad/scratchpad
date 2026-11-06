@@ -48,7 +48,7 @@ CREATE TRIGGER detail_write INSTEAD OF INSERT OR UPDATE ON entities FOR EACH ROW
 	if _, err = lock.ExecContext(context.Background(), `SELECT pg_advisory_lock(77821)`); err != nil {
 		t.Fatal(err)
 	}
-	defer lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77821)`)
+	defer func() { _, _ = lock.ExecContext(context.Background(), `SELECT pg_advisory_unlock(77821)`) }()
 	type response struct {
 		status int
 		body   map[string]any
