@@ -16,7 +16,7 @@ Scratchpad is in active early development. Start with the repository README, its
 
 ## Verification
 
-Changes must pass the repository lint, formatting, type, test, and build checks appropriate to their language and surface. GitHub Actions is the target CI runner. Follow the root scripts rather than assuming that a documentation build also verifies the API or MCP.
+Changes must pass the repository lint, formatting, type, test, and build checks appropriate to their language and surface. `task check` runs the full local gate; pull requests on Forgejo also get the homelab build check. Follow the root scripts rather than assuming that a documentation build also verifies the API or MCP.
 
 For documentation changes, run:
 

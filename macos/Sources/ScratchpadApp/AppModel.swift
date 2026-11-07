@@ -35,7 +35,7 @@ final class AppModel: ObservableObject {
     var presentation: StatusPresentation { StatusPresentation(status: status, update: serviceUpdate) }
     let client = ServiceClient()
     let supervisor = ServiceSupervisor()
-    let notifier = MenubarNotifier(preferences: { IncidentNotificationSettings.preferences() })
+    let notifier: MenubarNotifier
     // One long-lived consumer posts incident notifications in the order the
     // polls observed them; per-poll tasks could reorder offline and recovered.
     private lazy var incidentDelivery = SerialDelivery<MenubarNotification> { [notifier] notification in
@@ -76,6 +76,7 @@ final class AppModel: ObservableObject {
     }
 
     init() {
+        notifier = MenubarNotifier(preferences: { IncidentNotificationSettings.preferences() })
         let defaults = UserDefaults.standard
         if defaults.bool(forKey: "serviceAbsenceSuppressed"),
             defaults.bool(forKey: "serviceExpectedToRun")
@@ -93,6 +94,20 @@ final class AppModel: ObservableObject {
             }
         }
         recoverUpgradeIfNeeded()
+    }
+
+    /// Fixed state for documentation screenshots: no timers, no service calls,
+    /// and a notifier that never touches the system notification center.
+    init(
+        fixtureStatus: ServiceStatus, receipts: [Receipt], configuration: ServiceConfiguration,
+        notificationCenter: any NotificationCenterClient
+    ) {
+        notifier = MenubarNotifier(
+            center: notificationCenter, preferences: { IncidentNotificationSettings.preferences() })
+        status = fixtureStatus
+        statusObservedAt = .now
+        self.receipts = receipts
+        self.configuration = configuration
     }
 
     func refresh() {

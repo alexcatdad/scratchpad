@@ -1,104 +1,196 @@
+/*
+ * Scratchpad docs, on the menu bar family tokens: cool aluminium paper,
+ * Bricolage Grotesque for H1/H2, the system stack for everything else.
+ * The accent is the favicon's notepad amber, and it appears only in links,
+ * the focus ring, the selected tray glyph and the Copy button.
+ */
+
+/* Dark is Starlight's default theme. */
 :root {
-  --sp-display: "Avenir Next", Avenir, "Segoe UI", sans-serif;
-  --sl-font: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --sl-font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  --sl-color-white: #edf0ff;
-  --sl-color-gray-1: #edf0ff;
-  --sl-color-gray-2: #cbd0e3;
-  --sl-color-gray-3: #a9b0ca;
-  --sl-color-gray-4: #747f9e;
-  --sl-color-gray-5: #353d59;
-  --sl-color-gray-6: #1e2235;
-  --sl-color-black: #151827;
-  --sl-color-accent-low: #292f64;
-  --sl-color-accent: #a4acff;
-  --sl-color-accent-high: #b5baff;
-  --sl-color-bg-nav: #1a1e30;
-  --sl-color-bg-sidebar: #1a1e30;
-  --sl-color-hairline-light: #353d59;
-  --sl-nav-height: 4.75rem;
+  --sp-paper: #17191e;
+  --sp-surface: #20232a;
+  --sp-ink: #eceef2;
+  --sp-muted: #9aa1ae;
+  --sp-hairline: #2e323b;
+  --sp-amber: #f2b705;
+  --sp-amber-hover: #ffc927;
+  --sp-link: #f5c542;
+  --sp-bar: rgb(36 39 46 / 0.78);
+  --sp-bar-edge: rgb(255 255 255 / 0.07);
+  --sp-tray-bg: rgb(242 183 5 / 0.34);
+
+  --sp-display:
+    "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, system-ui,
+    sans-serif;
+  --sp-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --sp-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  --sl-font: var(--sp-ui);
+  --sl-font-mono: var(--sp-mono);
+
+  --sl-color-white: var(--sp-ink);
+  --sl-color-gray-1: #dfe2e8;
+  --sl-color-gray-2: #c3c8d1;
+  --sl-color-gray-3: var(--sp-muted);
+  --sl-color-gray-4: #6c7380;
+  --sl-color-gray-5: var(--sp-hairline);
+  --sl-color-gray-6: var(--sp-surface);
+  --sl-color-black: var(--sp-paper);
+  --sl-color-accent-low: #3a2f0c;
+  --sl-color-accent: #f2b705;
+  --sl-color-accent-high: #f5c542;
+  --sl-color-text-accent: var(--sp-link);
+  --sl-color-bg-nav: var(--sp-paper);
+  --sl-color-bg-sidebar: var(--sp-paper);
+  --sl-color-hairline-light: var(--sp-hairline);
+  --sl-color-hairline: var(--sp-hairline);
+  --sl-color-hairline-shade: #101216;
+
+  --sl-nav-height: 3.75rem;
   --sl-sidebar-width: 17rem;
-  --sl-content-width: 47rem;
+  --sl-content-width: 46rem;
   --sl-text-h1: 2.75rem;
-  --sl-text-h2: 1.8rem;
-  --sl-text-h3: 1.4rem;
-  --sl-line-height: 1.75;
+  --sl-text-h2: 1.75rem;
+  --sl-text-h3: 1.3125rem;
+  --sl-text-h4: 1.0625rem;
+  --sl-line-height: 1.55;
 }
+
 :root[data-theme="light"] {
-  --sl-color-white: #1c2236;
-  --sl-color-gray-1: #252b42;
-  --sl-color-gray-2: #46506a;
-  --sl-color-gray-3: #5d657d;
-  --sl-color-gray-4: #79829c;
-  --sl-color-gray-5: #d4d8e8;
-  --sl-color-gray-6: #e4e6f0;
-  --sl-color-gray-7: #f5f5fc;
-  --sl-color-black: #ffffff;
-  --sl-color-accent-low: #ededff;
-  --sl-color-accent: #4a50dc;
-  --sl-color-accent-high: #333abb;
-  --sl-color-text-accent: #4a50dc;
-  --sl-color-bg-nav: #f5f5fc;
-  --sl-color-bg-sidebar: #f5f5fc;
-  --sl-color-hairline-light: #e4e6f0;
+  --sp-paper: #eef0f3;
+  --sp-surface: #f8f9fb;
+  --sp-ink: #15171c;
+  --sp-muted: #5b6270;
+  --sp-hairline: #d4d8df;
+  --sp-amber: #f2b705;
+  --sp-amber-hover: #e0a800;
+  /* Amber darkened for text: 6:1 on paper. */
+  --sp-link: #855a00;
+  --sp-bar: rgb(248 249 251 / 0.72);
+  --sp-bar-edge: rgb(21 23 28 / 0.08);
+  --sp-tray-bg: rgb(242 183 5 / 0.38);
+
+  --sl-color-white: var(--sp-ink);
+  --sl-color-gray-1: #23262d;
+  --sl-color-gray-2: #3a3f49;
+  --sl-color-gray-3: var(--sp-muted);
+  --sl-color-gray-4: #7d8492;
+  --sl-color-gray-5: var(--sp-hairline);
+  --sl-color-gray-6: #e3e6eb;
+  --sl-color-gray-7: var(--sp-surface);
+  --sl-color-black: var(--sp-paper);
+  --sl-color-accent-low: #f7e7b0;
+  --sl-color-accent: #855a00;
+  --sl-color-accent-high: #5e3f00;
+  --sl-color-text-accent: var(--sp-link);
+  --sl-color-bg-nav: var(--sp-paper);
+  --sl-color-bg-sidebar: var(--sp-paper);
+  --sl-color-hairline-light: var(--sp-hairline);
+  --sl-color-hairline: var(--sp-hairline);
+  --sl-color-hairline-shade: #c3c8d1;
 }
+
+html {
+  /* The home hero is full-bleed; never let 100vw add a horizontal scrollbar. */
+  overflow-x: clip;
+}
+body {
+  background: var(--sp-paper);
+  color: var(--sp-ink);
+}
+
+/* Header */
 header.header {
-  border-bottom-color: var(--sl-color-hairline-light);
+  border-bottom-color: var(--sp-hairline);
 }
 .site-title {
   font-family: var(--sp-display);
-  font-weight: 750;
-  letter-spacing: -0.04em;
-  color: var(--sl-color-white);
-  gap: 0.6rem;
-  font-size: 1.55rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--sp-ink);
+  gap: 0.55rem;
+  font-size: 1.3125rem;
 }
 .site-title img {
-  height: 1.85rem;
+  height: 1.6rem;
 }
+site-search button {
+  border-radius: 0.5rem;
+}
+
+/* Sidebar: the current page is marked with ink and a surface, not the accent. */
 .sidebar-content {
-  padding-top: 1.5rem;
+  padding-top: 1.25rem;
 }
 .sidebar-content a {
   border-radius: 0.4rem;
-  padding-block: 0.45rem;
+  padding-block: 0.4rem;
   font-size: 0.875rem;
 }
 .sidebar-content .large {
-  font-size: 0.925rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--sp-ink);
 }
-.sidebar-content a[aria-current="page"] {
-  color: var(--sl-color-text-accent);
-  background: var(--sl-color-accent-low);
+.sidebar-content a[aria-current="page"],
+.sidebar-content a[aria-current="page"]:hover,
+.sidebar-content a[aria-current="page"]:focus {
+  color: var(--sp-ink);
+  background: var(--sp-surface);
+  box-shadow: inset 0 0 0 1px var(--sp-hairline);
   font-weight: 600;
 }
 .sidebar-content .top-level > li + li {
-  margin-top: 1.3rem;
+  margin-top: 1.1rem;
 }
+
+/* Type: display face for H1/H2 only. */
 h1,
-.sl-markdown-content h2,
+.sl-markdown-content h2 {
+  font-family: var(--sp-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--sp-ink);
+}
 .sl-markdown-content h3,
 .sl-markdown-content h4 {
-  font-family: var(--sp-display);
-  letter-spacing: -0.035em;
-  font-weight: 700;
+  font-family: var(--sp-ui);
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--sp-ink);
 }
 .sl-markdown-content {
-  font-size: 1rem;
+  font-size: 1.0625rem;
+  line-height: 1.55;
 }
 .sl-markdown-content h2 {
-  margin-top: 2.6rem;
-  padding-top: 0.35rem;
+  margin-top: 2.75rem;
+  line-height: 1.2;
+}
+.sl-markdown-content h3 {
+  margin-top: 2rem;
 }
 .sl-markdown-content a:not(.sl-link-button) {
-  text-underline-offset: 0.2em;
+  color: var(--sp-link);
+  text-underline-offset: 0.18em;
+  text-decoration-thickness: 1px;
+}
+.sl-markdown-content a:not(.sl-link-button):hover {
+  text-decoration-thickness: 2px;
 }
 .sl-markdown-content :not(pre) > code {
-  padding: 0.18em 0.35em;
+  padding: 0.12em 0.35em;
   border-radius: 0.3rem;
+  background: var(--sp-surface);
+  border: 1px solid var(--sp-hairline);
+  font-size: 0.875em;
+}
+.sl-markdown-content table {
+  font-size: 0.9375rem;
 }
 .expressive-code {
-  margin-block: 1.4rem;
+  margin-block: 1.25rem;
 }
 .expressive-code .frame {
   border-radius: 0.5rem;
@@ -108,45 +200,49 @@ h1,
   box-shadow: none;
 }
 .right-sidebar {
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
 }
-starlight-theme-select select {
-  font-size: 0.85rem;
-}
-site-search button {
-  border-radius: 0.5rem;
-}
+
 :focus-visible {
-  outline: 2px solid var(--sl-color-text-accent);
+  outline: 2px solid var(--sp-link);
   outline-offset: 3px;
 }
+
+/* Home: hero is full-bleed, everything below it is one quiet column. */
 :root:not([data-has-sidebar]) .sl-container {
-  max-width: 82rem;
+  max-width: 84rem;
 }
 :root:not([data-has-sidebar]) .content-panel {
-  padding-inline: clamp(1.25rem, 5vw, 4rem);
+  padding-inline: clamp(1rem, 4vw, 2.5rem);
+  padding-top: 0;
 }
-:root:not([data-has-sidebar]) .content-panel + .content-panel {
-  border-top: 0;
+:root[data-has-hero] .sl-markdown-content {
+  max-width: 68ch;
+  margin-top: 2.5rem;
+}
+:root[data-has-hero] .sl-markdown-content h2 {
+  font-size: 1.75rem;
+  margin-top: 4rem;
+}
+:root[data-has-hero] .sl-markdown-content h2:first-child {
+  margin-top: 1rem;
 }
 :root:not([data-has-sidebar]) footer {
-  margin-top: 2rem;
+  margin-top: 3rem;
 }
+
 @media (min-width: 50rem) {
-  .content-panel {
+  :root[data-has-sidebar] .content-panel {
     padding-top: 2rem;
   }
 }
 @media (max-width: 49.99rem) {
   :root {
-    --sl-nav-height: 4rem;
-    --sl-text-h1: 2.2rem;
+    --sl-nav-height: 3.5rem;
+    --sl-text-h1: 2.25rem;
   }
   .site-title {
-    font-size: 1.35rem;
-  }
-  .sl-markdown-content {
-    font-size: 0.95rem;
+    font-size: 1.1875rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -155,12 +251,4 @@ site-search button {
   *::after {
     scroll-behavior: auto;
   }
-}
-.scratchpad-hero .sl-link-button {
-  border-radius: 0.5rem;
-  font-weight: 600;
-  font-size: 1rem;
-}
-.scratchpad-hero .sl-link-button.minimal {
-  color: var(--sl-color-text-accent);
 }

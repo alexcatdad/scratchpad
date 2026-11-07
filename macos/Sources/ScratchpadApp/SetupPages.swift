@@ -315,6 +315,8 @@ private struct ReviewSheet: View {
 
 struct GeneralPage: View {
     @EnvironmentObject private var model: AppModel
+    /// Where the version label is read from; fixtures pass their own.
+    var bundle: Bundle = .main
     @State private var loginEnabled = false
     @State private var confirmStop = false
 
@@ -391,7 +393,7 @@ struct GeneralPage: View {
                 }
             }
 
-            SettingsAboutSection(repository: URL(string: "https://github.com/alexcatdad/scratchpad"))
+            SettingsAboutSection(bundle: bundle, repository: URL(string: "https://github.com/alexcatdad/scratchpad"))
         }
         .formStyle(.grouped)
         .navigationTitle("General")

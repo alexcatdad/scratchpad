@@ -11,9 +11,9 @@ let package = Package(
     ],
     dependencies: [
         // First-party tray, panel and notification building blocks.
-        // menubar-kit v2026.11.07.1 (SwiftPM cannot resolve four-part CalVer tags, so the tag's commit is pinned).
+        // menubar-kit v2026.11.07.2 (SwiftPM cannot resolve four-part CalVer tags, so the tag's commit is pinned).
         .package(
-            url: "https://github.com/alexcatdad/menubar-kit.git", revision: "4027df8aaafd84a9c3dc46571477c76b5d74921d")
+            url: "https://github.com/alexcatdad/menubar-kit.git", revision: "cf3666e8e1a822930c7f4c3f64309de5951b1c54")
     ],
     targets: [
         .target(
@@ -30,7 +30,9 @@ let package = Package(
         .executableTarget(name: "ScratchpadKeychain", dependencies: ["ScratchpadNative"]),
         .testTarget(
             name: "ScratchpadNativeTests",
-            dependencies: ["ScratchpadNative", .product(name: "MenubarKit", package: "menubar-kit")]
+            dependencies: [
+                "ScratchpadNative", "ScratchpadApp", .product(name: "MenubarKit", package: "menubar-kit"),
+            ]
         ),
     ]
 )
