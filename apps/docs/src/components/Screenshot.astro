@@ -1,0 +1,54 @@
+---
+// biome-ignore-all lint/correctness/noUnusedImports lint/correctness/noUnusedVariables: Astro templates consume these frontmatter bindings.
+import { Image } from "astro:assets";
+
+// Fixture renders from `task screenshots`: 2x transparent PNGs with the frame
+// and shadow already drawn, so they sit directly on the page background.
+interface Props {
+  light: import("astro").ImageMetadata;
+  dark: import("astro").ImageMetadata;
+  alt: string;
+}
+const { light, dark, alt } = Astro.props;
+const width = light.width / 2;
+---
+
+<figure class="sp-shot not-content" style={`--sp-shot-w: ${width}px`}>
+  <Image
+    class="sp-light"
+    src={light}
+    alt={alt}
+    width={width}
+    densities={[1, 2]}
+  />
+  <Image
+    class="sp-dark"
+    src={dark}
+    alt={alt}
+    width={width}
+    densities={[1, 2]}
+  />
+</figure>
+
+<style>
+  .sp-shot {
+    margin: 1.5rem 0 1.5rem -2rem;
+    width: var(--sp-shot-w);
+    max-width: calc(100% + 2rem);
+  }
+  .sp-shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  :global(:root[data-theme="light"]) .sp-dark,
+  :global(:root[data-theme="dark"]) .sp-light {
+    display: none !important;
+  }
+  @media (max-width: 40rem) {
+    .sp-shot {
+      margin-inline: -1rem;
+      max-width: calc(100% + 2rem);
+    }
+  }
+</style>

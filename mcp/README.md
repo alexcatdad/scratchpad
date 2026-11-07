@@ -28,7 +28,9 @@ scratchpad status                         # local capture service status
 resolves from the current directory. The CLI never starts the capture service:
 from a sandboxed agent shell a started service would inherit the sandbox. It
 reports a stopped service instead, and the app starts it. The app bundles it as
-`Contents/Helpers/scratchpad`, and the Homebrew cask links it onto `PATH`.
+`Contents/Helpers/scratchpad`. The Homebrew cask does not link it onto `PATH`
+yet: call it by its full path or add a symlink, for example
+`ln -sf /Applications/Scratchpad.app/Contents/Helpers/scratchpad ~/.local/bin/scratchpad`.
 
 ## Development runbook
 

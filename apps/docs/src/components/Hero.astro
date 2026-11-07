@@ -1,127 +1,386 @@
 ---
 // biome-ignore-all lint/correctness/noUnusedImports lint/correctness/noUnusedVariables: Astro templates consume these frontmatter bindings.
 import { Image } from "astro:assets";
-import { LinkButton } from "@astrojs/starlight/components";
 import DefaultHero from "@astrojs/starlight/components/Hero.astro";
-import folio from "../assets/context-folio.png";
+import panelDark from "../assets/screenshots/panel-dark.png";
+import panelLight from "../assets/screenshots/panel-light.png";
 
 const { entry } = Astro.locals.starlightRoute;
 const isHome = entry.id === "index" || entry.id === "";
+const install = "brew install --cask alexcatdad/tap/scratchpad";
+const panelAlt =
+  "The Scratchpad menu bar panel: a green check with “Saving and syncing, every capture has reached the server”, rows showing the capture service running, the server connected and nothing waiting to sync, and the three most recent captures — a decision, a finding and a constraint — with how long ago each was saved.";
+// The PNGs carry a 32-point transparent margin for the frame's shadow.
+const panelWidth = panelLight.width / 2;
 ---
 
 {isHome ? (
-  <section class="scratchpad-hero" aria-labelledby="_top">
-    <div class="hero-copy">
-      <h1 id="_top" data-page-title>
-        Leave a trail
-        <br class="desktop-break" /> worth finding.
-      </h1>
-      <p class="hero-subtitle">
-        Private project memory for developers and coding agents.
-      </p>
-      <p class="hero-description">
-        Your code remembers what changed. Scratchpad keeps the why—decisions,
-        discoveries, and lessons for the next session.
-      </p>
-      <div class="hero-actions">
-        <LinkButton href="/scratchpad/guides/installation/" icon="right-arrow">
-          Get started
-        </LinkButton>
-        <LinkButton
-          href="/scratchpad/guides/mcp/"
-          variant="minimal"
-          icon="right-arrow"
-        >
-          Connect your MCP
-        </LinkButton>
+  <section class="sp-hero" aria-labelledby="_top">
+    <div class="sp-menubar" aria-hidden="true">
+      <div class="sp-menubar-inner">
+        <span class="sp-menubar-app">Scratchpad</span>
+        <span class="sp-menubar-items">
+          <svg class="sp-item" viewBox="0 0 20 16" width="20" height="16">
+            <path
+              d="M10 13.2a1.3 1.3 0 1 1 0 .01ZM6.6 10.4a4.8 4.8 0 0 1 6.8 0M3.9 7.7a8.6 8.6 0 0 1 12.2 0M1.3 5a12.4 12.4 0 0 1 17.4 0"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+            />
+          </svg>
+          <svg class="sp-item" viewBox="0 0 26 14" width="26" height="14">
+            <rect
+              x="1"
+              y="1.5"
+              width="20.5"
+              height="11"
+              rx="3"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.2"
+              opacity=".55"
+            />
+            <rect
+              x="2.8"
+              y="3.3"
+              width="13"
+              height="7.4"
+              rx="1.6"
+              fill="currentColor"
+            />
+            <path
+              d="M23.2 5.2v3.6"
+              stroke="currentColor"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              opacity=".55"
+            />
+          </svg>
+          <svg
+            class="sp-item sp-item-wide"
+            viewBox="0 0 18 16"
+            width="18"
+            height="16"
+          >
+            <rect
+              x="1"
+              y="2"
+              width="16"
+              height="5"
+              rx="2.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.3"
+            />
+            <circle cx="5.5" cy="4.5" r="1.5" fill="currentColor" />
+            <rect
+              x="1"
+              y="9"
+              width="16"
+              height="5"
+              rx="2.5"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.3"
+            />
+            <circle cx="12.5" cy="11.5" r="1.5" fill="currentColor" />
+          </svg>
+          <span class="sp-tray">
+            <svg viewBox="0 0 36 36" width="18" height="18">
+              <mask id="sp-tray-ink">
+                <rect width="36" height="36" fill="white" />
+                <path
+                  d="M10 13h16"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M10 27c1.7-2.1 3.1-5.4 4.3-9.1M17 27.1c1.8-2.4 3.1-5.8 4.2-9.6M24 24.4c1.6-2.1 2.8-4.8 3.8-7.6"
+                  fill="none"
+                  stroke="black"
+                  stroke-width="2.8"
+                  stroke-linecap="round"
+                />
+              </mask>
+              <g fill="currentColor" mask="url(#sp-tray-ink)">
+                <path d="M10 6.5h16a3 3 0 0 1 3 3V32a2.5 2.5 0 0 1-2.5 2.5h-17A2.5 2.5 0 0 1 7 32V9.5a3 3 0 0 1 3-3Z" />
+                <rect x="10.5" y="3" width="4" height="8" rx="2" />
+                <rect x="21.5" y="3" width="4" height="8" rx="2" />
+              </g>
+            </svg>
+          </span>
+          <span class="sp-clock">
+            <span class="sp-clock-day">Sat 7 Nov&nbsp;</span>09:41
+          </span>
+        </span>
       </div>
     </div>
-    <figure class="context-folio">
-      <Image
-        src={folio}
-        alt="Illustrative notes: Capture asks why SQLite first; Context says start small and keep deployment simple; History keeps the original reasoning."
-        width={680}
-        loading="eager"
-      />
-      <figcaption>An example of the context worth keeping.</figcaption>
-    </figure>
+
+    <div class="sp-hero-body" style={`--sp-panel-w: ${panelWidth}px`}>
+      <figure class="sp-panel">
+        <Image
+          class="sp-light"
+          src={panelLight}
+          alt={panelAlt}
+          width={panelWidth}
+          densities={[1, 2]}
+          loading="eager"
+        />
+        <Image
+          class="sp-dark"
+          src={panelDark}
+          alt={panelAlt}
+          width={panelWidth}
+          densities={[1, 2]}
+          loading="eager"
+        />
+      </figure>
+      <div class="sp-hero-copy">
+        <h1 id="_top" data-page-title>
+          Scratchpad keeps the reasons behind your code where your coding agents
+          can find them.
+        </h1>
+        <p class="sp-lede">
+          A menu bar app for your Mac. Agents save decisions, findings and
+          failures as they work; Scratchpad keeps them on this Mac first, then
+          syncs them to your own server on your tailnet.
+        </p>
+        <div class="sp-install">
+          <code>{install}</code>
+          <button type="button" class="sp-copy" data-copy={install}>
+            Copy
+          </button>
+        </div>
+        <p class="sp-install-note">
+          The release is served from a private Forgejo, so Homebrew needs a read
+          token first. The{" "}
+          <a href="/scratchpad/guides/installation/">installation guide</a>{" "}
+          walks through it.
+        </p>
+      </div>
+    </div>
   </section>
 ) : (
   <DefaultHero />
 )}
 
+<script>
+  for (const button of document.querySelectorAll<HTMLButtonElement>(
+    ".sp-copy",
+  )) {
+    button.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(button.dataset.copy ?? "");
+        button.textContent = "Copied";
+      } catch {
+        button.textContent = "Select and copy";
+      }
+      setTimeout(() => {
+        button.textContent = "Copy";
+      }, 2000);
+    });
+  }
+</script>
+
 <style>
-  .scratchpad-hero {
-    display: grid;
-    grid-template-columns: 1.08fr 1fr;
-    gap: 1rem;
-    align-items: center;
-    padding-block: 4rem 4.5rem;
+  .sp-hero {
+    /* Break out of Starlight's content column to the full viewport width. */
+    margin-inline: calc(50% - 50vw);
+    --sp-pad: clamp(1rem, 4vw, 2.5rem);
+    --sp-clock-w: 8.75rem;
+    --sp-tray-w: 2.25rem;
+    --sp-gap: 0.5rem;
+    /* Same text edge as Starlight's 84rem splash container below. */
+    --sp-max: calc(84rem + 2 * var(--sp-pad));
   }
-  .hero-copy h1 {
-    font-family: var(--sp-display);
-    font-size: clamp(3rem, 6.2vw, 5.8rem);
-    line-height: 1.04;
-    letter-spacing: -0.055em;
-    font-weight: 700;
-    color: var(--sl-color-white);
-    margin: 0;
+  .sp-menubar {
+    height: 1.75rem;
+    background: var(--sp-bar);
+    -webkit-backdrop-filter: saturate(1.6) blur(20px);
+    backdrop-filter: saturate(1.6) blur(20px);
+    border-bottom: 1px solid var(--sp-bar-edge);
+    color: var(--sp-ink);
+    font: 500 0.8125rem/1.75rem var(--sp-ui);
   }
-  .hero-subtitle {
-    color: var(--sl-color-gray-3);
-    font-size: 1.3rem;
-    line-height: 1.5;
-    margin-top: 1.75rem;
-    max-width: 35rem;
-  }
-  .hero-description {
-    font-size: 1.15rem;
-    line-height: 1.7;
-    margin-top: 1.75rem;
-    max-width: 34rem;
-  }
-  .hero-actions {
+  .sp-menubar-inner {
+    max-width: var(--sp-max);
+    margin-inline: auto;
+    padding-inline: var(--sp-pad);
     display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
     align-items: center;
-    margin-top: 1.75rem;
+    justify-content: space-between;
+    height: 100%;
   }
-  .context-folio {
+  .sp-menubar-app {
+    font-weight: 700;
+  }
+  .sp-menubar-items {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-gap);
+    height: 100%;
+  }
+  .sp-item {
+    opacity: 0.85;
+    margin-inline: 0.25rem;
+  }
+  .sp-tray {
+    display: inline-grid;
+    place-items: center;
+    width: var(--sp-tray-w);
+    height: 1.375rem;
+    border-radius: 0.375rem;
+    background: var(--sp-tray-bg);
+    color: var(--sp-ink);
+  }
+  .sp-clock {
+    width: var(--sp-clock-w);
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .sp-hero-body {
+    max-width: var(--sp-max);
+    margin-inline: auto;
+    padding-inline: var(--sp-pad);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "copy panel";
+    column-gap: clamp(2rem, 5vw, 5rem);
+    align-items: start;
+  }
+  .sp-panel {
+    grid-area: panel;
     margin: 0;
-    min-width: 0;
+    /* Centre the panel under the tray glyph; the image's own margin holds the shadow. */
+    margin-right: max(
+      -1 * var(--sp-pad),
+      calc(
+        var(--sp-clock-w) + var(--sp-gap) + var(--sp-tray-w) / 2 -
+          var(--sp-panel-w) / 2
+      )
+    );
+    margin-top: -0.75rem;
+    width: var(--sp-panel-w);
+    animation: sp-drop 420ms cubic-bezier(0.2, 0.8, 0.2, 1) 120ms both;
   }
-  .context-folio img {
+  .sp-panel img {
+    display: block;
     width: 100%;
     height: auto;
   }
-  .context-folio figcaption {
-    font-size: 0.75rem;
-    text-align: center;
-    color: var(--sl-color-gray-3);
-    margin-top: 0.5rem;
+  .sp-hero-copy {
+    grid-area: copy;
+    max-width: 42rem;
+    padding-block: clamp(2.5rem, 7vw, 5.5rem) 2rem;
   }
-  @media (max-width: 49.99rem) {
-    .scratchpad-hero {
-      grid-template-columns: 1fr;
-      gap: 1.5rem;
-      padding-block: 2.5rem 2rem;
+  .sp-hero-copy h1 {
+    margin: 0;
+    font-family: var(--sp-display);
+    font-size: clamp(2.25rem, 4.6vw, 4rem);
+    line-height: 1.04;
+    letter-spacing: -0.02em;
+    font-weight: 700;
+    color: var(--sp-ink);
+    text-wrap: balance;
+  }
+  .sp-lede {
+    margin-top: 1.5rem;
+    font-size: 1.3125rem;
+    line-height: 1.5;
+    color: var(--sp-muted);
+    max-width: 34rem;
+  }
+  .sp-install {
+    margin-top: 2rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    max-width: 34rem;
+    padding: 0.5rem 0.5rem 0.5rem 1rem;
+    background: var(--sp-surface);
+    border: 1px solid var(--sp-hairline);
+    border-radius: 0.625rem;
+  }
+  .sp-install code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    font: 0.9375rem/1.6 var(--sp-mono);
+    color: var(--sp-ink);
+    background: none;
+    padding: 0;
+  }
+  .sp-copy {
+    flex: none;
+    font: 600 0.875rem/1 var(--sp-ui);
+    padding: 0.55rem 0.9rem;
+    border: 0;
+    border-radius: 0.4rem;
+    background: var(--sp-amber);
+    color: #15171c;
+    cursor: pointer;
+  }
+  .sp-copy:hover {
+    background: var(--sp-amber-hover);
+  }
+  .sp-install-note a {
+    color: var(--sp-link);
+    text-underline-offset: 0.18em;
+  }
+  .sp-install-note {
+    margin-top: 0.875rem;
+    font-size: 0.9375rem;
+    line-height: 1.55;
+    color: var(--sp-muted);
+    max-width: 34rem;
+  }
+
+  :global(:root[data-theme="light"]) .sp-dark,
+  :global(:root[data-theme="dark"]) .sp-light {
+    display: none !important;
+  }
+
+  @keyframes sp-drop {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
     }
-    .hero-copy h1 {
-      font-size: clamp(2.8rem, 9vw, 4rem);
+    to {
+      opacity: 1;
+      transform: none;
     }
-    .desktop-break {
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sp-panel {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 52rem) {
+    .sp-hero {
+      --sp-clock-w: 3rem;
+    }
+    .sp-clock-day,
+    .sp-item-wide {
       display: none;
     }
-    .context-folio {
-      max-width: 32rem;
-      width: 100%;
-      margin-inline: auto;
+    .sp-hero-body {
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "panel" "copy";
     }
-    .hero-subtitle,
-    .hero-description {
-      max-width: 35rem;
-      margin-top: 1.25rem;
+    .sp-panel {
+      margin: -0.5rem auto 0;
+      width: 100%;
+      max-width: var(--sp-panel-w);
+    }
+    .sp-hero-copy {
+      padding-block: 0.5rem 1rem;
     }
   }
 </style>

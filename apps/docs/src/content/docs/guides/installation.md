@@ -1,98 +1,99 @@
 ---
-title: Installation & development
-description: Install the macOS app, understand historical MCP releases, or develop from source.
+title: Install the app
+description: Install Scratchpad on a Mac with Homebrew, connect it to your server, and set up a server or a development checkout.
 ---
 
-## Install the macOS application
+## Install the macOS app
 
-The macOS app bundles the stdio MCP adapter, background capture service and
-encrypted offline queue. It targets Apple Silicon Macs running macOS 13 or
-later. Intel and Linux app builds are not available.
+The macOS app bundles the background capture service, its encrypted offline
+queue, the `scratchpad` command for coding agents and the `scratchpad-mcp`
+server for MCP clients. It needs a Mac with Apple silicon running macOS 13 or
+later, and a Scratchpad server you can reach. Intel and Linux app builds are not
+available.
 
-Install the signed app from the Homebrew tap. The cask is available from the
-first app release onwards:
+### Give Homebrew a release token
+
+Releases are published only on a private Forgejo instance on the owner's
+tailnet, which requires sign-in for downloads. The Homebrew cask sends a
+read-only token from the `HOMEBREW_FORGEJO_TOKEN` environment variable with the
+download. Without it, Forgejo answers with its sign-in page and the checksum
+check fails.
+
+Put the token in Homebrew's environment file, so every `brew` command sees it
+without exporting it in your shell. Open
+`~/.homebrew/brew.env` in a text editor (create the folder if needed) and add:
+
+```sh
+HOMEBREW_FORGEJO_TOKEN=<read-only release token>
+```
+
+Use an editor rather than `echo`, so the token stays out of your shell history,
+and keep the file private (`chmod 600 ~/.homebrew/brew.env`). Homebrew also
+reads `$XDG_CONFIG_HOME/homebrew/brew.env` and a system-wide
+`/etc/homebrew/brew.env`.
+
+### Install and connect
 
 ```sh
 brew install --cask alexcatdad/tap/scratchpad
 open -a Scratchpad
 ```
 
-Homebrew requires explicit trust for third-party packages. This fully qualified
-install trusts only the Scratchpad cask. If you have already tapped the
-repository and need to inspect the cask before installation, use
-`brew trust --cask alexcatdad/tap/scratchpad`, then
-`brew info --cask alexcatdad/tap/scratchpad`. No whole-tap trust or trust-bypass
-environment variable is needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
+This fully qualified install trusts only the Scratchpad cask; whole-tap trust is
+not needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 
-In the app, open **Connection**, enter your server address, choose **Find
-Keys**, pick an accepted key and choose **Connect**. The matching public key must
-already be authorized by the server. Keep private keys on the computer; the app
-reuses your SSH signer.
+In the app, open **Connection**, enter your server address (for example
+`https://scratchpad.example.ts.net`), choose **Find Keys**, pick a key the
+server accepts and choose **Connect**. Keep private keys on the computer; the
+app signs with your existing SSH key or agent.
 
-Open **AI Tools**, choose **Set Up…** for your client, review the lines it adds
-and apply them. Restart the client's MCP connection. Its command is the bundled
-`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`, which obtains
-configuration and authenticated operations through the collector. Installing
-the standalone formula is not required. Verify a real authenticated read in
-your intended project after connecting.
+Then connect your coding agents. The recommended path is the bundled
+`scratchpad` command; see [Agent integration](/scratchpad/guides/agents/). For
+clients that need an MCP server, **AI Tools → Set Up…** adds the bundled
+`scratchpad-mcp` to the client's configuration and shows you the change first;
+see [MCP & project context](/scratchpad/guides/mcp/).
 
-Homebrew manages app updates with `brew upgrade --cask scratchpad`. After an
-upgrade, the menu-bar popover shows **Update installed**; choose **Restart
-Capture Service** so the service runs the new version. It also switches at your
-next login. Installing the app does not deploy a server or
-transfer another computer's local configuration, signer or queued captures.
-See the [distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md).
+### Upgrades
+
+```sh
+brew upgrade --cask scratchpad
+```
+
+After an upgrade the capture service keeps running the previous version until it
+restarts. The menu bar panel shows **Update installed**; choose **Restart Capture
+Service** so it runs the new version. It also switches at your next login.
+Installing the app does not deploy a server or transfer another computer's
+configuration, signer or queued captures. See the
+[distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md).
 
 ## Retired standalone MCP formula
 
 The `alexcatdad/tap/scratchpad-mcp` formula is deprecated and receives no further
-releases. It installed only the MCP binary, without the capture service the
-current binary needs, and its environment-based setup describes the historical
-v0.3.0 release. Move to the app:
+releases. It installed only the v0.3.0 MCP binary, without the capture service
+the current tools need. Move to the app:
 
 ```sh
 brew uninstall alexcatdad/tap/scratchpad-mcp
 brew install --cask alexcatdad/tap/scratchpad
 ```
 
-Then update your MCP client to the bundled
+Then switch agents to the bundled `scratchpad` command, or MCP clients to
 `/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`.
 
-## Run the released server with Compose
+## Run a server
 
-Create a `compose.yaml` in a deployment directory:
-
-```yaml
-services:
-  scratchpad:
-    image: ghcr.io/alexcatdad/scratchpad:v0.3.0
-    ports:
-      - "127.0.0.1:3000:3000"
-    environment:
-      SCRATCHPAD_PUBLIC_URL: http://localhost:3000
-      SCRATCHPAD_DATABASE_PATH: /data/scratchpad.sqlite
-    volumes:
-      - scratchpad-data:/data
-    restart: unless-stopped
-volumes:
-  scratchpad-data:
-```
-
-Then start it and generate a setup token:
-
-```sh
-docker compose pull
-docker compose up -d
-docker compose exec scratchpad npm run admin -- setup
-```
-
-Open [localhost:3000](http://localhost:3000), enter the one-use token, and register a passkey. The image supports Linux ARM64 and AMD64. Remote instances require a stable HTTPS origin and a TLS reverse proxy; follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before exposing the service beyond localhost.
-
-The named volume stores your database. Preserve it across container upgrades, and take a full SQLite backup before changing application versions. AI services and PostgreSQL are not required.
+The app talks to a Scratchpad server that you run yourself, on loopback or
+behind HTTPS on a private network. Build and run it from a source checkout with
+the steps below, or follow the
+[deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md)
+for a single-host Docker installation. Remote instances need a stable HTTPS
+origin set in `SCRATCHPAD_PUBLIC_URL` before you enroll passkeys. The published
+`ghcr.io/alexcatdad/scratchpad:v0.3.0` image is historical and predates the Go
+server; new releases are not published as container images.
 
 ## Optional GitHub-first setup
 
-Current server source supports GitHub-first owner setup and GitHub browser sign-in; the released v0.3.0 image above predates this capability. Configure the per-instance OAuth app using the [operator runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-oauth.md), then generate the same administrator setup token. Choose GitHub on the setup page and authorize your account. The token authorizes initial ownership; a GitHub username or login by itself does not. Passkey-only setup remains available. Existing owners link through authenticated Settings.
+Current server source supports GitHub-first owner setup and GitHub browser sign-in; the historical v0.3.0 image predates this capability. Configure the per-instance OAuth app using the [operator runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-oauth.md), then generate the same administrator setup token. Choose GitHub on the setup page and authorize your account. The token authorizes initial ownership; a GitHub username or login by itself does not. Passkey-only setup remains available. Existing owners link through authenticated Settings.
 
 After linking, your laptop and VMs can use synchronized published SSH authentication or signing keys by proving possession. Passkeys and independent manual keys remain optional alternatives. See [Security & recovery](/scratchpad/reference/security/) and [Agent integration](/scratchpad/guides/agents/).
 
@@ -146,15 +147,18 @@ docker compose exec scratchpad npm run admin -- recover
 
 Use the dashboard recovery flow with the resulting token. Recovery preserves records and invalidates existing sessions; it does not reopen ordinary first-time setup.
 
-## Build and connect the MCP
+## Build the CLI and MCP
 
 ```sh
 cd mcp
 go mod download
+go build -o ../dist/scratchpad ./cmd/scratchpad
 go build -o ../dist/scratchpad-mcp ./cmd/scratchpad-mcp
+go build -o ../dist/scratchpad-service ./cmd/scratchpad-service
 ```
 
-Follow [MCP setup](/scratchpad/guides/mcp/) to enroll a key and configure your coding client. These are local build instructions, not a signed release installation.
+Both clients talk to a running `scratchpad-service`; the app normally starts it.
+These are local build instructions, not a signed release installation.
 
 ## Verify source changes
 
@@ -178,3 +182,7 @@ npm run build --workspace @scratchpad/docs
 ```
 
 Open the address printed by Astro with the `/scratchpad/` base path. Static output is `apps/docs/dist`. GitHub Pages hosts this public site, not the application or your records. A successful local build does not establish a successful Pages deployment.
+
+The app screenshots under `apps/docs/src/assets/screenshots/` are rendered from
+fixture data, never captured from a screen. Regenerate them on a Mac with
+`task screenshots` after a visible change to the menu bar panel or settings.

@@ -94,6 +94,12 @@ tasks:
         cmd: cd {{.ITEM}} && go run golang.org/x/vuln/cmd/govulncheck@{{.GOVULNCHECK_VERSION}} ./...
       - npm audit --omit=dev --audit-level=high
 
+  screenshots:
+    desc: Render the documentation screenshots (fixture state, no screen capture) into apps/docs/src/assets/screenshots
+    cmds:
+      - mkdir -p apps/docs/src/assets/screenshots
+      - SCRATCHPAD_SCREENSHOTS="{{.ROOT_DIR}}/apps/docs/src/assets/screenshots" DEVELOPER_DIR="$(xcode-select -p)" swift test --package-path macos --filter documentationScreenshots
+
   build:darwin-arm64:
     desc: Signed Scratchpad.app archive for the Homebrew cask
     cmds:

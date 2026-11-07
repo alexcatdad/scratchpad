@@ -17,6 +17,27 @@ export default defineConfig({
       locales: { root: { label: "English", lang: "en" } },
       favicon: "/favicon.svg",
       customCss: ["./src/styles/custom.css"],
+      head: [
+        {
+          tag: "link",
+          attrs: { rel: "preconnect", href: "https://fonts.googleapis.com" },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "preconnect",
+            href: "https://fonts.gstatic.com",
+            crossorigin: "",
+          },
+        },
+        {
+          tag: "link",
+          attrs: {
+            rel: "stylesheet",
+            href: "https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap",
+          },
+        },
+      ],
       logo: { src: "./public/favicon.svg", alt: "" },
       components: {
         Hero: "./src/components/Hero.astro",
@@ -39,7 +60,7 @@ export default defineConfig({
           label: "Get started",
           items: [
             {
-              label: "Installation & development",
+              label: "Install the app",
               slug: "guides/installation",
             },
             { label: "Configuration", slug: "guides/configuration" },
@@ -49,8 +70,8 @@ export default defineConfig({
               label: "Optional extensions & API clients",
               slug: "guides/optional-extensions",
             },
-            { label: "MCP & project context", slug: "guides/mcp" },
             { label: "Agent integration", slug: "guides/agents" },
+            { label: "MCP & project context", slug: "guides/mcp" },
             { label: "Connect Codex", slug: "guides/codex" },
             { label: "Connect ChatGPT on macOS", slug: "guides/chatgpt" },
             {

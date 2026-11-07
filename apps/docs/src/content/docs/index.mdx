@@ -1,11 +1,103 @@
 ---
-title: Leave a trail worth finding.
-description: Scratchpad is private, self-hosted project memory for developers and coding agents.
+title: Project memory for coding agents
+description: Scratchpad is a macOS menu bar app and capture service that keeps your project's decisions, findings and failures where your coding agents can find them, on your own server.
 template: splash
 hero:
-  tagline: Private project memory for developers and coding agents.
+  tagline: Project memory for coding agents.
 ---
 
-import HomeContent from "../../components/HomeContent.astro";
+import Screenshot from "../../components/Screenshot.astro";
+import settingsDark from "../../assets/screenshots/settings-dark.png";
+import settingsLight from "../../assets/screenshots/settings-light.png";
+import overviewDark from "../../assets/screenshots/workspace-overview-dark.png";
+import overviewLight from "../../assets/screenshots/workspace-overview-light.png";
 
-<HomeContent />
+## What the panel tells you
+
+The header is the one answer you need: whether captures are reaching your
+server. A green check with **Saving and syncing** means every capture your
+agents saved has arrived. Amber means Scratchpad is still saving on this Mac
+but cannot sync right now: the server is unreachable, syncing is paused, or a
+capture needs you to pick a project. Red means it cannot save at all, or the
+server no longer accepts this Mac's key. When there is something to do, a
+button for it appears under the header.
+
+The three rows below spell out the parts: the capture service on this Mac, the
+connection to your server, and how many captures are waiting to sync.
+**Recent captures** lists the last three things your agents saved, with their
+type and how long ago. **Show All** opens the full list.
+
+Captures are saved on this Mac before anything goes over the network, so a
+laptop on a train keeps working. They sync when the server is reachable again.
+
+**Open Scratchpad** shows the same status in a window, with your recent
+activity and the server address this Mac uses.
+
+<Screenshot
+  light={overviewLight}
+  dark={overviewDark}
+  alt="The Scratchpad window's overview page: the Saving and syncing status, rows for the capture service, server and sync queue, the server address https://scratchpad.example.ts.net, and six recent captures, each marked Synced."
+/>
+
+## Settings
+
+<Screenshot
+  light={settingsLight}
+  dark={settingsDark}
+  alt="Scratchpad's General settings: Start capture service at login, the Notify me about problems and Play a sound toggles (both off), the capture service and server versions, the upgrade command, and a Stop button for the capture service."
+/>
+
+Notifications are off until you turn them on, and macOS asks for permission
+only then. They cover long outages, refused captures and saving failures, and
+carry counts, never capture content. Sound is a separate switch. **Start
+capture service at login** keeps captures working after a restart; if you stop
+the service yourself, it stays stopped until you start it.
+
+## Install
+
+Scratchpad needs a Mac with Apple silicon running macOS 13 or later, and a
+Scratchpad server you can reach on your tailnet. Releases are published only on
+a private Forgejo, so Homebrew needs a read-only token to download them.
+
+1. Add `HOMEBREW_FORGEJO_TOKEN=<token>` to `~/.homebrew/brew.env` with a text
+   editor, so the token stays out of your shell history.
+2. Install and open the app:
+
+   ```sh
+   brew install --cask alexcatdad/tap/scratchpad
+   open -a Scratchpad
+   ```
+
+3. In **Connection**, enter your server address, choose **Find Keys**, pick a key
+   the server accepts and choose **Connect**.
+4. Point your coding agents at the bundled `scratchpad` command. The
+   [agent guide](/scratchpad/guides/agents/) shows how.
+
+Homebrew handles upgrades with `brew upgrade --cask scratchpad`. The
+[installation guide](/scratchpad/guides/installation/) covers each step in
+detail.
+
+## What it never does
+
+- It never uploads a private key. The app signs with your existing SSH key or
+  agent; the server only ever sees the public key.
+- It never stores secrets in plain text. Credentials live in the macOS Keychain
+  on your Mac.
+- It never edits a capture after saving it. Corrections are new records, and
+  the history stays visible.
+- It never commits or pushes to your repositories. Mirroring captures into a
+  checkout is off unless you turn it on.
+- It never talks to anything but the server you connect it to. There is no
+  hosted service and no public endpoint.
+- It needs no AI provider. Capture and search work without one; AI features are
+  optional and run on your server.
+
+## Read on
+
+- [Agent integration](/scratchpad/guides/agents/): the `scratchpad` command,
+  the companion skills and how agents should use memory.
+- [MCP & project context](/scratchpad/guides/mcp/): for clients that need an
+  MCP server instead.
+- [Architecture](/scratchpad/reference/architecture/) and
+  [Security & recovery](/scratchpad/reference/security/).
+- [Source on GitHub](https://github.com/alexcatdad/scratchpad), MIT licensed.

@@ -3,18 +3,52 @@ title: MCP & project context
 description: The local stdio interface, project discovery, and authentication design.
 ---
 
-The `scratchpad-mcp` binary runs locally and speaks MCP over stdio. It discovers Git context, authenticates to the central API, and optionally mirrors eligible captures into the selected checkout. Record business rules remain server-side.
+`scratchpad-mcp` is a local stdio MCP server bundled with the app at
+`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`. It exposes the
+same tools as the [`scratchpad` command](/scratchpad/guides/agents/), discovers
+Git context on your Mac and hands reads and captures to the local capture
+service, which holds the server connection. Record business rules remain
+server-side.
+
+**For coding agents with a shell, use the `scratchpad` command instead.** It runs
+the same tools with the same results, as a short process that always matches the
+installed app. Use the MCP server for clients that can only talk MCP.
 
 ## Connect your client
 
-For an agent-oriented workflow and shareable Markdown documentation, see [Agent integration](/scratchpad/guides/agents/).
+Configure the server and SSH key once in the app's **Connection** page. The MCP
+server has no connection settings of its own: it ignores the old
+`SCRATCHPAD_URL`, `SCRATCHPAD_PUBLIC_KEY` and `SCRATCHPAD_SIGNING_KEY`
+variables, and no token or key is ever handed to it.
 
-Start with the guide for your client:
+The easiest path is **AI Tools → Set Up…** in the app. It adds one entry to the
+client's configuration, shows you the change first, and leaves other entries
+alone. Restart the client's MCP connection afterwards. For a manual setup, point
+the client's stdio command at the bundled binary, for example in Codex:
 
-- [Codex setup](/scratchpad/guides/codex/) — CLI registration, configuration, and a first read.
-- [ChatGPT macOS setup](/scratchpad/guides/chatgpt/) — the desktop STDIO connection and the distinction from ChatGPT web.
+```toml
+[mcp_servers.scratchpad]
+command = "/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp"
+```
 
-Install the binary and select an eligible synchronized GitHub SSH key or enroll an independent public key before adding it to either client. Homebrew installs the MCP; your Scratchpad server runs separately.
+Client walkthroughs:
+
+- [Codex setup](/scratchpad/guides/codex/): the command, the MCP alternative
+  and a first read.
+- [ChatGPT macOS setup](/scratchpad/guides/chatgpt/): the desktop STDIO
+  connection and the distinction from ChatGPT web.
+
+When it launches, `scratchpad-mcp` starts the capture service if it is not
+running and waits up to 12 seconds for it. A service you stopped yourself stays
+stopped: start it from the menu bar panel. If startup fails, the server still
+lists its tools and reports the problem on stderr; reads and captures fail until
+the service is available. Exiting a client does not stop the service.
+
+| Variable                    | Meaning                                                              |
+| --------------------------- | -------------------------------------------------------------------- |
+| `SCRATCHPAD_MIRROR`         | Set to `true` to opt into local repository mirroring; off by default |
+| `SCRATCHPAD_MIRROR_PATH`    | Repository-relative path; defaults to `scratchpad/decisions.jsonl`   |
+| `SCRATCHPAD_SERVICE_SOCKET` | A different capture service socket, for isolated tests               |
 
 ## Selecting the project
 
@@ -34,35 +68,21 @@ Initial payloads stay small and flexible. Adding optional fields later must not 
 
 ## Authentication
 
-The MCP proves possession of an independent enrolled key or an eligible SSH authentication/signing key synchronized from the owner’s verified GitHub binding. GitHub-managed keys need no individual dashboard approval. Current server source supports GitHub access; released v0.3.0 servers predate it. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
+The capture service proves possession of an independent enrolled key or an eligible SSH authentication/signing key synchronized from the owner’s verified GitHub binding. GitHub-managed keys need no individual dashboard approval. The server provides a random, short-lived, single-use challenge; successful verification yields a session lasting up to 24 hours.
 
-Tokens stay in the MCP process memory. Restarting MCP requires authentication again. Revoking its credential immediately invalidates its sessions. Private signing keys remain local.
+The capture service performs the challenge and keeps the session token in memory; neither the MCP server nor the `scratchpad` command sees it. Revoking its credential immediately invalidates its sessions. Private signing keys remain local.
 
 GitHub-managed requests and renewals also require an unblocked key and cache freshness within 24 hours of the last complete successful synchronization. Detected removal, unlinking or account replacement invalidates derived access immediately. Independent manual credentials remain locally managed. See [Security & recovery](/scratchpad/reference/security/).
 
-Use the [connection skill](/scratchpad/guides/agents/#connect-with-an-agent) for agent-assisted discovery, client configuration and a scoped authenticated read.
+Use the [connection skill](/scratchpad/guides/agents/#add-the-companion-skills) for agent-assisted discovery, client configuration and a scoped authenticated read.
 
 ## Build and enroll
 
 This manual workflow creates an independent local credential. Use it when a key is not published on GitHub or independent access is desired.
 
-Build the local binary using the [installation guide](/scratchpad/guides/installation/). Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
+Open **Settings → Connect an MCP key** in the authenticated dashboard, paste an OpenSSH public key, and create an enrollment challenge.
 
-Sign the exact displayed JSON proof **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The MCP handles subsequent authentication challenges automatically. Version 2 binds each proof to the locally configured instance, key, purpose and expiry. Upgrade the server and MCP together; old nonce-only signatures are rejected. Existing sessions retain their expiry and revocation rules until renewal.
-
-## Client configuration
-
-Point your MCP client's stdio command at the absolute path to the installed `scratchpad-mcp` binary, or your locally built `dist/scratchpad-mcp`. Find an installed binary with `command -v scratchpad-mcp`. Set these environment variables in that client's configuration:
-
-| Variable                 | Meaning                                                                       |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| `SCRATCHPAD_URL`         | Required server origin; HTTP is allowed only on loopback                      |
-| `SCRATCHPAD_PUBLIC_KEY`  | Required absolute path to the enrolled OpenSSH public key                     |
-| `SCRATCHPAD_SIGNING_KEY` | Optional private-key path; otherwise use the public-key path with `ssh-agent` |
-| `SCRATCHPAD_MIRROR`      | Set to `true` to opt into local mirroring; off by default                     |
-| `SCRATCHPAD_MIRROR_PATH` | Repository-relative path; defaults to `scratchpad/decisions.jsonl`            |
-
-Keep the private key local and available through `ssh-agent` or the explicit signing-key path. A locked or missing key prevents authentication.
+Sign the exact displayed JSON proof **without a newline**, using the displayed namespace and your matching local key. Paste the armored SSH signature into the dashboard to verify and enroll the credential. Private keys are never uploaded. The capture service handles subsequent authentication challenges automatically. Version 2 binds each proof to the locally configured instance, key, purpose and expiry. Upgrade the server and the app together; old nonce-only signatures are rejected. Existing sessions retain their expiry and revocation rules until renewal.
 
 ## Available tools
 
@@ -72,11 +92,11 @@ They accept common `title`, `authority`, `confidence`, and `requestId` fields pl
 
 Read tools are `search_memory`, `get_record`, `get_project_context`, `get_decision_history`, and `find_related`. Related records come from stored relationships, not AI inference. `resolve_project` supports owner-confirmed project resolution when discovery is insufficient.
 
-The binary exposes its exact typed schemas through MCP tool discovery. Consult the [MCP README](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md) for the wire contract and development checks.
+The binary exposes its exact typed schemas through MCP tool discovery, and `scratchpad tools <tool>` prints the same schemas. Consult the [MCP README](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md) for the wire contract and development checks.
 
 ## Optional AI tools
 
-The v0.2.0 binary adds these tools. Earlier v0.1.3 binaries predate them.
+These tools need AI configured on the server.
 
 | Tool                | Behavior                                                                                    |
 | ------------------- | ------------------------------------------------------------------------------------------- |
@@ -85,6 +105,7 @@ The v0.2.0 binary adds these tools. Earlier v0.1.3 binaries predate them.
 | `process_memory`    | Queue `analyze` or `embed` work without changing project permissions or raw captures.       |
 | `get_ai_jobs`       | Inspect persisted processing status, retries and failures.                                  |
 | `generate_document` | Queue a private `handoff`, `architecture`, `decisions`, `client_history` or `adr` document. |
+| `retrieve_evidence` | Retrieve cited evidence for a question from the PostgreSQL RAG backend.                     |
 
 Single-project calls use `projectId` or normal checkout/`workingDirectory` discovery. Cross-project calls explicitly set `crossProject: true`; optional `projectIds` restrict that scope to the requested projects. Only permitted projects participate. Poll job status, then inspect the generated artifacts and their sources. Suggestion review remains an owner-controlled dashboard/API action.
 

@@ -1,54 +1,69 @@
 ---
 title: Releases & installation channels
-description: Install Scratchpad v0.3.0 and understand how its release artifacts are verified.
+description: How Scratchpad releases are versioned, built, signed and delivered through Homebrew.
 ---
 
-## v0.3.0
+## What a release contains
 
-[v0.3.0 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0) adds [opt-in native pgvector, public GitHub profile enrichment and generated TypeScript/Go API clients](/scratchpad/guides/optional-extensions/). Use `ghcr.io/alexcatdad/scratchpad:v0.3.0` for the application and Homebrew for MCP 0.3.0. SQLite and processing consent retain their existing defaults.
+Each release is one archive, `scratchpad-<version>-darwin-arm64.zip`, holding
+`Scratchpad.app` for Apple silicon on macOS 13 or later. The app bundles
+everything a Mac needs:
 
-[Publication run 36935307686](https://github.com/alexcatdad/scratchpad/actions/runs/36935307686) passed native source/signature verification, multiarchitecture image publication, checksummed assets and Homebrew delivery. The release includes `scratchpad-api-client-0.3.0.tgz`; the Go module is available through the matching `packages/clients/go/v0.3.0` tag. See the [optional acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/optional-readiness.md) for installation and deployment verification.
+| Helper                                | Purpose                                              |
+| ------------------------------------- | ---------------------------------------------------- |
+| `Contents/Helpers/scratchpad`         | The command coding agents use.                       |
+| `Contents/Helpers/scratchpad-mcp`     | The stdio MCP server for MCP-only clients.           |
+| `Contents/Helpers/scratchpad-service` | The capture service and its encrypted offline queue. |
 
-[Fresh acceptance 36935929030](https://github.com/alexcatdad/scratchpad/actions/runs/36935929030) passed all four jobs: macOS/Linux Homebrew installation and installed MCP workflows, both image architectures and published-image backup/restore, and independently installed released clients with real SSH authentication. The owner dashboard and local Homebrew MCP are upgraded to 0.3.0; existing records, configuration and browser login are preserved.
+Each helper reports the release version with `--version`. The app shows the same
+version at the bottom of its menu bar panel and in **Settings → About**.
 
-## v0.2.0 foundation
+Versions are daily CalVer, `YYYY.MM.DD.N`, with tags `vYYYY.MM.DD.N`. Releases
+are immutable: published assets are never replaced and tags never move.
 
-[v0.2.0 on GitHub](https://github.com/alexcatdad/scratchpad/releases/tag/v0.2.0) adds optional PostgreSQL, persisted AI analysis and embedding jobs, source-linked suggestions and patterns, semantic search, private Markdown documents, and dashboard/MCP controls. Its versioned application image is `ghcr.io/alexcatdad/scratchpad:v0.2.0`. Capture and deterministic retrieval remain available without AI.
+## Where releases are published
 
-[Publication run 36929564159](https://github.com/alexcatdad/scratchpad/actions/runs/36929564159) and [fresh-runner acceptance 36930356827](https://github.com/alexcatdad/scratchpad/actions/runs/36930356827) passed. macOS and Linux Homebrew installation, installed MCP authentication, the optional AI workflow, both image architectures and published-image backup/restore were verified. The [remaining-product ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) records provider, deployment and release evidence separately.
+Releases are published only on the owner's private Forgejo instance, reachable
+on the owner's tailnet. GitHub is a source mirror with no releases. The
+`alexcatdad/tap/scratchpad` Homebrew cask downloads from Forgejo with a
+read-only token, so it installs and upgrades only on machines on that network;
+see [installation](/scratchpad/guides/installation/). The cask keeps macOS
+quarantine in place; the app is notarized and stapled, so Gatekeeper accepts it.
 
-| Component   | Published format                                                              |
-| ----------- | ----------------------------------------------------------------------------- |
-| macOS MCP   | ARM64 and AMD64 ZIPs containing Developer ID signed, Apple-notarized binaries |
-| Linux MCP   | ARM64 and AMD64 tar archives, also usable with Linux Homebrew on WSL          |
-| Application | Versioned GHCR image for Linux ARM64 and AMD64                                |
-| Homebrew    | `scratchpad-mcp` formula in the existing `alexcatdad/tap`                     |
+The deprecated `alexcatdad/tap/scratchpad-mcp` formula receives no further
+releases. Earlier `v0.x.y` and monthly `vYYYY.M.N` releases remain on GitHub as
+history. v0.3.0 also published a `ghcr.io/alexcatdad/scratchpad:v0.3.0`
+server image, which predates the Go server.
 
-Install the MCP through Homebrew:
+## How a release is made
+
+Releases are explicit and local. The owner runs the release tasks on a Mac with
+[release-tools](https://github.com/alexcatdad/release-tools); no CI workflow
+builds, signs, publishes or updates the tap. The build signs the app and its
+helpers with a Developer ID identity, submits them to Apple for notarization and
+staples the ticket. Signing keys and notarization credentials stay in the local
+macOS Keychain.
+
+release-tools then publishes the archive with `SHA256SUMS` and a manifest, and
+updates the cask's version and checksum. A release tag does not deploy the
+server; deployment is a separate step.
+
+See the [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md)
+for the maintainer procedure and the
+[distribution runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/macos-app-distribution.md)
+for installation checks.
+
+## Upgrading
 
 ```sh
-brew install alexcatdad/tap/scratchpad-mcp
-scratchpad-mcp --version
+brew upgrade --cask scratchpad
 ```
 
-Homebrew follows the version currently delivered to the tap. For an exact release, use that release's named archive and verify it against its `checksums.txt`. See [installation](/scratchpad/guides/installation/) for server setup and key enrollment.
+After an upgrade the capture service keeps running the previous version until it
+restarts. The menu bar panel shows **Update installed**; choose **Restart Capture
+Service**. Restarting keeps every queued capture. Upgrade your server alongside
+the app when a release notes a server change; captures wait on your Mac while the
+server is older than the app needs.
 
-No npm registry publication or native Windows installer is required. v0.3.0 supplies its compiled TypeScript client as a checksummed release tarball. Optional AI processing, embeddings, pattern analysis and PostgreSQL are included in v0.2.0; capturing and retrieving memory does not require them.
-
-## Local signing, independent verification
-
-The owner signs both macOS binaries with a Developer ID Application identity and submits their ZIP archives to Apple using credentials in the **local macOS Keychain**. Signing credentials and notarization passwords are not uploaded to GitHub.
-
-After Apple accepts both submissions, the owner uploads the archives, notarization receipts, and a source/checksum manifest to a draft release. A manual workflow verifies those finished files against a fresh build of the tagged source, the configured public team identifier, and Apple trust assessment. A stable tag must identify a commit on `main` with successful CI at that exact revision.
-
-The workflow builds Linux archives and the multiarchitecture image, publishes checksums, and updates the tap from verified release assets. It refuses to overwrite a public release or downgrade an existing formula. Tap-only recovery reuses the published bytes rather than rebuilding signed archives.
-
-Bare command-line binaries and ZIPs do not support stapled notarization tickets. The published macOS ZIPs are the exact Apple-accepted archives; online Apple trust assessment remains relevant.
-
-## Operating and upgrading
-
-The [MVP acceptance guide](/scratchpad/guides/mvp-acceptance/) contains the completed scenario checklist and a reusable synthetic example.
-
-Use the versioned image tag to make upgrades deliberate. Keep a full SQLite backup before upgrading, and retain the matching older application image for rollback. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) and [release runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/release.md) for operations and maintainer procedures.
-
-The historical [v0.1.3 fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36859768053) passed macOS/Linux Homebrew installation, installed MCP authentication and capture, readiness for both image architectures, and published-image backup/restore. The expanded workflow also verifies contractor repositories, linked worktrees and explicit non-Git identity through the actual API. The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records the completed scope and synthetic acceptance scenarios. Other projects are illustrative examples, not sources of truth for Scratchpad’s requirements. Verify browser sign-in and a real MCP session in your own deployment.
+The [MVP acceptance guide](/scratchpad/guides/mvp-acceptance/) keeps the
+historical v0.1.3 acceptance checklist and a reusable synthetic example.

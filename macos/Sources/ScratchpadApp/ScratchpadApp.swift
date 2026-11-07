@@ -107,6 +107,8 @@ func runStatusAction(_ action: StatusPresentation.Action, model: AppModel, openW
 struct MenuContent: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.openWindow) private var openWindow
+    /// Where the version label is read from; fixtures pass their own.
+    var bundle: Bundle = .main
 
     var body: some View {
         let p = model.presentation
@@ -162,7 +164,7 @@ struct MenuContent: View {
                 Button("Settings…") { showWorkspace(.general, model: model, openWindow: openWindow) }
             }
 
-            VersionFooter()
+            VersionFooter(bundle: bundle)
         }
     }
 }

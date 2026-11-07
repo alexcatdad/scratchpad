@@ -20,12 +20,16 @@ See the [OAuth operator runbook](docs/runbooks/github-oauth.md), [security guide
 
 ## Install the macOS app
 
-Scratchpad's macOS application is the primary desktop installation. It bundles
-the stdio MCP adapter, background capture service and encrypted offline queue.
-The app targets Apple Silicon Macs running macOS 13 or later.
+Scratchpad's macOS application is the desktop installation. It bundles the
+background capture service with its encrypted offline queue, the `scratchpad`
+command for coding agents and the `scratchpad-mcp` stdio server for MCP
+clients. It needs a Mac with Apple silicon running macOS 13 or later, and a
+Scratchpad server you can reach.
 
-The app release and Homebrew cask are pending publication. Once both are
-published, install and open it with:
+Releases are published only on a private Forgejo instance on the owner's
+tailnet, so the Homebrew cask needs a read-only release token. Add
+`HOMEBREW_FORGEJO_TOKEN=<token>` to `~/.homebrew/brew.env` with a text editor
+(keeping it out of shell history), then:
 
 ```sh
 brew install --cask alexcatdad/tap/scratchpad
@@ -33,34 +37,33 @@ open -a Scratchpad
 ```
 
 The fully qualified install grants Homebrew trust only to the Scratchpad cask.
-Tapping the repository alone does not grant trust; whole-tap trust is not needed.
+Connect your server and SSH signer in **Connection**. Upgrade with
+`brew upgrade --cask scratchpad`, then choose **Restart Capture Service** when the
+panel shows **Update installed**.
 
-Connect your existing server and SSH signer in **Connection**, then use **AI
-Tools** to preview and apply your coding client's configuration. The client uses the bundled
-`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`; no separate MCP
-formula is required. Restart the client's MCP connection after applying it.
-The server remains a separate deployment.
-
-See the [app distribution runbook](docs/runbooks/macos-app-distribution.md)
-for publication and installation verification.
-
-## Historical standalone MCP
+Coding agents use the bundled command,
+`/Applications/Scratchpad.app/Contents/Helpers/scratchpad`. The cask does not
+link it onto `PATH` yet; call it by that path or add a symlink:
 
 ```sh
-brew install alexcatdad/tap/scratchpad-mcp
-scratchpad-mcp --version
+ln -sf /Applications/Scratchpad.app/Contents/Helpers/scratchpad ~/.local/bin/scratchpad
+scratchpad status
+scratchpad tools
 ```
 
-The tap supports macOS and Linux, including Linux Homebrew on WSL. Versioned archives and checksums are also available from [GitHub Releases](https://github.com/alexcatdad/scratchpad/releases/tag/v0.3.0). macOS binaries are Developer ID signed and notarized. See [MCP configuration and tools](mcp/README.md) to enroll a key and connect your coding client.
+It never starts the capture service; open the app to start it. Clients that need
+MCP can use **AI Tools** in the app to add the bundled `scratchpad-mcp`. See the
+[installation guide](https://alexcatdad.github.io/scratchpad/guides/installation/),
+[agent integration](https://alexcatdad.github.io/scratchpad/guides/agents/) and
+the [app distribution runbook](docs/runbooks/macos-app-distribution.md).
 
-This formula currently distributes v0.3.0, which predates the app, collector
-and current authentication contract. It does not provide the app's offline
-capture workflow and is not a substitute for the app on a new Mac. Keep an
-existing installation until clients have been switched to the bundled adapter.
+The standalone `alexcatdad/tap/scratchpad-mcp` formula is deprecated: it
+distributes v0.3.0, which predates the app, the capture service and the current
+authentication contract. Uninstall it and switch clients to the app.
 
 ## Run with Docker
 
-The versioned image supports Linux ARM64 and AMD64:
+The historical v0.3.0 image supports Linux ARM64 and AMD64. It predates the Go server; for current source, build locally with `docker compose up --build -d` (below):
 
 ```sh
 docker volume create scratchpad-data
@@ -110,11 +113,13 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run admin -- setup
 ```
 
-Build MCP:
+Build the CLI, MCP server and capture service:
 
 ```sh
 cd mcp
+go build -o ../dist/scratchpad ./cmd/scratchpad
 go build -o ../dist/scratchpad-mcp ./cmd/scratchpad-mcp
+go build -o ../dist/scratchpad-service ./cmd/scratchpad-service
 ```
 
 See [MCP configuration and tools](mcp/README.md) and the [development runbook](docs/runbooks/development.md).
@@ -127,7 +132,7 @@ Open a record to inspect its original payload, capture provenance, evidence, rel
 
 ## Release verification
 
-Releases are built, signed, notarized and published by an explicit local task on the owner's Mac using [release-tools](docs/runbooks/release.md); GitHub Actions only validates and never releases. A release publishes native MCP archives for macOS and Linux with checksums and a manifest, and updates the Homebrew tap formula. Apple signing and notarization credentials stay in the local macOS Keychain and are never stored in GitHub. Release assets are verified by SHA-256 against the local artifacts before the draft is published.
+Releases are built, signed, notarized and published by an explicit local task on the owner's Mac using [release-tools](docs/runbooks/release.md); no CI workflow builds, signs or publishes. A release publishes the signed and stapled `Scratchpad.app` archive with `SHA256SUMS` and a manifest to the owner's private Forgejo, and updates the Homebrew cask. GitHub is a source mirror with no releases. Apple signing and notarization credentials stay in the local macOS Keychain.
 
 See the [remaining-product acceptance ledger](docs/post-mvp-readiness.md) for the current source and the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for prior installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
 
@@ -144,7 +149,7 @@ npm run test:e2e
 
 Run `npm run test:backend` and `go -C backend vet ./...` for the Go API. From `mcp/`, also run `go vet ./...` and `go test -race ./...`. The browser integration test uses disposable SQLite storage and a virtual passkey, then drives the real Go MCP through capture and server restart. No production authentication bypass is provided.
 
-GitHub Actions checks the application, documentation, Go code and Docker image. GitHub Pages hosts only the public static documentation, never the private application or its records.
+`task check` runs the full local gate. GitHub Pages hosts only the public static documentation, never the private application or its records.
 
 ## Principles
 
