@@ -13,7 +13,8 @@ enum AppIdentity {
         (Bundle.main.object(forInfoDictionaryKey: "ReleaseVersion") as? String)
         ?? (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
     static let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-    static var versionLabel: String { ServiceUpdateState.label(version: version ?? "unknown", build: build) }
+    // The release tag people see, the same label the other menu-bar apps show.
+    static var versionLabel: String { VersionLabel.of(.main) }
 }
 
 @main
@@ -161,7 +162,7 @@ struct MenuContent: View {
                 Button("Settings…") { showWorkspace(.general, model: model, openWindow: openWindow) }
             }
 
-            VersionFooter(version: AppIdentity.version, build: AppIdentity.build)
+            VersionFooter()
         }
     }
 }
