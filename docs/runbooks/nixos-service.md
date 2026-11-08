@@ -1,8 +1,9 @@
 # Run the server as a NixOS service
 
-The flake exports `packages.<system>.scratchpad-server` (the Go server only) and
-`nixosModules.default`. The dashboard renderer runs as a second loopback unit
-(`dashboard.enable`, default true) that the API server proxies.
+The flake exports `packages.<system>.scratchpad-server` (the Go server only),
+`packages.<system>.default` (server, renderer and the combined launcher) and
+`nixosModules.default`. In the module, the dashboard renderer runs as a second
+loopback unit (`dashboard.enable`, default true) that the API server proxies.
 
 ## Enable
 
@@ -50,6 +51,29 @@ sudo systemd-run --pty --wait --collect --uid=scratchpad --gid=scratchpad \
 ```
 
 Use the same form for `migrate`, `setup` and `recover`.
+
+## Single-unit deployment
+
+Hosts that run Scratchpad as one service, such as the homelab deploy slot, use
+the flake's `#default` output and start `bin/scratchpad-stack` with no
+arguments. It is the container image's launcher
+(`scripts/go-dashboard-runtime.mjs`, [go-container.md](go-container.md)):
+
+- It runs `scratchpad-server serve` with the unit's environment and the UI-only
+  renderer on `127.0.0.1:$SCRATCHPAD_UI_PORT` (default `4000`). It sets
+  `SCRATCHPAD_DASHBOARD_URL` to that origin itself.
+- The renderer gets `SCRATCHPAD_UI_ONLY=true`, `HOST=127.0.0.1` and the port,
+  with the database URL, GitHub OAuth values and key path blanked.
+- When either process exits, it stops the other and exits 1, so the supervisor
+  restarts the pair. SIGTERM or SIGINT stop both and exit 0; a child still
+  running after 15 seconds is killed.
+- Administrative commands pass through: `scratchpad-stack migrate`, `setup`,
+  `recover` and `backup` run only the server.
+
+The unit binds the API port and the renderer port, both on loopback, and needs
+`MemoryDenyWriteExecute=false` for Node's JIT. Health stays `GET /health` on the
+API port. Configure it with the same environment as the API server unit above;
+no renderer-specific variables are needed.
 
 ## Homelab handoff
 
