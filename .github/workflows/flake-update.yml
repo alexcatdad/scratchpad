@@ -1,0 +1,19 @@
+# Nightly flake.lock update through the shared workflow (alexcatdad/ci-actions,
+# pinned): runs nix flake update and opens or updates one pull request with
+# the new lock, through the homelab GitHub App so the PR's checks run.
+# Dependabot doesn't update Nix inputs; this does.
+name: Flake update
+on:
+  schedule:
+    - cron: "33 3 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flake-update:
+    permissions:
+      contents: read
+    uses: alexcatdad/ci-actions/.github/workflows/flake-update.yml@2ff7a21eaa680d9eba4987e52697a6f2601054ea
+    secrets:
+      app-client-id: ${{ secrets.HOMELAB_APP_CLIENT_ID }}
+      app-private-key: ${{ secrets.HOMELAB_APP_PRIVATE_KEY }}
