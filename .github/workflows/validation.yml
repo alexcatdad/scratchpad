@@ -2,6 +2,7 @@
 # Reports only for now (Homelab Delivery Plan step 2.4): nothing is required
 # and nothing deploys from here yet.
 # The vulnix report (security) lists known CVEs in the built package without failing.
+# govulncheck covers the Go modules with packages (tools/lint only pins tools).
 name: Validation
 on:
   pull_request:
@@ -32,7 +33,7 @@ jobs:
       nix: true
       test-command: nix flake check
       security-command: |
-        for m in backend mcp packages/clients/go tools/lint; do (cd "$m" && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...); done
+        for m in backend mcp packages/clients/go; do (cd "$m" && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...); done
         nix build .#default -o result && { nix run --inputs-from . nixpkgs#vulnix -- result || test $? -eq 2; }
   codeql:
     permissions:
