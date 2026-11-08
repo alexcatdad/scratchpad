@@ -3,7 +3,8 @@
 # runs homelab-deploy-slot on this repo's own runner on the homelab: the host
 # builds the tip of main from GitHub, switches the slot, checks health and
 # rolls back on failure. The weekly schedule never deploys.
-# The vulnix report (security) lists known CVEs in the built package without failing.
+# The vulnix report (security) lists known CVEs in the built package and never
+# fails the job (findings, or its NVD download timing out).
 # govulncheck covers the Go modules with packages (tools/lint only pins tools).
 name: Validation
 on:
@@ -36,7 +37,7 @@ jobs:
       test-command: nix flake check
       security-command: |
         for m in backend mcp packages/clients/go; do (cd "$m" && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...); done
-        nix build .#default -o result && { nix run --inputs-from . nixpkgs#vulnix -- result || test $? -eq 2; }
+        nix build .#default -o result && { nix run --inputs-from . nixpkgs#vulnix -- result || echo "vulnix exited $? (2 = findings; report only)"; }
   codeql:
     permissions:
       contents: read
