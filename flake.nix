@@ -16,24 +16,34 @@
       packages = forAll (pkgs: rec {
         scratchpad-server = pkgs.callPackage ./nix/package.nix { inherit version commit; };
         scratchpad-dashboard = pkgs.callPackage ./nix/dashboard.nix { };
-        # The homelab slots run bin/scratchpad-server and bin/scratchpad-dashboard
-        # from this one output; `nix run` still starts the server.
-        default = pkgs.symlinkJoin {
-          name = "scratchpad-${version}";
-          paths = [
-            (pkgs.writeShellApplication {
+        # The homelab slot runs bin/scratchpad-stack from this one output: the
+        # API server and the loopback dashboard renderer as one unit. `nix run`
+        # still starts the server alone.
+        default =
+          let
+            server = pkgs.writeShellApplication {
               name = "scratchpad-server";
               # SSH sign-in proofs are verified with `ssh-keygen -Y verify`.
               runtimeInputs = [ pkgs.openssh ];
               text = ''exec ${pkgs.lib.getExe scratchpad-server} "$@"'';
-            })
-            (pkgs.writeShellApplication {
+            };
+            dashboard = pkgs.writeShellApplication {
               name = "scratchpad-dashboard";
               text = ''exec ${pkgs.lib.getExe pkgs.nodejs_24} ${scratchpad-dashboard}/apps/web/server.mjs "$@"'';
-            })
-          ];
-          meta.mainProgram = "scratchpad-server";
-        };
+            };
+            # The container's launcher: `serve` (the default) runs the server and
+            # the UI-only renderer on 127.0.0.1:$SCRATCHPAD_UI_PORT (default 4000)
+            # and stops both when either exits; admin commands go to the server.
+            stack = pkgs.writeShellApplication {
+              name = "scratchpad-stack";
+              text = ''exec ${pkgs.lib.getExe pkgs.nodejs_24} ${scratchpad-dashboard}/scripts/go-dashboard-runtime.mjs ${pkgs.lib.getExe server} "$@"'';
+            };
+          in
+          pkgs.symlinkJoin {
+            name = "scratchpad-${version}";
+            paths = [ server dashboard stack ];
+            meta.mainProgram = "scratchpad-server";
+          };
       });
 
       # Lint and tests, run by `nix flake check` (the homelab build gate).

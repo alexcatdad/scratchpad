@@ -25,6 +25,8 @@ buildNpmPackage {
     # Drop links to workspaces the renderer does not ship or import.
     find $out/node_modules/@scratchpad -maxdepth 1 -type l ! -name web -delete
     cp -r apps/web/dist apps/web/server.mjs apps/web/package.json $out/apps/web/
+    # The combined launcher resolves ../apps/web/server.mjs from here.
+    install -Dm444 scripts/go-dashboard-runtime.mjs $out/scripts/go-dashboard-runtime.mjs
     runHook postInstall
   '';
   dontNpmInstall = true;
