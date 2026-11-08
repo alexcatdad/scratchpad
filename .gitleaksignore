@@ -1,0 +1,3 @@
+# gitleaks findings reviewed and judged not secrets (prose).
+docs/runbooks/github-owner-access.md:generic-api-key:78
+ab6f68abaec9884c1a0723a94a1054cbd81db9c4:docs/runbooks/github-owner-access.md:generic-api-key:78
