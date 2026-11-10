@@ -216,6 +216,14 @@ type ReceiptContent struct {
 	ClientSavedAt string          `json:"clientSavedAt"`
 }
 
+// Redaction reports that the service replaced credential-shaped text with a
+// secret:// reference before storing the capture. It names the kind of value
+// and how many were replaced, never the value itself.
+type Redaction struct {
+	Kind  string `json:"kind"`
+	Count int    `json:"count"`
+}
+
 type Receipt struct {
 	ReceiptID        string          `json:"receiptId"`
 	State            ReceiptState    `json:"state"`
@@ -227,6 +235,7 @@ type Receipt struct {
 	DeliveryCode     DeliveryCode    `json:"deliveryCode,omitempty"`
 	NextAttemptAt    string          `json:"nextAttemptAt,omitempty"`
 	Content          *ReceiptContent `json:"content,omitempty"`
+	Redactions       []Redaction     `json:"redactions,omitempty"`
 }
 
 type CaptureResponse struct {

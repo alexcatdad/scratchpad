@@ -1916,6 +1916,17 @@ central record. MCP text and structured output share this contract. The MCP
 does not fall back to direct central capture when the local service is
 unavailable.
 
+Before accepting a capture, the local service replaces credential-shaped values
+in the title, confidence reason, payload strings and Git context with
+`secret://redacted/<kind>`. A receipt for such a capture carries
+`redactions`, an array of `{ "kind", "count" }` in kind order; the field is
+omitted when nothing was replaced. Kinds are `private-key`, `aws-access-key`,
+`github-token`, `api-key`, `slack-token`, `stripe-key`, `google-api-key`,
+`npm-token`, `tailscale-key`, `jwt`, `authorization-header`, `bearer-token`,
+`url-credential`, `assigned-secret` and `high-entropy-value`. Object keys,
+numbers, key order and whitespace in the payload are preserved. Retrying the
+original input replays the stored, redacted capture; it is not a conflict.
+
 ### App-owned MCP transport
 
 The bundled MCP requires only its command path. Its existing tools and central
