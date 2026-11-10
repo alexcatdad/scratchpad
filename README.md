@@ -26,10 +26,7 @@ command for coding agents and the `scratchpad-mcp` stdio server for MCP
 clients. It needs a Mac with Apple silicon running macOS 13 or later, and a
 Scratchpad server you can reach.
 
-Releases are published only on a private Forgejo instance on the owner's
-tailnet, so the Homebrew cask needs a read-only release token. Add
-`HOMEBREW_FORGEJO_TOKEN=<token>` to `~/.homebrew/brew.env` with a text editor
-(keeping it out of shell history), then:
+Install it with Homebrew:
 
 ```sh
 brew install --cask alexcatdad/tap/scratchpad
@@ -132,7 +129,7 @@ Open a record to inspect its original payload, capture provenance, evidence, rel
 
 ## Release verification
 
-Releases are built, signed, notarized and published by an explicit local task on the owner's Mac using [release-tools](docs/runbooks/release.md); no CI workflow builds, signs or publishes. A release publishes the signed and stapled `Scratchpad.app` archive with `SHA256SUMS` and a manifest to the owner's private Forgejo, and updates the Homebrew cask. GitHub is a source mirror with no releases. Apple signing and notarization credentials stay in the local macOS Keychain.
+Releases are built, signed, notarized and published by an explicit local task on the owner's Mac using [release-tools](docs/runbooks/release.md); no CI workflow builds, signs or publishes. A release publishes the signed and stapled `Scratchpad.app` archive with `SHA256SUMS` and a manifest to GitHub, and updates the Homebrew cask. Apple signing and notarization credentials stay in the local macOS Keychain.
 
 See the [remaining-product acceptance ledger](docs/post-mvp-readiness.md) for the current source and the [MVP readiness evidence](docs/runbooks/mvp-readiness.md) for prior installation checks. Publication, installation on a particular platform, and acceptance in your deployment remain distinct outcomes.
 

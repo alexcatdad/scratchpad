@@ -23,11 +23,12 @@ are immutable: published assets are never replaced and tags never move.
 
 ## Where releases are published
 
-Releases are published only on the owner's private Forgejo instance, reachable
-on the owner's tailnet. GitHub is a source mirror with no releases. The
-`alexcatdad/tap/scratchpad` Homebrew cask downloads from Forgejo with a
-read-only token, so it installs and upgrades only on machines on that network;
-see [installation](/scratchpad/guides/installation/). The cask keeps macOS
+Releases are published on
+[GitHub](https://github.com/alexcatdad/scratchpad/releases). The
+`alexcatdad/tap/scratchpad` Homebrew cask downloads from there; see
+[installation](/scratchpad/guides/installation/). Releases up to `2026.11.07.1`
+were published on a private server that is now retired
+and are no longer downloadable. The cask keeps macOS
 quarantine in place; the app is notarized and stapled, so Gatekeeper accepts it.
 
 The deprecated `alexcatdad/tap/scratchpad-mcp` formula receives no further
