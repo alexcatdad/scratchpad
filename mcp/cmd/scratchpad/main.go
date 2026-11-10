@@ -36,6 +36,8 @@ const usage = `Usage:
   scratchpad status               Show the local capture service status
   scratchpad hook --agent <name>  Record one agent hook event from stdin
                                   (claude-code or codex; for hook configuration)
+  scratchpad hooks print --agent <name>
+                                  Print the hook configuration for an agent
   scratchpad --version
 
 <tool> is any Scratchpad tool, with dashes or underscores
@@ -116,6 +118,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return printStatus(ctx, localcapture.NewClient(os.Getenv("SCRATCHPAD_SERVICE_SOCKET")), stdout, stderr)
 	case "hook":
 		return runHook(ctx, args[1:], stdin, stderr, defaultHookDeps())
+	case "hooks":
+		return runHooks(args[1:], stdout, stderr, executablePath)
 	}
 	session, err := open(ctx)
 	if err != nil {
