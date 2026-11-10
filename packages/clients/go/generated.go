@@ -17,6 +17,60 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for AgentEventAgent.
+const (
+	ClaudeCode AgentEventAgent = "claude-code"
+	Codex      AgentEventAgent = "codex"
+)
+
+// Valid indicates whether the value is a known member of the AgentEventAgent enum.
+func (e AgentEventAgent) Valid() bool {
+	switch e {
+	case ClaudeCode:
+		return true
+	case Codex:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for AgentEventKind.
+const (
+	Interrupt        AgentEventKind = "interrupt"
+	ModelFailure     AgentEventKind = "model_failure"
+	PermissionDenied AgentEventKind = "permission_denied"
+	Prompt           AgentEventKind = "prompt"
+	SessionEnd       AgentEventKind = "session_end"
+	SessionStart     AgentEventKind = "session_start"
+	ToolFailure      AgentEventKind = "tool_failure"
+	TurnEnd          AgentEventKind = "turn_end"
+)
+
+// Valid indicates whether the value is a known member of the AgentEventKind enum.
+func (e AgentEventKind) Valid() bool {
+	switch e {
+	case Interrupt:
+		return true
+	case ModelFailure:
+		return true
+	case PermissionDenied:
+		return true
+	case Prompt:
+		return true
+	case SessionEnd:
+		return true
+	case SessionStart:
+		return true
+	case ToolFailure:
+		return true
+	case TurnEnd:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for AiSettingsAnalysisModes.
 const (
 	AiSettingsAnalysisModesClassification        AiSettingsAnalysisModes = "classification"
@@ -1274,6 +1328,48 @@ func (e GetReady200JSONResponseBodyStatus) Valid() bool {
 	}
 }
 
+// AgentEvent One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received.
+type AgentEvent struct {
+	Agent     AgentEventAgent `json:"agent"`
+	AgentId   *string         `json:"agentId,omitempty"`
+	AgentType *string         `json:"agentType,omitempty"`
+	Cwd       *string         `json:"cwd,omitempty"`
+
+	// EventId Identifier minted at intake. Together with the delivering credential it makes delivery idempotent.
+	EventId          string                  `json:"eventId"`
+	GitContext       *map[string]interface{} `json:"gitContext,omitempty"`
+	InstructionFiles *[]struct {
+		Path   string `json:"path"`
+		Sha256 string `json:"sha256"`
+	} `json:"instructionFiles,omitempty"`
+	Kind           AgentEventKind `json:"kind"`
+	Model          *string        `json:"model,omitempty"`
+	OccurredAt     time.Time      `json:"occurredAt"`
+	PermissionMode *string        `json:"permissionMode,omitempty"`
+
+	// ProjectId Optional explicit project. Without it the project is resolved from gitContext.remote; no project is ever created.
+	ProjectId     *string `json:"projectId,omitempty"`
+	Reason        *string `json:"reason,omitempty"`
+	SchemaVersion *int    `json:"schemaVersion,omitempty"`
+	SessionId     string  `json:"sessionId"`
+	Text          *string `json:"text,omitempty"`
+	Tool          *struct {
+		DurationMs  *int        `json:"durationMs,omitempty"`
+		Error       *string     `json:"error,omitempty"`
+		Input       interface{} `json:"input,omitempty"`
+		Interrupted *bool       `json:"interrupted,omitempty"`
+		Name        *string     `json:"name,omitempty"`
+	} `json:"tool,omitempty"`
+	TurnId               *string                `json:"turnId,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
+}
+
+// AgentEventAgent defines model for AgentEvent.Agent.
+type AgentEventAgent string
+
+// AgentEventKind defines model for AgentEvent.Kind.
+type AgentEventKind string
+
 // AiSettings defines model for AiSettings.
 type AiSettings struct {
 	AnalysisModes    *[]AiSettingsAnalysisModes `json:"analysisModes,omitempty"`
@@ -1548,6 +1644,8 @@ type ProjectKind string
 
 // ProjectSettings defines model for ProjectSettings.
 type ProjectSettings struct {
+	// AgentEvents Opt this project in to storing coding-agent hook events. Absent means false; the server writes the key only when it is true.
+	AgentEvents          *bool                                `json:"agentEvents,omitempty"`
 	AiProcessing         bool                                 `json:"aiProcessing"`
 	CrossProjectAnalysis bool                                 `json:"crossProjectAnalysis"`
 	EnabledRecordTypes   *[]ProjectSettingsEnabledRecordTypes `json:"enabledRecordTypes,omitempty"`
@@ -1610,6 +1708,24 @@ type SemanticQuery struct {
 
 // GetAbout200JSONResponseBodyDatabase defines parameters for GetAbout.
 type GetAbout200JSONResponseBodyDatabase string
+
+// GetAgentEventsParams defines parameters for GetAgentEvents.
+type GetAgentEventsParams struct {
+	// After Cursor from a previous page. Omit to start from the oldest stored event.
+	After *string `form:"after,omitempty" json:"after,omitempty"`
+	Limit *int    `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// ProjectId Optional filter.
+	ProjectId *string `form:"projectId,omitempty" json:"projectId,omitempty"`
+
+	// SessionId Optional filter.
+	SessionId *string `form:"sessionId,omitempty" json:"sessionId,omitempty"`
+}
+
+// PostAgentEventsJSONBody defines parameters for PostAgentEvents.
+type PostAgentEventsJSONBody struct {
+	Events []AgentEvent `json:"events"`
+}
 
 // GetAiJobsParams defines parameters for GetAiJobs.
 type GetAiJobsParams struct {
@@ -2118,6 +2234,9 @@ type GetReady200JSONResponseBodyDatabase string
 // GetReady200JSONResponseBodyStatus defines parameters for GetReady.
 type GetReady200JSONResponseBodyStatus string
 
+// PostAgentEventsJSONRequestBody defines body for PostAgentEvents for application/json ContentType.
+type PostAgentEventsJSONRequestBody PostAgentEventsJSONBody
+
 // PostAiJobsJSONRequestBody defines body for PostAiJobs for application/json ContentType.
 type PostAiJobsJSONRequestBody = JobRequest
 
@@ -2237,6 +2356,319 @@ type PostSuggestionsIdRejectJSONRequestBody = RevisionPrecondition
 
 // PostSummariesExportJSONRequestBody defines body for PostSummariesExport for application/json ContentType.
 type PostSummariesExportJSONRequestBody PostSummariesExportJSONBody
+
+// Getter for additional properties for AgentEvent. Returns the specified
+// element and whether it was found
+func (a AgentEvent) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for AgentEvent
+func (a *AgentEvent) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for AgentEvent to handle AdditionalProperties
+func (a *AgentEvent) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["agent"]; found {
+		err = json.Unmarshal(raw, &a.Agent)
+		if err != nil {
+			return fmt.Errorf("error reading 'agent': %w", err)
+		}
+		delete(object, "agent")
+	}
+
+	if raw, found := object["agentId"]; found {
+		err = json.Unmarshal(raw, &a.AgentId)
+		if err != nil {
+			return fmt.Errorf("error reading 'agentId': %w", err)
+		}
+		delete(object, "agentId")
+	}
+
+	if raw, found := object["agentType"]; found {
+		err = json.Unmarshal(raw, &a.AgentType)
+		if err != nil {
+			return fmt.Errorf("error reading 'agentType': %w", err)
+		}
+		delete(object, "agentType")
+	}
+
+	if raw, found := object["cwd"]; found {
+		err = json.Unmarshal(raw, &a.Cwd)
+		if err != nil {
+			return fmt.Errorf("error reading 'cwd': %w", err)
+		}
+		delete(object, "cwd")
+	}
+
+	if raw, found := object["eventId"]; found {
+		err = json.Unmarshal(raw, &a.EventId)
+		if err != nil {
+			return fmt.Errorf("error reading 'eventId': %w", err)
+		}
+		delete(object, "eventId")
+	}
+
+	if raw, found := object["gitContext"]; found {
+		err = json.Unmarshal(raw, &a.GitContext)
+		if err != nil {
+			return fmt.Errorf("error reading 'gitContext': %w", err)
+		}
+		delete(object, "gitContext")
+	}
+
+	if raw, found := object["instructionFiles"]; found {
+		err = json.Unmarshal(raw, &a.InstructionFiles)
+		if err != nil {
+			return fmt.Errorf("error reading 'instructionFiles': %w", err)
+		}
+		delete(object, "instructionFiles")
+	}
+
+	if raw, found := object["kind"]; found {
+		err = json.Unmarshal(raw, &a.Kind)
+		if err != nil {
+			return fmt.Errorf("error reading 'kind': %w", err)
+		}
+		delete(object, "kind")
+	}
+
+	if raw, found := object["model"]; found {
+		err = json.Unmarshal(raw, &a.Model)
+		if err != nil {
+			return fmt.Errorf("error reading 'model': %w", err)
+		}
+		delete(object, "model")
+	}
+
+	if raw, found := object["occurredAt"]; found {
+		err = json.Unmarshal(raw, &a.OccurredAt)
+		if err != nil {
+			return fmt.Errorf("error reading 'occurredAt': %w", err)
+		}
+		delete(object, "occurredAt")
+	}
+
+	if raw, found := object["permissionMode"]; found {
+		err = json.Unmarshal(raw, &a.PermissionMode)
+		if err != nil {
+			return fmt.Errorf("error reading 'permissionMode': %w", err)
+		}
+		delete(object, "permissionMode")
+	}
+
+	if raw, found := object["projectId"]; found {
+		err = json.Unmarshal(raw, &a.ProjectId)
+		if err != nil {
+			return fmt.Errorf("error reading 'projectId': %w", err)
+		}
+		delete(object, "projectId")
+	}
+
+	if raw, found := object["reason"]; found {
+		err = json.Unmarshal(raw, &a.Reason)
+		if err != nil {
+			return fmt.Errorf("error reading 'reason': %w", err)
+		}
+		delete(object, "reason")
+	}
+
+	if raw, found := object["schemaVersion"]; found {
+		err = json.Unmarshal(raw, &a.SchemaVersion)
+		if err != nil {
+			return fmt.Errorf("error reading 'schemaVersion': %w", err)
+		}
+		delete(object, "schemaVersion")
+	}
+
+	if raw, found := object["sessionId"]; found {
+		err = json.Unmarshal(raw, &a.SessionId)
+		if err != nil {
+			return fmt.Errorf("error reading 'sessionId': %w", err)
+		}
+		delete(object, "sessionId")
+	}
+
+	if raw, found := object["text"]; found {
+		err = json.Unmarshal(raw, &a.Text)
+		if err != nil {
+			return fmt.Errorf("error reading 'text': %w", err)
+		}
+		delete(object, "text")
+	}
+
+	if raw, found := object["tool"]; found {
+		err = json.Unmarshal(raw, &a.Tool)
+		if err != nil {
+			return fmt.Errorf("error reading 'tool': %w", err)
+		}
+		delete(object, "tool")
+	}
+
+	if raw, found := object["turnId"]; found {
+		err = json.Unmarshal(raw, &a.TurnId)
+		if err != nil {
+			return fmt.Errorf("error reading 'turnId': %w", err)
+		}
+		delete(object, "turnId")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for AgentEvent to handle AdditionalProperties
+func (a AgentEvent) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["agent"], err = json.Marshal(a.Agent)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'agent': %w", err)
+	}
+
+	if a.AgentId != nil {
+		object["agentId"], err = json.Marshal(a.AgentId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'agentId': %w", err)
+		}
+	}
+
+	if a.AgentType != nil {
+		object["agentType"], err = json.Marshal(a.AgentType)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'agentType': %w", err)
+		}
+	}
+
+	if a.Cwd != nil {
+		object["cwd"], err = json.Marshal(a.Cwd)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'cwd': %w", err)
+		}
+	}
+
+	object["eventId"], err = json.Marshal(a.EventId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'eventId': %w", err)
+	}
+
+	if a.GitContext != nil {
+		object["gitContext"], err = json.Marshal(a.GitContext)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'gitContext': %w", err)
+		}
+	}
+
+	if a.InstructionFiles != nil {
+		object["instructionFiles"], err = json.Marshal(a.InstructionFiles)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'instructionFiles': %w", err)
+		}
+	}
+
+	object["kind"], err = json.Marshal(a.Kind)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'kind': %w", err)
+	}
+
+	if a.Model != nil {
+		object["model"], err = json.Marshal(a.Model)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'model': %w", err)
+		}
+	}
+
+	object["occurredAt"], err = json.Marshal(a.OccurredAt)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'occurredAt': %w", err)
+	}
+
+	if a.PermissionMode != nil {
+		object["permissionMode"], err = json.Marshal(a.PermissionMode)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'permissionMode': %w", err)
+		}
+	}
+
+	if a.ProjectId != nil {
+		object["projectId"], err = json.Marshal(a.ProjectId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'projectId': %w", err)
+		}
+	}
+
+	if a.Reason != nil {
+		object["reason"], err = json.Marshal(a.Reason)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'reason': %w", err)
+		}
+	}
+
+	if a.SchemaVersion != nil {
+		object["schemaVersion"], err = json.Marshal(a.SchemaVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'schemaVersion': %w", err)
+		}
+	}
+
+	object["sessionId"], err = json.Marshal(a.SessionId)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'sessionId': %w", err)
+	}
+
+	if a.Text != nil {
+		object["text"], err = json.Marshal(a.Text)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'text': %w", err)
+		}
+	}
+
+	if a.Tool != nil {
+		object["tool"], err = json.Marshal(a.Tool)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'tool': %w", err)
+		}
+	}
+
+	if a.TurnId != nil {
+		object["turnId"], err = json.Marshal(a.TurnId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'turnId': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
 
 // Getter for additional properties for OwnerProfile. Returns the specified
 // element and whether it was found
@@ -2636,6 +3068,31 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
 	GetAbout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetAgentEvents Page stored agent events in the order they were stored
+	//
+	// The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.
+	//
+	// Corresponds with GET /api/v1/agent-events (the `GetAgentEvents` operationId).
+	GetAgentEvents(ctx context.Context, params *GetAgentEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAgentEventsWithBody Store a batch of coding-agent hook events
+	//
+	// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+	PostAgentEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostAgentEvents Store a batch of coding-agent hook events
+	//
+	// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+	PostAgentEvents(ctx context.Context, body PostAgentEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetAiJobs Inspect a bounded page of persisted jobs
 	//
@@ -3370,6 +3827,61 @@ type ClientInterface interface {
 // Corresponds with GET /api/v1/about (the `GetAbout` operationId).
 func (c *Client) GetAbout(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAboutRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAgentEvents Page stored agent events in the order they were stored
+//
+// The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.
+//
+// Corresponds with GET /api/v1/agent-events (the `GetAgentEvents` operationId).
+func (c *Client) GetAgentEvents(ctx context.Context, params *GetAgentEventsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAgentEventsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAgentEventsWithBody Store a batch of coding-agent hook events
+//
+// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+func (c *Client) PostAgentEventsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAgentEventsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostAgentEvents Store a batch of coding-agent hook events
+//
+// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+func (c *Client) PostAgentEvents(ctx context.Context, body PostAgentEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostAgentEventsRequest(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -5160,6 +5672,136 @@ func NewGetAboutRequest(server string) (*http.Request, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	return req, nil
+}
+
+// NewGetAgentEventsRequest constructs an http.Request for the GetAgentEvents method
+func NewGetAgentEventsRequest(server string, params *GetAgentEventsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/agent-events")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.After != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "after", *params.After, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.ProjectId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "projectId", *params.ProjectId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.SessionId != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "sessionId", *params.SessionId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostAgentEventsRequest calls the generic PostAgentEvents builder with application/json body
+func NewPostAgentEventsRequest(server string, body PostAgentEventsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostAgentEventsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostAgentEventsRequestWithBody constructs an http.Request for the PostAgentEvents method, with any body, and a specified content type
+func NewPostAgentEventsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/api/v1/agent-events")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	return req, nil
 }
@@ -8237,6 +8879,33 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /api/v1/about (the `GetAbout` operationId).
 	GetAboutWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAboutResponse, error)
 
+	// GetAgentEventsWithResponse Page stored agent events in the order they were stored
+	//
+	// The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /api/v1/agent-events (the `GetAgentEvents` operationId).
+	GetAgentEventsWithResponse(ctx context.Context, params *GetAgentEventsParams, reqEditors ...RequestEditorFn) (*GetAgentEventsResponse, error)
+
+	// PostAgentEventsWithBodyWithResponse Store a batch of coding-agent hook events
+	//
+	// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+	PostAgentEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAgentEventsResponse, error)
+
+	// PostAgentEventsWithResponse Store a batch of coding-agent hook events
+	//
+	// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+	PostAgentEventsWithResponse(ctx context.Context, body PostAgentEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAgentEventsResponse, error)
+
 	// GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 	//
 	// Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
@@ -9065,6 +9734,150 @@ func (r GetAboutResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAboutResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetAgentEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		// Cursor Pass as after to continue. Empty only when no event has ever been returned to this reader.
+		Cursor string `json:"cursor"`
+		Events []struct {
+			Agent string `json:"agent"`
+
+			// Event One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received.
+			Event      AgentEvent `json:"event"`
+			Id         string     `json:"id"`
+			Kind       string     `json:"kind"`
+			OccurredAt time.Time  `json:"occurredAt"`
+			ProjectId  string     `json:"projectId"`
+			ReceivedAt time.Time  `json:"receivedAt"`
+			SessionId  string     `json:"sessionId"`
+		} `json:"events"`
+		HasMore bool `json:"hasMore"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAgentEventsResponse) GetJSON200() *struct {
+	// Cursor Pass as after to continue. Empty only when no event has ever been returned to this reader.
+	Cursor string `json:"cursor"`
+	Events []struct {
+		Agent string `json:"agent"`
+
+		// Event One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received.
+		Event      AgentEvent `json:"event"`
+		Id         string     `json:"id"`
+		Kind       string     `json:"kind"`
+		OccurredAt time.Time  `json:"occurredAt"`
+		ProjectId  string     `json:"projectId"`
+		ReceivedAt time.Time  `json:"receivedAt"`
+		SessionId  string     `json:"sessionId"`
+	} `json:"events"`
+	HasMore bool `json:"hasMore"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r GetAgentEventsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAgentEventsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAgentEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAgentEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAgentEventsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostAgentEventsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *struct {
+		Accepted  int `json:"accepted"`
+		Discarded struct {
+			Invalid    int `json:"invalid"`
+			NotEnabled int `json:"notEnabled"`
+			Unresolved int `json:"unresolved"`
+		} `json:"discarded"`
+		Duplicate int `json:"duplicate"`
+	}
+	// JSONDefault the response for an HTTP default `application/json` response
+	JSONDefault *Error
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostAgentEventsResponse) GetJSON200() *struct {
+	Accepted  int `json:"accepted"`
+	Discarded struct {
+		Invalid    int `json:"invalid"`
+		NotEnabled int `json:"notEnabled"`
+		Unresolved int `json:"unresolved"`
+	} `json:"discarded"`
+	Duplicate int `json:"duplicate"`
+} {
+	return r.JSON200
+}
+
+// GetJSONDefault returns the response for an HTTP default `application/json` response
+func (r PostAgentEventsResponse) GetJSONDefault() *Error {
+	return r.JSONDefault
+}
+
+// GetBody returns the raw response body bytes
+func (r PostAgentEventsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostAgentEventsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostAgentEventsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostAgentEventsResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -12634,6 +13447,51 @@ func (c *ClientWithResponses) GetAboutWithResponse(ctx context.Context, reqEdito
 	return ParseGetAboutResponse(rsp)
 }
 
+// GetAgentEventsWithResponse Page stored agent events in the order they were stored
+//
+// The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /api/v1/agent-events (the `GetAgentEvents` operationId).
+func (c *ClientWithResponses) GetAgentEventsWithResponse(ctx context.Context, params *GetAgentEventsParams, reqEditors ...RequestEditorFn) (*GetAgentEventsResponse, error) {
+	rsp, err := c.GetAgentEvents(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAgentEventsResponse(rsp)
+}
+
+// PostAgentEventsWithBodyWithResponse Store a batch of coding-agent hook events
+//
+// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+func (c *ClientWithResponses) PostAgentEventsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostAgentEventsResponse, error) {
+	rsp, err := c.PostAgentEventsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAgentEventsResponse(rsp)
+}
+
+// PostAgentEventsWithResponse Store a batch of coding-agent hook events
+//
+// Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /api/v1/agent-events (the `PostAgentEvents` operationId).
+func (c *ClientWithResponses) PostAgentEventsWithResponse(ctx context.Context, body PostAgentEventsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostAgentEventsResponse, error) {
+	rsp, err := c.PostAgentEvents(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostAgentEventsResponse(rsp)
+}
+
 // GetAiJobsWithResponse Inspect a bounded page of persisted jobs
 //
 // Preserves retained job history. Defaults to 100 jobs, maximum 200. Follow nextCursor for older history. hasActive reports running or eligible queued work independently of the page. Poll a specific returned job ID with jobId; it cannot be combined with cursor. Invalid ranges, empty values or malformed cursors return 400.
@@ -14046,6 +14904,96 @@ func ParseGetAboutResponse(rsp *http.Response) (*GetAboutResponse, error) {
 			GithubConfigured bool                                `json:"githubConfigured"`
 			SchemaVersion    int                                 `json:"schemaVersion"`
 			Version          string                              `json:"version"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetAgentEventsResponse parses an HTTP response from a GetAgentEventsWithResponse call
+func ParseGetAgentEventsResponse(rsp *http.Response) (*GetAgentEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAgentEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			// Cursor Pass as after to continue. Empty only when no event has ever been returned to this reader.
+			Cursor string `json:"cursor"`
+			Events []struct {
+				Agent string `json:"agent"`
+
+				// Event One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received.
+				Event      AgentEvent `json:"event"`
+				Id         string     `json:"id"`
+				Kind       string     `json:"kind"`
+				OccurredAt time.Time  `json:"occurredAt"`
+				ProjectId  string     `json:"projectId"`
+				ReceivedAt time.Time  `json:"receivedAt"`
+				SessionId  string     `json:"sessionId"`
+			} `json:"events"`
+			HasMore bool `json:"hasMore"`
+		}
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest Error
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostAgentEventsResponse parses an HTTP response from a PostAgentEventsWithResponse call
+func ParsePostAgentEventsResponse(rsp *http.Response) (*PostAgentEventsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostAgentEventsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest struct {
+			Accepted  int `json:"accepted"`
+			Discarded struct {
+				Invalid    int `json:"invalid"`
+				NotEnabled int `json:"notEnabled"`
+				Unresolved int `json:"unresolved"`
+			} `json:"discarded"`
+			Duplicate int `json:"duplicate"`
 		}
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err

@@ -101,6 +101,33 @@ fresh existing authentication or recovery. Both preserve independent credentials
 and knowledge and revoke GitHub-derived access. Presentation profile linkage
 never grants access. See the [owner-access ADR](adr/0001-github-owner-access.md).
 
+### Accepted clarification: agent events (2026-11-10)
+
+The owner accepted a second, separate stream beside the eight capture types.
+**Agent events** are hook events from coding agents (Claude Code and Codex),
+collected by the agent's harness so that evidence of a mistake does not depend
+on the agent reporting it. They exist to find repeated agent mistakes.
+
+Agent events are not captures and the capture invariants do not apply to them:
+
+- They are not a ninth record type and never appear in records, search, context
+  or retrieval.
+- They expire. The server deletes them after a retention period, 30 days unless
+  the operator sets `SCRATCHPAD_AGENT_EVENT_RETENTION_DAYS`.
+- They are excluded from knowledge export and import. Operational backups
+  include them.
+- Storage is opt-in per project through the `agentEvents` project setting, off
+  by default for every project kind. Events for a project that has not opted in,
+  or for a repository Scratchpad does not know, are discarded; no project is
+  created for them.
+- Only mistake signals are kept: failed and denied tool calls, the user's
+  prompts, the end of each turn, interrupts, failed model requests and session
+  boundaries. Successful tool calls and tool output are never stored.
+- The collector redacts credential-shaped values before an event is queued, as
+  it does for captures.
+
+Anything derived from agent events stays a suggestion until the owner accepts it.
+
 ## Retrieval, curation and portability
 
 Always provide deterministic listing/full-text search, project/type/date/tag and

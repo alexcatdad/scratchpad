@@ -1916,6 +1916,17 @@ central record. MCP text and structured output share this contract. The MCP
 does not fall back to direct central capture when the local service is
 unavailable.
 
+Before accepting a capture, the local service replaces credential-shaped values
+in the title, confidence reason, payload strings and Git context with
+`secret://redacted/<kind>`. A receipt for such a capture carries
+`redactions`, an array of `{ "kind", "count" }` in kind order; the field is
+omitted when nothing was replaced. Kinds are `private-key`, `aws-access-key`,
+`github-token`, `api-key`, `slack-token`, `stripe-key`, `google-api-key`,
+`npm-token`, `tailscale-key`, `jwt`, `authorization-header`, `bearer-token`,
+`url-credential`, `assigned-secret` and `high-entropy-value`. Object keys,
+numbers, key order and whitespace in the payload are preserved. Retrying the
+original input replays the stored, redacted capture; it is not a conflict.
+
 ### App-owned MCP transport
 
 The bundled MCP requires only its command path. Its existing tools and central
@@ -1959,3 +1970,40 @@ existing passages stale for reindexing, while leaving it empty keeps existing
 indexes current. The fingerprint of ordinary record embeddings (`POST /ai/jobs`
 type `embed`) also uses the effective embedding endpoint, so moving to a
 different endpoint requires re-running the embed job.
+
+## Accepted clarification: agent events (2026-11-10)
+
+Agent events are coding-agent hook events, kept apart from captures. The product
+rules are in [the requirements](prd.md); this section is the HTTP contract.
+
+`POST /api/v1/agent-events` accepts `{ "events": [...] }` with 1 to 200 events
+and a body of at most 3 MiB, from a machine credential only. Each event needs
+`eventId`, `agent` (`claude-code` or `codex`), `kind`, `sessionId` and
+`occurredAt`; other fields are stored as received, with exact JSON numbers.
+`kind` is one of `session_start`, `session_end`, `prompt`, `tool_failure`,
+`permission_denied`, `turn_end`, `interrupt` or `model_failure`.
+
+The project comes from `projectId` or, without it, from `gitContext.remote`
+matched against known repository identities. The endpoint never creates a
+project. A well-formed batch always answers 200:
+
+```json
+{
+  "accepted": 2,
+  "duplicate": 0,
+  "discarded": { "invalid": 0, "unresolved": 1, "notEnabled": 1 }
+}
+```
+
+`unresolved` counts events whose project is unknown and `notEnabled` counts
+events whose project has not set `agentEvents`. The sender drops the batch after
+a 200, because none of those outcomes changes on a retry. Delivery is idempotent
+per credential and `eventId`. Events write no audit entries.
+
+`GET /api/v1/agent-events` pages events in stored order. It accepts `after`,
+`limit` (1 to 500, default 100), `projectId` and `sessionId`, and returns
+`events`, `cursor` and `hasMore`. The cursor is opaque and is returned on every
+page, including the last, so a reader keeps it and asks again later.
+
+`ProjectSettings.agentEvents` is an optional boolean. The server writes it only
+when it is true; absent means false.

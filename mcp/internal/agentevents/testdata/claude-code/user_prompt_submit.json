@@ -1,0 +1,11 @@
+{
+  "session_id": "11111111-2222-4333-8444-555555555555",
+  "transcript_path": "/Users/dev/.claude/projects/-work-app/11111111-2222-4333-8444-555555555555.jsonl",
+  "cwd": "/work/app",
+  "prompt_id": "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+  "scratchpad_dir": "/tmp/claude-501/-work-app/11111111/scratchpad",
+  "permission_mode": "auto",
+  "session_title": "Example session",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "No, not like that. Use the existing helper instead."
+}

@@ -270,3 +270,25 @@ func (a *Adapter) OnlineRequest(ctx context.Context, binding localcapture.Bindin
 	}
 	return localcapture.OnlineResponse{Body: body}, nil
 }
+
+var _ localcapture.AgentEventAdapter = (*Adapter)(nil)
+
+// DeliverAgentEvents sends one batch over the cached session used for online
+// requests. Agent events are high-volume evidence, so they do not obtain a
+// fresh SSH proof per delivery as captures do.
+func (a *Adapter) DeliverAgentEvents(ctx context.Context, binding localcapture.Binding, events []json.RawMessage) error {
+	client, err := a.onlineRequestClient(ctx, binding)
+	if err != nil {
+		return err
+	}
+	err = client.AgentEventsCentral(ctx, events)
+	var api *scratchpad.APIError
+	if errors.As(err, &api) && (api.Code == "AUTH_INVALID" || api.Code == "AUTH_REQUIRED") {
+		a.onlineMu.Lock()
+		if a.onlineClient == client {
+			a.onlineClient = nil
+		}
+		a.onlineMu.Unlock()
+	}
+	return err
+}

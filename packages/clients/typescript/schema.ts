@@ -989,6 +989,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/agent-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Page stored agent events in the order they were stored
+         * @description The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.
+         */
+        get: operations["get_agent_events"];
+        put?: never;
+        /**
+         * Store a batch of coding-agent hook events
+         * @description Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.
+         */
+        post: operations["post_agent_events"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1014,6 +1038,8 @@ export interface components {
             };
             crossProjectAnalysis: boolean;
             aiProcessing: boolean;
+            /** @description Opt this project in to storing coding-agent hook events. Absent means false; the server writes the key only when it is true. */
+            agentEvents?: boolean;
         };
         Project: components["schemas"]["Entity"] & {
             name?: string;
@@ -1245,6 +1271,45 @@ export interface components {
             recordIds: string[];
             projectIds: string[];
             crossProject: boolean;
+        };
+        /** @description One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received. */
+        AgentEvent: {
+            schemaVersion?: number;
+            /** @description Identifier minted at intake. Together with the delivering credential it makes delivery idempotent. */
+            eventId: string;
+            /** @enum {string} */
+            agent: "claude-code" | "codex";
+            /** @enum {string} */
+            kind: "session_start" | "session_end" | "prompt" | "tool_failure" | "permission_denied" | "turn_end" | "interrupt" | "model_failure";
+            sessionId: string;
+            turnId?: string;
+            /** Format: date-time */
+            occurredAt: string;
+            /** @description Optional explicit project. Without it the project is resolved from gitContext.remote; no project is ever created. */
+            projectId?: string;
+            cwd?: string;
+            model?: string;
+            permissionMode?: string;
+            agentId?: string;
+            agentType?: string;
+            text?: string;
+            reason?: string;
+            tool?: {
+                name?: string;
+                input?: unknown;
+                error?: string;
+                interrupted?: boolean;
+                durationMs?: number;
+            };
+            instructionFiles?: {
+                path: string;
+                sha256: string;
+            }[];
+            gitContext?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
     };
     responses: {
@@ -3401,6 +3466,86 @@ export interface operations {
                         unindexedSources: number;
                         incompatibleSources: number;
                         passageCount: number;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    get_agent_events: {
+        parameters: {
+            query?: {
+                /** @description Cursor from a previous page. Omit to start from the oldest stored event. */
+                after?: string;
+                limit?: number;
+                /** @description Optional filter. */
+                projectId?: string;
+                /** @description Optional filter. */
+                sessionId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        events: {
+                            id: string;
+                            projectId: string;
+                            sessionId: string;
+                            agent: string;
+                            kind: string;
+                            /** Format: date-time */
+                            occurredAt: string;
+                            /** Format: date-time */
+                            receivedAt: string;
+                            event: components["schemas"]["AgentEvent"];
+                        }[];
+                        /** @description Pass as after to continue. Empty only when no event has ever been returned to this reader. */
+                        cursor: string;
+                        hasMore: boolean;
+                    };
+                };
+            };
+            default: components["responses"]["Error"];
+        };
+    };
+    post_agent_events: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    events: components["schemas"]["AgentEvent"][];
+                };
+            };
+        };
+        responses: {
+            /** @description Successful response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        accepted: number;
+                        duplicate: number;
+                        discarded: {
+                            invalid: number;
+                            unresolved: number;
+                            notEnabled: number;
+                        };
                     };
                 };
             };

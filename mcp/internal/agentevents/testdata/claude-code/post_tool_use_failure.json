@@ -1,0 +1,19 @@
+{
+  "session_id": "11111111-2222-4333-8444-555555555555",
+  "transcript_path": "/Users/dev/.claude/projects/-work-app/11111111-2222-4333-8444-555555555555.jsonl",
+  "cwd": "/work/app",
+  "prompt_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  "scratchpad_dir": "/tmp/claude-501/-work-app/11111111/scratchpad",
+  "permission_mode": "auto",
+  "effort": { "level": "medium" },
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls /nonexistent-dir",
+    "description": "List a directory that does not exist"
+  },
+  "tool_use_id": "toolu_01SYNTHETIC0000000000000001",
+  "error": "Exit code 1\nls: /nonexistent-dir: No such file or directory",
+  "is_interrupt": false,
+  "duration_ms": 36
+}

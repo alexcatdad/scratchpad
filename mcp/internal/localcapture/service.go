@@ -63,6 +63,7 @@ type Runtime struct {
 	pruneInterval           time.Duration
 	lifecycle               Lifecycle
 	paused                  bool
+	agentEvents             agentEventDelivery
 	stopped                 bool
 	quiescing               bool
 	connection              ConnectionStatus
@@ -215,6 +216,7 @@ func (r *Runtime) worker(ctx context.Context) {
 				break
 			}
 		}
+		r.deliverAgentEvents(ctx)
 	}
 }
 
@@ -230,6 +232,10 @@ func (r *Runtime) pruneReceipts() {
 		return
 	}
 	if err := r.store.prune(time.Now()); err != nil {
+		r.markStorageFailure(err)
+		return
+	}
+	if err := r.store.pruneAgentEvents(time.Now()); err != nil {
 		r.markStorageFailure(err)
 	}
 }
@@ -725,6 +731,13 @@ func (r *Runtime) Capture(ctx context.Context, req CaptureRequest) (CaptureOutco
 	if req.RequestID == "" || len(req.RequestID) > 256 || req.Record.Type == "" || req.Record.Title == "" || len(req.Record.Payload) == 0 || !json.Valid(req.Record.Payload) {
 		return CaptureOutcome{}, ErrConflictSentinel
 	}
+	// Redaction precedes the request digest and the durable commit, so the
+	// queue, the receipt and every delivery attempt only ever hold the
+	// redacted capture, and a retry of the original input matches it.
+	redactions, err := redactCapture(&req)
+	if err != nil {
+		return CaptureOutcome{}, ErrInternalSentinel
+	}
 	// This is internal retry semantics, never caller-controlled protocol data.
 	req.ClientSavedAtGenerated = false
 	req.Binding = Binding{ServerURL: config.ServerURL, CredentialFingerprint: config.CredentialFingerprint}
@@ -740,7 +753,7 @@ func (r *Runtime) Capture(ctx context.Context, req CaptureRequest) (CaptureOutco
 	waiter := r.registerDeliveryWaiter(req.RequestID)
 	defer r.releaseDeliveryWaiter(waiter)
 	now := time.Now().UTC()
-	receipt := Receipt{State: ReceiptPending, AcceptedAt: now.Format(time.RFC3339Nano), ClientSavedAt: req.ClientSavedAt, Content: &ReceiptContent{RequestID: req.RequestID, Record: req.Record, Scope: req.Scope, GitContext: req.GitContext, ClientSavedAt: req.ClientSavedAt}}
+	receipt := Receipt{State: ReceiptPending, AcceptedAt: now.Format(time.RFC3339Nano), ClientSavedAt: req.ClientSavedAt, Content: &ReceiptContent{RequestID: req.RequestID, Record: req.Record, Scope: req.Scope, GitContext: req.GitContext, ClientSavedAt: req.ClientSavedAt}, Redactions: redactions}
 	if req.Scope.ProjectID == "" && len(req.GitContext) == 0 {
 		receipt.State = ReceiptNeedsSelection
 	}

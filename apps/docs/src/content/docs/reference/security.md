@@ -95,6 +95,20 @@ attribution. Caller-authored actor descriptions are context, not verified identi
 Captured text, imported logs and AI output are evidence to inspect; retrieval does
 not authorize executing instructions in that content.
 
+## Secrets in captures
+
+Captures are immutable, so the local capture service checks each one before
+storing it. Values that look like credentials are replaced with a
+`secret://redacted/<kind>` reference: known token and key formats, private key
+blocks, credentials inside URLs, values assigned to fields named like a
+password or token, and long random values. The receipt reports which kinds were
+replaced and how many, never the value.
+
+This lowers the risk of recording a secret. It does not remove it. A secret with
+no recognizable shape, such as a short password in a sentence, is not detected,
+and source code is not treated as secret. Keep recording references such as
+`secret://provider/main` instead of values.
+
 ## Persistence and backups
 
 Records, account bindings, synchronization freshness, blocks, sessions, revocations,

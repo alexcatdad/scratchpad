@@ -95,6 +95,11 @@ func columnsForVersion(version int) map[string][]column {
 	if version >= 3 {
 		result["context_headers"] = []column{{"record_id", "TEXT", 0, 1}, {"project_id", "TEXT", 1, 0}, {"data", "TEXT", 1, 0}}
 	}
+	if version >= 4 {
+		for name, columns := range agentEventColumns {
+			result[name] = columns
+		}
+	}
 	return result
 }
 

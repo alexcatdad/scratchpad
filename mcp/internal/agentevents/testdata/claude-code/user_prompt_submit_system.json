@@ -1,0 +1,11 @@
+{
+  "session_id": "11111111-2222-4333-8444-555555555555",
+  "transcript_path": "/Users/dev/.claude/projects/-work-app/11111111-2222-4333-8444-555555555555.jsonl",
+  "cwd": "/work/app",
+  "prompt_id": "cccccccc-dddd-4eee-8fff-000000000000",
+  "scratchpad_dir": "/tmp/claude-501/-work-app/11111111/scratchpad",
+  "permission_mode": "auto",
+  "session_title": "Example session",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "<task-notification>\n<task-id>b0000000</task-id>\n<status>completed</status>\n</task-notification>"
+}
