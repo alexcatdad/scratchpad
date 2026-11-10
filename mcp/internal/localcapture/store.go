@@ -200,6 +200,18 @@ func openWithKey(path string, key []byte) (*Store, error) {
 		db.Close()
 		return nil, ErrStorageFailedSentinel
 	}
+	// Additive and unversioned: a binary that predates agent events reads only
+	// capture_items and ignores this table, so the queue schema version stays.
+	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS agent_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_ns INTEGER NOT NULL,
+    attempts INTEGER NOT NULL,
+    next_attempt_ns INTEGER NOT NULL,
+    envelope BLOB NOT NULL
+)`); err != nil {
+		db.Close()
+		return nil, ErrStorageFailedSentinel
+	}
 	if schemaVersion == 0 {
 		if _, err = db.Exec("PRAGMA user_version=1"); err != nil {
 			db.Close()

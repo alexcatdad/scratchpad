@@ -231,6 +231,10 @@ func (r *Runtime) pruneReceipts() {
 	}
 	if err := r.store.prune(time.Now()); err != nil {
 		r.markStorageFailure(err)
+		return
+	}
+	if err := r.store.pruneAgentEvents(time.Now()); err != nil {
+		r.markStorageFailure(err)
 	}
 }
 
