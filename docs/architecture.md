@@ -84,6 +84,17 @@ advertise `clientSavedAt-v1` before central capture. Same identity and content
 replay the original capture; changed content conflicts. Separate intentional
 captures remain separate even when their text matches.
 
+The collector replaces credential-shaped values with a `secret://redacted/<kind>`
+reference before the durable local commit, so the queue, receipts and every
+delivery hold only the redacted capture. It checks the title, the confidence
+reason and every string in the payload and Git context for known token and key
+formats, private key blocks, credentials in URLs, values assigned to
+secret-named fields and long random values. Detection is deterministic, so a
+retry of the original input matches the stored capture. The receipt lists each
+kind replaced and its count, never the value. This reduces risk and is not a
+guarantee: a secret with no recognizable shape passes through, and source code
+is not treated as secret.
+
 Raw input, payloads, source claims, timestamps and provenance stay immutable.
 Server-assigned actor identity remains distinct from descriptive attribution.
 Curation creates revisions/audits; derived knowledge cites sources and never
