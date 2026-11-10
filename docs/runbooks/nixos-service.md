@@ -1,9 +1,11 @@
 # Run the server as a NixOS service
 
-The flake exports `packages.<system>.scratchpad-server` (the Go server only),
-`packages.<system>.default` (server, renderer and the combined launcher) and
-`nixosModules.default`. In the module, the dashboard renderer runs as a second
-loopback unit (`dashboard.enable`, default true) that the API server proxies.
+The flake exports `packages.<system>.scratchpad-server` (the Go server with the
+dashboard embedded), `packages.<system>.default` (the same server wrapped with
+OpenSSH on its path) and `nixosModules.default`, which runs one unit,
+`scratchpad.service`. `packages.<system>.scratchpad-dashboard` is the
+dashboard's static build; it is a build input of the server and nothing runs it.
+No output contains or starts a Node runtime.
 
 ## Enable
 
@@ -33,7 +35,10 @@ GitHub OAuth callback setup is in [github-oauth.md](github-oauth.md).
 `flake.lock` pins nixpkgs. After changing Go or npm dependencies, set the
 matching `vendorHash` (`nix/package.nix`) or `npmDepsHash` (`nix/dashboard.nix`) to
 `lib.fakeHash`, run `nix build .#scratchpad-server .#scratchpad-dashboard`, and
-copy the reported hash back. The server builds with Go 1.27 (`buildGo127Module`).
+copy the reported hash back. `npmDepsHash` changes whenever `package-lock.json`
+does. The server builds with Go 1.27 (`buildGo127Module`) and copies the
+dashboard build into `internal/httpapi/dashboard/dist` before compiling, where
+`go:embed` picks it up.
 
 ## State and administration
 
@@ -54,26 +59,42 @@ Use the same form for `migrate`, `setup` and `recover`.
 
 ## Single-unit deployment
 
-Hosts that run Scratchpad as one service, such as the homelab deploy slot, use
-the flake's `#default` output and start `bin/scratchpad-stack` with no
-arguments. It is the container image's launcher
-(`scripts/go-dashboard-runtime.mjs`, [go-container.md](go-container.md)):
+Hosts that run Scratchpad as one service outside the NixOS module, such as the
+homelab deploy slot, use the flake's `#default` output and start
+`bin/scratchpad-server serve`. The wrapper puts OpenSSH on the path for
+`ssh-keygen`. Administrative commands use the same binary: `migrate`, `setup`,
+`recover` and `backup`.
 
-- It runs `scratchpad-server serve` with the unit's environment and the UI-only
-  renderer on `127.0.0.1:$SCRATCHPAD_UI_PORT` (default `4000`). It sets
-  `SCRATCHPAD_DASHBOARD_URL` to that origin itself.
-- The renderer gets `SCRATCHPAD_UI_ONLY=true`, `HOST=127.0.0.1` and the port,
-  with the database URL, GitHub OAuth values and key path blanked.
-- When either process exits, it stops the other and exits 1, so the supervisor
-  restarts the pair. SIGTERM or SIGINT stop both and exit 0; a child still
-  running after 15 seconds is killed.
-- Administrative commands pass through: `scratchpad-stack migrate`, `setup`,
-  `recover` and `backup` run only the server.
+`bin/scratchpad-stack` remains only as a compatibility name for units written
+for the retired two-process launcher. It runs the server alone (`serve` when
+given no arguments) and unsets `SCRATCHPAD_DASHBOARD_URL` and
+`SCRATCHPAD_UI_PORT`, so an existing unit keeps working unchanged. Switch such
+units to `bin/scratchpad-server serve` when convenient.
 
-The unit binds the API port and the renderer port, both on loopback, and needs
-`MemoryDenyWriteExecute=false` for Node's JIT. Health stays `GET /health` on the
-API port. Configure it with the same environment as the API server unit above;
-no renderer-specific variables are needed.
+The unit binds only the API port. It no longer needs
+`MemoryDenyWriteExecute=false`, which was there for Node's JIT. Health stays
+`GET /health`. Configure it with the same environment as the API server unit
+above.
+
+## Upgrading from the two-unit layout
+
+Earlier revisions ran a Node dashboard renderer beside the server. No data
+migration is involved; remove what referred to the renderer:
+
+- NixOS module: delete `services.scratchpad.dashboard.enable`,
+  `dashboard.package`, `dashboard.port` and `services.scratchpad.dashboardUrl`.
+  They were removed, and a configuration that still sets one fails evaluation
+  with a message saying so. `scratchpad-dashboard.service` disappears on the
+  next `nixos-rebuild switch`.
+- Hand-written units: stop and disable any `scratchpad-dashboard` unit, and
+  drop `After=`/`Requires=` references to it.
+- Environment: remove `SCRATCHPAD_DASHBOARD_URL`, `SCRATCHPAD_UI_PORT`,
+  `SCRATCHPAD_UI_ONLY` and the renderer's `HOST`/`PORT`.
+  `SCRATCHPAD_DASHBOARD_URL` is now development-only; pointing the server at
+  the old renderer port makes the dashboard return `503 DASHBOARD_UNAVAILABLE`.
+- Port 4000 is no longer bound. Remove probes or firewall rules for it.
+- The flake output `bin/scratchpad-dashboard` is gone. The
+  `scratchpad-dashboard` package still exists but is only the static build.
 
 ## Homelab handoff
 
@@ -94,4 +115,5 @@ The installer needs these inputs; none belong in this repository.
   0600/0400, no group write, no other access). Never generate a new one.
 - **GitHub:** `github.clientId` plus `SCRATCHPAD_GITHUB_CLIENT_SECRET` in
   `environmentFile`. The OAuth callback is `<publicUrl>/api/v1/auth/github/callback`.
-- **Dashboard:** `scratchpad-dashboard` runs on `127.0.0.1:4000` with no credentials; the API server proxies it. No separate exposure is needed. Set `dashboard.enable = false` for API-only.
+- **Dashboard:** embedded in the server and served from the same origin. No
+  separate unit, port or exposure is needed.

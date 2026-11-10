@@ -2,7 +2,7 @@
 
 This runbook records the acceptance boundary for making the Go service the
 default and retiring the TypeScript API implementation. The current source has
-one Go API and a UI-only React renderer. This separates local
+one Go binary that serves the API and the embedded static React dashboard. This separates local
 behavior evidence from CI, image, rollback, and deployed-runtime acceptance.
 
 ## Behavior gates
@@ -42,9 +42,8 @@ against Go.
 
 ## Runtime and packaging gates
 
-The development entrypoint must launch the Go API and a renderer configured for
-UI-only use. The renderer must not receive database, GitHub OAuth, or encryption
-secrets. Test setup and administration use the Go CLI. Production startup,
+The development entrypoint must build the dashboard, embed it and launch the
+single Go process; no renderer process exists to receive secrets. Test setup and administration use the Go CLI. Production startup,
 health checks, SQLite permissions, PostgreSQL configuration, and the default
 container image must all exercise the same Go runtime contract.
 
@@ -58,8 +57,8 @@ runtime with credentials and records available.
 ## Retirement completion criteria
 
 Remove the TypeScript API implementation only after the behavior gates above
-pass on the current source and generated renderer. Keep the three renderer
-health/API route stubs UI-only, retain the compact numeric oracle, and retain
+pass on the current source and its dashboard build. The renderer's
+health/API route stubs were removed with the renderer; retain the compact numeric oracle, and retain
 the frozen old image only for the agreed rollback window. Remove backend-only
 dependencies and lockfile entries after import scans and CI demonstrate that
 the frontend, documentation, generator, and test runners no longer require

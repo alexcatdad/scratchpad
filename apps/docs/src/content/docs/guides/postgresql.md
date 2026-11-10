@@ -23,7 +23,7 @@ This is a knowledge migration. It does not move authentication credentials, brow
 
 ## Back up operational state
 
-Use PostgreSQL's `pg_dump` and `pg_restore` for full operational backup/restore. The `npm run admin -- backup` command is SQLite-only and refuses a PostgreSQL deployment.
+Use PostgreSQL's `pg_dump` and `pg_restore` for full operational backup/restore. The `scratchpad-server backup` command is SQLite-only and refuses a PostgreSQL deployment.
 
 Restore into a fresh database with the target application stopped, then verify readiness, browser sign-in, MCP retrieval and queued work. Preserve the original database for rollback. A full database snapshot contains private records and authentication state; protect it accordingly.
 

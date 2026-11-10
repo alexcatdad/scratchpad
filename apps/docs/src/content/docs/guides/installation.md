@@ -99,7 +99,7 @@ After linking, your laptop and VMs can use synchronized published SSH authentica
 
 ## Develop from source
 
-Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.3**. The source backend and MCP are Go; React is retained for the dashboard. Docker Compose is an alternative for running the server.
+Use Node.js **24.21.0** from `.node-version`, npm, Git, OpenSSH `ssh-keygen` and Go **1.27.3**. The source backend and MCP are Go; the React dashboard is built to static files that the Go server embeds, so Node is needed to build and test, not to run. Docker Compose is an alternative for running the server.
 
 Clone [the repository](https://github.com/alexcatdad/scratchpad) and run these commands from its root:
 
@@ -110,7 +110,7 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
-`npm run dev` builds Go and the dashboard, then starts the public Go API on loopback port 3000 and a private UI-only renderer on port 4000. Stopping it stops both processes. Open [localhost:3000](http://localhost:3000). Keep the terminal running. In a second terminal at the repository root, set the same configuration and generate the owner setup token:
+`npm run dev` builds the dashboard, builds the Go server with it embedded and starts that one process on loopback port 3000. Open [localhost:3000](http://localhost:3000). Keep the terminal running. In a second terminal at the repository root, set the same configuration and generate the owner setup token:
 
 ```sh
 export SCRATCHPAD_PUBLIC_URL=http://localhost:3000
@@ -126,10 +126,10 @@ Use the same database path for the administrative command and the running server
 
 ```sh
 docker compose up --build -d
-docker compose exec scratchpad npm run admin -- setup
+docker compose exec scratchpad scratchpad-server setup
 ```
 
-The local Compose configuration serves the dashboard on port 3000 and stores SQLite in a persistent volume. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before moving beyond localhost: remote instances require HTTPS and a matching `SCRATCHPAD_PUBLIC_URL`.
+The image contains only the Go server, which serves the API and the dashboard; administrative commands call `scratchpad-server` directly. The local Compose configuration serves the dashboard on port 3000 and stores SQLite in a persistent volume. Follow the [deployment runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/deployment.md) before moving beyond localhost: remote instances require HTTPS and a matching `SCRATCHPAD_PUBLIC_URL`.
 
 ## Recover access
 
@@ -142,7 +142,7 @@ npm run admin -- recover
 For Docker:
 
 ```sh
-docker compose exec scratchpad npm run admin -- recover
+docker compose exec scratchpad scratchpad-server recover
 ```
 
 Use the dashboard recovery flow with the resulting token. Recovery preserves records and invalidates existing sessions; it does not reopen ordinary first-time setup.

@@ -1,5 +1,5 @@
 {
-  description = "Scratchpad central API server";
+  description = "Scratchpad server (API and embedded dashboard)";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
@@ -14,11 +14,13 @@
       commit = self.shortRev or "dirty";
     in {
       packages = forAll (pkgs: rec {
-        scratchpad-server = pkgs.callPackage ./nix/package.nix { inherit version commit; };
         scratchpad-dashboard = pkgs.callPackage ./nix/dashboard.nix { };
-        # The homelab slot runs bin/scratchpad-stack from this one output: the
-        # API server and the loopback dashboard renderer as one unit. `nix run`
-        # still starts the server alone.
+        # One Go binary: the API server with the dashboard's static build
+        # embedded. No Node runtime is built into or run by any output.
+        scratchpad-server = pkgs.callPackage ./nix/package.nix {
+          inherit version commit;
+          dashboard = scratchpad-dashboard;
+        };
         default =
           let
             server = pkgs.writeShellApplication {
@@ -27,21 +29,21 @@
               runtimeInputs = [ pkgs.openssh ];
               text = ''exec ${pkgs.lib.getExe scratchpad-server} "$@"'';
             };
-            dashboard = pkgs.writeShellApplication {
-              name = "scratchpad-dashboard";
-              text = ''exec ${pkgs.lib.getExe pkgs.nodejs_24} ${scratchpad-dashboard}/apps/web/server.mjs "$@"'';
-            };
-            # The container's launcher: `serve` (the default) runs the server and
-            # the UI-only renderer on 127.0.0.1:$SCRATCHPAD_UI_PORT (default 4000)
-            # and stops both when either exits; admin commands go to the server.
+            # Compatibility name for hosts that still start the retired
+            # two-process launcher: it now runs the server alone (`serve` by
+            # default) and drops the settings that pointed at the renderer.
             stack = pkgs.writeShellApplication {
               name = "scratchpad-stack";
-              text = ''exec ${pkgs.lib.getExe pkgs.nodejs_24} ${scratchpad-dashboard}/scripts/go-dashboard-runtime.mjs ${pkgs.lib.getExe server} "$@"'';
+              text = ''
+                unset SCRATCHPAD_DASHBOARD_URL SCRATCHPAD_UI_PORT
+                if [ "$#" -eq 0 ]; then set -- serve; fi
+                exec ${pkgs.lib.getExe server} "$@"
+              '';
             };
           in
           pkgs.symlinkJoin {
             name = "scratchpad-${version}";
-            paths = [ server dashboard stack ];
+            paths = [ server stack ];
             meta.mainProgram = "scratchpad-server";
           };
       });

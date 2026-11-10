@@ -34,8 +34,6 @@ const runId = `scratchpad-real-ai-${randomUUID()}`;
 const environment = {
   ...process.env,
   SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3102",
-  SCRATCHPAD_UI_PORT: "4102",
-  SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4102",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: databasePath,
   SCRATCHPAD_DATABASE_URL: "",

@@ -1,0 +1,2 @@
+Keeps the embedded dashboard directory present in a checkout with no web build.
+`npm run build -w @scratchpad/web` writes the dashboard to dist/ beside this file.

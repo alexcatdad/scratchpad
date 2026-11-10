@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, normalizePath } from "vite";
 
@@ -7,11 +6,18 @@ const database = normalizePath(
   resolve(process.env.SCRATCHPAD_DATABASE_PATH ?? "data/scratchpad.sqlite"),
 ).replace(/[?*()[\]{}!+@]/g, "\\$&");
 
+// The build is static files only. It is written into the Go module, where
+// backend/internal/httpapi/dashboard.go embeds it into the server binary.
 export default defineConfig({
   publicDir: false,
+  build: {
+    outDir: "../../backend/internal/httpapi/dashboard/dist",
+    emptyOutDir: true,
+  },
   server: {
     host: "127.0.0.1",
-    port: 3000,
+    port: 4000,
+    strictPort: true,
     fs: {
       deny: [
         "**/.env",
@@ -29,5 +35,5 @@ export default defineConfig({
       ],
     },
   },
-  plugins: [tanstackStart(), react()],
+  plugins: [react()],
 });

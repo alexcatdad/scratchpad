@@ -8,6 +8,8 @@ and single-host installations.
 
 Run Scratchpad as one owner's private instance. The checked-in Compose service builds locally, binds `127.0.0.1:3000`, and persists SQLite at `/data/scratchpad.sqlite` in its named `scratchpad-data` volume. Published images are available from GHCR; the owner's Homebrew installation and local dashboard now use published v0.2.0. A locally built development image is a separate acceptance candidate and must not be described as a published release.
 
+The image contains one process: the Go server, which embeds the dashboard as static files. It has no Node runtime; `openssh-client` (for `ssh-keygen`, which verifies SSH sign-in proofs) and `ca-certificates` are the only additions to the base image.
+
 The host needs Docker Compose, storage for the persistent volume, and a TLS reverse proxy for access beyond localhost. GitHub Pages serves public documentation and cannot host the application.
 
 ## Local first-owner setup
@@ -16,7 +18,7 @@ Run from the repository root:
 
 ```sh
 docker compose up --build -d
-docker compose exec scratchpad npm run admin -- setup
+docker compose exec scratchpad scratchpad-server setup
 ```
 
 Open <http://localhost:3000>, enter the one-use token, and register a passkey. Generate the token against the running service so it uses the same volume and public URL. The token expires after 15 minutes; generating a replacement invalidates the previous token.
@@ -73,7 +75,7 @@ From the repository root:
 umask 077
 mkdir -p backups
 backup_name="scratchpad-$(date -u +%Y%m%dT%H%M%SZ).sqlite"
-docker compose exec -T scratchpad npm run admin -- backup "/data/backups/$backup_name"
+docker compose exec -T scratchpad scratchpad-server backup "/data/backups/$backup_name"
 docker compose cp "scratchpad:/data/backups/$backup_name" "./backups/$backup_name"
 chmod 600 "./backups/$backup_name"
 ```
@@ -123,7 +125,7 @@ curl --fail http://localhost:3000/ready
 
 Continue using **both Compose files** for all commands against the restored instance, including `exec`, `stop`, backups, and upgrades. Record this selection in the deployment configuration. Running default `docker compose up` without the override would reconnect the original volume; that is a rollback action, not a routine restart. The backup is a self-contained SQLite database; do not copy old `-wal` or `-shm` files into the fresh volume.
 
-Verify browser sign-in, project/record counts, a known decision chain, and real MCP retrieval. A restored backup also restores the authentication state at its snapshot time: review credentials and revoke anything that should no longer be valid. Administrator recovery (`npm run admin -- recover`) can replace a lost passkey and invalidate current sessions without deleting records.
+Verify browser sign-in, project/record counts, a known decision chain, and real MCP retrieval. A restored backup also restores the authentication state at its snapshot time: review credentials and revoke anything that should no longer be valid. Administrator recovery (`docker compose exec scratchpad scratchpad-server recover`) can replace a lost passkey and invalidate current sessions without deleting records.
 
 The application must own both the restored database file and its volume directory. SQLite creates WAL and shared-memory files beside the database; assigning ownership only to the database file can cause `SQLITE_READONLY_DIRECTORY` even when the file itself is writable.
 
@@ -138,6 +140,29 @@ Native JSON import/export is a separate knowledge migration feature. Importing a
 5. If rollback is needed, stop the new service, return to the recorded source/image, and restore the pre-upgrade database snapshot offline. Preserve the failed instance data for diagnosis before replacement.
 
 Do not assume an older server understands a database migrated by a newer server. Restoring the earlier code alone is insufficient; retain the matching pre-upgrade database. Keep the same Compose project name or explicit volume identity so an upgrade does not appear to lose data by attaching a new empty volume. `docker compose down --volumes` destroys the named data volume and is not part of normal upgrade, restart, or rollback.
+
+### Upgrading from the two-process image
+
+Earlier source images ran a Node launcher that supervised the Go server and a
+private dashboard renderer on port 4000. The server now embeds the dashboard,
+so the container runs only `scratchpad-server serve`. No data migration is
+involved. When upgrading:
+
+- Remove `SCRATCHPAD_DASHBOARD_URL`, `SCRATCHPAD_UI_PORT` and
+  `SCRATCHPAD_UI_ONLY` from the environment, along with any `HOST` or `PORT`
+  set for the renderer. `SCRATCHPAD_DASHBOARD_URL` is now a development-only
+  setting; left pointing at the old renderer it makes the dashboard return
+  `503 DASHBOARD_UNAVAILABLE`.
+- Port 4000 is no longer bound. Remove any mapping, probe or firewall rule for
+  it.
+- Administrative commands call the binary directly:
+  `docker compose exec scratchpad scratchpad-server setup`, `recover`,
+  `backup /data/<file>` or `migrate`. `npm run admin` no longer exists inside
+  the image; it still works from a source checkout.
+- A custom `command` or `entrypoint` that started `node` must be removed. The
+  image's entrypoint is `scratchpad-server` and its default command is `serve`.
+- Health checks that ran `node -e fetch(...)` inside the container no longer
+  work. Use the image's own health check or probe `/ready` over HTTP.
 
 ## Release distribution
 

@@ -1,7 +1,8 @@
 # Go runtime image
 
-The default final `runtime` target selects the Go backend and private React
-renderer; `go-runtime` names the same implementation explicitly. Rebuilding an
+The final `runtime` target is one Go binary that embeds the React dashboard as
+static files; `go-runtime` names the same image explicitly. It contains no Node
+runtime. Rebuilding an
 existing Compose installation therefore requires the reviewed migration procedure
 before replacing its container. Code defaults do not authorize a live cutover.
 Rollback verification extracts a pinned historical Git revision into a private
@@ -22,25 +23,26 @@ TEST_RETAINED_IMAGE=scratchpad-retained:local \
 ```
 
 Use the project's Node version and installed dependencies for the browser test.
-The image uses the backend's pinned Go 1.27.3 toolchain, verified against the
-[official stable download listing](https://go.dev/dl/), and the existing pinned
-Node 24.21.0 renderer image. It runs as UID/GID 1000, owns a private `/data`
-directory, exposes port 3000 and keeps rendering on loopback port 4000.
-The Go target adds pinned `ca-certificates=20250419~deb12u2` from the
+The build has three stages. A pinned Node 24.21.0 stage builds the dashboard to
+static files; a stage with the backend's pinned Go 1.27.3 toolchain, verified
+against the [official stable download listing](https://go.dev/dl/), compiles
+the server with those files embedded and fails if `index.html` is missing; the
+final stage is `debian:bookworm-slim` with the binary. The final stage adds
+`openssh-client`, because the server runs `ssh-keygen` to verify SSH sign-in
+proofs, and pinned `ca-certificates=20250419~deb12u2` from the
 [Debian Bookworm security package](https://packages.debian.org/bookworm/ca-certificates)
-so HTTPS clients can use normal system trust. Package selection was also checked
-against the image's official Debian repository candidate.
+so HTTPS clients can use normal system trust. It runs as UID/GID 1000, owns a
+private `/data` directory and exposes port 3000. Nothing listens on port 4000.
 
-The image entrypoint forwards `migrate`, `setup`, `recover` and `backup` arguments
-to Go without starting the renderer. Its default `serve` command runs both
-processes. Go owns API, readiness, authentication, storage and workers; the
-renderer has explicit UI-only mode and no OAuth, encryption-key or PostgreSQL
-configuration. `SCRATCHPAD_UI_PORT` selects its private port. In this combined
-image, either child exiting causes the companion to stop and the launcher to
-fail, allowing the container runtime to restart it. SIGTERM/SIGINT shut down both
-children, with a 15-second fallback deadline. Allow at least 20 seconds for
-container termination. This differs from the independently managed two-process
-[local dashboard setup](go-dashboard.md), where renderer downtime leaves Go up.
+The entrypoint is `scratchpad-server` and the default command is `serve`, so
+`migrate`, `setup`, `recover` and `backup` are passed as container arguments or
+through `docker exec <container> scratchpad-server <command>`. Go serves the
+API, readiness and the [embedded dashboard](go-dashboard.md). SIGTERM/SIGINT
+stop the single process; allow at least 20 seconds for container termination.
+The image has no HTTP client, so its health check reads `/ready` through bash's
+`/dev/tcp`. `scripts/docker-smoke.sh` checks readiness, the authenticated
+boundary, the embedded dashboard and a restart, and fails if the image contains
+`node` or the container runs more than the server process.
 
 For an isolated development installation, create a fresh named volume and keep
 the public URL consistent with its published port:
@@ -64,11 +66,11 @@ host loopback addresses do not refer to the host from inside the container.
 
 ## Verification and recovery boundaries
 
-The native launcher test checks real CLI migration forwarding, HTTP startup,
-normal shutdown and renderer port-bind failure with companion cleanup:
+The native runtime test builds the server with the dashboard embedded, runs a
+CLI migration, then checks the dashboard document and asset headers, caching,
+`404` for every other path, the access log and a clean shutdown:
 
 ```sh
-npm run build -w @scratchpad/web
 npx playwright test tests/go-runtime.spec.ts
 ```
 

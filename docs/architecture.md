@@ -15,18 +15,33 @@ Coding agent
   -> private local Go capture service (encrypted queue, receipts, SSH sessions)
   -> HTTPS Go backend (authentication, API, persistence, workers)
        -> SQLite or PostgreSQL
-       -> private loopback Node renderer -> React dashboard
+       -> embedded static React dashboard (served by the same binary)
        -> optional OpenAI-compatible completion and embedding providers
 ```
 
 The `backend` module is the authoritative implementation of application behavior.
 The Go process owns the public origin, `/api/v1`, `/health`, `/ready`, migrations,
 authentication, projects, captures, curation, audit, imports/exports and optional
-AI jobs. The default container and `npm run dev` select Go. The private renderer
-runs with `SCRATCHPAD_UI_ONLY=true`; it must not initialize a database or implement
-application behavior. Go strips credentials and forwarding identity before
-proxying dashboard GET/HEAD requests and prevents renderer cookies from replacing
-Go sessions. Renderer failure leaves the API available.
+AI jobs. No Node process runs in any deployment.
+
+The dashboard (`apps/web`) is a static single-page app: plain Vite with TanStack
+Router, one route at `/` whose state lives in the query string, and all data
+fetched in the browser from `/api/v1` on the same origin. It has no server-side
+logic. `npm run build -w @scratchpad/web` writes static files to
+`backend/internal/httpapi/dashboard/dist`, which the Go binary embeds
+(`go:embed`) and serves for GET and HEAD outside `/api/`: `index.html` for `/`
+only (no fallback for other paths, which are `404 NOT_FOUND`), revalidated with
+`Cache-Control: no-cache`; content-hashed files under `/assets/` with
+`public, max-age=31536000, immutable`; explicit content types, an `ETag`, gzip
+when accepted and `X-Content-Type-Options: nosniff`. A binary built with no web
+build present has no dashboard and is an API-only server. Dashboard requests
+pass through the same access log as the API: method, path, status and duration,
+never the query string.
+
+`SCRATCHPAD_DASHBOARD_URL` is a development-only alternative: a loopback origin
+of a running `vite dev`, to which Go proxies dashboard GET/HEAD requests after
+stripping credentials and forwarding identity; cookies set by the target are
+dropped. Never set it in production.
 
 The TypeScript implementation has been removed from the current source tree.
 Rollback tests extract its pinned historical revision into disposable fixtures.

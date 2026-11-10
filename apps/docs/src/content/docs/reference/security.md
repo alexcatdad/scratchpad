@@ -11,7 +11,8 @@ not been performed.
 
 ## First owner and sign-in
 
-`npm run admin -- setup` on the server creates a 15-minute, single-use setup token.
+`scratchpad-server setup` on the server (`npm run admin -- setup` in a source
+checkout) creates a 15-minute, single-use setup token.
 The owner supplies it at the configured origin and chooses a first passkey or,
 when the operator configures OAuth, GitHub sign-in. Initial setup closes after
 ownership is established. GitHub authentication binds the stable GitHub account
@@ -80,7 +81,7 @@ Descriptive profile linkage remains a separate presentation setting.
 
 ## Recovery
 
-Server administrative access is the recovery authority. `npm run admin -- recover`
+Server administrative access is the recovery authority. `scratchpad-server recover`
 authorizes the separate audited recovery flow. Register a replacement passkey for
 independent access or replace the GitHub binding through authorized recovery.
 Recovery preserves records and does not reopen ordinary first-owner setup.
