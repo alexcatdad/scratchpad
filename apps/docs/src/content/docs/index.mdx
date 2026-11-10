@@ -56,21 +56,18 @@ the service yourself, it stays stopped until you start it.
 ## Install
 
 Scratchpad needs a Mac with Apple silicon running macOS 13 or later, and a
-Scratchpad server you can reach on your tailnet. Releases are published only on
-a private Forgejo, so Homebrew needs a read-only token to download them.
+Scratchpad server you can reach.
 
-1. Add `HOMEBREW_FORGEJO_TOKEN=<token>` to `~/.homebrew/brew.env` with a text
-   editor, so the token stays out of your shell history.
-2. Install and open the app:
+1. Install and open the app:
 
    ```sh
    brew install --cask alexcatdad/tap/scratchpad
    open -a Scratchpad
    ```
 
-3. In **Connection**, enter your server address, choose **Find Keys**, pick a key
+2. In **Connection**, enter your server address, choose **Find Keys**, pick a key
    the server accepts and choose **Connect**.
-4. Point your coding agents at the bundled `scratchpad` command. The
+3. Point your coding agents at the bundled `scratchpad` command. The
    [agent guide](/scratchpad/guides/agents/) shows how.
 
 Homebrew handles upgrades with `brew upgrade --cask scratchpad`. The

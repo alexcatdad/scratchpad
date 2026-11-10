@@ -5,14 +5,14 @@
 Releases are explicit, local and owner-initiated. An invocation of the Go Task
 entry points below, on the coordinator Mac, builds the distributables from the
 selected commit, signs and notarizes the macOS binaries, publishes a release on
-Forgejo (`https://forgejo.triceratops-dory.ts.net/alexcatdad/scratchpad`) and
+GitHub (`https://github.com/alexcatdad/scratchpad`) and
 updates the Homebrew tap. No CI workflow builds release artifacts, signs, tags,
 publishes, deploys, dispatches a release or updates the tap, and releases
 neither wait for nor read CI status.
 
-Releases go to Forgejo only. `github.com/alexcatdad/scratchpad` stays a source
-push mirror: it receives the release tag through the mirror, but no GitHub
-release is created. Release tags do not trigger the homelab deployment; a
+Releases go to GitHub, the release-tools default host. The earlier private
+Forgejo instance is retired; releases up to `v2026.11.07.1`
+were published there and their assets are no longer available. Release tags do not trigger the homelab deployment; a
 deployment is a separate, owner-initiated step (see
 [Kubernetes deployment](homelab-deploy.md)).
 
@@ -39,9 +39,8 @@ TypeScript/Go SDK packages are not part of this release contract (see
 release-tools additionally uploads `SHA256SUMS` and
 `scratchpad-<version>.manifest.json`, then updates `Casks/scratchpad.rb` in
 `alexcatdad/homebrew-tap`. That cask is the only tap entry this app owns. Its
-download URL points at the Forgejo release
-(`https://forgejo.triceratops-dory.ts.net/alexcatdad/scratchpad/releases/download/<tag>/...`),
-so the cask installs and upgrades only on machines on the tailnet. The
+download URL points at the GitHub release
+(`https://github.com/alexcatdad/scratchpad/releases/download/<tag>/...`). The
 `scratchpad-mcp` formula is deprecated in favor of the cask and receives no
 further releases; its v2026.10.1 assets remain as history.
 
@@ -76,35 +75,34 @@ in the release-tools repository). Provide:
   coordinator; Linux targets are `runs: any`, so workers are used only with
   `--workers`, and none is required.
 
-Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), a Forgejo
-access token with the `write:repository` scope for this repository, `gh`
-authenticated with push access to `alexcatdad/homebrew-tap`,
+Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), `gh`
+authenticated with push access to this repository and to
+`alexcatdad/homebrew-tap`,
 Xcode command-line tools (`codesign`, `notarytool`), Node 24 (see
 [Release](#release)), and the release-tools repository with its tags fetched.
 `Taskfile.yml` looks for it at `../../../infrastructure/release-tools` relative
 to this checkout (the owner's `alexcatdad/infrastructure/release-tools` layout);
 set `RELTOOL_SRC` to use another path. `task release:*` stops with an error if
-neither exists and the pinned reltool is not already built in the cache. reltool reads the Forgejo token from `FORGEJO_TOKEN`, then the `fj`
-key store (`fj -H forgejo.triceratops-dory.ts.net auth login`), then the macOS
-Keychain item `release-tools-forgejo`; it never prints the token. Secret values
+neither exists and the pinned reltool is not already built in the cache. reltool publishes through the local
+`gh` CLI and its stored authentication. Secret values
 never go into this repository, this documentation or logs; the config stores
 names only.
 
 ## Release
 
-From a clean checkout of the commit to release, already pushed to Forgejo.
+From a clean checkout of the commit to release, already pushed to GitHub.
 Run the release under Node 24: the SDK integration test in `task check`
 requires a `v24.` runtime, so a newer default Node fails the check step. With
 fnm, prefix each command, for example `fnm exec --using 24 -- task release`.
 
 ```sh
-task release:check     # read-only: next version, signing identity, tools, disk (does not contact Forgejo)
+task release:check     # read-only: next version, signing identity, tools, disk (does not contact GitHub)
 task release:prepare   # reserve version, run checks, build, sign, notarize, verify
 task release           # prepare, then draft release, SHA-256 verification, publish, tap
 ```
 
 `task release:check` and `task release:prepare` do not publish. `task release`
-creates a draft Forgejo release, uploads every asset, verifies each by
+creates a draft GitHub release, uploads every asset, verifies each by
 downloading it and comparing its SHA-256 with the local final artifact,
 publishes, confirms the tag, and updates the tap cask from the published release
 with the owner's local `gh` and Git. It runs unattended once started. Pass
@@ -121,9 +119,8 @@ task release:abandon -- VERSION  # only before publication; the counter stays co
 ```
 
 A failed tap step is retried by `task release:resume` without rebuilding or
-reserving a new version. Published assets are never replaced. Forgejo has no
-immutable releases, so this is reltool's guarantee: never edit a published
-release's assets by hand. State lives under
+reserving a new version. Published assets are never replaced: reltool never changes a release after
+publishing it, so never edit a published release's assets by hand. State lives under
 `$XDG_STATE_HOME/release-tools/scratchpad/`; back it up with the local config.
 
 ## Container image

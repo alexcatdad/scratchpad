@@ -19,8 +19,7 @@ Go backend work also runs in the devcontainer / GitHub Codespaces (Linux; no Swi
 
 ## Changes
 
-- The canonical repository is on Forgejo; GitHub is a push mirror. Branch from
-  `main` and open a pull request back to `main` on Forgejo.
+- Branch from `main` and open a pull request back to `main` on GitHub.
 - Use Conventional Commit messages (`feat:`, `fix:`, `docs:`, `test:`, `ci:`, `chore:`).
 - Run `task check` before pushing; add tests for new behaviour.
 - Use synthetic fixtures, never real credentials or personal data.

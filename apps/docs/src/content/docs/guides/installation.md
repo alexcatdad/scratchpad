@@ -11,27 +11,6 @@ server for MCP clients. It needs a Mac with Apple silicon running macOS 13 or
 later, and a Scratchpad server you can reach. Intel and Linux app builds are not
 available.
 
-### Give Homebrew a release token
-
-Releases are published only on a private Forgejo instance on the owner's
-tailnet, which requires sign-in for downloads. The Homebrew cask sends a
-read-only token from the `HOMEBREW_FORGEJO_TOKEN` environment variable with the
-download. Without it, Forgejo answers with its sign-in page and the checksum
-check fails.
-
-Put the token in Homebrew's environment file, so every `brew` command sees it
-without exporting it in your shell. Open
-`~/.homebrew/brew.env` in a text editor (create the folder if needed) and add:
-
-```sh
-HOMEBREW_FORGEJO_TOKEN=<read-only release token>
-```
-
-Use an editor rather than `echo`, so the token stays out of your shell history,
-and keep the file private (`chmod 600 ~/.homebrew/brew.env`). Homebrew also
-reads `$XDG_CONFIG_HOME/homebrew/brew.env` and a system-wide
-`/etc/homebrew/brew.env`.
-
 ### Install and connect
 
 ```sh
