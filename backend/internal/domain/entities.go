@@ -29,6 +29,9 @@ type ProjectSettings struct {
 	EnabledRecordTypes                 []string
 	RepoMirroring                      RepositoryMirroring
 	CrossProjectAnalysis, AIProcessing bool
+	// AgentEvents opts the project in to storing coding-agent hook events.
+	// It is off unless the owner turns it on, for every project kind.
+	AgentEvents bool
 }
 
 var supportedRecordTypes = []string{"decision", "adr", "business_decision", "finding", "qa", "failure", "constraint", "project_state"}
@@ -65,6 +68,13 @@ func ParseProjectSettings(raw any) (ProjectSettings, error) {
 	ai, ok := fields["aiProcessing"].(bool)
 	if !ok {
 		return ProjectSettings{}, invalid
+	}
+	// Projects written before agent events existed have no key; they stay off.
+	agentEvents := false
+	if rawAgentEvents, exists := fields["agentEvents"]; exists {
+		if agentEvents, ok = rawAgentEvents.(bool); !ok {
+			return ProjectSettings{}, invalid
+		}
 	}
 	parseTypes := func(raw any) ([]string, error) {
 		values := []string{}
@@ -107,11 +117,17 @@ func ParseProjectSettings(raw any) (ProjectSettings, error) {
 	if err != nil {
 		return ProjectSettings{}, err
 	}
-	return ProjectSettings{EnabledRecordTypes: enabledTypes, RepoMirroring: RepositoryMirroring{Enabled: enabled, RecordTypes: mirrorTypes}, CrossProjectAnalysis: cross, AIProcessing: ai}, nil
+	return ProjectSettings{EnabledRecordTypes: enabledTypes, RepoMirroring: RepositoryMirroring{Enabled: enabled, RecordTypes: mirrorTypes}, CrossProjectAnalysis: cross, AIProcessing: ai, AgentEvents: agentEvents}, nil
 }
 
 func (settings ProjectSettings) Fields() map[string]any {
-	return map[string]any{"enabledRecordTypes": settings.EnabledRecordTypes, "repoMirroring": map[string]any{"enabled": settings.RepoMirroring.Enabled, "recordTypes": settings.RepoMirroring.RecordTypes}, "crossProjectAnalysis": settings.CrossProjectAnalysis, "aiProcessing": settings.AIProcessing}
+	fields := map[string]any{"enabledRecordTypes": settings.EnabledRecordTypes, "repoMirroring": map[string]any{"enabled": settings.RepoMirroring.Enabled, "recordTypes": settings.RepoMirroring.RecordTypes}, "crossProjectAnalysis": settings.CrossProjectAnalysis, "aiProcessing": settings.AIProcessing}
+	// Written only when on, so projects that never opt in keep the exact
+	// settings shape they had before agent events existed.
+	if settings.AgentEvents {
+		fields["agentEvents"] = true
+	}
+	return fields
 }
 
 type Project struct {

@@ -3763,6 +3763,189 @@
           }
         }
       }
+    },
+    "/api/v1/agent-events": {
+      "post": {
+        "operationId": "post_agent_events",
+        "summary": "Store a batch of coding-agent hook events",
+        "description": "Machine credentials only. Agent events are evidence with their own retention, not captures: they are not audited per event, not exported and expire after the configured retention period. The response is 200 with counts whenever the batch itself is well formed, so the sender can drop what it sent. An event is discarded when it is invalid, when its project cannot be resolved without creating one, or when its project has not set agentEvents. Delivery is idempotent per credential and eventId.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "events": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "$ref": "#/components/schemas/AgentEvent"
+                    }
+                  }
+                },
+                "required": ["events"],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "accepted": {
+                      "type": "integer"
+                    },
+                    "duplicate": {
+                      "type": "integer"
+                    },
+                    "discarded": {
+                      "type": "object",
+                      "properties": {
+                        "invalid": {
+                          "type": "integer"
+                        },
+                        "unresolved": {
+                          "type": "integer"
+                        },
+                        "notEnabled": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": ["invalid", "unresolved", "notEnabled"]
+                    }
+                  },
+                  "required": ["accepted", "duplicate", "discarded"]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        },
+        "security": [
+          {
+            "mcpBearer": []
+          }
+        ]
+      },
+      "get": {
+        "operationId": "get_agent_events",
+        "summary": "Page stored agent events in the order they were stored",
+        "description": "The cursor is a database-allocated sequence, so a reader that keeps the returned cursor and asks again never misses an event stored later. The cursor is returned on every page, including the last one.",
+        "parameters": [
+          {
+            "name": "after",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor from a previous page. Omit to start from the oldest stored event."
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 100
+            }
+          },
+          {
+            "name": "projectId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          },
+          {
+            "name": "sessionId",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Optional filter."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "events": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string"
+                          },
+                          "projectId": {
+                            "type": "string"
+                          },
+                          "sessionId": {
+                            "type": "string"
+                          },
+                          "agent": {
+                            "type": "string"
+                          },
+                          "kind": {
+                            "type": "string"
+                          },
+                          "occurredAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "receivedAt": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "event": {
+                            "$ref": "#/components/schemas/AgentEvent"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "projectId",
+                          "sessionId",
+                          "agent",
+                          "kind",
+                          "occurredAt",
+                          "receivedAt",
+                          "event"
+                        ]
+                      }
+                    },
+                    "cursor": {
+                      "type": "string",
+                      "description": "Pass as after to continue. Empty only when no event has ever been returned to this reader."
+                    },
+                    "hasMore": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": ["events", "cursor", "hasMore"]
+                }
+              }
+            }
+          },
+          "default": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3864,6 +4047,10 @@
           },
           "aiProcessing": {
             "type": "boolean"
+          },
+          "agentEvents": {
+            "type": "boolean",
+            "description": "Opt this project in to storing coding-agent hook events. Absent means false; the server writes the key only when it is true."
           }
         },
         "required": ["repoMirroring", "crossProjectAnalysis", "aiProcessing"]
@@ -4602,6 +4789,114 @@
           }
         },
         "description": "Server-owned complete inputs, separate from display citations. Absent on historical artifacts with unknown provenance; such artifacts cannot be retrieved or reviewed as suggestions."
+      },
+      "AgentEvent": {
+        "type": "object",
+        "description": "One coding-agent hook event in the neutral shape produced by the local capture service. Fields other than those listed are stored and returned as received.",
+        "properties": {
+          "schemaVersion": {
+            "type": "integer"
+          },
+          "eventId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "description": "Identifier minted at intake. Together with the delivering credential it makes delivery idempotent."
+          },
+          "agent": {
+            "type": "string",
+            "enum": ["claude-code", "codex"]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "session_start",
+              "session_end",
+              "prompt",
+              "tool_failure",
+              "permission_denied",
+              "turn_end",
+              "interrupt",
+              "model_failure"
+            ]
+          },
+          "sessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512
+          },
+          "turnId": {
+            "type": "string"
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "projectId": {
+            "type": "string",
+            "description": "Optional explicit project. Without it the project is resolved from gitContext.remote; no project is ever created."
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "permissionMode": {
+            "type": "string"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "agentType": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "input": {},
+              "error": {
+                "type": "string"
+              },
+              "interrupted": {
+                "type": "boolean"
+              },
+              "durationMs": {
+                "type": "integer"
+              }
+            }
+          },
+          "instructionFiles": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string"
+                }
+              },
+              "required": ["path", "sha256"]
+            }
+          },
+          "gitContext": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": ["eventId", "agent", "kind", "sessionId", "occurredAt"],
+        "additionalProperties": true
       }
     },
     "responses": {

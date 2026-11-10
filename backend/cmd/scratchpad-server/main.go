@@ -141,6 +141,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	agentEventRetention := 30 * 24 * time.Hour
+	if raw := os.Getenv("SCRATCHPAD_AGENT_EVENT_RETENTION_DAYS"); raw != "" {
+		days, parseErr := strconv.Atoi(raw)
+		if parseErr != nil || days < 1 || days > 3650 {
+			return errors.New("CONFIG_INVALID: SCRATCHPAD_AGENT_EVENT_RETENTION_DAYS must be a whole number of days from 1 to 3650.")
+		}
+		agentEventRetention = time.Duration(days) * 24 * time.Hour
+	}
 	mux := http.NewServeMux()
 	dashboard, err := httpapi.Dashboard(os.Getenv("SCRATCHPAD_DASHBOARD_URL"))
 	if err != nil {
@@ -194,6 +202,8 @@ func run() error {
 	mux.HandleFunc("POST /api/v1/relationships", auth.Curation("relationship-create"))
 	mux.HandleFunc("POST /api/v1/relationships/{id}/accept", httpapi.EntityRoute(auth.Curation("relationship-accept")))
 	mux.HandleFunc("POST /api/v1/relationships/{id}/reject", httpapi.EntityRoute(auth.Curation("relationship-reject")))
+	mux.HandleFunc("POST /api/v1/agent-events", auth.AgentEvents())
+	mux.HandleFunc("GET /api/v1/agent-events", auth.AgentEventList())
 	mux.HandleFunc("GET /api/v1/records", auth.Search(false))
 	mux.HandleFunc("POST /api/v1/search", auth.Search(true))
 	mux.HandleFunc("GET /api/v1/projects", auth.Projects("list"))
@@ -241,6 +251,9 @@ func run() error {
 	workerDone := make(chan struct{})
 	go func() { defer close(workerDone); github.Run(workerContext) }()
 	defer func() { cancelWorker(); <-workerDone }()
+	retentionDone := make(chan struct{})
+	go func() { defer close(retentionDone); auth.RunAgentEventRetention(workerContext, agentEventRetention) }()
+	defer func() { cancelWorker(); <-retentionDone }()
 	aiWorkerDone := make(chan struct{})
 	go func() { defer close(aiWorkerDone); ai.Run(workerContext) }()
 	defer func() { cancelWorker(); <-aiWorkerDone }()

@@ -1,0 +1,14 @@
+{
+  "session_id": "11111111-2222-4333-8444-555555555555",
+  "transcript_path": "/Users/dev/.claude/projects/-work-app/11111111-2222-4333-8444-555555555555.jsonl",
+  "cwd": "/work/app",
+  "prompt_id": "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff",
+  "scratchpad_dir": "/tmp/claude-501/-work-app/11111111/scratchpad",
+  "permission_mode": "auto",
+  "effort": { "level": "medium" },
+  "hook_event_name": "Stop",
+  "stop_hook_active": false,
+  "last_assistant_message": "Done. I switched to the existing helper.",
+  "background_tasks": [],
+  "session_crons": []
+}

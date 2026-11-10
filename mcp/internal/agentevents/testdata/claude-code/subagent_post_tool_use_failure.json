@@ -1,0 +1,15 @@
+{
+  "session_id": "11111111-2222-4333-8444-555555555555",
+  "transcript_path": "/Users/dev/.claude/projects/-work-app/11111111-2222-4333-8444-555555555555.jsonl",
+  "cwd": "/work/app",
+  "prompt_id": "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  "permission_mode": "auto",
+  "agent_id": "a0000000000000001",
+  "agent_type": "Explore",
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Read",
+  "tool_input": { "file_path": "/work/app/missing.go" },
+  "tool_use_id": "toolu_01SYNTHETIC0000000000000004",
+  "error": "File does not exist.",
+  "is_interrupt": false
+}

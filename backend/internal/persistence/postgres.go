@@ -17,7 +17,7 @@ var postgresMigrations = []migration{{1, []string{
 	`CREATE TABLE retries(scope TEXT NOT NULL,key TEXT NOT NULL,request TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(scope,key))`,
 	`CREATE TABLE record_search(record_id TEXT PRIMARY KEY,title TEXT NOT NULL,content TEXT NOT NULL,document TSVECTOR GENERATED ALWAYS AS(to_tsvector('simple',title || ' ' || content)) STORED)`,
 	`CREATE INDEX record_search_document ON record_search USING GIN(document)`,
-}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}, {3, postgresContextHeaderStatements()}}
+}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}, {3, postgresContextHeaderStatements()}, {4, postgresAgentEventStatements()}}
 
 func openPostgres(ctx context.Context, raw string) (*Store, error) {
 	u, err := url.Parse(raw)
@@ -66,8 +66,11 @@ func validatePostgresColumns(ctx context.Context, q queryer, version int) error 
 				return errors.New("unexpected columns")
 			}
 			wanted := strings.ToLower(expected[i].kind)
-			if (table == "entities" || table == "context_headers") && name == "data" {
+			if (table == "entities" || table == "context_headers" || table == "agent_events") && name == "data" {
 				wanted = "jsonb"
+			}
+			if (table == "agent_events" || table == "record_changes") && name == "seq" {
+				wanted = "bigint"
 			}
 			wantedNullable := "NO"
 			if table == "record_search" && expected[i].name == "document" {

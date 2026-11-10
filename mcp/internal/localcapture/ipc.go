@@ -408,6 +408,16 @@ func (s *IPCServer) dispatch(req Request) (any, error) {
 			return nil, ErrUnknownOperationSentinel
 		}
 		return service.OnlineRequest(ctx, b)
+	case OpAgentEvent:
+		var b AgentEventRequest
+		if bodyAs(req.Body, &b) != nil {
+			return nil, ErrConflictSentinel
+		}
+		service, ok := s.Service.(AgentEventService)
+		if !ok {
+			return nil, ErrUnknownOperationSentinel
+		}
+		return service.AgentEvent(ctx, b)
 	case OpCapture:
 		var b CaptureRequest
 		if bodyAs(req.Body, &b) != nil {

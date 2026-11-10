@@ -63,6 +63,7 @@ type Runtime struct {
 	pruneInterval           time.Duration
 	lifecycle               Lifecycle
 	paused                  bool
+	agentEvents             agentEventDelivery
 	stopped                 bool
 	quiescing               bool
 	connection              ConnectionStatus
@@ -215,6 +216,7 @@ func (r *Runtime) worker(ctx context.Context) {
 				break
 			}
 		}
+		r.deliverAgentEvents(ctx)
 	}
 }
 
@@ -230,6 +232,10 @@ func (r *Runtime) pruneReceipts() {
 		return
 	}
 	if err := r.store.prune(time.Now()); err != nil {
+		r.markStorageFailure(err)
+		return
+	}
+	if err := r.store.pruneAgentEvents(time.Now()); err != nil {
 		r.markStorageFailure(err)
 	}
 }
