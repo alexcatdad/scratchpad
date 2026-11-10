@@ -101,7 +101,7 @@ var sqliteMigrations = []migration{{1, []string{
 	`CREATE TABLE identities(identity TEXT PRIMARY KEY,project_id TEXT NOT NULL)`,
 	`CREATE TABLE retries(scope TEXT NOT NULL,key TEXT NOT NULL,request TEXT NOT NULL,response TEXT NOT NULL,PRIMARY KEY(scope,key))`,
 	`CREATE VIRTUAL TABLE record_search USING fts5(record_id UNINDEXED,title,content)`,
-}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}, {3, sqliteContextHeaderStatements()}}
+}}, {2, []string{`CREATE INDEX entities_created ON entities(kind,created_at,id)`}}, {3, sqliteContextHeaderStatements()}, {4, sqliteAgentEventStatements()}}
 
 func (s *Store) migrate(ctx context.Context) error {
 	conn, err := s.DB.Conn(ctx)
@@ -225,6 +225,9 @@ func validate(ctx context.Context, q queryer, engine string) (int, error) {
 		return 0, shapeErr
 	}
 	if err := validateContextHeaders(ctx, q, engine, version); err != nil {
+		return 0, err
+	}
+	if err := validateAgentEvents(ctx, q, engine, version); err != nil {
 		return 0, err
 	}
 	return version, nil

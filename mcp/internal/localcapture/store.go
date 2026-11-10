@@ -205,8 +205,6 @@ func openWithKey(path string, key []byte) (*Store, error) {
 	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS agent_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_ns INTEGER NOT NULL,
-    attempts INTEGER NOT NULL,
-    next_attempt_ns INTEGER NOT NULL,
     envelope BLOB NOT NULL
 )`); err != nil {
 		db.Close()

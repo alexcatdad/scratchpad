@@ -154,7 +154,7 @@ func TestFreshSQLiteMigrationIsRepeatable(t *testing.T) {
 		if err := json.Unmarshal(out, &report); err != nil {
 			t.Fatal(err)
 		}
-		if report.Database != "sqlite" || report.SchemaVersion != 3 {
+		if report.Database != "sqlite" || report.SchemaVersion != 4 {
 			t.Fatalf("unexpected report: %s", out)
 		}
 	}
@@ -173,7 +173,7 @@ func TestSchemaOneUpgrade(t *testing.T) {
 	if err := json.Unmarshal(out, &report); err != nil {
 		t.Fatal(err)
 	}
-	if report.SchemaVersion != 3 {
+	if report.SchemaVersion != 4 {
 		t.Fatalf("supported schema 1 was not upgraded: %s", out)
 	}
 }
@@ -1175,7 +1175,7 @@ func TestContextHeaderMigrationConflictRetriesAndPreservesHistory(t *testing.T) 
 					t.Fatalf("projection migration retry failed: %v %s", err, out)
 				}
 				var report map[string]any
-				if json.Unmarshal(out, &report) != nil || report["schemaVersion"] != float64(3) {
+				if json.Unmarshal(out, &report) != nil || report["schemaVersion"] != float64(4) {
 					t.Fatalf("schema 2 did not advance sequentially to 3: %s", out)
 				}
 			}

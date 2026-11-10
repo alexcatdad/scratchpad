@@ -91,3 +91,10 @@ func (c *Client) CaptureCentral(ctx context.Context, projectID string, record ma
 	}
 	return out, nil
 }
+
+// AgentEventsCentral delivers a batch of agent events. The server answers with
+// counts and stores nothing for projects that have not opted in, so a
+// successful call always means the batch can be dropped locally.
+func (c *Client) AgentEventsCentral(ctx context.Context, events []json.RawMessage) error {
+	return c.request(ctx, "POST", "/agent-events", map[string]any{"events": events}, "", nil)
+}

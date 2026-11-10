@@ -25,7 +25,26 @@ const (
 	AgentEventMaxAge  = 7 * 24 * time.Hour
 
 	agentEventAAD = "agent-event"
+
+	// One delivery carries at most this many events and bytes, inside the
+	// server's limits of 200 events and 3 MiB per request.
+	agentEventBatchSize     = 100
+	agentEventBatchBytes    = 2 << 20
+	agentEventIdleDelay     = 2 * time.Second
+	agentEventDeliveryLimit = 30 * time.Second
 )
+
+// AgentEventAdapter delivers a batch to the central server. It is optional,
+// like OnlineAdapter: without it events stay queued within the local bounds.
+type AgentEventAdapter interface {
+	DeliverAgentEvents(context.Context, Binding, []json.RawMessage) error
+}
+
+// agentEventDelivery is touched only by the worker goroutine.
+type agentEventDelivery struct {
+	next     time.Time
+	failures int
+}
 
 type AgentEventRequest struct {
 	Event json.RawMessage `json:"event"`
@@ -92,7 +111,7 @@ func (s *Store) acceptAgentEvent(event []byte, now time.Time, maxRows int) error
 	if err != nil {
 		return err
 	}
-	if _, err = s.db.Exec("INSERT INTO agent_events(created_ns,attempts,next_attempt_ns,envelope) VALUES(?,0,0,?)", now.UnixNano(), blob); err != nil {
+	if _, err = s.db.Exec("INSERT INTO agent_events(created_ns,envelope) VALUES(?,?)", now.UnixNano(), blob); err != nil {
 		return ErrStorageFailedSentinel
 	}
 	// The row cap is enforced on every insert through the primary key, so a
@@ -157,4 +176,74 @@ func (s *Store) agentEventCount() (int, error) {
 		return 0, ErrStorageFailedSentinel
 	}
 	return count, nil
+}
+
+// deliverAgentEvents sends one batch when one is due. Events are evidence, not
+// captures: delivery reuses the cached server session instead of a fresh SSH
+// proof per item, a failure only backs off, and nothing here changes the
+// receipt counts, the connection state or the last-delivery summary.
+func (r *Runtime) deliverAgentEvents(ctx context.Context) {
+	now := time.Now()
+	if now.Before(r.agentEvents.next) {
+		return
+	}
+	adapter, ok := r.adapter.(AgentEventAdapter)
+	if !ok {
+		r.agentEvents.next = now.Add(time.Hour)
+		return
+	}
+	if !r.workMu.TryLock() {
+		return
+	}
+	defer r.workMu.Unlock()
+	r.mu.Lock()
+	blocked := r.stopped || r.quiescing || r.paused || !r.storageAvailable
+	r.mu.Unlock()
+	if blocked {
+		return
+	}
+	batch, err := r.store.agentEventBatch(agentEventBatchSize)
+	if err != nil {
+		r.markStorageFailure(err)
+		return
+	}
+	if len(batch) == 0 {
+		r.agentEvents.next = now.Add(agentEventIdleDelay)
+		return
+	}
+	events := make([]json.RawMessage, 0, len(batch))
+	size := 0
+	last := batch[0].id
+	for _, queued := range batch {
+		if len(events) > 0 && size+len(queued.event) > agentEventBatchBytes {
+			break
+		}
+		events = append(events, queued.event)
+		size += len(queued.event)
+		last = queued.id
+	}
+	r.configMu.RLock()
+	config, err := r.store.configuration()
+	r.configMu.RUnlock()
+	if err != nil || validateConfiguration(config) != nil {
+		r.agentEvents.next = now.Add(agentEventIdleDelay)
+		return
+	}
+	deliver, cancel := context.WithTimeout(ctx, agentEventDeliveryLimit)
+	defer cancel()
+	err = adapter.DeliverAgentEvents(deliver, Binding{ServerURL: config.ServerURL, CredentialFingerprint: config.CredentialFingerprint, PublicKeyPath: config.PublicKeyPath, SigningKeyPath: config.SigningKeyPath, SSHAgentSocket: config.SSHAgentSocket}, events)
+	if err != nil {
+		r.agentEvents.failures++
+		delay := r.retryMin << min(r.agentEvents.failures, 10)
+		if delay > r.timeRetryMax || delay <= 0 {
+			delay = r.timeRetryMax
+		}
+		r.agentEvents.next = time.Now().Add(delay)
+		return
+	}
+	r.agentEvents.failures = 0
+	r.agentEvents.next = time.Time{}
+	if err = r.store.deleteAgentEventsThrough(last); err != nil {
+		r.markStorageFailure(err)
+	}
 }

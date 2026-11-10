@@ -95,6 +95,15 @@ kind replaced and its count, never the value. This reduces risk and is not a
 guarantee: a secret with no recognizable shape passes through, and source code
 is not treated as secret.
 
+Agent hook events take a separate path. The `scratchpad hook` command, called
+by Claude Code and Codex hooks, maps each payload to one neutral event, keeps
+only mistake signals and hands it to the collector, which redacts it, stores it
+encrypted in its own bounded table and returns at once. The collector delivers
+events in batches over its cached server session. Events are evidence with their
+own retention, not captures: they never appear as receipts or in status counts,
+and the server stores them only for projects that opted in. See the accepted
+clarification in [the requirements](prd.md).
+
 Raw input, payloads, source claims, timestamps and provenance stay immutable.
 Server-assigned actor identity remains distinct from descriptive attribution.
 Curation creates revisions/audits; derived knowledge cites sources and never
@@ -119,6 +128,10 @@ or credential migration.
 
 Go recognizes historical schema 1. Ordered transactional migration 2 adds entity
 ordering and migration 3 adds indexed, trigger-maintained context headers.
+Migration 4 adds `agent_events`, a typed table for coding-agent hook events, and
+`record_changes`, a trigger-maintained list of records in commit order. Both are
+paged by a database-allocated sequence: every write is serialized, so sequence
+order is commit order, which `created_at` cannot guarantee for imported records.
 Optional PostgreSQL passage projections have their own prerequisites. Startup
 serializes migrations (`BEGIN IMMEDIATE` on SQLite and the shared transaction
 advisory lock on PostgreSQL), validates installed objects and refuses malformed

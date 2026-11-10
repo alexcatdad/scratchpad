@@ -221,3 +221,170 @@ func TestAgentEventOverPrivateIPC(t *testing.T) {
 	cancel()
 	<-done
 }
+
+type agentEventTestAdapter struct {
+	*testAdapter
+	deliver func(context.Context, Binding, []json.RawMessage) error
+}
+
+func (a *agentEventTestAdapter) DeliverAgentEvents(ctx context.Context, binding Binding, events []json.RawMessage) error {
+	return a.deliver(ctx, binding, events)
+}
+
+func agentEventRuntime(t *testing.T, deliver func(context.Context, Binding, []json.RawMessage) error) (*Runtime, *Store) {
+	t.Helper()
+	store, err := OpenStore(filepath.Join(t.TempDir(), "private", "captures.sqlite"), &testKeys{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	adapter := &agentEventTestAdapter{testAdapter: &testAdapter{identity: testIdentity()}, deliver: deliver}
+	r, err := NewRuntime(context.Background(), ServiceOptions{Store: store, Adapter: adapter, RetryMin: 10 * time.Millisecond, RetryMax: 20 * time.Millisecond})
+	if err != nil {
+		store.Close()
+		t.Fatal(err)
+	}
+	t.Cleanup(r.Close)
+	if err = r.SetConfiguration(context.Background(), ServiceConfiguration{ServerURL: "https://scratchpad.invalid", CredentialFingerprint: "SHA256:synthetic", PublicKeyPath: "/tmp/synthetic.pub", SigningKeyPath: "/tmp/synthetic.key"}); err != nil {
+		t.Fatal(err)
+	}
+	return r, store
+}
+
+func waitForAgentEventCount(t *testing.T, store *Store, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		count, err := store.agentEventCount()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if count == want {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("queue holds %d agent events, want %d", count, want)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestAgentEventsAreDeliveredInBatchesAndThenDropped(t *testing.T) {
+	type call struct {
+		binding Binding
+		ids     []string
+	}
+	calls := make(chan call, 16)
+	r, store := agentEventRuntime(t, func(_ context.Context, binding Binding, events []json.RawMessage) error {
+		var ids []string
+		for _, event := range events {
+			var decoded struct {
+				EventID string `json:"eventId"`
+			}
+			if err := json.Unmarshal(event, &decoded); err != nil {
+				return err
+			}
+			ids = append(ids, decoded.EventID)
+		}
+		calls <- call{binding, ids}
+		return nil
+	})
+	if err := r.PauseDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	const total = agentEventBatchSize + 5
+	for i := range total {
+		if _, err := r.AgentEvent(context.Background(), agentEvent(fmt.Sprintf("e%03d", i), "queued")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Paused delivery holds agent events as it holds captures.
+	time.Sleep(60 * time.Millisecond)
+	if count, _ := store.agentEventCount(); count != total || len(calls) != 0 {
+		t.Fatalf("paused service delivered events: count=%d calls=%d", count, len(calls))
+	}
+	if err := r.ResumeDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForAgentEventCount(t, store, 0)
+
+	first, second := <-calls, <-calls
+	if len(first.ids) != agentEventBatchSize || first.ids[0] != "e000" || len(second.ids) != 5 || second.ids[4] != fmt.Sprintf("e%03d", total-1) {
+		t.Fatalf("unexpected batches: %d starting %s, then %d", len(first.ids), first.ids[0], len(second.ids))
+	}
+	if first.binding.ServerURL != "https://scratchpad.invalid" || first.binding.CredentialFingerprint != "SHA256:synthetic" || first.binding.SigningKeyPath != "/tmp/synthetic.key" {
+		t.Fatalf("unexpected binding: %#v", first.binding)
+	}
+	status, err := r.Status(context.Background())
+	if err != nil || status.Pending != 0 || status.LastDelivery != nil {
+		t.Fatalf("agent event delivery changed capture status: %#v err=%v", status, err)
+	}
+}
+
+func TestAgentEventsSurviveFailedDeliveryAndAreRetried(t *testing.T) {
+	attempts := make(chan int, 16)
+	failures := 2
+	r, store := agentEventRuntime(t, func(_ context.Context, _ Binding, events []json.RawMessage) error {
+		attempts <- len(events)
+		if failures > 0 {
+			failures--
+			return errors.New("server unreachable")
+		}
+		return nil
+	})
+	if err := r.PauseDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	for i := range 3 {
+		if _, err := r.AgentEvent(context.Background(), agentEvent(fmt.Sprintf("e%d", i), "retry")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.ResumeDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForAgentEventCount(t, store, 0)
+	if len(attempts) != 3 {
+		t.Fatalf("delivery attempts = %d, want 3", len(attempts))
+	}
+	for range 3 {
+		if size := <-attempts; size != 3 {
+			t.Fatalf("a retry sent %d events, want the same 3", size)
+		}
+	}
+}
+
+func TestAgentEventBatchRespectsTheByteBudget(t *testing.T) {
+	sizes := make(chan int, 8)
+	r, store := agentEventRuntime(t, func(_ context.Context, _ Binding, events []json.RawMessage) error {
+		total := 0
+		for _, event := range events {
+			total += len(event)
+		}
+		sizes <- total
+		return nil
+	})
+	if err := r.PauseDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	large := strings.Repeat("x", AgentEventMaxBytes-200)
+	for i := range 10 {
+		if _, err := r.AgentEvent(context.Background(), agentEvent(fmt.Sprintf("big%d", i), large)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := r.ResumeDelivery(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	waitForAgentEventCount(t, store, 0)
+	close(sizes)
+	batches := 0
+	for size := range sizes {
+		batches++
+		if size > agentEventBatchBytes {
+			t.Fatalf("a batch carried %d bytes, over the %d budget", size, agentEventBatchBytes)
+		}
+	}
+	if batches < 2 {
+		t.Fatalf("ten large events went out in %d batch", batches)
+	}
+}
