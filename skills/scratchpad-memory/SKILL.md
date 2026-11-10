@@ -135,6 +135,14 @@ Skill invocation does not enable mirroring, change its path, repair/truncate JSO
 remove writer locks, commit or push files. Follow the owner's authorized scope
 and the documented recovery procedure for those operations.
 
+## Hooks record mistake signals separately
+
+The owner may have configured agent hooks (`scratchpad hooks print`). They send
+failed tool calls, prompts and session boundaries to Scratchpad automatically,
+as agent events kept apart from memory. They do not replace captures: still use
+`record_failure` when a failure and its cause are worth remembering, because an
+agent event holds no explanation. Never run `scratchpad hook` yourself.
+
 ## Optional AI and handoffs
 
 Use `search_memory` for deterministic retrieval. Available `semantic_search` can

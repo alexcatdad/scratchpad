@@ -206,6 +206,46 @@ optional repository mirroring fails after central persistence, keep the
 returned record ID and report the mirror failure. Do not create a new capture
 just to repair a mirror.
 
+## Report agent mistakes with hooks
+
+An agent only records a failure when it notices one. Hooks close that gap: the
+agent's own harness calls `scratchpad hook` on a few events, whether or not the
+agent thought anything went wrong. Scratchpad keeps these **agent events** apart
+from memory records, so that repeated mistakes can be found later.
+
+Only mistake signals are kept: failed and denied tool calls, your prompts, the
+end of each turn, interrupts, failed model requests and the start and end of a
+session. Successful tool calls are dropped and tool output is never stored.
+Credential-shaped values are replaced before an event is queued. Events expire;
+they are not exported and never appear in search or context.
+
+Print the configuration for your agent:
+
+```sh
+scratchpad hooks print --agent claude-code
+scratchpad hooks print --agent codex
+```
+
+The command prints JSON and changes no file.
+
+- **Claude Code:** merge the printed `hooks` object into
+  `~/.claude/settings.json`. Start a new session if a running one does not pick
+  the hooks up.
+- **Codex:** merge it into `~/.codex/hooks.json`, then run `/hooks` in Codex and
+  trust the new hooks. Codex skips a hook until you trust it, and again if its
+  definition ever changes.
+
+Every hook is the same command, runs in the background and prints nothing. If
+the capture service is stopped, the event is not recorded and the agent is not
+disturbed.
+
+Storage is opt-in per project and off by default. The server stores events only
+for a project whose `agentEvents` setting is `true`, and discards events for
+repositories it does not know; it never creates a project for them. Set it with
+`PATCH /api/v1/projects/{id}/settings`, sending the project's current settings
+with `"agentEvents": true` and its `expectedVersion`. The dashboard has no
+switch for it yet.
+
 ## Optional AI
 
 AI requires server configuration, an available provider and project
