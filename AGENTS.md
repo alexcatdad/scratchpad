@@ -86,23 +86,21 @@ current authority.
   publishes, deploys or updates the tap.
 - release-tools v0.4.1: daily CalVer `vYYYY.MM.DD.N`. Releases are immutable:
   never replace published assets or move tags.
-- Releases publish to Forgejo only; GitHub stays a source mirror with no
-  releases. Release tags do not trigger the homelab deployment.
+- Releases publish to GitHub (`github.com/alexcatdad/scratchpad`). Release
+  tags do not trigger the homelab deployment.
 - Distribution: Homebrew cask in `alexcatdad/homebrew-tap`, downloading from
-  Forgejo, so it installs only on the tailnet. Never strip quarantine.
+  the GitHub release. Never strip quarantine.
 
 ## Git
 
-- Canonical host: Forgejo `alexcatdad/scratchpad` (homelab, automated
-  deployment), with `github.com/alexcatdad/scratchpad` as a push mirror. GitHub
-  Actions is disabled on the mirror; only `pages.yml` would run there if it is
-  re-enabled.
-- Branch from `main`, PR back to `main` on Forgejo, squash-merge. Conventional
+- Canonical host: `github.com/alexcatdad/scratchpad`. The Forgejo instance is
+  retired. The `Validation` workflow runs on pull requests and on `main`;
+  a push to `main` then deploys to the homelab.
+- Branch from `main`, PR back to `main` on GitHub, squash-merge. Conventional
   commit messages. Make small coherent commits; never commit secrets, local
   databases or test artifacts.
-- Forgejo Actions is not used: pull requests get the `homelab/build` hook
-  status only. GitHub workflows (`pages.yml`) start from `permissions: {}` and
-  pin actions to full commit SHAs.
+- GitHub workflows start from `permissions: {}` and pin actions to full commit
+  SHAs.
 - Do not wait on or poll CI; one status check when a decision depends on it.
 - Agent parallelism is allowed. Coordinate file ownership, do not overwrite
   concurrent work, and stop agents when their task is done.

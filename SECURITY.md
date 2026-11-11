@@ -2,10 +2,9 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through the GitHub mirror's
+Report vulnerabilities privately through the repository's
 [security advisory form](https://github.com/alexcatdad/scratchpad/security/advisories/new).
-The canonical repository is on the maintainer's Forgejo instance; the GitHub
-mirror's private vulnerability reporting is the monitored public channel. Do
+Do
 not open a public issue for a suspected vulnerability. Expect an initial
 response within seven days.
 
@@ -38,10 +37,9 @@ for the authentication and recovery model.
 
 Releases are built and Developer ID signed locally, notarized by Apple and
 stapled. Signing keys and notarization credentials stay in the maintainer's
-local Keychain. Releases are published on Forgejo only; GitHub carries no
-release assets. Forgejo releases are not immutable, but release-tools never
+local Keychain. Releases are published on GitHub, and release-tools never
 edits a release's assets after publishing it. To verify a download from the
-Forgejo release:
+GitHub release:
 
 1. Download `SHA256SUMS` and `scratchpad-<version>.manifest.json` from the same
    release, run `shasum -a 256 -c SHA256SUMS` next to the archive, and check
