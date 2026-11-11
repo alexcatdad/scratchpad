@@ -48,7 +48,7 @@ Malformed or partial JSONL is reported rather than silently truncated. Save a co
 The administrator command creates a new consistent SQLite snapshot without stopping captures:
 
 ```sh
-docker compose exec scratchpad npm run admin -- backup /data/backups/snapshot.sqlite
+docker compose exec scratchpad scratchpad-server backup /data/backups/snapshot.sqlite
 ```
 
 Use a unique destination each time; existing files are rejected. Copy the snapshot off the instance and keep it private: it includes authentication and session state. The copy inside `/data` is on the same volume and is not protection against losing that volume.

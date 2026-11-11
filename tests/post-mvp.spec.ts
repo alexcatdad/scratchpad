@@ -49,8 +49,6 @@ let volumeCreated = false;
 const environment = {
   ...process.env,
   SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3101",
-  SCRATCHPAD_UI_PORT: "4101",
-  SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4101",
   SCRATCHPAD_PUBLIC_URL: origin,
   SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
   SCRATCHPAD_DATABASE_URL: "",

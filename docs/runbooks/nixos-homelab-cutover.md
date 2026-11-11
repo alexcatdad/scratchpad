@@ -40,13 +40,13 @@ From the existing installation, without printing values:
 1. Record the current runtime (host, image digest, compose/unit), origin,
    Tailscale Serve config, database engine/version, roles, key reference and
    backup schedule.
-2. On the NixOS host: confirm loopback ports `3000` and `4000` are free (or pick
-   others via `listenAddress` and `dashboard.port`), PostgreSQL is reachable from
+2. On the NixOS host: confirm loopback port `3000` is free (or pick another
+   via `listenAddress`), PostgreSQL is reachable from
    the host, and the agenix/sops secret mechanism is available.
 3. Confirm the scratchpad flake builds on the host:
 
    ```sh
-   nix build github:alexcatdad/scratchpad#scratchpad-server github:alexcatdad/scratchpad#scratchpad-dashboard
+   nix build github:alexcatdad/scratchpad#scratchpad-server
    ```
 
    Record the commit it resolved. Do not make the scratchpad input follow the
@@ -107,7 +107,7 @@ secret if the OAuth app is not ready yet; set both together later. Do not
    It prints the engine and schema version. Stop on any error.
 
 4. `nixos-rebuild switch`. Check
-   `systemctl status scratchpad scratchpad-dashboard` and
+   `systemctl status scratchpad` and
    `journalctl -u scratchpad -b`. The first log line reports the address,
    database engine and schema version.
 5. Point Tailscale Serve at `http://127.0.0.1:3000` on the existing hostname

@@ -1,24 +1,27 @@
 ---
 title: Architecture
-description: Current Go backend, retained dashboard and local capture boundaries.
+description: Current Go backend, embedded dashboard and local capture boundaries.
 ---
 
-Current source uses a Go backend and retains the React/TypeScript dashboard.
+Current source is one Go server that embeds the React/TypeScript dashboard as
+static files.
 Published releases and installed deployments have separate acceptance evidence.
 
 ```text
 Coding agent -> local Go stdio MCP
   -> private Go capture service / encrypted queue
   -> HTTPS Go API -> SQLite or PostgreSQL
-       -> private Node renderer -> React dashboard
+       -> embedded static React dashboard
        -> optional completion / embedding providers
 ```
 
 Go owns authentication, API/business logic, persistence/migrations, project
 resolution, capture, search/context, audit, relationships, imports/exports and
-background jobs. Node renders dashboard pages in UI-only mode on loopback; it
-receives no credential or database authority. Go owns public cookies, health and
-readiness. Renderer failure does not disable the API.
+background jobs. The dashboard is a static single-page app built ahead of time
+and embedded in the Go binary, which serves it from the same origin as the API.
+No Node process runs in a deployment. The page keeps its state in the query
+string and fetches all data from the API in the browser; the server's access
+log records request paths, never query strings.
 
 The native macOS app owns collector configuration, credentials and lifecycle.
 Its bundled MCP requires only its command path. Captures first enter encrypted

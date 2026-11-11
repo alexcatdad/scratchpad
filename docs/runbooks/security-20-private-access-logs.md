@@ -4,21 +4,22 @@ Issue #20 is independently based on main `ab6f68abaec9884c1a0723a94a1054cbd81db9
 
 ## Contract
 
-The production `npm run start -w @scratchpad/web` command uses `apps/web/server.mjs` with the existing srvx Node adapter and static middleware. Access logs contain method, URL pathname, status and duration in milliseconds. Query strings, origins, headers and bodies are excluded. Unexpected request failures produce a fixed diagnostic and HTTP 500 rather than printing arbitrary exception messages containing private input.
+The Go server is the only HTTP process: it serves the API and the embedded static dashboard, so one access log covers both. `RequestLog` (`backend/internal/httpapi/access_log.go`) writes one JSON line per request with `method`, `path`, `status` and `durationMs`. `path` is the URL path only. Query strings, origins, headers and bodies are excluded, which matters for the dashboard because its state (search text, filters, record IDs, the GitHub sign-in error) lives in the query string of `/`. A panicking handler is logged as `HTTP_REQUEST_FAILED` without the panic value or stack.
 
-Existing port/host environment configuration, `.env.production` then `.env` loading with environment precedence, static assets and graceful shutdown remain available. The container uses the same package start command. Browser fixtures launch the same entry point rather than the generic srvx CLI, whose default logger prints complete URLs. Use the documented production command to retain this privacy boundary.
+The Node entry point this runbook originally described (`apps/web/server.mjs` with the srvx adapter) no longer exists; there is no second logger to keep private. The development proxy (`SCRATCHPAD_DASHBOARD_URL`) sits behind the same Go log, but Vite prints its own output in the developer's terminal and is not a production path.
 
 ## Verification
 
 ```sh
-fnm exec --using=24.21.0 node --check apps/web/server.mjs
-fnm exec --using=24.21.0 npm run lint
-fnm exec --using=24.21.0 npm run typecheck
-fnm exec --using=24.21.0 npm test
-fnm exec --using=24.21.0 npm run build
-fnm exec --using=24.21.0 npm run test:e2e -- tests/workflow.spec.ts
+fnm exec --using=24.22.1 npm run lint
+fnm exec --using=24.22.1 npm run typecheck
+fnm exec --using=24.22.1 npm test
+go -C backend test ./internal/httpapi/
+fnm exec --using=24.22.1 npx playwright test tests/go-runtime.spec.ts tests/workflow.spec.ts
 ```
 
-The authenticated browser regression reproduced full-query logging on main, including percent-encoded private search markers on HTTP 200 and 401 requests. It covers dashboard navigation, actual dashboard search, API query/filter requests and a synthetic credential header. Corrected logs exclude the unique marker, its raw value and its encoded value while retaining method, path, status and timing. The complete owner enrollment, capture, real stdio MCP and restart workflow passed on the corrected production entry point.
+`tests/go-runtime.spec.ts` requests the dashboard with a private marker and an `authError` value in the query string and asserts that the server log records `"path":"/"` and neither value.
+
+The original authenticated browser regression reproduced full-query logging on main, including percent-encoded private search markers on HTTP 200 and 401 requests. It covers dashboard navigation, actual dashboard search, API query/filter requests and a synthetic credential header. Corrected logs exclude the unique marker, its raw value and its encoded value while retaining method, path, status and timing. The complete owner enrollment, capture, real stdio MCP and restart workflow passed on the corrected production entry point.
 
 The independent branch aligns existing Go toolchain declarations to 1.27.2 for the baseline standard-library vulnerability gate. No dependencies, database migrations or deployment changes are introduced. Canonical GitHub Actions remains separate from local verification.

@@ -10,13 +10,13 @@ import {
 import { createServer as createHTTPServer } from "node:http";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
 
 for (const engine of ["sqlite", "postgres"] as const) {
-  test(`retained React dashboard captures and configures through Go on ${engine}`, async ({
+  test(`embedded React dashboard captures and configures through Go on ${engine}`, async ({
     page,
   }) => {
     test.skip(
@@ -106,11 +106,8 @@ for (const engine of ["sqlite", "postgres"] as const) {
           listener.close(() => done(address.port));
         });
       });
-    const uiPort = await port();
-    let apiPort = await port();
-    while (apiPort === uiPort) apiPort = await port();
+    const apiPort = await port();
     const origin = `http://localhost:${apiPort}`;
-    const uiOrigin = `http://127.0.0.1:${uiPort}`;
     const start = (
       label: string,
       file: string,
@@ -127,7 +124,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
               ? done()
               : fail(
                   new Error(
-                    `${label} fixture exited: code=${code}, signal=${signal}, UI port=${uiPort}, API port=${apiPort}`,
+                    `${label} fixture exited: code=${code}, signal=${signal}, port=${apiPort}`,
                   ),
                 ),
           );
@@ -157,7 +154,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         SCRATCHPAD_DATABASE_PATH: join(dir, "memory.sqlite"),
         SCRATCHPAD_PUBLIC_URL: origin,
         SCRATCHPAD_LISTEN_ADDR: `127.0.0.1:${apiPort}`,
-        SCRATCHPAD_DASHBOARD_URL: uiOrigin,
+        SCRATCHPAD_DASHBOARD_URL: "",
         SCRATCHPAD_GITHUB_CLIENT_ID: "",
         SCRATCHPAD_GITHUB_CLIENT_SECRET: "",
         SCRATCHPAD_ENCRYPTION_KEY_FILE: installationKey,
@@ -177,28 +174,11 @@ for (const engine of ["sqlite", "postgres"] as const) {
           .trim()
           .split("\n")
           .at(-1) ?? "";
-      start("Dashboard", process.execPath, [resolve("apps/web/server.mjs")], {
-        ...env,
-        PORT: String(uiPort),
-        HOST: "127.0.0.1",
-        SCRATCHPAD_UI_ONLY: "true",
-        SCRATCHPAD_ENCRYPTION_KEY_FILE: "",
-        SCRATCHPAD_DATABASE_PATH: join(dir, "unused-ui.sqlite"),
-      });
-      start("Go API", binary, ["serve"], env);
+      start("Go server", binary, ["serve"], env);
       await expect
         .poll(async () => {
           try {
             return (await fetch(`${origin}/ready`)).status;
-          } catch {
-            return 0;
-          }
-        })
-        .toBe(200);
-      await expect
-        .poll(async () => {
-          try {
-            return (await fetch(uiOrigin)).status;
           } catch {
             return 0;
           }
@@ -225,7 +205,6 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await expect(
         page.getByRole("heading", { name: "Project memory", exact: true }),
       ).toBeVisible();
-      expect((await fetch(`${uiOrigin}/ready`)).status).toBe(503);
       await page.getByRole("button", { name: "Projects", exact: true }).click();
       await page
         .getByLabel("Project name", { exact: true })
@@ -833,15 +812,6 @@ for (const engine of ["sqlite", "postgres"] as const) {
           exact: true,
         }),
       ).toBeVisible();
-      children[0].kill("SIGTERM");
-      await exits[0];
-      expect(
-        await page.evaluate(
-          async () =>
-            (await (await fetch("/api/v1/auth/status")).json()).authenticated,
-        ),
-      ).toBe(true);
-      expect((await fetch(origin)).status).toBe(503);
     } finally {
       for (const child of children)
         if (child.exitCode === null) child.kill("SIGTERM");

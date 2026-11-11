@@ -15,7 +15,7 @@ import {
   type Socket,
 } from "node:net";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { expect, test } from "@playwright/test";
 import postgres from "postgres";
 import { sshProof } from "../apps/web/src/lib/ssh-proof";
@@ -45,8 +45,6 @@ for (const engine of ["sqlite", "postgres"] as const) {
     const sockets = new Set<Socket>();
     let server: ReturnType<typeof spawn> | undefined;
     let stopped = Promise.resolve();
-    let renderer: ReturnType<typeof spawn> | undefined;
-    let rendererStopped = Promise.resolve();
     let databaseAdmin: ReturnType<typeof postgres> | undefined;
     let databaseCreated = false;
     const databaseName = `scratchpad_github_dashboard_${randomUUID().replaceAll("-", "")}`;
@@ -155,7 +153,6 @@ for (const engine of ["sqlite", "postgres"] as const) {
         { cwd: "backend" },
       );
       const port = await unusedPort();
-      const uiPort = await unusedPort();
       const origin = `http://localhost:${port}`;
       const env = {
         ...process.env,
@@ -163,7 +160,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         SCRATCHPAD_DATABASE_PATH: join(dir, "owner.sqlite"),
         SCRATCHPAD_LISTEN_ADDR: `127.0.0.1:${port}`,
         SCRATCHPAD_PUBLIC_URL: origin,
-        SCRATCHPAD_DASHBOARD_URL: `http://127.0.0.1:${uiPort}`,
+        SCRATCHPAD_DASHBOARD_URL: "",
         SCRATCHPAD_GITHUB_CLIENT_ID: "synthetic-client",
         SCRATCHPAD_GITHUB_CLIENT_SECRET: "synthetic-secret",
         HTTPS_PROXY: `http://127.0.0.1:${proxyAddress.port}`,
@@ -185,33 +182,6 @@ for (const engine of ["sqlite", "postgres"] as const) {
         .trim()
         .split("\n")
         .at(-1);
-      const ui = spawn(process.execPath, [resolve("apps/web/server.mjs")], {
-        env: {
-          ...env,
-          SCRATCHPAD_UI_ONLY: "true",
-          HOST: "127.0.0.1",
-          PORT: String(uiPort),
-          SCRATCHPAD_GITHUB_CLIENT_ID: "",
-          SCRATCHPAD_GITHUB_CLIENT_SECRET: "",
-        },
-        stdio: "ignore",
-      });
-      renderer = ui;
-      rendererStopped = new Promise<void>((done, fail) => {
-        ui.once("error", fail);
-        ui.once("exit", (code) =>
-          code === 0 ? done() : fail(new Error("OAuth renderer failed")),
-        );
-      });
-      await expect
-        .poll(async () => {
-          try {
-            return (await fetch(`http://127.0.0.1:${uiPort}`)).status;
-          } catch {
-            return 0;
-          }
-        })
-        .toBe(200);
       const child = spawn(binary, ["serve"], {
         env,
         stdio: ["ignore", "pipe", "pipe"],
@@ -417,9 +387,8 @@ for (const engine of ["sqlite", "postgres"] as const) {
       ).toBeVisible();
     } finally {
       if (server && server.exitCode === null) server.kill("SIGTERM");
-      if (renderer && renderer.exitCode === null) renderer.kill("SIGTERM");
       try {
-        await Promise.all([stopped, rendererStopped]);
+        await stopped;
       } finally {
         for (const socket of sockets) socket.destroy();
         await Promise.all([

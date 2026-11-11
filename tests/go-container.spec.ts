@@ -18,6 +18,9 @@ for (const scenario of [
     const context = process.env.TEST_DOCKER_CONTEXT;
     const image = process.env.TEST_GO_IMAGE;
     const retainedImage = process.env.TEST_RETAINED_IMAGE;
+    // The Go image has no Node runtime; the synthetic provider runs in this one.
+    const nodeImage =
+      process.env.TEST_NODE_IMAGE ?? "node:24.21.0-bookworm-slim";
     const rollback =
       scenario === "typescript-rollback" ||
       scenario === "typescript-postgres-rollback";
@@ -252,10 +255,10 @@ for (const scenario of [
             "-v",
             `${volume}:/data`,
             "--entrypoint",
-            "node",
+            "bash",
             image ?? "",
-            "-e",
-            `require('node:fs').writeFileSync('/data/installation-key',Buffer.alloc(32,${value}).toString('base64')+'\\n',{mode:0o600})`,
+            "-c",
+            `umask 077 && printf '%s\\n' '${Buffer.alloc(32, value).toString("base64")}' > /data/installation-key`,
           );
         }
         const provider = docker(
@@ -267,7 +270,7 @@ for (const scenario of [
           "provider",
           "--entrypoint",
           "node",
-          image ?? "",
+          nodeImage,
           "-e",
           "let calls=0,anonymousCalls=0;require('node:http').createServer((req,res)=>{let raw='';req.on('data',c=>raw+=c);req.on('end',()=>{res.setHeader('Content-Type','application/json');if(req.url==='/stats'){res.end(JSON.stringify({calls,anonymousCalls}));return}if(req.headers.authorization&&req.headers.authorization!=='Bearer synthetic-container-provider-token'){res.writeHead(401).end();return}calls++;if(!req.headers.authorization)anonymousCalls++;const body=JSON.parse(raw||'{}');const count=Array.isArray(body.input)?body.input.length:1;res.end(JSON.stringify(req.url==='/v1/embeddings'?{data:Array.from({length:count},(_,index)=>({index,embedding:[1,0]}))}:{choices:[{message:{content:'{\"ok\":true}'}}]}))})}).listen(8080,'0.0.0.0')",
         );
@@ -525,9 +528,9 @@ for (const scenario of [
           docker(
             "exec",
             source,
-            "node",
-            "-e",
-            "process.exit(require('node:fs').readFileSync('/data/checkpoint.sqlite').includes(Buffer.from('synthetic-container-provider-token'))?1:0)",
+            "bash",
+            "-c",
+            "! grep -qa synthetic-container-provider-token /data/checkpoint.sqlite",
           );
       }
       await page.getByRole("button", { name: "Memory", exact: true }).click();
@@ -654,10 +657,10 @@ for (const scenario of [
           "-v",
           `${restoredVolume}:/data`,
           "--entrypoint",
-          "node",
+          "bash",
           image ?? "",
-          "-e",
-          "const fs=require('node:fs');fs.copyFileSync('/source/checkpoint.sqlite','/data/scratchpad.sqlite');fs.chmodSync('/data/scratchpad.sqlite',0o600)",
+          "-c",
+          "cp /source/checkpoint.sqlite /data/scratchpad.sqlite && chmod 600 /data/scratchpad.sqlite",
         );
       const restored = await start(restoredVolume, sourceImage);
       await page.goto(origin);
@@ -810,10 +813,10 @@ for (const scenario of [
             JSON.parse(
               docker(
                 "exec",
-                unavailable,
+                providerContainer,
                 "node",
                 "-e",
-                "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+                "fetch('http://127.0.0.1:8080/stats').then(r=>r.text()).then(console.log)",
               ),
             ).calls,
           ).toBe(4);
@@ -833,10 +836,10 @@ for (const scenario of [
           JSON.parse(
             docker(
               "exec",
-              retained,
+              providerContainer,
               "node",
               "-e",
-              "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+              "fetch('http://127.0.0.1:8080/stats').then(r=>r.text()).then(console.log)",
             ),
           ),
         ).toEqual({ calls: 6, anonymousCalls: 0 });
@@ -867,10 +870,10 @@ for (const scenario of [
           JSON.parse(
             docker(
               "exec",
-              secretless,
+              providerContainer,
               "node",
               "-e",
-              "fetch('http://provider:8080/stats').then(r=>r.text()).then(console.log)",
+              "fetch('http://127.0.0.1:8080/stats').then(r=>r.text()).then(console.log)",
             ),
           ),
         ).toEqual({ calls: 8, anonymousCalls: 2 });

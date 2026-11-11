@@ -23,7 +23,7 @@ local Go stdio MCP. This is not an issue tracker or autonomous policy authority.
 The Go backend owns authentication, HTTP API/business logic, persistence,
 migrations, projects, records, search/context, auditing, relationships,
 import/export, optional AI/RAG and background jobs. React/TypeScript remains the
-dashboard, with a private Node renderer. The Go MCP and capture service and the
+dashboard, built to static files that the Go binary embeds and serves. The Go MCP and capture service and the
 native macOS application remain supported clients. SQLite is the default;
 PostgreSQL is an optional engine.
 
