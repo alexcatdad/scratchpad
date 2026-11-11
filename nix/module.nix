@@ -3,14 +3,18 @@ self:
 
 let
   cfg = config.services.scratchpad;
-  dashboardUrl =
-    if cfg.dashboardUrl != null then cfg.dashboardUrl
-    else if cfg.dashboard.enable then "http://127.0.0.1:${toString cfg.dashboard.port}"
-    else null;
 in
 {
+  # The server embeds the dashboard; there is no renderer process to configure.
+  imports = [
+    (lib.mkRemovedOptionModule [ "services" "scratchpad" "dashboard" ]
+      "The dashboard is embedded in scratchpad-server; the scratchpad-dashboard unit no longer exists.")
+    (lib.mkRemovedOptionModule [ "services" "scratchpad" "dashboardUrl" ]
+      "The dashboard is embedded in scratchpad-server. SCRATCHPAD_DASHBOARD_URL remains a development-only setting.")
+  ];
+
   options.services.scratchpad = {
-    enable = lib.mkEnableOption "the Scratchpad central API server";
+    enable = lib.mkEnableOption "the Scratchpad server (API and embedded dashboard)";
 
     package = lib.mkOption {
       type = lib.types.package;
@@ -34,31 +38,6 @@ in
       type = lib.types.listOf lib.types.str;
       default = [ ];
       description = "Reverse proxy addresses trusted for forwarded headers.";
-    };
-
-    dashboardUrl = lib.mkOption {
-      type = lib.types.nullOr lib.types.str;
-      default = null;
-      example = "http://127.0.0.1:4000";
-      description = "Override the loopback dashboard origin, for an externally run renderer.";
-    };
-
-    dashboard = {
-      enable = lib.mkOption {
-        type = lib.types.bool;
-        default = true;
-        description = "Run the dashboard renderer on loopback and proxy it from the API server.";
-      };
-      package = lib.mkOption {
-        type = lib.types.package;
-        default = self.packages.${pkgs.stdenv.hostPlatform.system}.scratchpad-dashboard;
-        description = "The dashboard package to run.";
-      };
-      port = lib.mkOption {
-        type = lib.types.port;
-        default = 4000;
-        description = "Loopback port of the dashboard renderer.";
-      };
     };
 
     ragEnabled = lib.mkOption {
@@ -103,11 +82,10 @@ in
     users.groups.scratchpad = { };
 
     systemd.services.scratchpad = {
-      description = "Scratchpad central API server";
+      description = "Scratchpad server (API and embedded dashboard)";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" ] ++ lib.optional cfg.dashboard.enable "scratchpad-dashboard.service";
+      after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
-      requires = lib.optional cfg.dashboard.enable "scratchpad-dashboard.service";
       # SSH sign-in proofs are verified with `ssh-keygen -Y verify`.
       path = [ pkgs.openssh ];
 
@@ -118,9 +96,6 @@ in
         SCRATCHPAD_ENCRYPTION_KEY_FILE = "%d/installation-key";
         SCRATCHPAD_TRUSTED_PROXIES = lib.concatStringsSep "," cfg.trustedProxies;
         SCRATCHPAD_RAG_ENABLED = lib.boolToString cfg.ragEnabled;
-      }
-      // lib.optionalAttrs (dashboardUrl != null) {
-        SCRATCHPAD_DASHBOARD_URL = dashboardUrl;
       }
       // lib.optionalAttrs (cfg.github.clientId != null) {
         SCRATCHPAD_GITHUB_CLIENT_ID = cfg.github.clientId;
@@ -138,38 +113,6 @@ in
         StateDirectoryMode = "0700";
         UMask = "0077";
 
-        NoNewPrivileges = true;
-        PrivateTmp = true;
-        PrivateDevices = true;
-        ProtectSystem = "strict";
-        ProtectHome = true;
-        ProtectKernelTunables = true;
-        ProtectKernelModules = true;
-        ProtectControlGroups = true;
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
-        RestrictNamespaces = true;
-        LockPersonality = true;
-        SystemCallArchitectures = "native";
-        CapabilityBoundingSet = "";
-      };
-    };
-
-    systemd.services.scratchpad-dashboard = lib.mkIf cfg.dashboard.enable {
-      description = "Scratchpad dashboard renderer";
-      wantedBy = [ "multi-user.target" ];
-
-      # The renderer holds no credentials; the API server owns all data and auth.
-      environment = {
-        NODE_ENV = "production";
-        HOST = "127.0.0.1";
-        PORT = toString cfg.dashboard.port;
-        SCRATCHPAD_UI_ONLY = "true";
-      };
-
-      serviceConfig = {
-        ExecStart = "${lib.getExe pkgs.nodejs_24} ${cfg.dashboard.package}/apps/web/server.mjs";
-        Restart = "on-failure";
-        DynamicUser = true;
         NoNewPrivileges = true;
         PrivateTmp = true;
         PrivateDevices = true;

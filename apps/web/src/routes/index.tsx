@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthScreen } from "../components/auth";
 import { Capture } from "../components/capture";
@@ -28,7 +28,10 @@ import {
   views,
 } from "../lib/dashboard";
 import { encodedId } from "../lib/opaque-id";
-export const Route = createFileRoute("/")({
+import { Route as rootRoute } from "./__root";
+export const Route = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/",
   component: Dashboard,
   validateSearch: dashboardSearch,
 });

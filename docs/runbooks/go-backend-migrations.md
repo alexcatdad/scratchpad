@@ -77,8 +77,8 @@ files. Do not copy a live main database file as a substitute for online backup.
 
 ```sh
 npm run admin -- backup /absolute/private-backups/pre-go.sqlite
-# In the source container, the same wrapper invokes the installed Go binary:
-docker compose exec scratchpad npm run admin -- backup /data/pre-go.sqlite
+# In a current source container, call the Go binary directly:
+docker compose exec scratchpad scratchpad-server backup /data/pre-go.sqlite
 ```
 
 Use the same database configuration as the server. The source wrapper uses Go;

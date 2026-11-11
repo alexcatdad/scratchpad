@@ -1,3 +1,5 @@
+# The dashboard as static files (index.html and hashed assets). It is a build
+# input of the server package, which embeds it; nothing runs it at runtime.
 { lib, buildNpmPackage, nodejs_24 }:
 
 buildNpmPackage {
@@ -14,22 +16,16 @@ buildNpmPackage {
   nodejs = nodejs_24;
   npmWorkspace = "apps/web";
 
-  npmDepsHash = "sha256-TxrRGqGxrJDEk5kwvHzYcW54EXtMHPeVa5ivSpC1/oM=";
+  npmDepsHash = "sha256-V0wqGBPOOSE6TELsaV/jCMtuk+rpgYy32CX52wIq/+s=";
 
-  # Only the web workspace is built; the dev-only dependencies are pruned.
+  # Vite writes the build where the Go module embeds it from.
   installPhase = ''
     runHook preInstall
-    npm prune --omit=dev --offline --workspace @scratchpad/web
-    mkdir -p $out/apps/web
-    cp -r node_modules package.json $out/
-    # Drop links to workspaces the renderer does not ship or import.
-    find $out/node_modules/@scratchpad -maxdepth 1 -type l ! -name web -delete
-    cp -r apps/web/dist apps/web/server.mjs apps/web/package.json $out/apps/web/
-    # The combined launcher resolves ../apps/web/server.mjs from here.
-    install -Dm444 scripts/go-dashboard-runtime.mjs $out/scripts/go-dashboard-runtime.mjs
+    test -f backend/internal/httpapi/dashboard/dist/index.html
+    cp -r backend/internal/httpapi/dashboard/dist $out
     runHook postInstall
   '';
   dontNpmInstall = true;
 
-  meta.description = "Scratchpad dashboard renderer";
+  meta.description = "Scratchpad dashboard static build";
 }

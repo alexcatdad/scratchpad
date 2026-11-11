@@ -16,8 +16,6 @@ export function createWorkflowHarness() {
   const environment = {
     ...process.env,
     SCRATCHPAD_LISTEN_ADDR: "127.0.0.1:3100",
-    SCRATCHPAD_UI_PORT: "4100",
-    SCRATCHPAD_DASHBOARD_URL: "http://127.0.0.1:4100",
     SCRATCHPAD_PUBLIC_URL: origin,
     SCRATCHPAD_DATABASE_PATH: resolve(temporary, "memory.sqlite"),
     SCRATCHPAD_DATABASE_URL: process.env.SCRATCHPAD_E2E_DATABASE_URL ?? "",

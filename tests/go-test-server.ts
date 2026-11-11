@@ -2,6 +2,7 @@ import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { copyFileSync, existsSync } from "node:fs";
 import { resolve } from "node:path";
 
+// The binary embeds the dashboard that tests/global-setup.ts builds.
 export function buildGoServer(
   root: string,
   destination: string,
@@ -24,16 +25,15 @@ export function buildGoServer(
 }
 
 export function startGoServer(
-  root: string,
+  _root: string,
   binary: string,
   env: NodeJS.ProcessEnv,
   onOutput: (chunk: Buffer) => void = () => {},
 ) {
-  const child = spawn(
-    process.execPath,
-    [resolve(root, "scripts/go-dashboard-runtime.mjs"), binary, "serve"],
-    { env, stdio: ["ignore", "pipe", "pipe"] },
-  );
+  const child = spawn(binary, ["serve"], {
+    env: { ...env, SCRATCHPAD_DASHBOARD_URL: "" },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   child.stdout?.on("data", onOutput);
   child.stderr?.on("data", onOutput);
   return child;

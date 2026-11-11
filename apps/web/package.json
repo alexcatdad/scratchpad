@@ -6,18 +6,15 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "start": "node server.mjs"
+    "test": "vitest run"
   },
   "dependencies": {
     "@simplewebauthn/browser": "14.0.0",
     "@tanstack/react-router": "1.170.46",
-    "@tanstack/react-start": "1.169.4",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-markdown": "10.1.0",
     "remark-gfm": "4.0.1",
-    "srvx": "1.0.5",
     "zod": "4.6.7"
   },
   "devDependencies": {

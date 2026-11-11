@@ -4,7 +4,7 @@
 
 Private, self-hosted memory for developers and coding agents: decisions,
 findings, questions, failures, constraints and project history, with reasoning
-and provenance intact. A Go server (`backend/`) with a React dashboard, a Go
+and provenance intact. A Go server (`backend/`) with an embedded React dashboard, a Go
 MCP adapter and capture service (`mcp/`), and a native macOS menu-bar app
 (Swift 6, macOS 13+, Apple Silicon) that bundles them for the desktop.
 
@@ -39,7 +39,9 @@ current authority.
 - `backend/` — Go server: authentication, persistence, migrations, HTTP API, optional AI/RAG.
 - `mcp/` — Go stdio MCP adapter and local capture service.
 - `macos/` — Swift package: app target, `ScratchpadNative` library, Keychain helper, tests.
-- `apps/web/` — retained React dashboard; `apps/docs/` — documentation site (GitHub Pages).
+- `apps/web/` — React dashboard: a static Vite and TanStack Router build, written to
+  `backend/internal/httpapi/dashboard/dist` and embedded in the Go binary. No
+  Node runs at runtime. `apps/docs/` — documentation site (GitHub Pages).
 - `packages/clients/` — generated TypeScript and Go HTTP clients.
 - `deploy/`, `nix/`, `flake.nix`, `Dockerfile` — homelab and container deployment.
 - `docs/` — PRD, architecture, API, ADRs and runbooks. `tests/` — Playwright acceptance.
@@ -65,8 +67,10 @@ current authority.
   coverage floor for `mcp/`, and race tests for `packages/clients/go`. The
   backend suite (~300 serial integration tests, ~13 min) is too heavy for the
   shared builder, so the gate only compiles its tests. The build has no
-  network, so dependencies come from Nix (`vendorHash`, `npmDepsHash`); update
-  those hashes when `go.sum` or `package-lock.json` changes. The backend suite,
+  network, so dependencies come from Nix (`vendorHash`, and `npmDepsHash` in
+  `nix/dashboard.nix`); update those hashes when `go.sum` or
+  `package-lock.json` changes. `nix build .#default` builds the dashboard and
+  embeds it in the server. The backend suite,
   Swift and `task security` stay local-only, so still run `task check` before
   every push and `task release:check` before releasing.
 - PostgreSQL, pgvector, browser (`npm run test:e2e`) and container acceptance need

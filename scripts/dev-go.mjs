@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { chmodSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 const directory = mkdtempSync(join(tmpdir(), "scratchpad-dev-go-"));
 chmodSync(directory, 0o700);
@@ -49,7 +49,11 @@ async function run(file, args, env = process.env) {
 }
 
 try {
-  let code = await run("npm", ["run", "build", "-w", "@scratchpad/web"]);
+  // The Go binary embeds the dashboard build. With SCRATCHPAD_DASHBOARD_URL set
+  // the server proxies a running `vite dev` instead, so the build is skipped.
+  let code = process.env.SCRATCHPAD_DASHBOARD_URL
+    ? 0
+    : await run("npm", ["run", "build", "-w", "@scratchpad/web"]);
   if (code === 0 && !stopping)
     code = await run("go", [
       "-C",
@@ -60,18 +64,13 @@ try {
       "./cmd/scratchpad-server",
     ]);
   if (code === 0 && !stopping)
-    code = await run(
-      process.execPath,
-      [resolve("scripts/go-dashboard-runtime.mjs"), binary, "serve"],
-      {
-        ...process.env,
-        SCRATCHPAD_LISTEN_ADDR:
-          process.env.SCRATCHPAD_LISTEN_ADDR ?? "127.0.0.1:3000",
-        SCRATCHPAD_PUBLIC_URL:
-          process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
-        SCRATCHPAD_UI_PORT: process.env.SCRATCHPAD_UI_PORT ?? "4000",
-      },
-    );
+    code = await run(binary, ["serve"], {
+      ...process.env,
+      SCRATCHPAD_LISTEN_ADDR:
+        process.env.SCRATCHPAD_LISTEN_ADDR ?? "127.0.0.1:3000",
+      SCRATCHPAD_PUBLIC_URL:
+        process.env.SCRATCHPAD_PUBLIC_URL ?? "http://localhost:3000",
+    });
   process.exitCode = stopping ? 0 : code;
 } finally {
   rmSync(directory, { recursive: true, force: true });

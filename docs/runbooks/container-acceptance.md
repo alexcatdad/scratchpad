@@ -24,12 +24,12 @@ The default `npm run test:e2e` still uses the locally built production server wi
 1. Generate a unique `scratchpad-e2e-<UUID>` run identity and create an owned named volume.
 2. Start the prebuilt image at `127.0.0.1:3100`, with that volume mounted at `/data` and the configured public URL matching the browser origin.
 3. Wait for readiness using a 30-second overall deadline and two-second individual request timeouts.
-4. Run `docker exec <container> npm run admin -- setup`; consume its token through the browser's real passkey registration flow using a disposable virtual authenticator.
+4. Run `docker exec <container> scratchpad-server setup`; consume its token through the browser's real passkey registration flow using a disposable virtual authenticator.
 5. Create a project, save mirroring/cross-project/enabled-type settings, reload, and verify persistence plus capture-type filtering.
 6. Capture and curate decisions in the browser, add a storage tag, and verify advanced tag filtering for no matches, matching records, and clearing the filter. Add evidence and a relationship, and import a small synthetic historical project-state record. Verify desktop and mobile layouts.
 7. Generate an ephemeral SSH key and enroll it through the dashboard's real challenge/proof flow.
 8. Launch the built Go MCP executable over stdio. Capture all eight types through the real HTTP API and check retrieval, search, context, history, and relationships.
-9. While the container remains running, execute `docker exec <container> npm run admin -- backup /data/backup.sqlite`. The admin command awaits SQLite's consistent online backup and refuses to overwrite an existing destination.
+9. While the container remains running, execute `docker exec <container> scratchpad-server backup /data/backup.sqlite`. The admin command awaits SQLite's consistent online backup and refuses to overwrite an existing destination.
 10. Stop and remove the original application container. Create a second, empty named volume. A short-lived helper container mounts the original volume read-only and copies only `backup.sqlite` into the fresh volume as `scratchpad.sqlite`, setting ownership to application UID/GID `1000:1000` and file mode `0600`. No live database or WAL file is copied.
 11. Start the same image against the restored volume at the same origin. Start a new MCP process and verify all original IDs, typed content, exact retries, and changed-payload conflicts.
 12. Reload the existing browser session and verify curated title, evidence, audit history, imported project state, and project settings. Sign out and authenticate again using the original passkey.

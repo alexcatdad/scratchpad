@@ -184,16 +184,13 @@ test.beforeAll(async () => {
     databaseUrl = process.env.SCRATCHPAD_E2E_DATABASE_URL = database.toString();
   }
   const port = await unusedPort();
-  const uiPort = await unusedPort();
   origin = `http://localhost:${port}`;
   environment = {
     ...process.env,
     SCRATCHPAD_DATABASE_PATH: databasePath,
     SCRATCHPAD_DATABASE_URL: databaseUrl ?? "",
     SCRATCHPAD_LISTEN_ADDR: `127.0.0.1:${port}`,
-    SCRATCHPAD_UI_PORT: String(uiPort),
     SCRATCHPAD_PUBLIC_URL: origin,
-    SCRATCHPAD_DASHBOARD_URL: `http://127.0.0.1:${uiPort}`,
     SCRATCHPAD_GITHUB_CLIENT_ID: "synthetic-client",
     SCRATCHPAD_GITHUB_CLIENT_SECRET: "synthetic-secret",
     HTTPS_PROXY: `http://127.0.0.1:${proxyAddress.port}`,

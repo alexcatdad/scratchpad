@@ -6,7 +6,7 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Current source
 
-The default server is Go, with a retained React dashboard rendered privately by Node. Go owns authentication, persistence, migrations, HTTP APIs and optional AI/RAG. The local Go MCP/capture service and native macOS application keep their existing contracts. SQLite remains the default, with optional PostgreSQL. See [P0 acceptance](docs/runbooks/p0-consolidation.md) for retirement and delivery gates; code defaults do not authorize a live production cutover.
+The server is one Go binary that embeds the React dashboard as static files; nothing runs Node at runtime. Go owns authentication, persistence, migrations, HTTP APIs and optional AI/RAG. The local Go MCP/capture service and native macOS application keep their existing contracts. SQLite remains the default, with optional PostgreSQL. See [P0 acceptance](docs/runbooks/p0-consolidation.md) for retirement and delivery gates; code defaults do not authorize a live production cutover.
 
 ## Published release history
 
@@ -72,9 +72,11 @@ docker run -d --name scratchpad --restart unless-stopped \
 docker exec scratchpad npm run admin -- setup
 ```
 
-Source container commands use the installed Go binary through `npm run admin`;
-source development commands build/run the same Go CLI. Released v0.3.0 commands
-retain their historical TypeScript implementation. Before upgrading existing
+That is the released v0.3.0 command, which retains its historical TypeScript
+implementation. An image built from current source contains only the Go binary:
+run `docker exec scratchpad scratchpad-server setup` (or `recover`,
+`backup /data/<file>`, `migrate`) instead. In a source checkout,
+`npm run admin -- <command>` runs the same Go CLI. Before upgrading existing
 volumes, follow the [Go migration and rollback procedure](docs/runbooks/go-backend-migrations.md).
 
 Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. Additional passkeys and MCP public keys are enrolled in **Settings**. Never send a private key to the server.
@@ -84,7 +86,8 @@ For a remote deployment, use your exact HTTPS origin and a TLS reverse proxy; ke
 Lost-credential recovery is an explicit administrator action:
 
 ```sh
-docker exec scratchpad npm run admin -- recover
+docker exec scratchpad npm run admin -- recover          # v0.3.0 image
+docker exec scratchpad scratchpad-server recover         # current source image
 ```
 
 For a source checkout, the repository's `docker compose up --build -d` builds the current source instead of pulling the release image.
@@ -100,7 +103,7 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run dev
 ```
 
-Development builds the dashboard and Go server, then starts Go on loopback port 3000 with a private UI-only renderer on port 4000. Database, GitHub and encryption configuration belong to Go. Stopping the command stops both processes. Keep private runtime state outside served workspaces.
+Development builds the dashboard to static files, builds the Go server with them embedded and starts that one binary on loopback port 3000. For hot reloading, run `npm run dev -w @scratchpad/web` (Vite on `127.0.0.1:4000`) and start the server with `SCRATCHPAD_DASHBOARD_URL=http://127.0.0.1:4000 npm run dev`; that variable is development-only. Keep private runtime state outside served workspaces.
 
 In another terminal, use the same absolute database path and public URL for the server and administrator command (see `.env.example`):
 

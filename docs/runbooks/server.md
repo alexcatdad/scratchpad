@@ -1,6 +1,6 @@
 # Server development and operation
 
-The application server uses Go, SQLite or PostgreSQL, WebAuthn and the system `ssh-keygen` verifier. Node 24 renders the retained React dashboard privately. Run commands from the repository root unless stated otherwise.
+The application server uses Go, SQLite or PostgreSQL, WebAuthn and the system `ssh-keygen` verifier. The binary embeds the React dashboard as static files; Node 24 is needed only to build and test. Run commands from the repository root unless stated otherwise.
 
 1. Install the pinned workspace dependencies with `npm ci`.
 2. Set `SCRATCHPAD_DATABASE_PATH` to persistent storage and `SCRATCHPAD_PUBLIC_URL` to the browser origin. HTTP is allowed only on localhost; remote deployments require HTTPS.
@@ -40,7 +40,7 @@ Native exports preserve knowledge, project configuration, provenance, and audit 
 Create a consistent backup while the service is running:
 
 ```sh
-docker compose exec scratchpad npm run admin -- backup /data/backup-2026-09-29.sqlite
+docker compose exec scratchpad scratchpad-server backup /data/backup-2026-09-29.sqlite
 ```
 
 The destination must be an absolute new path distinct from the live database. The command uses SQLite's online backup API, refuses existing destinations, waits until the snapshot completes, and creates mode-0600 output. It does not print credentials or session values.
