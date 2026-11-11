@@ -57,7 +57,7 @@ func TestSQLiteBackupRefusesUnsafeOrExistingPathsWithoutChangingFiles(t *testing
 			case "missing-source":
 				path = filepath.Join(filepath.Dir(path), "missing.sqlite")
 			case "unsupported-source":
-				db, err := sql.Open("sqlite", path)
+				db, err := sql.Open("sqlite", sqliteTestDSN(path))
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -181,7 +181,7 @@ func TestSQLiteBackupCancellationCleansStagingAndRetainsSource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func restoreSnapshotFixture(t *testing.T, snapshot string) string {
 
 func TestSQLiteBackupPreservesPreUpgradeSchemaAndAuthenticatedHistory(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

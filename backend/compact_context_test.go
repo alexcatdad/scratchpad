@@ -92,7 +92,7 @@ func TestCompactContextSelectsCurrentStateBeforeUnverifiedHistoryLimit(t *testin
 				t.Fatal("state failed")
 			}
 			current := response["record"].(map[string]any)["id"].(string)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

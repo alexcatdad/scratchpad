@@ -18,7 +18,7 @@ func TestAISchedulingFindsValidOverlappingScopePastMalformedHistoricalJobs(t *te
 				origin := startServer(t, path, databaseURL)
 				first := jobProject(t, origin, "Scoped scheduler first", true, true)
 				second := jobProject(t, origin, "Scoped scheduler second", true, true)
-				driver, dsn := "sqlite", path
+				driver, dsn := "sqlite", sqliteTestDSN(path)
 				if engine == "postgres" {
 					driver, dsn = "pgx", databaseURL
 				}

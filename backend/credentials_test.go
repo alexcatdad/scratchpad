@@ -193,7 +193,7 @@ func TestConcurrentRevocationRetainsLastIndependentPasskey(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL, local := githubHistoricalBrowser(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

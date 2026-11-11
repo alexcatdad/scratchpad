@@ -109,7 +109,7 @@ func testSemanticExactNumbers(t *testing.T, engine, payload string, historical b
 		t.Fatalf("semantic search altered immutable numerical evidence: expected payload %v, returned %v", record["payload"], returned["payload"])
 	}
 	if historical {
-		driver, dsn := "sqlite", path
+		driver, dsn := "sqlite", sqliteTestDSN(path)
 		if engine == "postgres" {
 			driver, dsn = "pgx", databaseURL
 		}

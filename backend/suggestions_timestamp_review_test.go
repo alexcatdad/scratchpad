@@ -15,7 +15,7 @@ func TestSuggestionPagesOrderTimestampInstantsAndPreserveStoredTies(t *testing.T
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			base := suggestionFixture(t, origin, "summary", map[string]any{"text": "Chronological historical suggestion"})
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if engine == "postgres" {
 				driver, dsn = "pgx", databaseURL
 			}

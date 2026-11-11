@@ -105,7 +105,7 @@ func TestLegacyProviderSecretConversionIsPendingUntilProtectedKeyAvailable(t *te
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -264,7 +264,7 @@ func TestTamperedProviderCiphertextCannotBeUsed(t *testing.T) {
 					t.Fatal("secret fixture failed")
 				}
 			})
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			statement := `UPDATE entities SET data=json_set(data,'$.apiKey.ciphertext','tampered') WHERE kind='ai_settings' AND id='global'`
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
@@ -388,7 +388,7 @@ func TestFailedLegacyConversionRetainsPendingStateAndOrdinaryMemory(t *testing.T
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			t.Setenv("SCRATCHPAD_ENCRYPTION_KEY_FILE", syntheticEncryptionKey(t, 66))
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

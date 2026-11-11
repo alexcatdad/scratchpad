@@ -13,7 +13,7 @@ func TestJobActivityIncludesEnabledFutureWorkAndRunningAttemptsWithoutProviderCa
 		t.Run(engine, func(t *testing.T) {
 			t.Setenv("SCRATCHPAD_RAG_ENABLED", "true")
 			path, databaseURL := portableInstance(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

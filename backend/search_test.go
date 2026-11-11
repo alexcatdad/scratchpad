@@ -36,7 +36,7 @@ func TestLexicalSearchDecodesOnlyNativeMatchingRecords(t *testing.T) {
 			projectID := jobProject(t, origin, "Focused lexical records", false, false)
 			wanted := curationCapture(t, origin, projectID, "FOCUSED_MATCH_WITNESS")
 			unrelated := curationCapture(t, origin, projectID, "UNRELATED_CORRUPTION_WITNESS")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if engine == "postgres" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -113,7 +113,7 @@ func TestSearchPreservesCuratedAndTemporalFilters(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -206,7 +206,7 @@ func TestCaptureFailureRollsBackPublicHistoryAndRetry(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL, _ := githubHistoricalBrowser(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -262,7 +262,7 @@ func TestLexicalSearchLoadsOnlyCandidateMetadata(t *testing.T) {
 			projectID := jobProject(t, origin, "Focused search metadata", false, false)
 			wanted := curationCapture(t, origin, projectID, "MATCHING_METADATA_WITNESS")
 			unrelated := curationCapture(t, origin, projectID, "OTHER_METADATA_WITNESS")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if engine == "postgres" {
 				driver, dsn = "pgx", databaseURL
 			}

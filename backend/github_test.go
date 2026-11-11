@@ -592,7 +592,7 @@ func TestGithubStartupSyncUsesPersistedFreshness(t *testing.T) {
 	t.Setenv("SCRATCHPAD_GITHUB_CLIENT_ID", "")
 	t.Setenv("SCRATCHPAD_GITHUB_CLIENT_SECRET", "")
 	path, _, local := githubHistoricalBrowser(t, "sqlite")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

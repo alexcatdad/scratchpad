@@ -152,7 +152,7 @@ func TestSQLiteSuggestionPageDoesNotDecodeMalformedOffPageHistory(t *testing.T) 
 	path, databaseURL := portableInstance(t, "sqlite")
 	origin := startServer(t, path, databaseURL)
 	base := suggestionFixture(t, origin, "summary", map[string]any{"text": "Selected healthy evidence"})
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

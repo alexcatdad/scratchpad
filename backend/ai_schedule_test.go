@@ -132,7 +132,7 @@ func TestAIScheduleRespectsActiveCrossProjectWork(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			first := jobProject(t, origin, "Active first", true, true)
 			second := jobProject(t, origin, "Active second", true, true)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -183,7 +183,7 @@ func TestAIScheduleAuditFailureRollsBackCycleAndDeadline(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			jobProject(t, origin, "Cycle first", true, true)
 			jobProject(t, origin, "Cycle second", true, true)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

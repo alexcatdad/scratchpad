@@ -55,7 +55,7 @@ func TestProjectContextKeepsHistoricalAndUnverifiedKnowledgeSeparate(t *testing.
 			origin := startServer(t, path, databaseURL)
 			_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "Lifecycle"}, restoredToken)
 			id := project["project"].(map[string]any)["id"].(string)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -118,7 +118,7 @@ func TestProjectContextOrdersPreciseStateAndBoundsHistory(t *testing.T) {
 			origin := startServer(t, path, databaseURL)
 			_, project := projectRequest(t, origin, "POST", "/resolve-explicit", map[string]any{"name": "History"}, restoredToken)
 			id := project["project"].(map[string]any)["id"].(string)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

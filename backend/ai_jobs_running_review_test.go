@@ -19,7 +19,7 @@ func TestJobActivityDistinguishesLiveLeasesFromUnclaimableRunningHistory(t *test
 			if status != 200 {
 				t.Fatal("disabled fixture failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

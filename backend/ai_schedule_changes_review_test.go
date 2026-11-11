@@ -17,7 +17,7 @@ func TestAIScheduleShorteningUsesLastCycleAcrossWorkers(t *testing.T) {
 			if status != 200 {
 				t.Fatalf("configuration failed: %d %v", status, result)
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -70,7 +70,7 @@ func TestAIScheduleLengtheningAndPausedCadence(t *testing.T) {
 				if status != 200 {
 					t.Fatalf("configuration failed: %d %v", status, result)
 				}
-				driver, dsn := "sqlite", path
+				driver, dsn := "sqlite", sqliteTestDSN(path)
 				if databaseURL != "" {
 					driver, dsn = "pgx", databaseURL
 				}

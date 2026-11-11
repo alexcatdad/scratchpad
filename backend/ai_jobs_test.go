@@ -102,7 +102,7 @@ func TestAIJobRetryPreservesIdentityAndChecksVersionAndConsent(t *testing.T) {
 				t.Fatal("AI fixture failed")
 			}
 			projectID := jobProject(t, origin, "Retry scope", true, false)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -169,7 +169,7 @@ func TestAIJobEnqueueAuditFailureLeavesNoJob(t *testing.T) {
 			if status != 200 {
 				t.Fatal("export fixture failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

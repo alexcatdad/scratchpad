@@ -31,7 +31,7 @@ func TestCompactContextResumesAmongLongHistoricalRecords(t *testing.T) {
 		t.Fatal("state capture failed")
 	}
 	stateID := response["record"].(map[string]any)["id"].(string)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestContextQuestionStatusPreservesUnicodeAnswerEvidence(t *testing.T) {
 				t.Fatal("question capture failed")
 			}
 			question := response["record"].(map[string]any)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -175,7 +175,7 @@ func TestContextAcceptedAnswerKeepsHistoricalRenderingFallback(t *testing.T) {
 			if status != 201 {
 				t.Fatal("accepted answer failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

@@ -134,7 +134,7 @@ func TestEmbeddingWorkerRecoversExpiredLeaseAcrossCompetingServers(t *testing.T)
 			}
 			projectID := jobProject(t, origin, "Recovered lease", true, false)
 			curationCapture(t, origin, projectID, "Preserve abandoned work")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

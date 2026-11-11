@@ -32,7 +32,7 @@ func TestAnalysisWorkerAuditFailureLeavesNoActivatedArtifacts(t *testing.T) {
 			}
 			projectID := jobProject(t, origin, "Atomic completion output", true, false)
 			record := curationCapture(t, origin, projectID, "Immutable input")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
