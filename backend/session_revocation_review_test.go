@@ -23,7 +23,7 @@ func TestCredentialRevocationIsIndependentOfExpiredSessionHistory(t *testing.T) 
 				t.Fatal("target session fixture failed")
 			}
 			token := login["accessToken"].(string)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if engine == "postgres" {
 				driver, dsn = "pgx", databaseURL
 			}

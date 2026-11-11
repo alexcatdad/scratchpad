@@ -14,7 +14,7 @@ func TestGlobalSettingsAndProviderControlRollBackTogether(t *testing.T) {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

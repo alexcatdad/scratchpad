@@ -33,7 +33,7 @@ func TestBlockedGithubCallbacksDoNotConsumeIndependentProofCapacity(t *testing.T
 				fixture.ServeHTTP(w, r)
 			}))
 			path, databaseURL, local := githubHistoricalBrowser(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

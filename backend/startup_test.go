@@ -198,7 +198,7 @@ func legacyFixture(t *testing.T) string {
 		t.Fatal(err)
 	}
 	f.Close()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,7 +218,7 @@ func legacyFixture(t *testing.T) string {
 
 func TestUnsupportedSchemaIsRefusedWithoutChangingBackup(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,7 +245,7 @@ func TestUnsupportedSchemaIsRefusedWithoutChangingBackup(t *testing.T) {
 
 func TestMalformedSchemaIsNotRepaired(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -784,7 +784,7 @@ func runMCPPhase(t *testing.T, origin, socket, workspace, signingKey, statePath,
 
 func assertStoredTrayCaptures(t *testing.T, path string, expectedCaptures, expectedTypes int) {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -827,7 +827,7 @@ func assertStoredTrayCaptures(t *testing.T, path string, expectedCaptures, expec
 
 func storedClientSavedAtByTitle(t *testing.T, path, title string) string {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -865,7 +865,7 @@ func storedClientSavedAtByTitle(t *testing.T, path, title string) string {
 
 func countRecords(t *testing.T, path string) int {
 	t.Helper()
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -922,7 +922,7 @@ func fetchRecord(t *testing.T, origin, token string) (int, map[string]any) {
 }
 func TestRestoredSQLiteRecordSurvivesUpgradeAndRestart(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -980,7 +980,7 @@ func TestCompetingSQLiteStartups(t *testing.T) {
 
 func TestFailedSQLiteDDLCanBeRetried(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -993,7 +993,7 @@ func TestFailedSQLiteDDLCanBeRetried(t *testing.T) {
 	}
 	// Operator removes the known synthetic conflict; the migration must have
 	// rolled back both its DDL and marker, so an ordinary retry can succeed.
-	db, err = sql.Open("sqlite", path)
+	db, err = sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1049,7 +1049,7 @@ func TestRestoredAuthenticationIsRechecked(t *testing.T) {
 	for _, input := range inputs {
 		t.Run(input.name, func(t *testing.T) {
 			path := legacyFixture(t)
-			db, err := sql.Open("sqlite", path)
+			db, err := sql.Open("sqlite", sqliteTestDSN(path))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1069,7 +1069,7 @@ func TestRestoredAuthenticationIsRechecked(t *testing.T) {
 
 func TestSQLiteBackupRestorePreservesHistory(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1099,7 +1099,7 @@ func TestSQLiteBackupRestorePreservesHistory(t *testing.T) {
 
 func TestInterruptedSQLiteStartupCanBeRetried(t *testing.T) {
 	path := legacyFixture(t)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1137,7 +1137,7 @@ func TestContextHeaderMigrationConflictRetriesAndPreservesHistory(t *testing.T) 
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := legacyFixture(t), ""
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if engine == "postgres" {
 				path = ""
 				databaseURL = legacyPostgres(t)

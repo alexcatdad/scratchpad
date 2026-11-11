@@ -41,7 +41,7 @@ func TestTrustedProxyKeepsIndependentAuthRoutesEnrollmentAndRecoveryAvailable(t 
 			path, _, local := githubHistoricalBrowser(t, "sqlite")
 			command := "setup"
 			if mode == "recovery" {
-				db, err := sql.Open("sqlite", path)
+				db, err := sql.Open("sqlite", sqliteTestDSN(path))
 				if err != nil {
 					t.Fatal(err)
 				}

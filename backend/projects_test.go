@@ -302,7 +302,7 @@ func TestGitRemoteDotSegmentsRetainCanonicalSource(t *testing.T) {
 
 func TestProjectDefaultsAreInheritedWithoutLeakingUnknownFields(t *testing.T) {
 	path, _, _ := githubHistoricalBrowser(t, "sqlite")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

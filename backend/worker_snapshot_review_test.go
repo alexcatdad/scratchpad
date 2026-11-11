@@ -140,7 +140,7 @@ func TestHistoricalWorkerDiscardsAdmittedOutputAfterInputConsentWithdrawal(t *te
 							t.Fatal("long source fixture failed")
 						}
 					}
-					driver, dsn := "sqlite", path
+					driver, dsn := "sqlite", sqliteTestDSN(path)
 					if engine == "postgres" {
 						driver, dsn = "pgx", databaseURL
 					}

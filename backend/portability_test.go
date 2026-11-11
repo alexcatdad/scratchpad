@@ -51,7 +51,7 @@ func TestNativeImportEnforcesStreaming64MiBLimit(t *testing.T) {
 func portableInstance(t *testing.T, engine string) (string, string) {
 	t.Helper()
 	path, databaseURL, _ := githubHistoricalBrowser(t, engine)
-	driver, dsn := "sqlite", path
+	driver, dsn := "sqlite", sqliteTestDSN(path)
 	if databaseURL != "" {
 		driver, dsn = "pgx", databaseURL
 	}
@@ -231,7 +231,7 @@ func TestNativeImportRollsBackLateAuditFailure(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

@@ -47,7 +47,7 @@ func TestFailedPassageRetryRejectsUnavailableOrChangedGenerationWithoutRewriting
 				job = waitRAGJobs(t, origin, 1)[0].(map[string]any)
 			}
 			job["status"], job["version"], job["attempts"], job["lastError"] = "failed", 3, 3, "Synthetic retained failure"
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

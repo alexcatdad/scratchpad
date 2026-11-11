@@ -16,7 +16,7 @@ func TestBlankListingDecodesOnlyScopedPageRecords(t *testing.T) {
 			otherProject := jobProject(t, origin, "Other history", false, false)
 			wanted := curationCapture(t, origin, wantedProject, "SCOPED_LIST_WITNESS")
 			other := curationCapture(t, origin, otherProject, "OTHER_LIST_WITNESS")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -50,7 +50,7 @@ func TestListingReadsFullCurationOnlyForItsPage(t *testing.T) {
 			project := jobProject(t, origin, "Curation pages", false, false)
 			older := curationCapture(t, origin, project, "CURATION_PAGE_WITNESS older")
 			wanted := curationCapture(t, origin, project, "CURATION_PAGE_WITNESS current")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -91,7 +91,7 @@ func TestLexicalListingHydratesOnlyItsPage(t *testing.T) {
 			project := jobProject(t, origin, "Lexical pages", false, false)
 			older := curationCapture(t, origin, project, "PAGE_SCOPE_WITNESS older")
 			wanted := curationCapture(t, origin, project, "PAGE_SCOPE_WITNESS current")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -132,7 +132,7 @@ func TestRelationshipCycleCheckIgnoresDisconnectedHistory(t *testing.T) {
 			if status != 201 {
 				t.Fatal("history fixture relationship failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

@@ -40,7 +40,7 @@ func TestCompletionOrdersMinuteSecondAndPreciseInstantsWithStableTies(t *testing
 				t.Fatal("provider fixture failed")
 			}
 			project := jobProject(t, origin, "Historical completion chronology", true, false)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

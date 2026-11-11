@@ -26,7 +26,7 @@ func enrolledSSHKey(t *testing.T, path string) (string, string) {
 		t.Fatal(err)
 	}
 	key := strings.Join(strings.Fields(string(public))[:2], " ")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +220,7 @@ func TestGitHubSSHAuthorizationCacheAndBlocking(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			db, err := sql.Open("sqlite", path)
+			db, err := sql.Open("sqlite", sqliteTestDSN(path))
 			if err != nil {
 				t.Fatal(err)
 			}

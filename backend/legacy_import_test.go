@@ -125,7 +125,7 @@ func TestLegacyJSONLRollsBackLateImportAuditFailure(t *testing.T) {
 			if status != 200 {
 				t.Fatal("export failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

@@ -68,7 +68,7 @@ func TestRecordDetailReturnsAllAssociatedAuditsAboveNativeBindBoundary(t *testin
 				// Populate the remaining historical inputs in one fixture transaction.
 				// Their shape is identical to the publicly imported evidence above;
 				// avoid measuring native per-entity validation at this read boundary.
-				db, err := sql.Open("sqlite", path)
+				db, err := sql.Open("sqlite", sqliteTestDSN(path))
 				if err != nil {
 					t.Fatal(err)
 				}

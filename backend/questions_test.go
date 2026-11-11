@@ -69,7 +69,7 @@ func TestEmptyHistoricalAnswerEvidenceDoesNotResolveQuestion(t *testing.T) {
 	question := response["record"].(map[string]any)
 	questionID := question["id"].(string)
 	question["payload"].(map[string]any)["answer"] = " "
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

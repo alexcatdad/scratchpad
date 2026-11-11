@@ -31,7 +31,7 @@ func TestSuggestionReviewAuditFailureRollsBackAcceptance(t *testing.T) {
 			if status != 200 {
 				t.Fatal("detail missing")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -75,7 +75,7 @@ func TestSuggestionReviewRevalidatesMalformedHistoricalContent(t *testing.T) {
 			artifact := suggestionFixture(t, origin, "classification", map[string]any{"text": "Historical derived evidence", "tags": []any{"valid"}})
 			artifact["content"] = map[string]any{"text": "Malformed historical tags", "tags": []any{42}}
 			raw, _ := json.Marshal(artifact)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -203,7 +203,7 @@ func TestSuggestionMissingHistoricalSourceFailsAsInvalidArtifact(t *testing.T) {
 	artifact["sourceRecordIds"] = []any{"rec_missing"}
 	artifact["privacyDependencies"] = map[string]any{"version": 1, "recordIds": []any{"rec_missing"}, "projectIds": []any{"proj_portable"}, "crossProject": false}
 	raw, _ := json.Marshal(artifact)
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,7 +31,7 @@ func TestSearchDecodesOnlyItsSelectedPageAndFilterMatches(t *testing.T) {
 			if status != 201 {
 				t.Fatal("selected relationship fixture failed")
 			}
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -82,7 +82,7 @@ func TestSearchRetainsHistoricalOffsetFractionCursorOrder(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			project := jobProject(t, origin, "Historical offset cursor", false, false)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -125,7 +125,7 @@ func TestSearchEnglishTimestampTieGroupSpansNativeWindows(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
 			origin := startServer(t, path, databaseURL)
 			project := jobProject(t, origin, "Large English timestamp tie", false, false)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
@@ -198,7 +198,7 @@ func TestSearchNativeSelectionPreservesHistoricalCalendarAndPrecision(t *testing
 			origin := startServer(t, path, databaseURL)
 			project := jobProject(t, origin, "Historical timestamp selection", false, false)
 			base := curationCapture(t, origin, project, "Healthy newest evidence")
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}

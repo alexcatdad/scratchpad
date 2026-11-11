@@ -13,7 +13,7 @@ import (
 
 func TestSQLiteJobListingIgnoresMalformedOffPageBodiesAndFailsSelectedBodiesSafely(t *testing.T) {
 	path, databaseURL := portableInstance(t, "sqlite")
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite", sqliteTestDSN(path))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestAIJobListingBoundsHistoryAndKeepsOldActiveJobsReachable(t *testing.T) {
 	for _, engine := range []string{"sqlite", "postgres"} {
 		t.Run(engine, func(t *testing.T) {
 			path, databaseURL := portableInstance(t, engine)
-			driver, dsn := "sqlite", path
+			driver, dsn := "sqlite", sqliteTestDSN(path)
 			if databaseURL != "" {
 				driver, dsn = "pgx", databaseURL
 			}
