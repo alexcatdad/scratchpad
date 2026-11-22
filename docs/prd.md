@@ -16,15 +16,17 @@ happened, what evidence supports it and what remains uncertain.
 The core product works without AI, PostgreSQL, GitHub or repository writes. One
 installation represents one owner with multiple credentials. The dashboard
 supports inspection, curation, audit and configuration; agent workflows use the
-local Go stdio MCP. This is not an issue tracker or autonomous policy authority.
+local `scratchpad` command. This is not an issue tracker or autonomous policy
+authority.
 
 ## Current source product
 
 The Go backend owns authentication, HTTP API/business logic, persistence,
 migrations, projects, records, search/context, auditing, relationships,
 import/export, optional AI/RAG and background jobs. React/TypeScript remains the
-dashboard, built to static files that the Go binary embeds and serves. The Go MCP and capture service and the
-native macOS application remain supported clients. SQLite is the default;
+dashboard, built to static files that the Go binary embeds and serves. The Go
+`scratchpad` command and capture service and the native macOS application remain
+supported clients. SQLite is the default;
 PostgreSQL is an optional engine.
 
 Current source defaults are distinct from published release capabilities and
@@ -127,6 +129,22 @@ Agent events are not captures and the capture invariants do not apply to them:
   it does for captures.
 
 Anything derived from agent events stays a suggestion until the owner accepts it.
+
+### Accepted clarification: agents use the command, not a bundled MCP server (2026-11-22)
+
+The owner retired the bundled stdio MCP server. Local agents use the
+`scratchpad` command shipped in the app, the `scratchpad-memory` skill and agent
+hooks. The command hosts the same tool registry in process, so tool names,
+inputs, validation and results are unchanged. Capture still goes only through
+the local capture service.
+
+- The app bundles `scratchpad`, the capture service and the Keychain helper. It
+  no longer ships `scratchpad-mcp` or the page that wrote MCP client
+  configuration.
+- `scratchpad connect` configures the capture service from a terminal. Like
+  every command, it never starts the service; the app and its login item do.
+- The `scratchpad-mcp` source stays as a test harness and is not a supported
+  client path.
 
 ## Retrieval, curation and portability
 

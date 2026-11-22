@@ -11,7 +11,7 @@ acceptance evidence; source support does not imply a live cutover.
 
 ```text
 Coding agent
-  -> local Go stdio MCP (checkout discovery, provenance, mirror consent)
+  -> local Go `scratchpad` command (checkout discovery, provenance, mirror consent)
   -> private local Go capture service (encrypted queue, receipts, SSH sessions)
   -> HTTPS Go backend (authentication, API, persistence, workers)
        -> SQLite or PostgreSQL
@@ -53,7 +53,7 @@ identity and old-schema refusal. Track acceptance in the
 The native macOS SwiftUI app manages collector configuration, credentials and
 lifecycle. Homebrew cask updates replace the earlier in-app updater direction;
 Developer ID signing, notarization and installed-upgrade acceptance remain
-required. The command-only bundled MCP receives operation results from the
+required. The bundled `scratchpad` command receives operation results from the
 collector, never private keys or session tokens.
 
 ## Identity and authorization

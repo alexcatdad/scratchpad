@@ -5,7 +5,7 @@
 Private, self-hosted memory for developers and coding agents: decisions,
 findings, questions, failures, constraints and project history, with reasoning
 and provenance intact. A Go server (`backend/`) with an embedded React dashboard, a Go
-MCP adapter and capture service (`mcp/`), and a native macOS menu-bar app
+`scratchpad` command and capture service (`mcp/`), and a native macOS menu-bar app
 (Swift 6, macOS 13+, Apple Silicon) that bundles them for the desktop.
 
 Read `docs/prd.md`, `docs/architecture.md` and `docs/api.md`, including accepted
@@ -37,7 +37,8 @@ current authority.
 ## Layout
 
 - `backend/` — Go server: authentication, persistence, migrations, HTTP API, optional AI/RAG.
-- `mcp/` — Go stdio MCP adapter and local capture service.
+- `mcp/` — Go `scratchpad` command, local capture service, and the stdio MCP
+  adapter kept only as a test harness.
 - `macos/` — Swift package: app target, `ScratchpadNative` library, Keychain helper, tests.
 - `apps/web/` — React dashboard: a static Vite and TanStack Router build, written to
   `backend/internal/httpapi/dashboard/dist` and embedded in the Go binary. No
