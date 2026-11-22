@@ -69,7 +69,7 @@ limit. Network access to the Scratchpad server is still required from every devi
 
 ## Linking, replacing and disconnecting
 
-Existing owners link GitHub in **Settings → Access & MCP**. Replacement requires
+Existing owners link GitHub in **Settings → Access & keys**. Replacement requires
 fresh authentication through an existing credential; disconnecting requires fresh
 independent local authentication. Sign in again immediately before these actions:
 freshness is at most five minutes from an actual authentication proof, rather

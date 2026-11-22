@@ -90,7 +90,10 @@ export function Projects({
       {!projects.length && (
         <div className="empty">
           <h2>Start with a project.</h2>
-          <p>Create one here, or let MCP discover your Git repository.</p>
+          <p>
+            Create one here, or let the scratchpad command discover your Git
+            repository.
+          </p>
         </div>
       )}
     </section>

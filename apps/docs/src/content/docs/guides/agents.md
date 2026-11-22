@@ -60,7 +60,7 @@ and independent-key behavior.
 ### Use an independent key
 
 For a key that is not published on GitHub, enroll it in the dashboard first.
-Open **Settings → Connect an MCP key**, paste the OpenSSH public key and choose
+Open **Settings → Access & keys → Connect an SSH key**, paste the OpenSSH public key and choose
 **Create enrollment challenge**. Sign the exact displayed JSON proof **without a
 newline**, using the displayed namespace and the matching private key, then
 paste the armored SSH signature to enroll it. Private keys are never uploaded.

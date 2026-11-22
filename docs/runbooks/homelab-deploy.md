@@ -1,10 +1,14 @@
 # Kubernetes deployment lifecycle
 
 Scratchpad owns its application manifests, migration instructions and recovery
-procedure. No container image is published (see
-[release](release.md#container-image)): the deployment builds the `go-runtime`
-target of the `Dockerfile` from the release tag it deploys. No GitHub workflow
-builds or publishes images.
+procedure. The owner's homelab does not use this procedure: its git-hook build
+runs `nix flake check` and `nix build .#default` on `main` and deploys the
+result (see [release](release.md#container-image)). Release tags do not trigger
+it. The flake also exports a NixOS module (`nixosModules.default`).
+
+This runbook covers a Kubernetes container deployment. No container image is
+published and no GitHub workflow builds images: the deployment builds the
+`go-runtime` target of the `Dockerfile` from the commit it deploys.
 
 The manifests under `deploy/kubernetes/` describe a single-replica application,
 ClusterIP Service and SQLite PVC. They reference operator-managed ConfigMap and
@@ -30,7 +34,7 @@ missing Secret from that existing key file, set `KUBE_CONTEXT`, `KUBE_NAMESPACE`
 run `--apply`. It refuses to replace an existing Secret. This is key adoption,
 not key generation or rotation.
 
-Build the `go-runtime` image from the release tag being deployed, reference it by
+Build the `go-runtime` image from the commit being deployed, reference it by
 an immutable digest, and replace the image placeholder
 in a reviewed local copy of the Kustomize overlay. Apply only after the owner has
 reviewed the target cluster and namespace:
@@ -95,7 +99,7 @@ required to read encrypted settings from the restored snapshot.
 
 ## Release, migration and rollback
 
-1. Select a published digest from the exact source commit whose CI passed. Review
+1. Select the digest of an image built from the exact source commit whose CI passed. Review
    the release's schema and runtime notes. Keep the current image digest and a
    verified pre-change database backup. Back up the database using its native
    tool and store the archive outside the database volume under the existing
@@ -168,8 +172,8 @@ required to read encrypted settings from the restored snapshot.
 
    Require `GET /ready` to report the expected database engine.
 
-5. Verify authenticated browser sign-in, an existing record, controlled MCP
-   read/capture, and persistence after pod restart before reopening client access
+5. Verify authenticated browser sign-in, an existing record, a controlled
+   `scratchpad` command read and capture, and persistence after pod restart before reopening client access
    and resuming the recorded reconciler state.
 6. If rollout or acceptance fails before any new writes, restore the recorded
    image digest and wait for readiness. If the new image migrated schema or

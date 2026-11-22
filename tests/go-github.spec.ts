@@ -272,7 +272,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
       });
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page
-        .getByRole("button", { name: "Access & MCP", exact: true })
+        .getByRole("button", { name: "Access & keys", exact: true })
         .click();
       const access = page.getByRole("region", {
         name: "GitHub access",

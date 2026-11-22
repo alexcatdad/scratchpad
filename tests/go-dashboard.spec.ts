@@ -287,7 +287,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         page.getByText("Profile saved.", { exact: true }),
       ).toBeVisible();
       await page
-        .getByRole("button", { name: "Access & MCP", exact: true })
+        .getByRole("button", { name: "Access & keys", exact: true })
         .click();
       const signingKey = join(dir, "dashboard-ssh-key");
       execFileSync("ssh-keygen", [
@@ -306,7 +306,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
         .join(" ");
       const enrollment = page.locator("section").filter({
         has: page.getByRole("heading", {
-          name: "Connect an MCP key",
+          name: "Connect an SSH key",
           exact: true,
         }),
       });
@@ -344,10 +344,10 @@ for (const engine of ["sqlite", "postgres"] as const) {
         .getByRole("button", { name: "Verify and enroll key", exact: true })
         .click();
       await expect(
-        page.getByText("MCP key enrolled.", { exact: true }),
+        page.getByText("SSH key enrolled.", { exact: true }),
       ).toBeVisible();
       const credential = page.locator("li").filter({
-        has: page.getByText("MCP key", { exact: true }),
+        has: page.getByText("SSH key", { exact: true }),
       });
       await expect(
         credential.getByText("ssh · Independent local credential", {
@@ -406,7 +406,7 @@ for (const engine of ["sqlite", "postgres"] as const) {
       await page.reload();
       await page.getByRole("button", { name: "Settings", exact: true }).click();
       await page
-        .getByRole("button", { name: "Access & MCP", exact: true })
+        .getByRole("button", { name: "Access & keys", exact: true })
         .click();
       await expect(credential.getByText(/Revoked/)).toBeVisible();
       await expect(

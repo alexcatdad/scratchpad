@@ -31,7 +31,7 @@ export function Settings({
     ["profile", "Profile"],
     ["ai", "AI provider"],
     ["defaults", "Project defaults"],
-    ["access", "Access & MCP"],
+    ["access", "Access & keys"],
     ["data", "Import & export"],
     ["about", "About"],
   ] as const;
@@ -189,7 +189,7 @@ export function Settings({
           </ul>
         </section>
         <section className="settings-section">
-          <h2>Connect an MCP key</h2>
+          <h2>Connect an SSH key</h2>
           <p>
             Enroll a public SSH key and prove possession. Your private key stays
             on your machine.
@@ -203,7 +203,7 @@ export function Settings({
                   namespace: string;
                 }>(
                   "/auth/credentials/challenge",
-                  post({ publicKey, label: "MCP key" }),
+                  post({ publicKey, label: "SSH key" }),
                 );
                 setChallenge({
                   ...incoming,
@@ -245,7 +245,7 @@ export function Settings({
                   setSignature("");
                   setPublicKey("");
                   await refresh();
-                  setNotice("MCP key enrolled.");
+                  setNotice("SSH key enrolled.");
                 });
               }}
             >

@@ -362,7 +362,9 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
     page.getByRole("heading", { name: "Project memory", exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Access & keys", exact: true })
+    .click();
   await expect(
     page.getByRole("heading", { name: "GitHub access", exact: true }),
   ).toBeVisible();
@@ -666,7 +668,9 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
   ).toBeVisible();
   available = true;
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Access & keys", exact: true })
+    .click();
   await page
     .getByRole("button", { name: "Synchronize keys", exact: true })
     .click();
@@ -733,7 +737,9 @@ test("GitHub owner onboarding, cached MCP access, revocation and recovery preser
     })
     .toMatchObject({ status: 200, body: { authenticated: true } });
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Access & keys", exact: true })
+    .click();
   await expect(
     page.getByText("@synthetic-recovered-owner", { exact: true }),
   ).toBeVisible();
