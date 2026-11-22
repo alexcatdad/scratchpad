@@ -6,7 +6,6 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case captures = "Captures"
     case connection = "Connection"
-    case tools = "AI Tools"
     case general = "General"
     var id: Self { self }
     var icon: String {
@@ -14,7 +13,6 @@ enum WorkspacePage: String, CaseIterable, Identifiable {
         case .overview: "house"
         case .captures: "tray.full"
         case .connection: "key"
-        case .tools: "chevron.left.forwardslash.chevron.right"
         case .general: "gearshape"
         }
     }
@@ -53,7 +51,6 @@ struct WorkspaceView: View {
             case .overview: OverviewPage()
             case .captures: CapturesPage()
             case .connection: ConnectionPage()
-            case .tools: ToolsPage()
             case .general: GeneralPage()
             }
         }

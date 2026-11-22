@@ -8,7 +8,6 @@ const output = join(root, "dist");
 const site = "https://alexcatdad.github.io/scratchpad";
 const priority = [
   "guides/agents",
-  "guides/mcp",
   "guides/codex",
   "guides/chatgpt",
   "guides/installation",
@@ -96,8 +95,8 @@ for (const document of documents) {
   await writeFile(target, document.markdown);
 }
 
-const intro = `# Scratchpad\n\n> Private, self-hosted project memory for developers and coding agents. Capture decisions, findings, Q&A, failures, constraints and project state with immutable evidence and explicit provenance.\n\nScratchpad uses a local stdio MCP binary connected to a central HTTP API. The server URL is not a hosted MCP endpoint. Discover the running binary's exact tool schemas through MCP tools/list. AI is optional; capture and deterministic retrieval work without it. These exports contain public product documentation only.\n`;
-const index = `${intro}\n## Start here\n\n- [Complete documentation bundle](${site}/llms-full.txt): All exported Markdown guides in one document, with MCP integration first.\n- [OpenAPI contract](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json): Implemented HTTP routes and schemas.\n\n## Guides and reference\n\n${documents.map((document) => `- [${document.title}](${site}/${document.slug}.md): ${document.description}`).join("\n")}\n`;
+const intro = `# Scratchpad\n\n> Private, self-hosted project memory for developers and coding agents. Capture decisions, findings, Q&A, failures, constraints and project state with immutable evidence and explicit provenance.\n\nCoding agents use the local scratchpad command, which talks to a capture service on the owner's Mac; the service connects to a central HTTP API. The server URL is not a hosted MCP endpoint. Discover the installed version's exact tool schemas with scratchpad tools. AI is optional; capture and deterministic retrieval work without it. These exports contain public product documentation only.\n`;
+const index = `${intro}\n## Start here\n\n- [Complete documentation bundle](${site}/llms-full.txt): All exported Markdown guides in one document, with agent integration first.\n- [OpenAPI contract](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json): Implemented HTTP routes and schemas.\n\n## Guides and reference\n\n${documents.map((document) => `- [${document.title}](${site}/${document.slug}.md): ${document.description}`).join("\n")}\n`;
 await writeFile(join(output, "llms.txt"), index);
 await writeFile(
   join(output, "llms-full.txt"),

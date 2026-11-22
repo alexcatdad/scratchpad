@@ -1,8 +1,8 @@
 package main
 
-// connect and status configure and inspect the local capture service from a
-// terminal or agent, without the tray app. They use the same discovery
-// sources, server eligibility check and possession proof as the app.
+// connect configures the running capture service from a terminal or agent,
+// without the app's Connection page. It uses the same discovery sources,
+// server eligibility check and possession proof as the app.
 
 import (
 	"bytes"
@@ -28,8 +28,7 @@ import (
 )
 
 const connectUsage = `Usage:
-  scratchpad-mcp connect --server <https-origin> [--public-key <file.pub>] [--agent-socket <path>]
-  scratchpad-mcp status`
+  scratchpad connect --server <https-origin> [--public-key <file.pub>] [--agent-socket <path>]`
 
 type keyCandidate struct {
 	publicKey   string // "<type> <base64>", no comment
@@ -38,19 +37,19 @@ type keyCandidate struct {
 	agentSocket string
 }
 
-func runConnect(args []string) int {
+func runConnect(ctx context.Context, args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("connect", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	server := fs.String("server", "", "")
 	publicKeyFile := fs.String("public-key", "", "")
 	agentSocket := fs.String("agent-socket", "", "")
 	if err := fs.Parse(args); err != nil || *server == "" || fs.NArg() != 0 {
-		fmt.Fprintln(os.Stderr, connectUsage)
+		fmt.Fprintln(stderr, connectUsage)
 		return 2
 	}
 	origin, err := serverOrigin(*server)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(stderr, err)
 		return 2
 	}
 	sockets := agentSockets(*agentSocket)
@@ -58,7 +57,7 @@ func runConnect(args []string) int {
 	if *publicKeyFile != "" {
 		key, err := readPublicKeyFile(*publicKeyFile, firstOr(sockets, ""))
 		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
+			fmt.Fprintln(stderr, err)
 			return 1
 		}
 		candidates = []keyCandidate{key}
@@ -66,62 +65,42 @@ func runConnect(args []string) int {
 		candidates = discoverKeys(sockets)
 	}
 	if len(candidates) == 0 {
-		fmt.Fprintln(os.Stderr, "No SSH public keys found in the SSH agent or ~/.ssh/*.pub. Load your key with ssh-add and retry.")
+		fmt.Fprintln(stderr, "No SSH public keys found in the SSH agent or ~/.ssh/*.pub. Load your key with ssh-add and retry.")
 		return 1
 	}
-	fmt.Printf("Checking %d local key(s) with %s\n", len(candidates), origin)
+	fmt.Fprintf(stdout, "Checking %d local key(s) with %s\n", len(candidates), origin)
 	eligible, err := eligibleKeys(origin, candidates)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(stderr, err)
 		return 1
 	}
 	if len(eligible) == 0 {
-		fmt.Fprintln(os.Stderr, "The server accepted none of these keys. Link GitHub in the dashboard (Settings) and wait for key sync, or enroll a key manually.")
+		fmt.Fprintln(stderr, "The server accepted none of these keys. Link GitHub in the dashboard (Settings) and wait for key sync, or enroll a key manually.")
 		return 1
 	}
 	key := eligible[0]
 	if len(eligible) > 1 {
-		fmt.Printf("%d keys accepted; using %s (%s). Pass --public-key to choose another.\n", len(eligible), key.fingerprint, key.source)
+		fmt.Fprintf(stdout, "%d keys accepted; using %s (%s). Pass --public-key to choose another.\n", len(eligible), key.fingerprint, key.source)
 	}
 	cfg, err := keyConfiguration(origin, key)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(stderr, err)
 		return 1
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	socketPath := os.Getenv("SCRATCHPAD_SERVICE_SOCKET")
-	if err := ensureCollector(ctx, socketPath, launchCollector); err != nil {
-		fmt.Fprintln(os.Stderr, "Scratchpad capture service is not running. Start it from the tray app, then retry.")
-		return 1
-	}
-	fmt.Printf("Proving possession of %s; approve or unlock your SSH agent if asked.\n", key.fingerprint)
-	result, err := localcapture.NewClient(socketPath).VerifyConfiguration(ctx, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Connection failed: %v\n", err)
-		return 1
-	}
-	fmt.Printf("Connected and saved.\n  server:     %s\n  credential: %s\n  key:        %s\n  verified:   %s\n", result.ServerURL, result.CredentialID, key.fingerprint, result.VerifiedAt)
-	return 0
-}
-
-func runStatus() int {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	client := localcapture.NewClient(os.Getenv("SCRATCHPAD_SERVICE_SOCKET"))
-	status, err := client.Status(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Capture service unavailable: %v\n", err)
+	if err := requireService(ctx, client); err != nil {
+		fmt.Fprintf(stderr, "scratchpad: %v\n", err)
 		return 1
 	}
-	cfg, err := client.GetConfiguration(ctx)
-	out := map[string]any{"service": status}
-	if err == nil {
-		out["configuration"] = cfg
+	fmt.Fprintf(stdout, "Proving possession of %s; approve or unlock your SSH agent if asked.\n", key.fingerprint)
+	result, err := client.VerifyConfiguration(ctx, cfg)
+	if err != nil {
+		fmt.Fprintf(stderr, "Connection failed: %v\n", err)
+		return 1
 	}
-	enc := json.NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(out)
+	fmt.Fprintf(stdout, "Connected and saved.\n  server:     %s\n  credential: %s\n  key:        %s\n  verified:   %s\n", result.ServerURL, result.CredentialID, key.fingerprint, result.VerifiedAt)
 	return 0
 }
 

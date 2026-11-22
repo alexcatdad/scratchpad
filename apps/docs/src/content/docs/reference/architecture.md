@@ -4,11 +4,12 @@ description: Current Go backend, embedded dashboard and local capture boundaries
 ---
 
 Current source is one Go server that embeds the React/TypeScript dashboard as
-static files.
-Published releases and installed deployments have separate acceptance evidence.
+static files, and a macOS app that bundles the local capture service and the
+`scratchpad` command. Published releases and installed deployments have
+separate acceptance evidence.
 
 ```text
-Coding agent -> local Go stdio MCP
+Coding agent -> local Go `scratchpad` command
   -> private Go capture service / encrypted queue
   -> HTTPS Go API -> SQLite or PostgreSQL
        -> embedded static React dashboard
@@ -23,16 +24,25 @@ No Node process runs in a deployment. The page keeps its state in the query
 string and fetches all data from the API in the browser; the server's access
 log records request paths, never query strings.
 
-The native macOS app owns collector configuration, credentials and lifecycle.
-Its bundled MCP requires only its command path. Captures first enter encrypted
-durable local storage: pending receipts are local; delivered receipts retain
-central IDs. Offline reads fail explicitly. Optional repository mirrors follow
-central persistence and never commit/push automatically.
+The native macOS app owns collector configuration, credentials and lifecycle;
+the capture service starts from the app or its login item, never from the
+`scratchpad` command. Each command call is a short process that runs the
+installed tool registry and asks the capture service for the work. It receives
+operation results, never private keys or session tokens. Captures first enter
+encrypted durable local storage: pending receipts are local; delivered receipts
+retain central IDs. Offline reads fail explicitly. Optional repository mirrors
+follow central persistence and never commit or push automatically.
 
-SQLite is the default. PostgreSQL and pgvector passage RAG are optional. Core
-memory works without AI; background jobs and schedules are database-backed.
-Provider secrets require a separately retained installation-key file. Restoring
-encrypted settings requires that same key, without replacing existing credentials.
+Agent hooks for Claude Code and Codex call `scratchpad hook`, which keeps only
+mistake signals. The capture service redacts and queues these agent events
+separately from captures, and the server stores them only for projects that opt
+in.
+
+SQLite is the default. PostgreSQL and pgvector passage retrieval are optional.
+Core memory works without AI; background jobs and schedules are
+database-backed. Provider secrets require a separately retained installation-key
+file. Restoring encrypted settings requires that same key, without replacing
+existing credentials.
 
 | Layer   | Meaning                                | Change policy                                             |
 | ------- | -------------------------------------- | --------------------------------------------------------- |
@@ -45,7 +55,7 @@ proof, administrator recovery and optional GitHub owner OAuth. GitHub App identi
 users/teams, project membership, user-bound agent credentials and permission-aware
 retrieval are **planned P1 work**, not current multi-user authorization.
 
-Scratchpad owns application images, manifests, migrations, credential integration
+Scratchpad owns its container build, manifests, migrations, credential integration
 and recovery procedures. Generic platform infrastructure remains external.
 Production cutover is separately authorized after disposable restore validation;
 a main-branch merge does not establish deployed acceptance.

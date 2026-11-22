@@ -23,7 +23,7 @@ codesign --verify --strict --deep "$app"
 [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist") == "$MACOS_SHORT_VERSION" ]]
 [[ $(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$app/Contents/Info.plist") == "$MACOS_BUNDLE_VERSION" ]]
 [[ $(/usr/libexec/PlistBuddy -c 'Print ReleaseVersion' "$app/Contents/Info.plist") == "$RELEASE_VERSION" ]]
-[[ $("$app/Contents/Helpers/scratchpad-mcp" --version) == "scratchpad-mcp ${RELEASE_VERSION}" ]]
+[[ ! -e "$app/Contents/Helpers/scratchpad-mcp" ]]
 [[ $("$app/Contents/Helpers/scratchpad" --version) == "scratchpad ${RELEASE_VERSION}" ]]
 "$app/Contents/Helpers/scratchpad-service" --version | grep -q "^scratchpad-service ${RELEASE_VERSION} "
 printf 'Validated Scratchpad.app %s\n' "$RELEASE_VERSION"

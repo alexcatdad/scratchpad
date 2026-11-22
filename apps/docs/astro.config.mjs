@@ -71,7 +71,6 @@ export default defineConfig({
               slug: "guides/optional-extensions",
             },
             { label: "Agent integration", slug: "guides/agents" },
-            { label: "MCP & project context", slug: "guides/mcp" },
             { label: "Connect Codex", slug: "guides/codex" },
             { label: "Connect ChatGPT on macOS", slug: "guides/chatgpt" },
             {

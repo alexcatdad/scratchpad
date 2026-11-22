@@ -78,8 +78,8 @@ observations, durable answers, failures, constraints and transitions to their
 respective typed tools. An agent recommendation is `suggested` or `inferred` as
 appropriate; the act of recording it does not make it an accepted owner decision.
 
-Use absolute `workingDirectory` when the MCP launch folder is not reliably the
-active checkout, or a confirmed `projectId`. Inspect returned scope. Reuse an
+Use absolute `workingDirectory` when the command's current folder is not reliably
+the active checkout, or a confirmed `projectId`. Inspect returned scope. Reuse an
 already confirmed identity rather than asking again; unresolved ambiguity still
 needs owner input. Worktrees share project identity and retain Git provenance.
 
@@ -115,16 +115,16 @@ with the installed skill; links into the Scratchpad source checkout will fail
 when the skill is used in another project. Link public documentation for deeper
 setup details and keep runtime discovery authoritative for tool schemas.
 
-Keep core invariants in MCP server instructions for clients without skill support.
-Use the skill for orchestration and the public docs for setup and reference.
+Keep core invariants in the tool descriptions as well, so `scratchpad tools`
+output carries them. Use the skill
+for orchestration and the public docs for setup and reference.
 Update these together when behavior changes, rather than copying `llms-full.txt`
 into a skill or embedding full API schemas in its instructions.
 
-For reusable bundled distribution, a plugin can later package this skill with MCP
-configuration. The current local stdio authentication and owner-specific key
-paths still need setup; a skill or plugin does not turn the HTTP API into a remote
-MCP endpoint. Plugin implementation is a separate follow-up, not required to
-evaluate the first skill.
+The skill drives the `scratchpad` command; the app no longer ships an MCP server.
+Connecting the capture service and owner-specific keys still needs setup; a skill
+or plugin does not turn the HTTP API into a remote MCP endpoint. Plugin packaging
+is a separate follow-up, not required to evaluate the skill.
 
 ## Implementation and verification
 
@@ -175,7 +175,8 @@ before copying, preserve any existing installation, and copy the complete folder
 Compare installed file bytes with the source. Do not install a duplicate in the
 repository. The current conversation's loaded skill catalog is not proof of
 discovery after installation; confirm the skill on the next turn or restart if
-the client does not refresh. Installation does not configure or prove MCP access.
+the client does not refresh. Installation does not configure or prove access to
+the capture service.
 
 ### Evidence from 5 October 2026
 

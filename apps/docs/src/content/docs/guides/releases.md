@@ -9,14 +9,15 @@ Each release is one archive, `scratchpad-<version>-darwin-arm64.zip`, holding
 `Scratchpad.app` for Apple silicon on macOS 13 or later. The app bundles
 everything a Mac needs:
 
-| Helper                                | Purpose                                              |
-| ------------------------------------- | ---------------------------------------------------- |
-| `Contents/Helpers/scratchpad`         | The command coding agents use.                       |
-| `Contents/Helpers/scratchpad-mcp`     | The stdio MCP server for MCP-only clients.           |
-| `Contents/Helpers/scratchpad-service` | The capture service and its encrypted offline queue. |
+| Helper                                     | Purpose                                                   |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `Contents/Helpers/scratchpad`              | The command coding agents use.                            |
+| `Contents/Helpers/scratchpad-service`      | The capture service and its encrypted offline queue.      |
+| `Contents/Helpers/scratchpad-keychain.app` | Keeps the offline queue's encryption key in the Keychain. |
 
-Each helper reports the release version with `--version`. The app shows the same
-version at the bottom of its menu bar panel and in **Settings → About**.
+`scratchpad` and `scratchpad-service` report the release version with
+`--version`. The app shows the same version at the bottom of its menu bar panel
+and in **General**. Releases no longer include the `scratchpad-mcp` server.
 
 Versions are daily CalVer, `YYYY.MM.DD.N`, with tags `vYYYY.MM.DD.N`. Releases
 are immutable: published assets are never replaced and tags never move.

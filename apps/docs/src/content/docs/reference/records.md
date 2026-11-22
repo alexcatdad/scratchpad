@@ -23,9 +23,9 @@ Retry identity is persistent and scoped to the authenticated credential. Compari
 
 Raw records are immutable. An edit to mutable knowledge must include a revision precondition. If another edit has already changed that revision, return a conflict rather than overwriting it. The initial design requires no automatic merge.
 
-## Initial HTTP surface
+## HTTP surface
 
-The implementation exposes MCP challenge verification, project resolution and listing, record creation and retrieval, search, relationships, native import/export, and browser credential enrollment under `/api/v1`.
+The implementation exposes, under `/api/v1`, SSH challenge verification for machines (`/auth/mcp/challenge` and `/auth/mcp/verify`), passkey and optional GitHub sign-in, credential enrollment and revocation, project resolution, listing, settings and context, record creation and retrieval, search, curation, relationships and evidence, native import/export, owner profile, agent events, and optional AI jobs, suggestions, semantic search and passage retrieval. `/health` and `/ready` sit outside `/api/v1`.
 
 Use the implementation and tests to verify exact request and response formats. The [API baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md) describes the larger contract; it is not a claim that every listed endpoint is already live.
 
@@ -39,4 +39,4 @@ Curated title, tags, summary, and archive status are editable metadata. Revision
 
 ## Machine-readable API
 
-The [OpenAPI 3.1 document](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) describes actual implemented routes, cookie/bearer authentication, request schemas and stable error envelopes. See [API implementation extensions](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) for optional AI and PostgreSQL behavior. Generated clients are optional; the HTTP contract remains the boundary between the Go MCP and Go backend.
+The [OpenAPI 3.1 document](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) describes actual implemented routes, cookie/bearer authentication, request schemas and stable error envelopes. See [API implementation extensions](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) for optional AI and PostgreSQL behavior. Generated clients are optional; the HTTP contract remains the boundary between the local capture service and the Go backend.

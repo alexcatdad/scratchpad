@@ -131,20 +131,24 @@ func (f fakeStatus) Status(context.Context) (localcapture.ServiceStatus, error) 
 	return localcapture.ServiceStatus{Lifecycle: "running"}, f.err
 }
 
+func (f fakeStatus) GetConfiguration(context.Context) (localcapture.ServiceConfiguration, error) {
+	return localcapture.ServiceConfiguration{ServerURL: "https://memory.example.test"}, nil
+}
+
 func TestRequireServiceNeverStartsTheCollector(t *testing.T) {
 	ctx := context.Background()
 	if err := requireService(ctx, fakeStatus{}); err != nil {
 		t.Fatal(err)
 	}
 	err := requireService(ctx, fakeStatus{err: localcapture.ErrServiceStoppedSentinel})
-	if err == nil || !strings.Contains(err.Error(), "open Scratchpad") {
+	if err == nil || !strings.Contains(err.Error(), "Start Capture Service") {
 		t.Fatalf("stopped service should point at the app, got %v", err)
 	}
 	if err := requireService(ctx, fakeStatus{err: errors.New("boom")}); err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Fatalf("other errors should be wrapped, got %v", err)
 	}
 	var out, errOut bytes.Buffer
-	if code := printStatus(ctx, fakeStatus{}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "running") {
+	if code := printStatus(ctx, fakeStatus{}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "running") || !strings.Contains(out.String(), "memory.example.test") {
 		t.Fatalf("status: %d %q", code, out.String())
 	}
 	if code := printStatus(ctx, fakeStatus{err: errors.New("down")}, &out, &errOut); code != 1 {

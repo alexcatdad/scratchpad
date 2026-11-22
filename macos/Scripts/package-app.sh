@@ -110,7 +110,6 @@ fi
 
 mkdir -p "$stage_root/helpers"
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-service" ./cmd/scratchpad-service
-go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version -X main.buildNumber=$build_number" -o "$stage_root/helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
 go build -C "$repo_root/mcp" -ldflags "-X main.version=$release_version" -o "$stage_root/helpers/scratchpad" ./cmd/scratchpad
 
 mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS" "$candidate/Contents/Library/LaunchAgents" "$candidate/Contents/Resources"
@@ -118,7 +117,6 @@ cp "$bin/Scratchpad" "$candidate/Contents/MacOS/Scratchpad"
 cp "$bin/scratchpad-keychain" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"
 cp "$repo_root/macos/Resources/KeychainHelper-Info.plist" "$candidate/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 cp "$stage_root/helpers/scratchpad-service" "$candidate/Contents/Helpers/scratchpad-service"
-cp "$stage_root/helpers/scratchpad-mcp" "$candidate/Contents/Helpers/scratchpad-mcp"
 cp "$stage_root/helpers/scratchpad" "$candidate/Contents/Helpers/scratchpad"
 cp "$repo_root/macos/Resources/Info.plist" "$candidate/Contents/Info.plist"
 cp "$repo_root/macos/Resources/ScratchpadAppIcon.icns" "$candidate/Contents/Resources/ScratchpadAppIcon.icns"
@@ -147,7 +145,7 @@ if [ -n "${SIGNING_IDENTITY:-}" ]; then
   codesign --force --options runtime --timestamp --entitlements "$stage_root/keychain-access.entitlements" --sign "$SIGNING_IDENTITY" "$candidate/Contents/Helpers/scratchpad-keychain.app"
   helper_team=$(codesign -dv --verbose=4 "$candidate/Contents/Helpers/scratchpad-keychain.app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
   [ "$helper_team" = "$profile_team" ] || { echo "KEYCHAIN_PROFILE team does not match SIGNING_IDENTITY" >&2; exit 1; }
-  for helper in "$candidate/Contents/Helpers/scratchpad-mcp" "$candidate/Contents/Helpers/scratchpad-service" "$candidate/Contents/Helpers/scratchpad"; do
+  for helper in "$candidate/Contents/Helpers/scratchpad-service" "$candidate/Contents/Helpers/scratchpad"; do
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$helper"
   done
   codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$candidate"

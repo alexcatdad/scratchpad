@@ -3,24 +3,26 @@ title: Contributing
 description: Make focused changes, verify them, and keep project memory useful.
 ---
 
-Scratchpad is in active early development. Start with the repository README, its runbooks, and the [architecture baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/architecture.md).
+Scratchpad is in active development. Start with the repository README, its runbooks, and the [architecture baseline](https://github.com/alexcatdad/scratchpad/blob/main/docs/architecture.md).
 
 ## Working agreements
 
 - Keep the application and documentation in English.
-- Log important decisions in `decisions.jsonl`, including rationale and evidence.
-- Document repeatable multi-command activities in a runbook.
+- Record important decisions, with rationale and evidence, in the project's Scratchpad memory; without access to it, state the decision in the pull request description. `decisions.jsonl` holds the historical log until it is imported; do not add new entries to it.
+- Document repeatable multi-command activities in a runbook under `docs/runbooks/`.
+- Branch from `main`, open a pull request back to `main`, and use conventional commit messages.
 - Make focused commits with meaningful validation.
 - Use maintained components and verify current stable versions before adding dependencies.
 - Preserve other contributors' work and keep concurrent changes scoped.
 
 ## Verification
 
-Changes must pass the repository lint, formatting, type, test, and build checks appropriate to their language and surface. `task check` runs the full local gate; pull requests also run the `Validation` workflow on GitHub. Follow the root scripts rather than assuming that a documentation build also verifies the API or MCP.
+Changes must pass the repository lint, formatting, type, test, and build checks appropriate to their language and surface. `task check` runs the full local gate: npm, Go and Swift lint, build and tests with coverage floors (`SKIP_SWIFT=1` skips Swift on Linux). `task security` runs the Go and npm vulnerability scans. Pull requests also run the `Validation` workflow on GitHub. Follow the root scripts rather than assuming that a documentation build also verifies the API, the `scratchpad` command or the app.
 
 For documentation changes, run:
 
 ```sh
+npm run lint
 npm run check --workspace @scratchpad/docs
 npm run build --workspace @scratchpad/docs
 ```
@@ -35,4 +37,4 @@ Do not publish private attachment paths, client examples, captured credentials, 
 
 ## Release claims
 
-Build, test, merge, publish, deploy, and operational acceptance are separate outcomes. Report exactly which were verified. Native signing/notarization, release artifacts, container publication, and GitHub Pages deployment each need their own evidence.
+Build, test, merge, publish, deploy, and operational acceptance are separate outcomes. Report exactly which were verified. Native signing/notarization, release artifacts, the Homebrew cask, server deployment, and GitHub Pages deployment each need their own evidence.

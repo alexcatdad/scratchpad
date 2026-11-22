@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"bytes"
+	"context"
+	"testing"
+)
 
 func TestServerOrigin(t *testing.T) {
 	for raw, want := range map[string]string{
@@ -28,5 +32,14 @@ func TestParsePublicKeyMatchesSSHKeygenFingerprint(t *testing.T) {
 	}
 	if _, ok := parsePublicKey("not a key", "test", ""); ok {
 		t.Fatal("accepted invalid key")
+	}
+}
+
+func TestConnectRejectsBadArgumentsBeforeTouchingKeys(t *testing.T) {
+	for _, args := range [][]string{{}, {"--server", "http://memory.example.com"}, {"--server", "https://memory.example.com", "extra"}} {
+		var out, errOut bytes.Buffer
+		if code := run(context.Background(), append([]string{"connect"}, args...), nil, &out, &errOut, nil); code != 2 || out.Len() != 0 {
+			t.Errorf("connect %v = %d, stdout %q", args, code, out.String())
+		}
 	}
 }

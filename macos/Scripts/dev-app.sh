@@ -18,7 +18,7 @@ Build the Scratchpad menu-bar app into macos/.build/dev/Scratchpad Dev.app.
 The default only builds and replaces that workspace bundle. --run explicitly
 restarts only that dev bundle after the replacement is ready.
 On first use, --base-app must point to a complete signed Scratchpad.app bundle.
---rebuild-helpers also builds the current Go MCP and service into the candidate
+--rebuild-helpers also builds the current Go service and CLI into the candidate
 and ad-hoc signs those two helpers. The default preserves the seed helpers.
 EOF
 }
@@ -111,7 +111,6 @@ case "$seed_id" in
 esac
 for required in \
   "$seed_app/Contents/Helpers/scratchpad-service" \
-  "$seed_app/Contents/Helpers/scratchpad-mcp" \
   "$seed_app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"; do
   [ -e "$required" ] || { echo "base app is missing required bundled code: $required" >&2; exit 1; }
 done
@@ -146,6 +145,8 @@ trap cleanup EXIT HUP INT TERM
 "$ditto_bin" "$seed_app" "$candidate"
 # Remove the retired updater when reusing an older dev bundle as the seed.
 rm -rf "$candidate/Contents/Frameworks/Sparkle.framework"
+# Remove the retired MCP helper when the seed still ships it.
+rm -f "$candidate/Contents/Helpers/scratchpad-mcp"
 mkdir -p "$candidate/Contents/MacOS" "$candidate/Contents/Resources"
 cp "$source_executable" "$candidate/Contents/MacOS/Scratchpad"
 cp "$repo_root/macos/Resources/ScratchpadAppIcon.icns" "$candidate/Contents/Resources/ScratchpadAppIcon.icns"
@@ -166,9 +167,9 @@ if [ "$rebuild_helpers" -eq 1 ]; then
   "$go_bin" build -C "$repo_root/mcp" -ldflags '-X main.version=dev -X main.buildNumber=dev' \
     -o "$candidate/Contents/Helpers/scratchpad-service" ./cmd/scratchpad-service
   "$go_bin" build -C "$repo_root/mcp" -ldflags '-X main.version=dev -X main.buildNumber=dev' \
-    -o "$candidate/Contents/Helpers/scratchpad-mcp" ./cmd/scratchpad-mcp
+    -o "$candidate/Contents/Helpers/scratchpad" ./cmd/scratchpad
   "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/Helpers/scratchpad-service"
-  "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/Helpers/scratchpad-mcp"
+  "$codesign_bin" --force --sign - --options 0 "$candidate/Contents/Helpers/scratchpad"
 fi
 
 # Only rebuilt components receive local ad-hoc signatures, with no hardened

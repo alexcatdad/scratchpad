@@ -1905,14 +1905,14 @@ without promoting scores or historical records into accepted policy.
 
 ## Go replacement addition: durable tray capture receipts
 
-The bundled stdio MCP sends all eight `record_*` capture tools through the
+The bundled `scratchpad` command sends all eight `record_*` capture tools through the
 private local capture service. `saved_pending` confirms local durable intake
 only: its receipt has no central record or project IDs. `delivered` confirms
 central persistence and includes the durable receipt plus `centralRecordId` and
 `centralProjectId`. Full `record` and `project` objects are optional because a
 service restart can retain delivery state without retaining its transient HTTP
 response; use `get_capture_receipt` for delivery state and `get_record` for the
-central record. MCP text and structured output share this contract. The MCP
+central record. Text and structured output share this contract. The command
 does not fall back to direct central capture when the local service is
 unavailable.
 
@@ -1929,13 +1929,13 @@ original input replays the stored, redacted capture; it is not a conflict.
 
 ### App-owned MCP transport
 
-The bundled MCP requires only its command path. Its existing tools and central
+The bundled `scratchpad` command needs no server configuration. Its tools and central
 HTTP contracts are unchanged; the collector now performs their authenticated
 server requests. The private IPC `online_request` permits only the existing
 read, project-resolution and optional AI tool routes. Capture creation and
 server authentication/administration routes cannot use this operation. Online
 requests have a 120-second bound and the existing 4 MiB IPC frame limit; oversized
-responses report `RESPONSE_TOO_LARGE`. The MCP receives operation results, never
+responses report `RESPONSE_TOO_LARGE`. The command receives operation results, never
 SSH keys or session tokens. Unavailable collector or server reads fail explicitly
 without bypassing the collector. Capture and receipt semantics are unchanged.
 
