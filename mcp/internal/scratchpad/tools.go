@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/alexcatdad/scratchpad/mcp/internal/localcapture"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -25,8 +27,23 @@ type Common struct {
 	Authority        string `json:"authority" jsonschema:"explicit, observed, inferred, derived, or suggested"`
 	Confidence       string `json:"confidence" jsonschema:"high, medium, low, or unknown"`
 	ConfidenceReason string `json:"confidenceReason,omitempty"`
-	HappenedAt       string `json:"happenedAt,omitempty"`
+	HappenedAt       string `json:"happenedAt,omitempty" jsonschema:"UTC timestamp such as 2026-11-16T20:46Z or 2026-11-16T20:46:12Z; omit when unknown"`
 }
+
+// happenedAtPattern matches the UTC timestamps the server accepts.
+var happenedAtPattern = regexp.MustCompile(`^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(?::[0-9]{2}(?:\.[0-9]+)?)?Z$`)
+
+func validHappenedAt(at string) bool {
+	if !happenedAtPattern.MatchString(at) {
+		return false
+	}
+	if _, err := time.Parse(time.RFC3339Nano, at); err == nil {
+		return true
+	}
+	_, err := time.Parse("2006-01-02T15:04Z", at)
+	return err == nil
+}
+
 type CaptureResult struct {
 	Outcome          string         `json:"outcome"`
 	Receipt          map[string]any `json:"receipt"`
@@ -67,6 +84,9 @@ func (c *Client) capture(ctx context.Context, kind string, common Common, payloa
 	out := CaptureResult{}
 	if strings.TrimSpace(common.RequestID) == "" {
 		return nil, out, errors.New("requestId must not be blank")
+	}
+	if common.HappenedAt != "" && !validHappenedAt(common.HappenedAt) {
+		return nil, out, errors.New("happenedAt must be a UTC timestamp such as 2026-11-16T20:46Z; omit it when the time is unknown")
 	}
 	if c.CaptureService == nil {
 		return nil, out, errors.New("local capture service is unavailable")

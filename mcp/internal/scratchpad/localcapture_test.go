@@ -126,6 +126,32 @@ func TestCaptureFailsClosedWhenLocalServiceUnavailable(t *testing.T) {
 	}
 }
 
+func TestCaptureRejectsHappenedAtTheServerWouldRefuse(t *testing.T) {
+	for _, at := range []string{"2026-11-16T20:46Z", "2026-11-16T20:46:12Z", "2026-11-16T20:46:12.5Z"} {
+		if !validHappenedAt(at) {
+			t.Errorf("valid happenedAt %q was refused", at)
+		}
+	}
+	for _, at := range []string{"2026-11-16", "2026-11-16T20:46:12+02:00", "2026-13-40T20:46Z", "yesterday"} {
+		if validHappenedAt(at) {
+			t.Errorf("invalid happenedAt %q was accepted", at)
+		}
+	}
+	client, err := NewClient(Config{URL: "http://localhost:3124", WorkingDirectory: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A nil embedded service panics if the capture reaches the queue.
+	client.CaptureService = conflictCaptureService{}
+	_, _, err = client.capture(context.Background(), "decision", Common{
+		Scope: Scope{ProjectID: "project-synthetic"}, RequestID: "bare-date",
+		Title: "Synthetic dated capture", Authority: "observed", Confidence: "high", HappenedAt: "2026-11-16",
+	}, DecisionPayload{Decision: "Refuse before queueing"})
+	if err == nil || !strings.Contains(err.Error(), "happenedAt") {
+		t.Fatalf("bare date error = %v", err)
+	}
+}
+
 type conflictCaptureService struct {
 	localcapture.Service
 	configuration localcapture.ServiceConfiguration
