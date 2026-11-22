@@ -141,7 +141,7 @@ func TestRequireServiceNeverStartsTheCollector(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := requireService(ctx, fakeStatus{err: localcapture.ErrServiceStoppedSentinel})
-	if err == nil || !strings.Contains(err.Error(), "open Scratchpad") {
+	if err == nil || !strings.Contains(err.Error(), "Start Capture Service") {
 		t.Fatalf("stopped service should point at the app, got %v", err)
 	}
 	if err := requireService(ctx, fakeStatus{err: errors.New("boom")}); err == nil || !strings.Contains(err.Error(), "boom") {

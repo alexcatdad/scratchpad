@@ -100,7 +100,7 @@ func requireService(ctx context.Context, client statusClient) error {
 	defer cancel()
 	if _, err := client.Status(probe); err != nil {
 		if errors.Is(err, localcapture.ErrServiceStoppedSentinel) {
-			return errors.New("the Scratchpad capture service is not running; open Scratchpad (open -a Scratchpad) to start it, then retry")
+			return errors.New("the Scratchpad capture service is not running; choose Start Capture Service in the Scratchpad menu bar panel, then retry")
 		}
 		return fmt.Errorf("the Scratchpad capture service is unavailable; open Scratchpad to inspect it: %w", err)
 	}
