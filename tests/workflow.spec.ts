@@ -516,7 +516,7 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
   const key = resolve(temporary, "identity");
   command("ssh-keygen", ["-q", "-t", "ed25519", "-N", "", "-f", key]);
   await page.getByRole("button", { name: "Settings", exact: true }).click();
-  await page.getByRole("button", { name: "Access & MCP", exact: true }).click();
+  await page.getByRole("button", { name: "Access & keys", exact: true }).click();
   await page
     .getByLabel("Public key", { exact: true })
     .fill(readFileSync(`${key}.pub`, "utf8"));
@@ -547,7 +547,7 @@ test("owner enrollment, memory, MCP and restart preserve the real workflow", asy
     .getByRole("button", { name: "Verify and enroll key", exact: true })
     .click();
   await expect(
-    page.getByText("MCP key enrolled.", { exact: true }),
+    page.getByText("SSH key enrolled.", { exact: true }),
   ).toBeVisible();
   const projectDirectory = resolve(temporary, "repo");
   command("git", ["init", projectDirectory]);
