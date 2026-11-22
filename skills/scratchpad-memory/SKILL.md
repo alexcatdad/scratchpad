@@ -28,12 +28,11 @@ that always runs the installed version.
 - The project resolves from the current directory, so run commands from the
   active checkout (or pass `-f workingDirectory=<abs path>` / `-f projectId=<id>`).
 - `scratchpad status` shows the local capture service. If it reports the service
-  is not running, ask the owner to open Scratchpad. The CLI never starts the
-  service itself.
+  is not running, ask the owner to choose Start Capture Service in the
+  Scratchpad menu bar panel. The CLI never starts the service itself.
 
-Tool names below are logical names. Older installs may lack the CLI or some
-tools. If the CLI is unavailable, use the Scratchpad MCP tools when the client has
-them; otherwise report that memory could not be read or saved and continue
+Tool names below are logical names. Older installs may lack some tools. If the
+CLI is unavailable, report that memory could not be read or saved and continue
 independent work where useful. Do not invent tool results or substitute another
 note service.
 
@@ -137,7 +136,8 @@ and the documented recovery procedure for those operations.
 
 ## Hooks record mistake signals separately
 
-The owner may have configured agent hooks (`scratchpad hooks print`). They send
+The owner may have configured agent hooks (`scratchpad hooks print`) for Claude
+Code or Codex. They send
 failed tool calls, prompts and session boundaries to Scratchpad automatically,
 as agent events kept apart from memory. They do not replace captures: still use
 `record_failure` when a failure and its cause are worth remembering, because an
@@ -163,6 +163,6 @@ private deployment configuration belong in this skill.
 
 For setup or operational recovery, consult the public
 [agent integration guide](https://alexcatdad.github.io/scratchpad/guides/agents.md)
-and [CLI and MCP reference](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md).
+and [CLI reference](https://github.com/alexcatdad/scratchpad/blob/main/mcp/README.md).
 Runtime tool schemas (`scratchpad tools <tool>`) take precedence over illustrative
 documentation.

@@ -12,9 +12,9 @@ neither wait for nor read CI status.
 
 Releases go to GitHub, the release-tools default host. The earlier private
 Forgejo instance is retired; releases up to `v2026.11.07.1`
-were published there and their assets are no longer available. Release tags do not trigger the homelab deployment; a
-deployment is a separate, owner-initiated step (see
-[Kubernetes deployment](homelab-deploy.md)).
+were published there and their assets are no longer available. Release tags
+do not trigger the homelab deployment: the homelab builds and deploys `main`
+through its git-hook build (`nix flake check`, then `nix build .#default`).
 
 The tool is [release-tools](https://github.com/alexcatdad/release-tools)
 (`reltool`), pinned in `Taskfile.yml` to a tag and the commit it must resolve to.
@@ -33,8 +33,13 @@ TypeScript/Go SDK packages are not part of this release contract (see
 ## What a release publishes
 
 - `scratchpad-YYYY.MM.DD.N-darwin-arm64.zip`: `Scratchpad.app` for Apple Silicon,
-  macOS 13 or later; Developer ID signed, notarized and stapled. It bundles the
-  capture service, keychain helper and `scratchpad-mcp`.
+  macOS 13 or later; Developer ID signed, notarized and stapled. Its
+  `Contents/Helpers` holds the `scratchpad` command, the `scratchpad-service`
+  capture service and the `scratchpad-keychain.app` helper. It does not bundle
+  `scratchpad-mcp`.
+
+No server binary, container image or Linux build is published; servers build
+from source (see [Container image](#container-image)).
 
 release-tools additionally uploads `SHA256SUMS` and
 `scratchpad-<version>.manifest.json`, then updates `Casks/scratchpad.rb` in
@@ -49,9 +54,9 @@ derived from CI variables, Git refs or commit messages. Apple bundle versions
 allow at most three integers, so `CFBundleShortVersionString` and
 `CFBundleVersion` both get `MACOS_SHORT_VERSION` (`2026.11.05.1` becomes
 `2026.1105.1`). The full `RELEASE_VERSION` goes into the app's `ReleaseVersion`
-Info.plist key, which the app shows, and into the bundled `scratchpad-service`
-and `scratchpad-mcp` (`--version`). `scripts/release-validate.sh` checks all
-three.
+Info.plist key, which the app shows, and into the bundled `scratchpad` and
+`scratchpad-service` (`--version`). `scripts/release-validate.sh` checks these
+versions and that no `scratchpad-mcp` helper is present.
 
 The build signs with the keychain helper's Developer ID provisioning profile at
 `~/.config/scratchpad/keychain-helper.provisionprofile` (override with
@@ -71,11 +76,12 @@ in the release-tools repository). Provide:
   identity in the login Keychain;
 - `signing.scratchpad.notary_profile`: the name of an existing `notarytool`
   Keychain profile;
-- optional `workers[]` (SSH build workers). The matrix builds entirely on the
-  coordinator; Linux targets are `runs: any`, so workers are used only with
-  `--workers`, and none is required.
+- optional `workers[]` (SSH build workers). `release.json` has one target,
+  `darwin-arm64` with `runs: local`, so it builds on the coordinator and no
+  worker is required.
 
-Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`), `gh`
+Also required locally: Go Task, Git, Go (the version in `mcp/go.mod`, currently
+1.27.3), `gh`
 authenticated with push access to this repository and to
 `alexcatdad/homebrew-tap`,
 Xcode command-line tools (`codesign`, `notarytool`), Node 24 (see
@@ -106,7 +112,7 @@ creates a draft GitHub release, uploads every asset, verifies each by
 downloading it and comparing its SHA-256 with the local final artifact,
 publishes, confirms the tag, and updates the tap cask from the published release
 with the owner's local `gh` and Git. It runs unattended once started. Pass
-reltool flags after `--`, for example `task release:prepare -- --workers`.
+reltool flags after `--`.
 
 The `check` task (the full local gate: lint, build and tests with coverage
 floors for npm, Go and Swift) runs as a required step in a clean checkout.
@@ -125,17 +131,19 @@ publishing it, so never edit a published release's assets by hand. State lives u
 
 ## Container image
 
-No container image is published. The owner's homelab deployment builds the
-`go-runtime` target of the `Dockerfile` itself from the release tag when the
-owner deploys it; publishing a release or pushing its tag does not start a
-deployment; see [Kubernetes deployment](homelab-deploy.md). Images published
-before calendar versioning (up to `v0.3.0`) remain in the registry as history.
+No container image is published. A container deployment builds the
+`go-runtime` target of the `Dockerfile` itself (see
+[Kubernetes deployment](homelab-deploy.md)). The owner's homelab deploys `main`
+through its git-hook Nix build, not a release tag; publishing a release or
+pushing its tag does not start a deployment. Images published before calendar
+versioning (up to `v0.3.0`) remain in the registry as history.
 
 ## Verify a published release
 
 Installed-release acceptance is manual and local: install the cask on a Mac,
-check the version, the signature and notarization (`spctl -a -vv`), and run the
-end-to-end suite against the installed executable. The former GitHub
+check the version, the signature and notarization (`spctl -a -vv`), then run
+the bundled `scratchpad --version`, `scratchpad status` and a real
+`get-project-context` read. The former GitHub
 `release-acceptance.yml` workflow was removed; there is no hosted release CI.
 
 A green validation run, local signing, publication and installed acceptance are
@@ -143,22 +151,22 @@ separate outcomes; record each one.
 
 ## Open decisions
 
-1. **Container images.** Not published (decided): the homelab builds the image
-   from the release tag at deployment.
+1. **Container images.** Not published (decided): deployments build the
+   server themselves.
 2. **TypeScript client package.** `scratchpad-api-client-X.Y.Z.tgz` was attached
    to v0.3.0 and is no longer published. The tap updater now ignores assets that
    no formula slot uses, so it could be added to the matrix. It is not a
    straightforward step yet: the build needs Node 24, `npm ci`, a package version
    set per release (`packages/clients/typescript/package.json` is a fixed `0.3.0`
    and the old workflow required it to equal the tag), and `npm pack`, and a
-   target must own an architecture-neutral file. Decide the owning target (for
-   example `linux-amd64`) and whether the coordinator may require Node, or use a
-   separate release app or npm publication. The Go client module is consumed by Go
+   target must own an architecture-neutral file. Decide the owning target (the
+   only current one is `darwin-arm64`) and whether the coordinator may require
+   Node, or use a separate release app or npm publication. The Go client module is consumed by Go
    tag (`packages/clients/go/vX.Y.Z`), which is not created by this tooling; the
    former `verify-released-clients.sh` check is not run by any workflow.
 3. **Native macOS app and cask.** Decided 2026-10-30: releases publish the app
    archive and update the `scratchpad` cask; the MCP-only formula is deprecated.
-4. **Fedora package.** Linux ships as tar.gz for Homebrew only; no RPM is built.
+4. **Linux packages.** None are published; the release matrix is macOS only.
 
 ## Historical releases
 

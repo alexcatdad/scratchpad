@@ -18,7 +18,7 @@ Build the Scratchpad menu-bar app into macos/.build/dev/Scratchpad Dev.app.
 The default only builds and replaces that workspace bundle. --run explicitly
 restarts only that dev bundle after the replacement is ready.
 On first use, --base-app must point to a complete signed Scratchpad.app bundle.
---rebuild-helpers also builds the current Go MCP and service into the candidate
+--rebuild-helpers also builds the current Go service and CLI into the candidate
 and ad-hoc signs those two helpers. The default preserves the seed helpers.
 EOF
 }

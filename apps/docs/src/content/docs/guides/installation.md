@@ -6,8 +6,7 @@ description: Install Scratchpad on a Mac with Homebrew, connect it to your serve
 ## Install the macOS app
 
 The macOS app bundles the background capture service, its encrypted offline
-queue, the `scratchpad` command for coding agents and the `scratchpad-mcp`
-server for MCP clients. It needs a Mac with Apple silicon running macOS 13 or
+queue and the `scratchpad` command for coding agents. It needs a Mac with Apple silicon running macOS 13 or
 later, and a Scratchpad server you can reach. Intel and Linux app builds are not
 available.
 
@@ -24,13 +23,16 @@ not needed. See [Homebrew Tap Trust](https://docs.brew.sh/Tap-Trust).
 In the app, open **Connection**, enter your server address (for example
 `https://scratchpad.example.ts.net`), choose **Find Keys**, pick a key the
 server accepts and choose **Connect**. Keep private keys on the computer; the
-app signs with your existing SSH key or agent.
+app signs with your existing SSH key or agent. From a terminal,
+`scratchpad connect --server <origin>` does the same.
 
-Then connect your coding agents. The recommended path is the bundled
-`scratchpad` command; see [Agent integration](/scratchpad/guides/agents/). For
-clients that need an MCP server, **AI Tools → Set Up…** adds the bundled
-`scratchpad-mcp` to the client's configuration and shows you the change first;
-see [MCP & project context](/scratchpad/guides/mcp/).
+Start the capture service with **Start Capture Service** in the menu bar panel
+or **Start** in **General**. Turn on **Start capture service at login** in
+**General** to start it whenever you log in.
+
+Then connect your coding agents: put the `scratchpad` command on your `PATH`,
+install the hooks for Claude Code or Codex and add the `scratchpad-memory`
+skill. See [Agent integration](/scratchpad/guides/agents/).
 
 ### Upgrades
 
@@ -56,8 +58,17 @@ brew uninstall alexcatdad/tap/scratchpad-mcp
 brew install --cask alexcatdad/tap/scratchpad
 ```
 
-Then switch agents to the bundled `scratchpad` command, or MCP clients to
-`/Applications/Scratchpad.app/Contents/Helpers/scratchpad-mcp`.
+Then remove the old `scratchpad` MCP entry from each client and switch agents to
+the bundled `scratchpad` command; see
+[Agent integration](/scratchpad/guides/agents/#remove-an-old-mcp-entry).
+
+## Removed AI Tools page
+
+Earlier app versions bundled `scratchpad-mcp` and an **AI Tools** page that added
+it to `~/.claude.json` or `~/.codex/config.toml`. Both are gone, so that entry
+now points at a missing binary.
+[Remove it](/scratchpad/guides/agents/#remove-an-old-mcp-entry) and set up the
+command, hooks and skill instead.
 
 ## Run a server
 
@@ -126,18 +137,18 @@ docker compose exec scratchpad scratchpad-server recover
 
 Use the dashboard recovery flow with the resulting token. Recovery preserves records and invalidates existing sessions; it does not reopen ordinary first-time setup.
 
-## Build the CLI and MCP
+## Build the CLI and capture service
 
 ```sh
 cd mcp
 go mod download
 go build -o ../dist/scratchpad ./cmd/scratchpad
-go build -o ../dist/scratchpad-mcp ./cmd/scratchpad-mcp
 go build -o ../dist/scratchpad-service ./cmd/scratchpad-service
 ```
 
-Both clients talk to a running `scratchpad-service`; the app normally starts it.
-These are local build instructions, not a signed release installation.
+The CLI talks to a running `scratchpad-service` and never starts it; the app
+normally does. These are local build instructions, not a signed release
+installation.
 
 ## Verify source changes
 

@@ -18,9 +18,9 @@ The header is the one answer you need: whether captures are reaching your
 server. A green check with **Saving and syncing** means every capture your
 agents saved has arrived. Amber means Scratchpad is still saving on this Mac
 but cannot sync right now: the server is unreachable, syncing is paused, or a
-capture needs you to pick a project. Red means it cannot save at all, or the
-server no longer accepts this Mac's key. When there is something to do, a
-button for it appears under the header.
+capture needs you to pick a project. Red means it cannot save at all, the
+server no longer accepts this Mac's key, or the server needs an update. When
+there is something to do, a button for it appears under the header.
 
 The three rows below spell out the parts: the capture service on this Mac, the
 connection to your server, and how many captures are waiting to sync.
@@ -67,8 +67,9 @@ Scratchpad server you can reach.
 
 2. In **Connection**, enter your server address, choose **Find Keys**, pick a key
    the server accepts and choose **Connect**.
-3. Point your coding agents at the bundled `scratchpad` command. The
-   [agent guide](/scratchpad/guides/agents/) shows how.
+3. Point your coding agents at the bundled `scratchpad` command, add the
+   `scratchpad-memory` skill and, for Claude Code or Codex, the agent hooks.
+   The [agent guide](/scratchpad/guides/agents/) shows how.
 
 Homebrew handles upgrades with `brew upgrade --cask scratchpad`. The
 [installation guide](/scratchpad/guides/installation/) covers each step in
@@ -92,9 +93,7 @@ detail.
 ## Read on
 
 - [Agent integration](/scratchpad/guides/agents/): the `scratchpad` command,
-  the companion skills and how agents should use memory.
-- [MCP & project context](/scratchpad/guides/mcp/): for clients that need an
-  MCP server instead.
+  the companion skills, agent hooks and how agents should use memory.
 - [Architecture](/scratchpad/reference/architecture/) and
   [Security & recovery](/scratchpad/reference/security/).
 - [Source on GitHub](https://github.com/alexcatdad/scratchpad), MIT licensed.

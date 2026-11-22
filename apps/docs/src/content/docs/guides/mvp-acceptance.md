@@ -5,15 +5,15 @@ description: The verified MVP scope, acceptance scenarios, and a clearly labeled
 
 ## Current status
 
-**Historical MVP acceptance was completed in [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3).** Start with [installation](/scratchpad/guides/installation/) to run your private server and connect the MCP.
+**Historical MVP acceptance was completed in [v0.1.3](https://github.com/alexcatdad/scratchpad/releases/tag/v0.1.3).** Start with [installation](/scratchpad/guides/installation/) to run your private server and connect the app.
 
-The release includes eight typed capture tools, deterministic search and filtering, project context, immutable source records, audited metadata and relationships, passkey browser authentication, SSH challenge authentication for MCP, optional repository mirroring, import/export, and SQLite backup/restore. Native MCP packages and the application image are published through GitHub Releases, Homebrew and GHCR.
+That release included eight typed capture tools, deterministic search and filtering, project context, immutable source records, audited metadata and relationships, passkey browser authentication, SSH challenge authentication for MCP, optional repository mirroring, import/export, and SQLite backup/restore. Its native MCP packages and application image were published through GitHub Releases, Homebrew and GHCR. Agents now use the `scratchpad` command bundled in the macOS app instead of that stdio MCP client; it runs the same tool registry.
 
-The v0.1.3 MVP excludes AI processing, embeddings, pattern analysis and PostgreSQL. v0.2.0 implements those optional additions; their [remaining-product acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) is separate from this historical MVP evidence. The capture and retrieval workflow works without them.
+The v0.1.3 MVP excludes AI processing, embeddings, pattern analysis and PostgreSQL. Later releases implement those optional additions; their [remaining-product acceptance ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/post-mvp-readiness.md) is separate from this historical MVP evidence. The capture and retrieval workflow works without them.
 
 ## What acceptance means
 
-Acceptance exercises the actual server, browser dashboard and stdio MCP with disposable databases, credentials and repositories. Clearly labeled synthetic data supplies representative decisions and interrupted-project scenarios.
+Acceptance exercised the actual server, browser dashboard and then-current stdio MCP client with disposable databases, credentials and repositories. Clearly labeled synthetic data supplies representative decisions and interrupted-project scenarios.
 
 USB Boop and other projects are illustrative examples, not sources of truth for Scratchpad's requirements. Their original conversations or complete history are not prerequisites for acceptance. Real-history imports are optional datasets for checking import fidelity and retrieval; they retain their source provenance and uncertainty.
 
@@ -41,10 +41,10 @@ The [canonical JSONL fixture](https://github.com/alexcatdad/scratchpad/blob/main
 To try it in a disposable project:
 
 1. Save the line as `synthetic-paused-project.jsonl`.
-2. In **Settings → Import a decision log**, choose the project and select the file.
+2. In **Settings → Import & export**, under **Import a decision log**, choose the project and select the file.
 3. Open the project's context, then **Paused for hardware validation**. Inspect the state, reason, follow-up and original source.
 
-Imported lifecycle claims remain historical evidence until reviewed. Importing this example does not silently establish a real project's current state. The automated MCP workflow separately captures a synthetic current state and verifies its reason and follow-up in fresh MCP processes before and after restore.
+Imported lifecycle claims remain historical evidence until reviewed. Importing this example does not silently establish a real project's current state. The automated MCP workflow separately captured a synthetic current state and verified its reason and follow-up in fresh MCP processes before and after restore.
 
 ## Verification evidence
 
@@ -52,4 +52,4 @@ Imported lifecycle claims remain historical evidence until reviewed. Importing t
 - [Release publication](https://github.com/alexcatdad/scratchpad/actions/runs/36859022794) passed native verification, image publication, GitHub Release publication and Homebrew delivery.
 - [Fresh-runner release acceptance](https://github.com/alexcatdad/scratchpad/actions/runs/36859768053) passed macOS/Linux Homebrew installation, published-binary authentication and capture, both image architectures, checksums and published-image backup/restore.
 
-The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records exact revisions, operational scope and optional dataset results. See [release validation](/scratchpad/guides/releases/) for signing and delivery details. Check browser sign-in and a real MCP session in your own deployment after installation.
+The [readiness ledger](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/mvp-readiness.md) records exact revisions, operational scope and optional dataset results. See [release validation](/scratchpad/guides/releases/) for signing and delivery details. Check browser sign-in and a real `scratchpad` command read in your own deployment after installation.

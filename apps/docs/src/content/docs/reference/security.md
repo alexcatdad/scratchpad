@@ -4,10 +4,10 @@ description: The single-owner authentication and recovery model.
 ---
 
 Scratchpad is one owner per instance, with multiple browser and machine credentials.
-Passkeys and SSH challenge authentication remain available without GitHub. Current
-server source adds optional GitHub owner sign-in and synchronized machine keys;
-released v0.3.0 servers predate this addition. An independent security review has
-not been performed.
+Passkeys and SSH challenge authentication remain available without GitHub. The
+server adds optional GitHub owner sign-in and synchronized machine keys; servers
+built from the v0.3.0 release predate this addition. An independent security
+review has not been performed.
 
 ## First owner and sign-in
 
@@ -23,8 +23,9 @@ ownership and is never promoted automatically.
 The operator configures one OAuth app per instance; see the
 [OAuth runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/github-oauth.md).
 Client machines share that server configuration. Passkeys remain optional with
-GitHub-first setup. SimpleWebAuthn checks relying party, origin, challenge and
-registration/authentication responses for independent passkey access.
+GitHub-first setup. The server checks relying party, origin, challenge and
+registration/authentication responses for independent passkey access with
+`go-webauthn`.
 
 ## Machine access and synchronization
 
@@ -54,9 +55,10 @@ from GitHub therefore takes effect after the next successful synchronization;
 block it locally for immediate action. Independent manual keys remain locally
 managed and unaffected by GitHub cache expiry.
 
-Random challenges are short-lived and single-use. MCP sessions last up to 24 hours
-with no refresh-token system and stay in MCP process memory. Restarting the MCP
-requires proof again. The server persists session validity and revocation.
+Random challenges are short-lived and single-use. Machine sessions last up to 24
+hours with no refresh-token system and stay in the capture service's memory; the
+`scratchpad` command never sees them. Restarting the capture service requires
+proof again. The server persists session validity and revocation.
 
 ## Outages and independent access
 
@@ -67,7 +69,7 @@ limit. Network access to the Scratchpad server is still required from every devi
 
 ## Linking, replacing and disconnecting
 
-Existing owners link GitHub through authenticated Settings. Replacement requires
+Existing owners link GitHub in **Settings → Access & MCP**. Replacement requires
 fresh authentication through an existing credential; disconnecting requires fresh
 independent local authentication. Sign in again immediately before these actions:
 freshness is at most five minutes from an actual authentication proof, rather

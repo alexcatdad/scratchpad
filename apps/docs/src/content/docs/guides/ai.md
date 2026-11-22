@@ -3,11 +3,11 @@ title: Optional AI & semantic memory
 description: Configure a compatible provider, process permitted projects, review derived evidence and prepare private documents.
 ---
 
-**v0.2.0** includes optional AI and semantic memory. See [release verification](/scratchpad/guides/releases/) for its publication and installation evidence. Capture, exact search and project history continue to work without a model.
+AI and semantic memory are optional. Capture, exact search and project history continue to work without a model.
 
 ## Connect a provider
 
-Open **Settings → Optional AI** and configure the OpenAI-compatible base URL, completion model, embedding model and embedding dimensions. Enable AI, save the settings, then use **Test saved provider**. The test sends only synthetic connectivity input.
+In the dashboard, open **Settings → AI provider**. Under **Optional AI**, configure the OpenAI-compatible base URL, LLM model, embedding model and embedding dimensions. Set **Separate embeddings endpoint** only when embeddings are served elsewhere; the provider API key is sent only to the base URL, never to that endpoint. Select **Enable AI processing**, choose **Save AI settings**, then use **Test saved provider**. The test sends only synthetic text for completion and embeddings.
 
 For the selected local LM Studio setup:
 
@@ -19,9 +19,9 @@ For the selected local LM Studio setup:
 | Embedding model                   | `text-embedding-qwen3-embedding-4b`   |
 | Embedding dimensions              | `2560`                                |
 
-Use the identifiers and dimensions actually returned by your provider. A downloaded or loaded model alone does not prove embedding support. Provider API keys are optional for local providers; saved keys are not displayed, included in knowledge exports or written into configuration audit snapshots.
+Use the identifiers and dimensions actually returned by your provider. A downloaded or loaded model alone does not prove embedding support. Provider API keys are optional for local providers; saved keys are not displayed, included in knowledge exports or written into configuration audit snapshots. The server encrypts a saved key with its installation key file (`SCRATCHPAD_ENCRYPTION_KEY_FILE`); see [configuration](/scratchpad/guides/configuration/).
 
-Choose an analysis interval, similarity threshold and enabled analysis categories. Provider requests default to a 600-second timeout with reasoning effort **None**. The timeout is configurable from 5 to 3,600 seconds. Choose **Provider default** if your model does not support a reasoning-effort override. Set **Maximum output tokens** to bound response size (256–32,768; default 4,096). The selected Qwen 27B model generated approximately 12 tokens per second during initial local verification, but fell below 2 tokens per second under memory pressure with both models loaded. The default is 600 seconds; a longer explicit timeout can accommodate slow local hardware. Allow enough time for your hardware rather than treating a timeout as successful processing. An interval of **0** disables scheduled processing while retaining manual requests. Automatic jobs persist across restarts; failures are visible in Insights and can be retried. An unavailable provider does not make the core server unready.
+Choose an analysis interval, similarity threshold and analysis types. Provider requests default to a 600-second timeout with reasoning effort **None**. The timeout is configurable from 5 to 3,600 seconds. Choose **Provider default** if your model does not support a reasoning-effort override. Set **Maximum output tokens** to bound response size (256–32,768; default 4,096). The selected Qwen 27B model generated approximately 12 tokens per second during initial local verification, but fell below 2 tokens per second under memory pressure with both models loaded. Allow enough time for your hardware rather than treating a timeout as successful processing. An interval of **0** disables scheduled processing while retaining manual requests. Automatic jobs persist across restarts; failures are visible in Insights and can be retried. An unavailable provider does not make the core server unready.
 
 ## Choose participating projects
 
@@ -37,24 +37,22 @@ Analysis can produce summaries, classification help, duplicates, related decisio
 
 A response may contain useful suggestions alongside an unsupported pattern or duplicate claim. Those insufficiently supported suggestions are omitted with an audited warning shown on the job; valid suggestions remain available. Invalid source IDs, malformed output or revoked participation fail processing rather than becoming knowledge.
 
-After embeddings complete, use **Search by meaning**. Each result includes a similarity score and opens the underlying record. Model or dimension changes require rebuilding a compatible index; exact search in Memory remains available throughout.
+After embeddings complete, use **Search by meaning**. Each result includes a similarity score and opens the underlying record. Model, dimension or embedding-endpoint changes require rebuilding a compatible index; exact search in Memory remains available throughout.
+
+On PostgreSQL with pgvector, the server can also index passages for cited evidence retrieval; see [optional extensions](/scratchpad/guides/optional-extensions/).
 
 ## Prepare a private document
 
 Select one project in Insights and choose **Project handoff**, **Architecture summary**, **Decision report**, **Client-facing history**, or **ADR export**. Generate the document, review its linked sources, then choose **Download Markdown**.
 
-The document stays private until you decide to share it. Downloads include source citations and retain distinctions between observations and interpretation. Document generation does not publish the instance or give another person access to your private memory.
+The document stays private until you decide to share it. Downloads carry an application-generated draft label, source citations, and the distinction between observations and interpretation. Reviewing a suggestion preserves its derived origin; the document does not establish that a source decision was approved or implemented. Document generation does not publish the instance or give another person access to your private memory.
 
-Source links use the dashboard's `/?recordId=...` location. They require access to the original instance; sharing a downloaded document does not grant access to its records.
+Source links use the instance's configured public origin and the dashboard's `/?recordId=...` location, so they open the authenticated record detail from a downloaded file. Possessing the document does not bypass instance authentication or grant access to its records.
 
 ## Agent access
 
-The v0.2.0 MCP adds `semantic_search`, `get_suggestions`, `process_memory`, `get_ai_jobs`, and `generate_document`. See [MCP setup](/scratchpad/guides/mcp/) for project scope and signing configuration. Provider configuration remains server-owned; agents do not need provider keys.
+The `scratchpad` command exposes `semantic_search`, `get_suggestions`, `retrieve_evidence`, `process_memory`, `get_ai_jobs` and `generate_document`. See [agent integration](/scratchpad/guides/agents/) for project scope and usage. Provider configuration remains server-owned; agents do not need provider keys.
 
 See the [API contract](https://github.com/alexcatdad/scratchpad/blob/main/docs/api.md#66-remaining-product-implementation-extensions) and [development acceptance runbook](https://github.com/alexcatdad/scratchpad/blob/main/docs/runbooks/post-mvp-development.md) for exact interfaces and verification boundaries.
 
 The [machine-readable OpenAPI contract](https://raw.githubusercontent.com/alexcatdad/scratchpad/main/docs/openapi.json) includes provider settings, processing jobs, derived artifacts, review and semantic-search schemas. Completion providers must support structured JSON-schema responses; compatible embeddings alone do not establish completion support.
-
-Downloaded Markdown carries an application-generated draft label as well as source links. Reviewing a suggestion preserves its derived origin; the document does not establish that a source decision was approved or implemented.
-
-Document source links use the instance's configured public origin and open the authenticated dashboard record detail. They remain usable from a downloaded file; possessing the document does not bypass instance authentication.

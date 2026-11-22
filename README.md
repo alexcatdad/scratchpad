@@ -6,7 +6,7 @@ Private, self-hosted memory for developers and coding agents. Keep decisions, fi
 
 ## Current source
 
-The server is one Go binary that embeds the React dashboard as static files; nothing runs Node at runtime. Go owns authentication, persistence, migrations, HTTP APIs and optional AI/RAG. The local Go MCP/capture service and native macOS application keep their existing contracts. SQLite remains the default, with optional PostgreSQL. See [P0 acceptance](docs/runbooks/p0-consolidation.md) for retirement and delivery gates; code defaults do not authorize a live production cutover.
+The server is one Go binary that embeds the React dashboard as static files; nothing runs Node at runtime. Go owns authentication, persistence, migrations, HTTP APIs and optional AI/RAG. The native macOS application bundles the local Go capture service and the `scratchpad` command that coding agents call. SQLite remains the default, with optional PostgreSQL. See [P0 acceptance](docs/runbooks/p0-consolidation.md) for retirement and delivery gates; code defaults do not authorize a live production cutover.
 
 ## Published release history
 
@@ -21,9 +21,8 @@ See the [OAuth operator runbook](docs/runbooks/github-oauth.md), [security guide
 ## Install the macOS app
 
 Scratchpad's macOS application is the desktop installation. It bundles the
-background capture service with its encrypted offline queue, the `scratchpad`
-command for coding agents and the `scratchpad-mcp` stdio server for MCP
-clients. It needs a Mac with Apple silicon running macOS 13 or later, and a
+background capture service with its encrypted offline queue and the
+`scratchpad` command for coding agents. It needs a Mac with Apple silicon running macOS 13 or later, and a
 Scratchpad server you can reach.
 
 Install it with Homebrew:
@@ -34,13 +33,14 @@ open -a Scratchpad
 ```
 
 The fully qualified install grants Homebrew trust only to the Scratchpad cask.
-Connect your server and SSH signer in **Connection**. Upgrade with
+Connect your server and SSH signer in **Connection**, or with
+`scratchpad connect --server <origin>`. Upgrade with
 `brew upgrade --cask scratchpad`, then choose **Restart Capture Service** when the
 panel shows **Update installed**.
 
 Coding agents use the bundled command,
 `/Applications/Scratchpad.app/Contents/Helpers/scratchpad`. The cask does not
-link it onto `PATH` yet; call it by that path or add a symlink:
+link it onto `PATH`; call it by that path or add a symlink:
 
 ```sh
 ln -sf /Applications/Scratchpad.app/Contents/Helpers/scratchpad ~/.local/bin/scratchpad
@@ -48,15 +48,22 @@ scratchpad status
 scratchpad tools
 ```
 
-It never starts the capture service; open the app to start it. Clients that need
-MCP can use **AI Tools** in the app to add the bundled `scratchpad-mcp`. See the
+It never starts the capture service; start it from the app's menu bar panel or
+turn on **Start capture service at login** in **General**. For Claude Code
+and Codex, `scratchpad hooks print --agent claude-code|codex` prints hooks that
+record mistake signals, and the [`scratchpad-memory` skill](skills/scratchpad-memory/SKILL.md)
+teaches the agent to call the command. See the
 [installation guide](https://alexcatdad.github.io/scratchpad/guides/installation/),
 [agent integration](https://alexcatdad.github.io/scratchpad/guides/agents/) and
 the [app distribution runbook](docs/runbooks/macos-app-distribution.md).
 
+The app no longer bundles `scratchpad-mcp` or the **AI Tools** page that
+registered it. Remove any `scratchpad` MCP entry it added
+(`claude mcp remove scratchpad`, `codex mcp remove scratchpad`).
+
 The standalone `alexcatdad/tap/scratchpad-mcp` formula is deprecated: it
 distributes v0.3.0, which predates the app, the capture service and the current
-authentication contract. Uninstall it and switch clients to the app.
+authentication contract. Uninstall it and switch to the app.
 
 ## Run with Docker
 
@@ -79,7 +86,7 @@ run `docker exec scratchpad scratchpad-server setup` (or `recover`,
 `npm run admin -- <command>` runs the same Go CLI. Before upgrading existing
 volumes, follow the [Go migration and rollback procedure](docs/runbooks/go-backend-migrations.md).
 
-Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. Additional passkeys and MCP public keys are enrolled in **Settings**. Never send a private key to the server.
+Open `http://localhost:3000`, enter the single-use setup token, and register a passkey. The named `scratchpad-data` volume stores the database. Additional passkeys and independent SSH public keys are enrolled in **Settings**. Never send a private key to the server.
 
 For a remote deployment, use your exact HTTPS origin and a TLS reverse proxy; keep the application port private. The [installation guide](https://alexcatdad.github.io/scratchpad/guides/installation/) includes a Compose configuration. The [deployment runbook](docs/runbooks/deployment.md) covers persistent-volume backup/restore, upgrades, and rollback.
 
@@ -113,16 +120,15 @@ export SCRATCHPAD_DATABASE_PATH="$PWD/data/scratchpad.sqlite"
 npm run admin -- setup
 ```
 
-Build the CLI, MCP server and capture service:
+Build the CLI and capture service:
 
 ```sh
 cd mcp
 go build -o ../dist/scratchpad ./cmd/scratchpad
-go build -o ../dist/scratchpad-mcp ./cmd/scratchpad-mcp
 go build -o ../dist/scratchpad-service ./cmd/scratchpad-service
 ```
 
-See [MCP configuration and tools](mcp/README.md) and the [development runbook](docs/runbooks/development.md).
+See [CLI and tools](mcp/README.md) and the [development runbook](docs/runbooks/development.md).
 
 ## Inspect and maintain memory
 
@@ -147,7 +153,7 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Run `npm run test:backend` and `go -C backend vet ./...` for the Go API. From `mcp/`, also run `go vet ./...` and `go test -race ./...`. The browser integration test uses disposable SQLite storage and a virtual passkey, then drives the real Go MCP through capture and server restart. No production authentication bypass is provided.
+Run `npm run test:backend` and `go -C backend vet ./...` for the Go API. From `mcp/`, also run `go vet ./...` and `go test -race ./...`. The browser integration test uses disposable SQLite storage and a virtual passkey, then drives the real Go tools through capture and server restart. No production authentication bypass is provided.
 
 `task check` runs the full local gate. GitHub Pages hosts only the public static documentation, never the private application or its records.
 
