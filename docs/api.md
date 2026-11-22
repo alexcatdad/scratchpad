@@ -1681,7 +1681,7 @@ Document source links use the instance's configured public origin and open the a
 
 `POST /profile/github` accepts `{username, expectedVersion}` to link or refresh a public GitHub user profile. `DELETE /profile/github` accepts `{expectedVersion}` to unlink it. Both require the existing authenticated owner and return `{profile}`. Profile versions start at zero before the first stored presentation profile. The optional `profile.github` snapshot contains `username`, nullable public `displayName` and `avatarUrl`, `profileUrl` and `fetchedAt`. Public linkage does not alter credentials or authenticate the owner.
 
-Semantic search retains the same HTTP interface and consent/compatibility behavior with native pgvector enabled. `SCRATCHPAD_PGVECTOR=true` requires PostgreSQL and an operator-installed extension; the original embedding dimensions are preserved. This changes the optional database implementation, not capture authority or the HTTP boundary.
+Semantic search ranks stored embeddings in the server process on SQLite and PostgreSQL and does not use pgvector. pgvector is required only by optional passage RAG (`SCRATCHPAD_RAG_ENABLED=true`, PostgreSQL, an operator-installed extension in the application schema); see the [RAG runbook](runbooks/go-rag.md). Neither changes capture authority or the HTTP boundary.
 
 The OpenAPI contract drives deterministic TypeScript and Go client generation. Follow the API client runbook for generation, compilation, package consumption and actual authenticated integration checks. Generated clients preserve the central API's authentication, optimistic concurrency, typed errors and explicit project scope.
 
