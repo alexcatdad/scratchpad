@@ -1,7 +1,7 @@
 // Command scratchpad is the command-line interface to Scratchpad for coding
-// agents and scripts. It hosts the same tool registry as scratchpad-mcp
-// in-process and calls it over an in-memory MCP transport, so every tool, its
-// input validation and its output are identical to the MCP server's. Each call
+// agents and scripts. It hosts the Scratchpad tool registry in-process and
+// calls it over an in-memory MCP transport, so every tool, its input
+// validation and its output match the MCP server's. Each call
 // is a short-lived process, so it always runs the installed version.
 //
 // It never starts the capture service: a process started from a sandboxed
@@ -33,7 +33,9 @@ var version = "dev"
 const usage = `Usage:
   scratchpad <tool> [-f key=value]... [-F key=json]... [--input <file>|-] [--text]
   scratchpad tools [<tool>]       List tools, or show one tool's input schema
-  scratchpad status               Show the local capture service status
+  scratchpad status               Show the capture service status and connection
+  scratchpad connect --server <https-origin> [--public-key <file.pub>] [--agent-socket <path>]
+                                  Connect the capture service to a server
   scratchpad hook --agent <name>  Record one agent hook event from stdin
                                   (claude-code or codex; for hook configuration)
   scratchpad hooks print --agent <name>
@@ -47,7 +49,7 @@ const usage = `Usage:
   --input FILE   read a JSON object of fields from FILE, or stdin with "-"
   --text         print the tool's text content instead of JSON
 
-The project is resolved from the current directory, as for scratchpad-mcp.
+The project is resolved from the current directory.
 `
 
 func main() {
@@ -116,6 +118,8 @@ func run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return 0
 	case "status":
 		return printStatus(ctx, localcapture.NewClient(os.Getenv("SCRATCHPAD_SERVICE_SOCKET")), stdout, stderr)
+	case "connect":
+		return runConnect(ctx, args[1:], stdout, stderr)
 	case "hook":
 		return runHook(ctx, args[1:], stdin, stderr, defaultHookDeps())
 	case "hooks":
@@ -241,7 +245,14 @@ func listTools(ctx context.Context, session *mcp.ClientSession, args []string, s
 	return 0
 }
 
-func printStatus(ctx context.Context, client statusClient, stdout, stderr io.Writer) int {
+type statusReader interface {
+	statusClient
+	GetConfiguration(ctx context.Context) (localcapture.ServiceConfiguration, error)
+}
+
+// printStatus prints the service status and, when one is saved, the
+// connection configuration.
+func printStatus(ctx context.Context, client statusReader, stdout, stderr io.Writer) int {
 	probe, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	status, err := client.Status(probe)
@@ -249,7 +260,11 @@ func printStatus(ctx context.Context, client statusClient, stdout, stderr io.Wri
 		fmt.Fprintf(stderr, "scratchpad: capture service unavailable: %v\n", err)
 		return 1
 	}
-	return writeJSON(stdout, stderr, status)
+	out := map[string]any{"service": status}
+	if cfg, err := client.GetConfiguration(probe); err == nil {
+		out["configuration"] = cfg
+	}
+	return writeJSON(stdout, stderr, out)
 }
 
 func contentText(result *mcp.CallToolResult) string {
