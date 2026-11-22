@@ -5,12 +5,11 @@ app=${1:?usage: validate-bundle.sh Scratchpad.app}
 test -d "$app" || { echo "missing app bundle" >&2; exit 1; }
 info="$app/Contents/Info.plist"
 service="$app/Contents/Helpers/scratchpad-service"
-mcp="$app/Contents/Helpers/scratchpad-mcp"
 keychain_helper="$app/Contents/Helpers/scratchpad-keychain.app/Contents/MacOS/scratchpad-keychain"
 keychain_info="$app/Contents/Helpers/scratchpad-keychain.app/Contents/Info.plist"
 resources="$app/Contents/Resources"
 test -x "$service" || { echo "missing executable service helper" >&2; exit 1; }
-test -x "$mcp" || { echo "missing executable MCP helper" >&2; exit 1; }
+test ! -e "$app/Contents/Helpers/scratchpad-mcp" || { echo "bundle still ships the retired scratchpad-mcp helper" >&2; exit 1; }
 cli="$app/Contents/Helpers/scratchpad"
 test -x "$cli" || { echo "missing executable scratchpad CLI" >&2; exit 1; }
 test -x "$keychain_helper" || { echo "missing executable Keychain helper" >&2; exit 1; }
@@ -37,9 +36,7 @@ test "$schema" -gt 0 && test "$min" -gt 0 && test "$min" -le "$schema" && test "
   exit 1
 }
 
-expected_mcp="scratchpad-mcp $release_version (build $build)"
 expected_service="scratchpad-service $release_version (build $build; queue-schema $schema)"
-actual_mcp=$("$mcp" --build-info)
 actual_service=$("$service" --version)
 if invalid_keychain_output=$("$keychain_helper" invalid-arguments 2>/dev/null); then
   keychain_invalid_status=0
@@ -47,10 +44,6 @@ else
   keychain_invalid_status=$?
 fi
 test "$("$cli" --version)" = "scratchpad $release_version" || { echo "CLI version does not match bundle metadata" >&2; exit 1; }
-test "$actual_mcp" = "$expected_mcp" || {
-  echo "MCP version provenance does not match bundle metadata" >&2
-  exit 1
-}
 test "$actual_service" = "$expected_service" || {
   echo "service version or queue schema does not match bundle metadata" >&2
   exit 1
@@ -64,4 +57,4 @@ test "$keychain_invalid_status" -eq 1 || {
   exit 1
 }
 
-echo "Bundle version, build number, and queue schema match both helper binaries."
+echo "Bundle version, build number, and queue schema match the helper binaries."
