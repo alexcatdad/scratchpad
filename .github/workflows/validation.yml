@@ -22,16 +22,19 @@ jobs:
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-    uses: alexcatdad/ci-actions/.github/workflows/validate-pr.yml@2ff7a21eaa680d9eba4987e52697a6f2601054ea
+    uses: alexcatdad/ci-actions/.github/workflows/validate-pr.yml@76e8ddb7079aa16605a84138f9357143adcc878d
     with:
       nix: true
       build-command: nix build .#default
       test-command: nix flake check
+      # Paths no build or check reads. Markdown and docs/openapi.json stay out:
+      # nix flake check lints them (prettier, markdownlint, biome).
+      inert-paths: LICENSE
   main:
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
-    uses: alexcatdad/ci-actions/.github/workflows/validate-main.yml@2ff7a21eaa680d9eba4987e52697a6f2601054ea
+    uses: alexcatdad/ci-actions/.github/workflows/validate-main.yml@76e8ddb7079aa16605a84138f9357143adcc878d
     with:
       nix: true
       test-command: nix flake check
@@ -42,13 +45,13 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: alexcatdad/ci-actions/.github/workflows/codeql.yml@2ff7a21eaa680d9eba4987e52697a6f2601054ea
+    uses: alexcatdad/ci-actions/.github/workflows/codeql.yml@76e8ddb7079aa16605a84138f9357143adcc878d
     with:
       languages: '["actions", "go", "javascript-typescript"]'
   deploy:
     needs: main
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     permissions: {}
-    uses: alexcatdad/ci-actions/.github/workflows/slot-deploy.yml@2ff7a21eaa680d9eba4987e52697a6f2601054ea
+    uses: alexcatdad/ci-actions/.github/workflows/slot-deploy.yml@76e8ddb7079aa16605a84138f9357143adcc878d
     with:
       slot: scratchpad
